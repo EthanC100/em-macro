@@ -316,6 +316,21 @@ def external_block(months) -> dict[str, pd.DataFrame]:
     return out
 
 
+def _norm_outlook(x) -> str:
+    """'watch negative', 'review for downgrade', 'rating watch negative' -> watch_negative, etc."""
+    s = str(x).strip().lower()
+    if any(w in s for w in ("watch", "review", "creditwatch")):
+        if any(w in s for w in ("neg", "down")):
+            return "watch_negative"
+        if any(w in s for w in ("pos", "up")):
+            return "watch_positive"
+        return "developing"
+    for k in ("positive", "negative", "developing", "stable"):
+        if k in s:
+            return k
+    return s
+
+
 def ratings_block(months) -> dict[str, pd.DataFrame]:
     files = sorted((EVENTS / "raw").glob("rating_actions_*.csv"))
     if not files:
@@ -335,7 +350,7 @@ def ratings_block(months) -> dict[str, pd.DataFrame]:
             if g.empty:
                 continue
             r_num = g["rating_after"].astype(str).str.strip().map(RATING_NUM)
-            o_adj = g["outlook_after"].astype(str).str.strip().str.lower().str.replace(" ", "_").map(OUTLOOK_ADJ)
+            o_adj = g["outlook_after"].map(_norm_outlook).map(OUTLOOK_ADJ)
             s_lvl = pd.Series(r_num.values, index=g["date"].values).groupby(level=0).last()
             s_adj = pd.Series((r_num + o_adj.fillna(0)).values, index=g["date"].values).groupby(level=0).last()
             me = months.to_timestamp(how="end")
