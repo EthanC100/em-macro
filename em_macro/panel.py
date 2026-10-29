@@ -1,0 +1,475 @@
+"""Country-month panel, 13 countries, 2005-01 onward (no modelling).
+
+    python -m em_macro.panel          # builds data/processed/country_month_panel.csv
+                                      # and results/panel_coverage.md
+
+One row per country x month.  Each factor keeps its native timing:
+market data are monthly averages (and month-end where noted); annual data
+(IMF WEO, WGI, V-Dem, CBI) are assigned to every month of their calendar
+year; quarterly data to the months of their quarter.  Annual values are
+*final/latest-vintage* numbers, not what was known in real time -- see the
+coverage report before using them in any forecasting exercise.
+"""
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from . import panel_sources as PS
+from . import sources as S
+from .config import EVENTS, PROC, RESULTS, ROOT
+
+EXT = ROOT / "data" / "external"
+START, = pd.period_range("2005-01", periods=1, freq="M")
+
+COUNTRIES = ["BR", "MX", "FR", "ZA", "TR", "ID", "PL", "IT", "ES", "GB", "CO", "CL", "DE"]
+FOCUS = ["BR", "MX", "FR"]
+ISO3 = {"BR": "BRA", "MX": "MEX", "ZA": "ZAF", "TR": "TUR", "ID": "IDN", "PL": "POL", "FR": "FRA",
+        "IT": "ITA", "ES": "ESP", "GB": "GBR", "CO": "COL", "CL": "CHL", "DE": "DEU"}
+NAMES = {"BR": "Brazil", "MX": "Mexico", "ZA": "South Africa", "TR": "Turkey", "ID": "Indonesia",
+         "PL": "Poland", "FR": "France", "IT": "Italy", "ES": "Spain", "GB": "United Kingdom",
+         "CO": "Colombia", "CL": "Chile", "DE": "Germany"}
+CCY = {"BR": "BRL", "MX": "MXN", "ZA": "ZAR", "TR": "TRY", "ID": "IDR", "PL": "PLN", "FR": "EUR",
+       "IT": "EUR", "ES": "EUR", "GB": "GBP", "CO": "COP", "CL": "CLP", "DE": "EUR"}
+EURO = {"FR", "IT", "ES", "DE"}
+# spread benchmark: Bund for EU/UK members, US Treasury otherwise (Turkey priced vs. USTs)
+EUROPEAN = {"FR", "IT", "ES", "GB", "PL", "DE"}
+
+WEO = {"GGXCNL_NGDP": "fiscal_balance_gdp", "GGXONLB_NGDP": "primary_balance_gdp",
+       "GGXWDG_NGDP": "gross_debt_gdp", "GGXWDN_NGDP": "net_debt_gdp", "BCA_NGDPD": "current_account_gdp",
+       "NGDP_RPCH": "real_gdp_growth", "PCPIPCH": "inflation_weo"}
+WGI = ["VA", "PV", "GE", "RQ", "RL", "CC"]
+
+SCALE_SP = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-", "BB+", "BB", "BB-", "B+", "B",
+            "B-", "CCC+", "CCC", "CCC-", "CC", "C"]
+SCALE_MD = ["Aaa", "Aa1", "Aa2", "Aa3", "A1", "A2", "A3", "Baa1", "Baa2", "Baa3", "Ba1", "Ba2", "Ba3", "B1", "B2",
+            "B3", "Caa1", "Caa2", "Caa3", "Ca", "C"]
+RATING_NUM = {**{r: 21 - i for i, r in enumerate(SCALE_SP)}, **{r: 21 - i for i, r in enumerate(SCALE_MD)},
+              "SD": 1, "RD": 1, "D": 1}
+OUTLOOK_ADJ = {"positive": 1 / 3, "negative": -1 / 3, "watch_positive": 2 / 3, "watch_negative": -2 / 3,
+               "developing": 0.0, "stable": 0.0}
+
+SOURCES: dict[str, str] = {}          # column -> source description (filled while building)
+NOTES: dict[str, str] = {}            # column -> caveat
+
+
+def _months(end: pd.Period) -> pd.PeriodIndex:
+    return pd.period_range(START, end, freq="M")
+
+
+def _monthly(s: pd.Series, how: str = "mean") -> pd.Series:
+    s = s.dropna()
+    g = s.groupby(s.index.to_period("M"))
+    return g.mean() if how == "mean" else g.last()
+
+
+def _annual_to_months(s: pd.Series, months: pd.PeriodIndex) -> pd.Series:
+    """Assign an annual value (index = year) to every month of that year."""
+    return pd.Series([s.get(m.year, np.nan) for m in months], index=months)
+
+
+def _read_ext(path):
+    return pd.read_csv(path) if path.exists() else None
+
+
+# --------------------------------------------------------------- market data
+def market_block(months) -> dict[str, pd.DataFrame]:
+    """Returns {column: DataFrame(index=months, columns=countries)}."""
+    out = {}
+    daily = pd.read_csv(PROC / "daily_panel.csv", index_col=0, parse_dates=True)
+
+    # 10-year yields
+    y = pd.DataFrame(index=months, columns=COUNTRIES, dtype=float)
+    src = {}
+    for c in ["BR", "MX", "ZA", "PL", "TR"]:
+        y[c] = _monthly(daily[f"Y10_{c}"]).reindex(months)
+        src[c] = "monthly mean of the project's daily 10y series (see results/coverage_report.md)"
+    irs = PS.ecb_irs(["FR", "IT", "ES", "DE"])
+    for c in ["FR", "IT", "ES", "DE"]:
+        y[c] = irs[c].reindex(months)
+        src[c] = "ECB IRS, EMU convergence 10y yield (monthly average)"
+    oecd = PS.oecd_lt_rate(["GBR", "COL", "CHL", "IDN", "USA", "TUR"])
+    for c in ["GB", "CO", "CL", "ID"]:
+        y[c] = oecd[ISO3[c]].reindex(months)
+        src[c] = "OECD MEI long-term interest rate IRLT (monthly average)"
+    us10 = _monthly(daily["US10Y"]).reindex(months)
+    out["y10"] = y
+    out["spread_vs_de_bp"] = y.sub(y["DE"], axis=0) * 100
+    out["spread_vs_us_bp"] = y.sub(us10, axis=0) * 100
+    bench = pd.DataFrame({c: out["spread_vs_de_bp"][c] if c in EUROPEAN else out["spread_vs_us_bp"][c]
+                          for c in COUNTRIES})
+    bench["DE"] = out["spread_vs_us_bp"]["DE"]
+    out["spread_bench_bp"] = bench
+    SOURCES["y10"] = "; ".join(f"{c}: {s}" for c, s in src.items())
+    SOURCES["spread_vs_de_bp"] = "y10 minus Germany y10 (ECB IRS)"
+    SOURCES["spread_vs_us_bp"] = "y10 minus US 10y (FRED DGS10, monthly mean)"
+    SOURCES["spread_bench_bp"] = "vs Germany for FR, IT, ES, GB, PL; vs US for BR, MX, ZA, TR, ID, CO, CL, DE"
+
+    # FX: local currency per USD, monthly mean and month-end
+    fx = {}
+    for c in ["BR", "MX", "ZA", "TR", "ID", "PL"]:
+        fx[c] = daily[f"FX_{c}"]
+    eur = 1 / S.fred("DEXUSEU")
+    for c in EURO:
+        fx[c] = eur
+    fx["GB"] = 1 / S.fred("DEXUSUK")
+    fx["CO"] = PS.colombia_trm()
+    fx["CL"] = PS.chile_dolar_observado()
+    out["fx_per_usd_avg"] = pd.DataFrame({c: _monthly(fx[c]).reindex(months) for c in COUNTRIES})
+    out["fx_per_usd_end"] = pd.DataFrame({c: _monthly(fx[c], "last").reindex(months) for c in COUNTRIES})
+    out["fx_ret_vs_usd_pct"] = -100 * np.log(out["fx_per_usd_end"]).diff()
+    SOURCES["fx_per_usd_avg"] = ("BRL/MXN/ZAR: FRED H.10; TRY/IDR/PLN: Yahoo Finance; COP: Banco de la Republica "
+                                 "TRM (datos.gov.co); CLP: Banco Central de Chile dolar observado (mindicador.cl); "
+                                 "EUR, GBP: FRED DEXUSEU/DEXUSUK inverted (FR/IT/ES/DE share EUR)")
+    SOURCES["fx_per_usd_end"] = SOURCES["fx_per_usd_avg"] + "; last observation in month"
+    SOURCES["fx_ret_vs_usd_pct"] = "-100*dlog(month-end local per USD); + = local currency up"
+    yc = _monthly(S.yahoo("COP=X")).reindex(months)
+    corr = np.log(out["fx_per_usd_avg"]["CO"]).diff().corr(np.log(yc).diff())
+    NOTES["fx_per_usd_avg"] = (f"COP and CLP use official fixings because Yahoo's COP history has bad prints "
+                               f"(monthly-change correlation with the TRM only {corr:.2f}). EUR and GBP rows are "
+                               "identical across the euro countries.")
+
+    # policy rates and inflation
+    pol = {}
+    for c in COUNTRIES:
+        area = "XM" if c in EURO else c
+        pol[c] = _monthly(S.bis_policy(area)).reindex(months)
+    out["policy_rate"] = pd.DataFrame(pol)
+    cpi = pd.DataFrame({c: PS.bis_cpi_yoy(c).reindex(months) for c in COUNTRIES})
+    out["cpi_yoy"] = cpi
+    out["real_policy_rate"] = out["policy_rate"] - cpi
+    SOURCES["policy_rate"] = ("BIS WS_CBPOL daily, monthly mean; euro countries = BIS euro-area series (XM), "
+                              "which follows the ECB MRO rate and later the deposit facility rate -- both ECB "
+                              "rates are also in the panel as ecb_mro_rate / ecb_deposit_rate")
+    SOURCES["cpi_yoy"] = "BIS WS_LONG_CPI national CPI, y/y %"
+    SOURCES["real_policy_rate"] = "policy_rate minus cpi_yoy (ex post, same month)"
+
+    # reserves (USD m, excl. gold), monthly where FRED carries IMF IFS
+    res = {}
+    for c in COUNTRIES:
+        try:
+            res[c] = _monthly(S.fred(f"TRESEG{c}M052N"), "last").reindex(months)
+        except RuntimeError:
+            res[c] = pd.Series(np.nan, index=months)
+    out["reserves_usd_m"] = pd.DataFrame(res)
+    SOURCES["reserves_usd_m"] = "IMF IFS total reserves excl. gold via FRED TRESEG<cc>M052N (monthly)"
+    NOTES["reserves_usd_m"] = "Colombia and Chile are not on FRED; see reserves_months_imports (annual) for them."
+    return out
+
+
+def global_block(months) -> pd.DataFrame:
+    daily = pd.read_csv(PROC / "daily_panel.csv", index_col=0, parse_dates=True)
+    g = pd.DataFrame(index=months)
+    g["us10y"] = _monthly(daily["US10Y"]).reindex(months)
+    g["dxy"] = _monthly(daily["DXY"]).reindex(months)
+    g["vix"] = _monthly(daily["VIX"]).reindex(months)
+    g["fed_funds"] = _monthly(daily["US_FF"]).reindex(months)
+    g["ecb_deposit_rate"] = _monthly(PS.ecb_series("FM/D.U2.EUR.4F.KR.DFR.LEV")).reindex(months)
+    g["ecb_mro_rate"] = _monthly(PS.ecb_series("FM/D.U2.EUR.4F.KR.MRR_FR.LEV")).reindex(months)
+    SOURCES.update({"us10y": "FRED DGS10", "dxy": "Yahoo DX-Y.NYB", "vix": "FRED VIXCLS", "fed_funds": "FRED DFF",
+                    "ecb_deposit_rate": "ECB FM DFR", "ecb_mro_rate": "ECB FM MRO"})
+    return g
+
+
+# ---------------------------------------------------------------- annual data
+def annual_block(months) -> dict[str, pd.DataFrame]:
+    out = {}
+    vint = {}
+    for code, name in WEO.items():
+        cols = {}
+        for c in COUNTRIES:
+            s, upd = PS.imf_weo(ISO3[c], code)
+            cols[c] = s
+            vint[c] = upd
+        df = pd.DataFrame(cols)
+        out[name] = pd.DataFrame({c: _annual_to_months(df[c], months) for c in COUNTRIES})
+        SOURCES[name] = f"IMF WEO {code}, latest vintage (annual, assigned to calendar-year months)"
+        if name == "gross_debt_gdp":
+            out["debt_change_1y_pp"] = pd.DataFrame(
+                {c: _annual_to_months(df[c].diff(), months) for c in COUNTRIES})
+            out["debt_change_next5y_pp"] = pd.DataFrame(
+                {c: _annual_to_months(df[c].shift(-5) - df[c], months) for c in COUNTRIES})
+            SOURCES["debt_change_1y_pp"] = "gross_debt_gdp(t) - gross_debt_gdp(t-1), WEO latest vintage"
+            SOURCES["debt_change_next5y_pp"] = ("gross_debt_gdp(t+5) - gross_debt_gdp(t), WEO latest vintage: "
+                                                "realised history + current projections")
+    NOTES["gross_debt_gdp"] = ("WEO latest vintage (country update dates: "
+                               + ", ".join(f"{c} {v}" for c, v in vint.items()) + "). Real-time vintages "
+                               "(what was known at each date) are not included: imf.org WEO vintage files "
+                               "were rate-limited (HTTP 429) during the build.")
+    NOTES["debt_change_next5y_pp"] = ("Ex post: for past years this is the realised 5-year change; for recent "
+                                      "years it mixes outturns with the latest projections (to 2031). Do not "
+                                      "use as an ex-ante expectation.")
+
+    iso = [ISO3[c] for c in COUNTRIES]
+    for k in WGI:
+        df = PS.worldbank(iso, f"GOV_WGI_{k}.EST", source=3)
+        out[f"wgi_{k.lower()}"] = pd.DataFrame({c: _annual_to_months(df.get(ISO3[c], pd.Series(dtype=float)), months)
+                                                for c in COUNTRIES})
+        SOURCES[f"wgi_{k.lower()}"] = f"World Bank WGI {k}.EST (annual estimate, -2.5..2.5)"
+    for ind, name in [("FI.RES.TOTL.MO", "reserves_months_imports"), ("FI.RES.TOTL.CD", "reserves_usd_annual")]:
+        df = PS.worldbank(iso, ind)
+        out[name] = pd.DataFrame({c: _annual_to_months(df.get(ISO3[c], pd.Series(dtype=float)), months)
+                                  for c in COUNTRIES})
+        SOURCES[name] = f"World Bank {ind} (annual)"
+    return out
+
+
+# ------------------------------------------------------ research / agent files
+def external_block(months) -> dict[str, pd.DataFrame]:
+    out = {}
+    iso2 = {v: k for k, v in ISO3.items()}
+    st = EXT / "structural"
+
+    cbi = _read_ext(st / "cbi.csv")
+    if cbi is not None:
+        for col in [c for c in ("cbie_index", "garriga_lvau", "garriga_lvaw") if c in cbi]:
+            p = cbi.pivot_table(index="year", columns="iso3", values=col)
+            out[col] = pd.DataFrame({c: _annual_to_months(p.get(ISO3[c], pd.Series(dtype=float)), months)
+                                     for c in COUNTRIES})
+            SOURCES[col] = "data/external/structural/cbi.csv (see cbi_SOURCE.md)"
+    vd = _read_ext(st / "vdem.csv")
+    if vd is not None:
+        for col in ("v2x_jucon", "v2juhcind", "v2juncind", "v2x_rule", "v2x_corr"):
+            if col in vd:
+                p = vd.pivot_table(index="year", columns="iso3", values=col)
+                out[f"vdem_{col}"] = pd.DataFrame({c: _annual_to_months(p.get(ISO3[c], pd.Series(dtype=float)),
+                                                                        months) for c in COUNTRIES})
+                SOURCES[f"vdem_{col}"] = "data/external/structural/vdem.csv (V-Dem; see vdem_SOURCE.md)"
+    dh = _read_ext(st / "debt_holders.csv")
+    if dh is not None:
+        for col in ("foreign_share_pct", "fx_share_pct"):
+            frames = {}
+            for c in COUNTRIES:
+                g = dh[(dh["iso3"] == ISO3[c])].dropna(subset=[col])
+                s = {}
+                for r in g.itertuples():
+                    per = str(r.period)
+                    if str(r.freq).upper().startswith("Q"):
+                        q = pd.Period(per.replace("-", ""), freq="Q")
+                        for m in pd.period_range(q.asfreq("M", "s"), q.asfreq("M", "e"), freq="M"):
+                            s[m] = getattr(r, col)
+                    elif str(r.freq).upper().startswith("A"):
+                        for m in pd.period_range(f"{int(float(per))}-01", f"{int(float(per))}-12", freq="M"):
+                            s.setdefault(m, getattr(r, col))
+                    else:
+                        s[pd.Period(per, freq="M")] = getattr(r, col)
+                frames[c] = pd.Series(s, dtype=float).reindex(months)
+            out[f"debt_{col}"] = pd.DataFrame(frames)
+            SOURCES[f"debt_{col}"] = "data/external/structural/debt_holders.csv (see debt_holders_SOURCE.md)"
+
+    tg = _read_ext(st / "inflation_targets.csv")
+    if tg is not None:
+        tgt = pd.DataFrame(index=months, columns=COUNTRIES, dtype=float)
+        lo, hi = tgt.copy(), tgt.copy()
+        for r in tg.itertuples():
+            c = iso2.get(r.iso3)
+            if c is None:
+                continue
+            s = pd.Period(pd.Timestamp(r.start_date), "M")
+            e = pd.Period(pd.Timestamp(r.end_date), "M") if isinstance(r.end_date, str) and r.end_date else months[-1]
+            sel = (months >= s) & (months <= e)
+            tgt.loc[sel, c] = r.target_point_pct
+            lo.loc[sel, c] = r.band_low_pct
+            hi.loc[sel, c] = r.band_high_pct
+        out["inflation_target"] = tgt
+        out["inflation_target_low"] = lo
+        out["inflation_target_high"] = hi
+        SOURCES["inflation_target"] = "data/external/structural/inflation_targets.csv (central bank sources)"
+
+    im = _read_ext(st / "imf_programmes.csv")
+    if im is not None:
+        flag = pd.DataFrame(0.0, index=months, columns=COUNTRIES)
+        fac = pd.DataFrame("", index=months, columns=COUNTRIES)
+        for r in im.itertuples():
+            c = iso2.get(r.iso3)
+            if c is None or not isinstance(r.approval_date, str):
+                continue
+            s = pd.Period(pd.Timestamp(r.approval_date), "M")
+            e = (pd.Period(pd.Timestamp(r.expiry_date), "M") if isinstance(r.expiry_date, str) and r.expiry_date
+                 else months[-1])
+            sel = (months >= s) & (months <= e)
+            flag.loc[sel, c] = 1.0
+            fac.loc[sel, c] = r.facility
+        out["imf_programme"] = flag
+        out["imf_facility"] = fac
+        SOURCES["imf_programme"] = "data/external/structural/imf_programmes.csv (IMF lending history)"
+    return out
+
+
+def ratings_block(months) -> dict[str, pd.DataFrame]:
+    files = sorted((EVENTS / "raw").glob("rating_actions_*.csv"))
+    if not files:
+        return {}
+    ra = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    ra["date"] = pd.to_datetime(ra["date"], errors="coerce")
+    ra = ra.dropna(subset=["date"]).sort_values("date")
+    ra["agency"] = ra["agency"].str.replace("’", "'").str.strip()
+    iso2 = {v: k for k, v in ISO3.items()}
+    out = {}
+    num = {}
+    for agency, short in [("S&P", "sp"), ("Moody's", "moodys"), ("Fitch", "fitch")]:
+        lvl = pd.DataFrame(index=months, columns=COUNTRIES, dtype=float)
+        adj = lvl.copy()
+        for c in COUNTRIES:
+            g = ra[(ra["iso3"] == ISO3[c]) & (ra["agency"].str.lower() == agency.lower())]
+            if g.empty:
+                continue
+            r_num = g["rating_after"].astype(str).str.strip().map(RATING_NUM)
+            o_adj = g["outlook_after"].astype(str).str.strip().str.lower().str.replace(" ", "_").map(OUTLOOK_ADJ)
+            s_lvl = pd.Series(r_num.values, index=g["date"].values).groupby(level=0).last()
+            s_adj = pd.Series((r_num + o_adj.fillna(0)).values, index=g["date"].values).groupby(level=0).last()
+            me = months.to_timestamp(how="end")
+            lvl[c] = s_lvl.reindex(s_lvl.index.union(me)).ffill().reindex(me).values
+            adj[c] = s_adj.reindex(s_adj.index.union(me)).ffill().reindex(me).values
+        out[f"rating_{short}"] = lvl
+        num[short] = adj
+        SOURCES[f"rating_{short}"] = (f"{agency} long-term FC sovereign rating, month-end, numeric (AAA/Aaa=21 ... "
+                                      "C=1); data/events/raw/rating_actions_*.csv")
+    out["rating_avg_outlook_adj"] = (num["sp"] + num["moodys"] + num["fitch"]) / 3
+    SOURCES["rating_avg_outlook_adj"] = "mean of the three agencies' numeric ratings incl. outlook (+/-1/3, watch +/-2/3)"
+    acts = ra[ra["action"].isin(["upgrade", "downgrade", "outlook_change", "watch_on", "watch_off"])]
+    for kind in ("upgrade", "downgrade"):
+        g = acts[acts["action"] == kind]
+        cnt = g.groupby([g["iso3"].map(iso2), g["date"].dt.to_period("M")]).size().unstack(0)
+        out[f"rating_{kind}s_n"] = cnt.reindex(index=months, columns=COUNTRIES).fillna(0)
+        SOURCES[f"rating_{kind}s_n"] = f"number of {kind}s across S&P/Moody's/Fitch in the month"
+    return out
+
+
+def politics_block(months) -> dict[str, pd.DataFrame]:
+    pol = EXT / "politics"
+    cab_files = [f for f in sorted(pol.glob("cabinets_*.csv"))] if pol.exists() else []
+    if not cab_files:
+        return {}
+    cab = pd.concat([pd.read_csv(f) for f in cab_files], ignore_index=True)
+    cab["start"] = pd.to_datetime(cab["start_date"], errors="coerce")
+    cab["end"] = pd.to_datetime(cab["end_date"], errors="coerce")
+    cab = cab.dropna(subset=["start"]).sort_values("start")
+    parties = pd.concat([pd.read_csv(f) for f in sorted(pol.glob("parties_*.csv"))], ignore_index=True) \
+        if list(pol.glob("parties_*.csv")) else pd.DataFrame()
+    out = {k: pd.DataFrame(index=months, columns=COUNTRIES, dtype=float)
+           for k in ("gov_seat_share", "gov_n_parties", "gov_minority", "n_governments_prior5y",
+                     "head_party_left_right", "head_party_populism", "gov_parties_left_right",
+                     "gov_parties_populism")}
+    me = months.to_timestamp(how="end")
+    for c in COUNTRIES:
+        g = cab[cab["iso3"] == ISO3[c]]
+        if g.empty:
+            continue
+        pc = parties[parties["iso3"] == ISO3[c]] if len(parties) else pd.DataFrame()
+        for m, t in zip(months, me):
+            cur = g[(g["start"] <= t) & (g["end"].isna() | (g["end"] > t))]
+            n5 = ((g["start"] > t - pd.DateOffset(years=5)) & (g["start"] <= t)).sum()
+            out["n_governments_prior5y"].loc[m, c] = n5
+            if cur.empty:
+                continue
+            r = cur.iloc[-1]
+            share = r.get("seat_share")
+            share = float(share) * (100 if pd.notna(share) and float(share) <= 1 else 1) if pd.notna(share) else np.nan
+            out["gov_seat_share"].loc[m, c] = share
+            out["gov_n_parties"].loc[m, c] = r.get("n_parties")
+            out["gov_minority"].loc[m, c] = float(share < 50) if pd.notna(share) else np.nan
+            if len(pc):
+                head, gov = _party_scores(pc, r, t)
+                for k, v in zip(("head_party_left_right", "head_party_populism",
+                                 "gov_parties_left_right", "gov_parties_populism"), head + gov):
+                    out[k].loc[m, c] = v
+    SOURCES["gov_seat_share"] = "lower-house seat share of cabinet parties; data/external/politics/cabinets_*.csv"
+    SOURCES["gov_n_parties"] = "number of parties holding cabinet posts"
+    SOURCES["gov_minority"] = "1 if gov_seat_share < 50"
+    SOURCES["n_governments_prior5y"] = "cabinets/government spells starting in the 5 years up to month end"
+    for k in ("head_party_left_right", "gov_parties_left_right"):
+        SOURCES[k] = "V-Party v2pariglef (economic left-right; higher = right), latest election year <= month"
+    for k in ("head_party_populism", "gov_parties_populism"):
+        SOURCES[k] = "V-Party v2xpa_popul (0-1), latest election year <= month"
+    return out
+
+
+def _party_scores(pc: pd.DataFrame, cab_row, t) -> tuple[list, list]:
+    """Head-of-government party and mean over cabinet parties, V-Party scores
+    from the latest election year <= t."""
+    def score(party, col):
+        g = pc[(pc["party"].astype(str).str.strip().str.lower() == str(party).strip().lower())]
+        if col not in g or g.empty:
+            return np.nan
+        g = g.dropna(subset=[col])
+        if "vparty_year" in g:
+            g = g[pd.to_numeric(g["vparty_year"], errors="coerce") <= t.year]
+            g = g.sort_values("vparty_year")
+        return float(g[col].iloc[-1]) if len(g) else np.nan
+    parts = [p for p in str(cab_row.get("parties", "")).split(";") if p.strip()]
+    head = cab_row.get("head_party")
+    lr_head, pop_head = score(head, "vparty_v2pariglef"), score(head, "vparty_v2xpa_popul")
+    lr = np.nanmean([score(p, "vparty_v2pariglef") for p in parts]) if parts else np.nan
+    pop = np.nanmean([score(p, "vparty_v2xpa_popul") for p in parts]) if parts else np.nan
+    return [lr_head, pop_head], [lr, pop]
+
+
+# ---------------------------------------------------------------- assembly
+def build() -> pd.DataFrame:
+    daily = pd.read_csv(PROC / "daily_panel.csv", index_col=0, parse_dates=True)
+    end = pd.Period(daily.index.max(), "M")
+    months = _months(end)
+    blocks = {}
+    for f in (market_block, annual_block, external_block, ratings_block, politics_block):
+        blocks.update(f(months))
+    if "inflation_target" in blocks:
+        blocks["inflation_vs_target_pp"] = blocks["cpi_yoy"] - blocks["inflation_target"]
+        SOURCES["inflation_vs_target_pp"] = "cpi_yoy minus inflation_target (point target or band midpoint)"
+    rows = []
+    for c in COUNTRIES:
+        d = pd.DataFrame({k: v[c] for k, v in blocks.items() if c in v}, index=months)
+        d.insert(0, "currency", CCY[c])
+        d.insert(0, "focus", c in FOCUS)
+        d.insert(0, "country", NAMES[c])
+        d.insert(0, "iso3", ISO3[c])
+        d.index.name = "month"
+        rows.append(d.reset_index())
+    panel = pd.concat(rows, ignore_index=True)
+    glob = global_block(months).reset_index().rename(columns={"index": "month"})
+    panel = panel.merge(glob, on="month", how="left")
+    panel["month"] = panel["month"].astype(str)
+    PROC.mkdir(parents=True, exist_ok=True)
+    panel.to_csv(PROC / "country_month_panel.csv", index=False, float_format="%.6g")
+    coverage(panel, months)
+    return panel
+
+
+def coverage(panel: pd.DataFrame, months):
+    cols = [c for c in panel.columns if c not in ("iso3", "country", "focus", "currency", "month")]
+    rows = []
+    for col in cols:
+        for iso, g in panel.groupby("iso3"):
+            s = g.set_index("month")[col]
+            ok = s.notna() & (s.astype(str) != "")
+            rows.append({"factor": col, "iso3": iso, "first": s[ok].index.min() if ok.any() else "",
+                         "last": s[ok].index.max() if ok.any() else "",
+                         "pct_months": round(100 * ok.mean(), 1), "source": SOURCES.get(col, ""),
+                         "note": NOTES.get(col, "")})
+    cov = pd.DataFrame(rows)
+    cov.to_csv(PROC / "panel_coverage.csv", index=False)
+    order = [ISO3[c] for c in COUNTRIES]
+    mat = cov.pivot_table(index="factor", columns="iso3", values="pct_months").reindex(columns=order)
+    mat = mat.reindex(cols)
+    L = ["# Country-month panel: coverage by factor and country", "",
+         f"`data/processed/country_month_panel.csv`: {panel['iso3'].nunique()} countries x {len(months)} months "
+         f"({months[0]} to {months[-1]}), {len(cols)} factors. Cells = % of months with a value. Focus countries: "
+         "Brazil, Mexico, France.", "",
+         "| factor | " + " | ".join(order) + " |", "|---|" + "---|" * len(order)]
+    for f, r in mat.iterrows():
+        L.append(f"| {f} | " + " | ".join("" if pd.isna(v) else f"{v:.0f}" for v in r.values) + " |")
+    L += ["", "## Sources and notes by factor", ""]
+    for col in cols:
+        L.append(f"- **{col}** — {SOURCES.get(col, 'n/a')}" + (f" *Note:* {NOTES[col]}" if col in NOTES else ""))
+    L += ["", "## Spans by factor and country (first-last month with data)", "",
+          "| factor | " + " | ".join(order) + " |", "|---|" + "---|" * len(order)]
+    span = cov.assign(span=cov["first"].astype(str).str[:7] + "–" + cov["last"].astype(str).str[:7])
+    sp = span.pivot_table(index="factor", columns="iso3", values="span", aggfunc="first").reindex(index=cols,
+                                                                                                  columns=order)
+    for f, r in sp.iterrows():
+        L.append(f"| {f} | " + " | ".join("" if (pd.isna(v) or v == "–") else v for v in r.values) + " |")
+    (RESULTS / "panel_coverage.md").write_text("\n".join(L) + "\n")
+
+
+if __name__ == "__main__":
+    build()
