@@ -237,25 +237,38 @@ def external_block(months) -> dict[str, pd.DataFrame]:
                 SOURCES[f"vdem_{col}"] = "data/external/structural/vdem.csv (V-Dem; see vdem_SOURCE.md)"
     dh = _read_ext(st / "debt_holders.csv")
     if dh is not None:
+        # sources measure different things (coverage, valuation, government level), so
+        # each keeps its own column instead of being spliced
+        tag = np.select([dh["source"].str.contains("Arslanalp"), dh["source"].str.contains("Quarterly Public"),
+                         dh["source"].str.contains("Eurostat")], ["at", "qpsd", "eurostat"], "other")
+        dh = dh.assign(tag=tag, q_or_a=dh["freq"].str.upper().str[0])
+        dh = dh.sort_values("q_or_a", ascending=False)      # quarterly rows win over annual ones
         for col in ("foreign_share_pct", "fx_share_pct"):
-            frames = {}
-            for c in COUNTRIES:
-                g = dh[(dh["iso3"] == ISO3[c])].dropna(subset=[col])
-                s = {}
-                for r in g.itertuples():
-                    per = str(r.period)
-                    if str(r.freq).upper().startswith("Q"):
-                        q = pd.Period(per.replace("-", ""), freq="Q")
-                        for m in pd.period_range(q.asfreq("M", "s"), q.asfreq("M", "e"), freq="M"):
-                            s[m] = getattr(r, col)
-                    elif str(r.freq).upper().startswith("A"):
-                        for m in pd.period_range(f"{int(float(per))}-01", f"{int(float(per))}-12", freq="M"):
+            for src in ("at", "qpsd", "eurostat"):
+                frames = {}
+                for c in COUNTRIES:
+                    g = dh[(dh["iso3"] == ISO3[c]) & (dh["tag"] == src)].dropna(subset=[col])
+                    s = {}
+                    for r in g.itertuples():
+                        per = str(r.period)
+                        if r.q_or_a == "Q":
+                            q = pd.Period(per, freq="Q")
+                            ms = pd.period_range(q.asfreq("M", "s"), q.asfreq("M", "e"), freq="M")
+                        else:
+                            ms = pd.period_range(f"{int(float(per))}-01", f"{int(float(per))}-12", freq="M")
+                        for m in ms:
                             s.setdefault(m, getattr(r, col))
-                    else:
-                        s[pd.Period(per, freq="M")] = getattr(r, col)
-                frames[c] = pd.Series(s, dtype=float).reindex(months)
-            out[f"debt_{col}"] = pd.DataFrame(frames)
-            SOURCES[f"debt_{col}"] = "data/external/structural/debt_holders.csv (see debt_holders_SOURCE.md)"
+                    frames[c] = pd.Series(s, dtype=float).reindex(months)
+                df = pd.DataFrame(frames)
+                if df.notna().any().any():
+                    name = f"debt_{col.replace('_pct', '')}_{src}"
+                    out[name] = df
+                    SOURCES[name] = {"at": "Arslanalp-Tsuda sovereign investor base (IMF, 2016 vintage, to 2016Q2)",
+                                     "qpsd": "World Bank/IMF Quarterly Public Sector Debt (API source 20)",
+                                     "eurostat": "Eurostat gov_10q_ggdebt (quarterly) / gov_10dd_ggd (annual)"}[src] \
+                        + "; % of general/central government debt; data/external/structural/debt_holders.csv"
+        NOTES["debt_foreign_share_at"] = ("Levels differ across sources (e.g. GBR 2010Q4: 26.2% A-T vs 16.8% QPSD); "
+                                          "never splice them. Euro-area 'foreign' includes other euro residents.")
 
     tg = _read_ext(st / "inflation_targets.csv")
     if tg is not None:
