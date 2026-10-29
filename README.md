@@ -504,8 +504,10 @@ Calendar gaps:
 >   past-cases finder.
 > - **Specification error:** after the one-time test, the frozen model turned out to give non-credible fair values
 >   for some countries (France most visibly). It treats two different kinds of spread as one. A corrected version
->   with separate equations ("v2") feeds the dashboard. Its test results are labelled post-hoc because the change
->   was made after seeing the test period. The v2 test also fails to beat "no change".
+>   with separate equations ("v2") feeds the dashboard. v2 is **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**. Its 2020+ evaluation also fails to beat
+>   "no change".
+> - **Past-cases finder:** its average outcome predicted worse than "no change" out of sample, so the similar
+>   cases are **for context only**, not a forecast.
 >
 > Treat the fair values as a description of where spreads sit relative to 2005–2019 relationships, not as a
 > trading signal. The frozen event-study results (§5–6) are untouched.
@@ -605,7 +607,7 @@ How to read the less intuitive rows:
 - **Debt × seat share:** +58bp per joint standard deviation (t = 3.5).
 - **Party positions:** the populism and party-position terms are small or of mixed sign.
 
-**v2 (post-hoc) equations.**
+**v2 equations — **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**.**
 - **Spreads over Bunds** (France, Italy, Spain, UK, Poland; within R² 0.82):
   - rating −37bp per notch (t −7.7);
   - deficit +9bp per pp of GDP (t 5.0);
@@ -650,7 +652,7 @@ largest moves.
   Indonesia (0.92). Spain and France are clearly worse.
 - **Currency mispricing** is worse than no change (pooled 1.04 and 1.10). Mexico is 0.95–0.99; Brazil is 1.09–1.29.
 
-**Post-hoc v2** (`results/risk_model/test_v2_posthoc/`, not a clean test):
+**v2** (`results/risk_model/test_v2_posthoc/`) — **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**:
 
 | | 3 months | 6 months |
 |---|---|---|
@@ -684,8 +686,9 @@ cases' moves is **worse than no change**:
 | spreads | 1.04 (DM −2.4) | 1.05 (DM −2.9) |
 | currencies | 1.09 (DM −3.3) | 1.05 (DM −1.7) |
 
-It is worse for Brazil, Mexico and France too, except Mexico's currency (0.96, not significant). The cases are
-useful as context, not as a forecast.
+It is worse for Brazil, Mexico and France too, except Mexico's currency (0.96, not significant). **The similar
+cases are for context only, not a forecast.** `similar_cases.csv` says so in its `asset` column and at the end of
+every `outcome_note`.
 
 ### What-if tool (`results/risk_model/what_if.csv`; latest month; 90% bands from the Driscoll–Kraay covariance)
 
@@ -723,9 +726,9 @@ These follow forecast-panel `site/config.yaml`; the country column holds ISO3 co
 
 | file | columns | content |
 |---|---|---|
-| `results/risk_model/fair_value.csv` | `country,date,asset,actual,fair_value,gap,gap_z` | asset `spread_bp`, from v2 |
+| `results/risk_model/fair_value.csv` | `country,date,asset,actual,fair_value,gap,gap_z` | v2 spread fair values, **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**. The `asset` value carries this label so the dashboard shows it next to each fair value |
 | `results/risk_model/factors.csv` | `country,date,asset,factor,contribution` | bp, from 2015; contributions are measured against the country's 2005–2019 average and, with the "baseline" row, sum to the fair value |
-| `results/risk_model/similar_cases.csv` | `country,date,asset,case_country,case_date,similarity,outcome_note` | similarity = 1/(1 + RMS distance) |
+| `results/risk_model/similar_cases.csv` | `country,date,asset,case_country,case_date,similarity,outcome_note` | similarity = 1/(1 + RMS distance). **Context only:** the past-cases average predicted worse than no-change out of sample. This note is in the `asset` column and at the end of each `outcome_note` |
 
 Other files:
 - `what_if.csv`: the scenario estimates above.
@@ -752,7 +755,7 @@ Other files:
   - **Bands:** ridge shrinks towards zero, and the Driscoll–Kraay bands do not account for that bias.
 - **What the test can and can't say:**
   - **Small samples:** about 75–80 overlapping monthly forecasts per country, so per-country DM statistics are noisy.
-  - **Post-hoc v2:** it was chosen after seeing 2020+ output, so its numbers are not an independent test.
+  - **v2 is **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**.** Its numbers are not an independent test.
 
 ## 10. Limitations of the event study (§1–7)
 

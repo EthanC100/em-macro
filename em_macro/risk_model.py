@@ -535,6 +535,11 @@ def analog_forecasts(d: pd.DataFrame, fr: dict) -> pd.DataFrame:
 
 
 # ================================================================= outputs
+V2_LABEL = "spread_bp [v2 post-hoc: chosen after the 2020+ test; not a clean out-of-sample result]"
+SIMILAR_LABEL = ("spread_bp [context only: the past-cases average predicted worse than no-change out of sample, "
+                 "2020+]")
+
+
 def _fair_value_and_factors(fr: dict, d: pd.DataFrame, names: list[str]):
     """Fair value rows and factor contributions.  Contributions are measured
     against the country's own 2005-2019 average of each factor, so
@@ -586,9 +591,13 @@ def stage_outputs():
     d = load_data()
     v1, v2 = load_frozen("v1"), load_frozen("v2")
     fv, fac = _fair_value_and_factors(v2, d, ["spread_eu", "spread_em"])
+    fv["asset"] = V2_LABEL                      # shown on the dashboard next to each fair value
     fv.to_csv(OUT / "fair_value.csv", index=False, float_format="%.4f")
     fac.to_csv(OUT / "factors.csv", index=False, float_format="%.3f")
-    similar_cases(d, v1).to_csv(OUT / "similar_cases.csv", index=False, float_format="%.3f")
+    sc = similar_cases(d, v1)
+    sc["asset"] = SIMILAR_LABEL
+    sc["outcome_note"] = sc["outcome_note"] + " [context only: past-cases average did worse than no-change out of sample]"
+    sc.to_csv(OUT / "similar_cases.csv", index=False, float_format="%.3f")
     pd.concat([what_if(d, v2, ["spread_eu", "spread_em"]), what_if(d, v1, ["fx"])]).to_csv(
         OUT / "what_if.csv", index=False, float_format="%.2f")
     fxv, fxf = _fair_value_and_factors(v1, d, ["fx"])
