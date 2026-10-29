@@ -281,13 +281,20 @@ def external_block(months) -> dict[str, pd.DataFrame]:
             s = pd.Period(pd.Timestamp(r.start_date), "M")
             e = pd.Period(pd.Timestamp(r.end_date), "M") if isinstance(r.end_date, str) and r.end_date else months[-1]
             sel = (months >= s) & (months <= e)
-            tgt.loc[sel, c] = r.target_point_pct
+            point = r.target_point_pct
+            if pd.isna(point):            # band-only regimes: midpoint; ECB pre-2021 "below 2%": the ceiling
+                point = (r.band_low_pct + r.band_high_pct) / 2 if pd.notna(r.band_low_pct) else r.band_high_pct
+            tgt.loc[sel, c] = point
             lo.loc[sel, c] = r.band_low_pct
             hi.loc[sel, c] = r.band_high_pct
         out["inflation_target"] = tgt
         out["inflation_target_low"] = lo
         out["inflation_target_high"] = hi
-        SOURCES["inflation_target"] = "data/external/structural/inflation_targets.csv (central bank sources)"
+        SOURCES["inflation_target"] = ("data/external/structural/inflation_targets.csv (central bank sources); "
+                                       "point target, else band midpoint (e.g. SARB 3-6% -> 4.5), else ceiling "
+                                       "(ECB 'below but close to 2%' before Jul 2021 -> 2.0)")
+        SOURCES["inflation_target_low"] = "lower tolerance band (blank where none, e.g. UK, ECB)"
+        SOURCES["inflation_target_high"] = "upper tolerance band / ceiling"
 
     im = _read_ext(st / "imf_programmes.csv")
     if im is not None:
@@ -349,21 +356,32 @@ def ratings_block(months) -> dict[str, pd.DataFrame]:
     return out
 
 
+PARTY_MEASURES = {   # parties_*.csv column -> panel suffix, description
+    "parlgov_left_right": ("lr_parlgov", "ParlGov expert-survey left-right, 0-10"),
+    "ches_lrecon": ("lr_econ_ches", "Chapel Hill Expert Survey economic left-right, 0-10"),
+    "vparty_v2pariglef": ("lr_econ_vparty", "V-Party v2pariglef economic left-right (higher = right)"),
+    "gps_lr_econ": ("lr_econ_gps", "Global Party Survey 2019 economic left-right"),
+    "vparty_v2xpa_popul": ("populism_vparty", "V-Party v2xpa_popul populism index, 0-1"),
+    "gps_populism": ("populism_gps", "Global Party Survey 2019 populism"),
+    "populist_popu_list": ("populist_popu_list", "PopuList populist flag (Europe only)"),
+}
+
+
 def politics_block(months) -> dict[str, pd.DataFrame]:
     pol = EXT / "politics"
-    cab_files = [f for f in sorted(pol.glob("cabinets_*.csv"))] if pol.exists() else []
+    cab_files = sorted(pol.glob("cabinets_*.csv")) if pol.exists() else []
     if not cab_files:
         return {}
     cab = pd.concat([pd.read_csv(f) for f in cab_files], ignore_index=True)
     cab["start"] = pd.to_datetime(cab["start_date"], errors="coerce")
     cab["end"] = pd.to_datetime(cab["end_date"], errors="coerce")
     cab = cab.dropna(subset=["start"]).sort_values("start")
-    parties = pd.concat([pd.read_csv(f) for f in sorted(pol.glob("parties_*.csv"))], ignore_index=True) \
-        if list(pol.glob("parties_*.csv")) else pd.DataFrame()
-    out = {k: pd.DataFrame(index=months, columns=COUNTRIES, dtype=float)
-           for k in ("gov_seat_share", "gov_n_parties", "gov_minority", "n_governments_prior5y",
-                     "head_party_left_right", "head_party_populism", "gov_parties_left_right",
-                     "gov_parties_populism")}
+    pfiles = sorted(pol.glob("parties_*.csv"))
+    parties = pd.concat([pd.read_csv(f) for f in pfiles], ignore_index=True) if pfiles else pd.DataFrame()
+    measures = {k: v for k, v in PARTY_MEASURES.items() if k in parties}
+    keys = ["gov_seat_share", "gov_n_parties", "gov_minority", "n_governments_prior5y"]
+    keys += [f"{who}_{suf}" for suf, _ in measures.values() for who in ("head_party", "gov_parties")]
+    out = {k: pd.DataFrame(index=months, columns=COUNTRIES, dtype=float) for k in keys}
     me = months.to_timestamp(how="end")
     for c in COUNTRIES:
         g = cab[cab["iso3"] == ISO3[c]]
@@ -371,51 +389,51 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
             continue
         pc = parties[parties["iso3"] == ISO3[c]] if len(parties) else pd.DataFrame()
         for m, t in zip(months, me):
+            out["n_governments_prior5y"].loc[m, c] = ((g["start"] > t - pd.DateOffset(years=5))
+                                                      & (g["start"] <= t)).sum()
             cur = g[(g["start"] <= t) & (g["end"].isna() | (g["end"] > t))]
-            n5 = ((g["start"] > t - pd.DateOffset(years=5)) & (g["start"] <= t)).sum()
-            out["n_governments_prior5y"].loc[m, c] = n5
             if cur.empty:
                 continue
             r = cur.iloc[-1]
-            share = r.get("seat_share")
-            share = float(share) * (100 if pd.notna(share) and float(share) <= 1 else 1) if pd.notna(share) else np.nan
+            parts = [x.strip() for x in str(r.get("parties", "")).split(";") if x.strip() and x != "nan"]
+            share = pd.to_numeric(r.get("seat_share"), errors="coerce")
+            if pd.notna(share) and share <= 1:
+                share *= 100
+            if not parts:                 # technocratic cabinet without party ministers (e.g. Monti)
+                share = np.nan
             out["gov_seat_share"].loc[m, c] = share
-            out["gov_n_parties"].loc[m, c] = r.get("n_parties")
+            out["gov_n_parties"].loc[m, c] = len(parts) if parts else np.nan
             out["gov_minority"].loc[m, c] = float(share < 50) if pd.notna(share) else np.nan
-            if len(pc):
-                head, gov = _party_scores(pc, r, t)
-                for k, v in zip(("head_party_left_right", "head_party_populism",
-                                 "gov_parties_left_right", "gov_parties_populism"), head + gov):
-                    out[k].loc[m, c] = v
-    SOURCES["gov_seat_share"] = "lower-house seat share of cabinet parties; data/external/politics/cabinets_*.csv"
-    SOURCES["gov_n_parties"] = "number of parties holding cabinet posts"
+            for col, (suf, _) in measures.items():
+                out[f"head_party_{suf}"].loc[m, c] = _party_score(pc, r.get("head_party"), col, t.year)
+                vals = [_party_score(pc, p_, col, t.year) for p_ in parts]
+                vals = [v for v in vals if pd.notna(v)]
+                out[f"gov_parties_{suf}"].loc[m, c] = np.mean(vals) if vals else np.nan
+    SOURCES["gov_seat_share"] = ("lower-house seat share (%) of parties holding cabinet posts at cabinet start; "
+                                 "data/external/politics/cabinets_*.csv (ParlGov + Wikipedia/official extensions; "
+                                 "presidential systems: governing coalition, see NOTES files)")
+    SOURCES["gov_n_parties"] = "number of parties holding cabinet posts (coalition size)"
     SOURCES["gov_minority"] = "1 if gov_seat_share < 50"
     SOURCES["n_governments_prior5y"] = "cabinets/government spells starting in the 5 years up to month end"
-    for k in ("head_party_left_right", "gov_parties_left_right"):
-        SOURCES[k] = "V-Party v2pariglef (economic left-right; higher = right), latest election year <= month"
-    for k in ("head_party_populism", "gov_parties_populism"):
-        SOURCES[k] = "V-Party v2xpa_popul (0-1), latest election year <= month"
+    for col, (suf, desc) in measures.items():
+        SOURCES[f"head_party_{suf}"] = f"{desc}; party of the head of government; latest reference election <= year"
+        SOURCES[f"gov_parties_{suf}"] = f"{desc}; unweighted mean over cabinet parties"
+    NOTES["gov_seat_share"] = ("Seat counts are at cabinet start (not updated for defections). Turkey after 2018: "
+                               "People's Alliance; France 2017-2020: ParlGov counts LR in Philippe II/Castex "
+                               "(see politics NOTES).")
     return out
 
 
-def _party_scores(pc: pd.DataFrame, cab_row, t) -> tuple[list, list]:
-    """Head-of-government party and mean over cabinet parties, V-Party scores
-    from the latest election year <= t."""
-    def score(party, col):
-        g = pc[(pc["party"].astype(str).str.strip().str.lower() == str(party).strip().lower())]
-        if col not in g or g.empty:
-            return np.nan
-        g = g.dropna(subset=[col])
-        if "vparty_year" in g:
-            g = g[pd.to_numeric(g["vparty_year"], errors="coerce") <= t.year]
-            g = g.sort_values("vparty_year")
-        return float(g[col].iloc[-1]) if len(g) else np.nan
-    parts = [p for p in str(cab_row.get("parties", "")).split(";") if p.strip()]
-    head = cab_row.get("head_party")
-    lr_head, pop_head = score(head, "vparty_v2pariglef"), score(head, "vparty_v2xpa_popul")
-    lr = np.nanmean([score(p, "vparty_v2pariglef") for p in parts]) if parts else np.nan
-    pop = np.nanmean([score(p, "vparty_v2xpa_popul") for p in parts]) if parts else np.nan
-    return [lr_head, pop_head], [lr, pop]
+def _party_score(pc: pd.DataFrame, party, col: str, year: int) -> float:
+    if pc is None or not len(pc) or party is None or pd.isna(party):
+        return np.nan
+    g = pc[pc["party"].astype(str).str.strip().str.lower() == str(party).strip().lower()]
+    if g.empty or col not in g:
+        return np.nan
+    yr = pd.to_numeric(g.get("vparty_year"), errors="coerce") if "vparty_year" in g else pd.Series(np.nan, g.index)
+    g = g.assign(_y=yr).dropna(subset=[col])
+    past = g[g["_y"].isna() | (g["_y"] <= year)].sort_values("_y")
+    return float(past[col].iloc[-1]) if len(past) else np.nan
 
 
 # ---------------------------------------------------------------- assembly
@@ -428,7 +446,12 @@ def build() -> pd.DataFrame:
         blocks.update(f(months))
     if "inflation_target" in blocks:
         blocks["inflation_vs_target_pp"] = blocks["cpi_yoy"] - blocks["inflation_target"]
-        SOURCES["inflation_vs_target_pp"] = "cpi_yoy minus inflation_target (point target or band midpoint)"
+        SOURCES["inflation_vs_target_pp"] = "cpi_yoy minus inflation_target"
+        hi, lo = blocks["inflation_target_high"], blocks["inflation_target_low"]
+        cpi = blocks["cpi_yoy"]
+        outside = ((cpi > hi) | (cpi < lo)).astype(float).where(cpi.notna() & (hi.notna() | lo.notna()))
+        blocks["inflation_outside_band"] = outside
+        SOURCES["inflation_outside_band"] = "1 if cpi_yoy is above the upper or below the lower band"
     rows = []
     for c in COUNTRIES:
         d = pd.DataFrame({k: v[c] for k, v in blocks.items() if c in v}, index=months)
