@@ -1,6 +1,6 @@
 # Country-month panel: coverage by factor and country
 
-`data/processed/country_month_panel.csv`: 13 countries x 262 months (2005-01 to 2026-10), 47 factors. Cells = % of months with a value. Focus countries: Brazil, Mexico, France.
+`data/processed/country_month_panel.csv`: 13 countries x 262 months (2005-01 to 2026-10), 74 factors. Cells = % of months with a value. Focus countries: Brazil, Mexico, France.
 
 | factor | BRA | MEX | FRA | ZAF | TUR | IDN | POL | ITA | ESP | GBR | COL | CHL | DEU |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -45,6 +45,33 @@
 | debt_foreign_share_eurostat | 0 | 0 | 28 | 0 | 0 | 0 | 28 | 98 | 28 | 0 | 0 | 0 | 96 |
 | debt_fx_share_qpsd | 78 | 85 | 0 | 74 | 95 | 76 | 0 | 98 | 98 | 98 | 85 | 0 | 0 |
 | debt_fx_share_eurostat | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 98 | 0 | 0 | 0 | 0 | 0 |
+| inflation_target | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| inflation_target_low | 100 | 100 | 0 | 100 | 95 | 100 | 100 | 0 | 0 | 0 | 100 | 100 | 0 |
+| inflation_target_high | 100 | 100 | 76 | 100 | 95 | 100 | 100 | 76 | 76 | 0 | 100 | 100 | 76 |
+| imf_programme | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| imf_facility | 1 | 80 | 0 | 0 | 15 | 0 | 39 | 0 | 0 | 0 | 84 | 30 | 0 |
+| rating_sp | 100 | 100 | 0 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 100 | 100 | 0 |
+| rating_moodys | 100 | 100 | 0 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 100 | 100 | 0 |
+| rating_fitch | 100 | 100 | 0 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 100 | 100 | 0 |
+| rating_avg_outlook_adj | 100 | 100 | 0 | 100 | 100 | 100 | 0 | 0 | 0 | 0 | 100 | 100 | 0 |
+| rating_upgrades_n | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| rating_downgrades_n | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| gov_seat_share | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| gov_n_parties | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| gov_minority | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| n_governments_prior5y | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 100 | 100 | 100 | 0 | 0 | 100 |
+| head_party_lr_parlgov | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 74 | 100 | 100 | 0 | 0 | 100 |
+| gov_parties_lr_parlgov | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| head_party_lr_econ_ches | 0 | 0 | 93 | 0 | 91 | 0 | 97 | 64 | 100 | 100 | 0 | 0 | 100 |
+| gov_parties_lr_econ_ches | 0 | 0 | 100 | 0 | 91 | 0 | 97 | 94 | 100 | 100 | 0 | 0 | 100 |
+| head_party_lr_econ_vparty | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 55 | 100 | 100 | 0 | 0 | 100 |
+| gov_parties_lr_econ_vparty | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| head_party_populism_vparty | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 55 | 100 | 100 | 0 | 0 | 100 |
+| gov_parties_populism_vparty | 0 | 0 | 100 | 0 | 100 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| head_party_populist_popu_list | 0 | 0 | 100 | 0 | 0 | 0 | 100 | 74 | 100 | 100 | 0 | 0 | 100 |
+| gov_parties_populist_popu_list | 0 | 0 | 100 | 0 | 0 | 0 | 100 | 94 | 100 | 100 | 0 | 0 | 100 |
+| inflation_vs_target_pp | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+| inflation_outside_band | 100 | 100 | 76 | 100 | 95 | 100 | 100 | 76 | 76 | 0 | 100 | 100 | 76 |
 | us10y | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | dxy | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | vix | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
@@ -95,6 +122,33 @@
 - **debt_foreign_share_eurostat** — Eurostat gov_10q_ggdebt (quarterly) / gov_10dd_ggd (annual); % of general/central government debt; data/external/structural/debt_holders.csv
 - **debt_fx_share_qpsd** — World Bank/IMF Quarterly Public Sector Debt (API source 20); % of general/central government debt; data/external/structural/debt_holders.csv
 - **debt_fx_share_eurostat** — Eurostat gov_10q_ggdebt (quarterly) / gov_10dd_ggd (annual); % of general/central government debt; data/external/structural/debt_holders.csv
+- **inflation_target** — data/external/structural/inflation_targets.csv (central bank sources); point target, else band midpoint (e.g. SARB 3-6% -> 4.5), else ceiling (ECB 'below but close to 2%' before Jul 2021 -> 2.0)
+- **inflation_target_low** — lower tolerance band (blank where none, e.g. UK, ECB)
+- **inflation_target_high** — upper tolerance band / ceiling
+- **imf_programme** — data/external/structural/imf_programmes.csv (IMF lending history)
+- **imf_facility** — n/a
+- **rating_sp** — S&P long-term FC sovereign rating, month-end, numeric (AAA/Aaa=21 ... C=1); data/events/raw/rating_actions_*.csv
+- **rating_moodys** — Moody's long-term FC sovereign rating, month-end, numeric (AAA/Aaa=21 ... C=1); data/events/raw/rating_actions_*.csv
+- **rating_fitch** — Fitch long-term FC sovereign rating, month-end, numeric (AAA/Aaa=21 ... C=1); data/events/raw/rating_actions_*.csv
+- **rating_avg_outlook_adj** — mean of the three agencies' numeric ratings incl. outlook (+/-1/3, watch +/-2/3)
+- **rating_upgrades_n** — number of upgrades across S&P/Moody's/Fitch in the month
+- **rating_downgrades_n** — number of downgrades across S&P/Moody's/Fitch in the month
+- **gov_seat_share** — lower-house seat share (%) of parties holding cabinet posts at cabinet start; data/external/politics/cabinets_*.csv (ParlGov + Wikipedia/official extensions; presidential systems: governing coalition, see NOTES files) *Note:* Seat counts are at cabinet start (not updated for defections). Turkey after 2018: People's Alliance; France 2017-2020: ParlGov counts LR in Philippe II/Castex (see politics NOTES).
+- **gov_n_parties** — number of parties holding cabinet posts (coalition size)
+- **gov_minority** — 1 if gov_seat_share < 50
+- **n_governments_prior5y** — cabinets/government spells starting in the 5 years up to month end
+- **head_party_lr_parlgov** — ParlGov expert-survey left-right, 0-10; party of the head of government; latest reference election <= year
+- **gov_parties_lr_parlgov** — ParlGov expert-survey left-right, 0-10; unweighted mean over cabinet parties
+- **head_party_lr_econ_ches** — Chapel Hill Expert Survey economic left-right, 0-10; party of the head of government; latest reference election <= year
+- **gov_parties_lr_econ_ches** — Chapel Hill Expert Survey economic left-right, 0-10; unweighted mean over cabinet parties
+- **head_party_lr_econ_vparty** — V-Party v2pariglef economic left-right (higher = right); party of the head of government; latest reference election <= year
+- **gov_parties_lr_econ_vparty** — V-Party v2pariglef economic left-right (higher = right); unweighted mean over cabinet parties
+- **head_party_populism_vparty** — V-Party v2xpa_popul populism index, 0-1; party of the head of government; latest reference election <= year
+- **gov_parties_populism_vparty** — V-Party v2xpa_popul populism index, 0-1; unweighted mean over cabinet parties
+- **head_party_populist_popu_list** — PopuList populist flag (Europe only); party of the head of government; latest reference election <= year
+- **gov_parties_populist_popu_list** — PopuList populist flag (Europe only); unweighted mean over cabinet parties
+- **inflation_vs_target_pp** — cpi_yoy minus inflation_target
+- **inflation_outside_band** — 1 if cpi_yoy is above the upper or below the lower band
 - **us10y** — FRED DGS10
 - **dxy** — Yahoo DX-Y.NYB
 - **vix** — FRED VIXCLS
@@ -147,6 +201,33 @@
 | debt_foreign_share_eurostat |  |  | 2020-01–2025-12 |  |  |  | 2020-01–2025-12 | 2005-01–2026-06 | 2020-01–2025-12 |  |  |  | 2005-01–2025-12 |
 | debt_fx_share_qpsd | 2009-07–2026-06 | 2008-01–2026-06 |  | 2010-01–2026-03 | 2005-10–2026-06 | 2010-01–2026-06 |  | 2005-01–2026-06 | 2005-01–2026-06 | 2005-01–2026-06 | 2008-01–2026-06 |  |  |
 | debt_fx_share_eurostat |  |  |  |  |  |  |  | 2005-01–2026-06 |  |  |  |  |  |
+| inflation_target | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
+| inflation_target_low | 2005-01–2026-10 | 2005-01–2026-10 |  | 2005-01–2026-10 | 2006-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 |  |
+| inflation_target_high | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2021-06 | 2005-01–2026-10 | 2006-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2021-06 | 2005-01–2021-06 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2021-06 |
+| imf_programme | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
+| imf_facility | 2005-01–2005-03 | 2009-04–2026-10 |  | 2020-07–2020-07 | 2005-01–2008-05 |  | 2009-05–2017-11 |  |  |  | 2005-01–2025-09 | 2020-05–2026-10 |  |
+| rating_sp | 2005-01–2026-10 | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 |  |
+| rating_moodys | 2005-01–2026-10 | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 |  |
+| rating_fitch | 2005-01–2026-10 | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 |  |
+| rating_avg_outlook_adj | 2005-01–2026-10 | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 |  |
+| rating_upgrades_n | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
+| rating_downgrades_n | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
+| gov_seat_share |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_n_parties |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_minority |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| n_governments_prior5y |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| head_party_lr_parlgov |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_parties_lr_parlgov |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| head_party_lr_econ_ches |  |  | 2005-01–2026-10 |  | 2007-01–2026-10 |  | 2005-10–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_parties_lr_econ_ches |  |  | 2005-01–2026-10 |  | 2007-01–2026-10 |  | 2005-10–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| head_party_lr_econ_vparty |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2018-05 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_parties_lr_econ_vparty |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| head_party_populism_vparty |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2018-05 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_parties_populism_vparty |  |  | 2005-01–2026-10 |  | 2005-01–2026-10 |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| head_party_populist_popu_list |  |  | 2005-01–2026-10 |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| gov_parties_populist_popu_list |  |  | 2005-01–2026-10 |  |  |  | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |  |  | 2005-01–2026-10 |
+| inflation_vs_target_pp | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 |
+| inflation_outside_band | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2021-06 | 2005-01–2026-09 | 2006-01–2026-09 | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2021-06 | 2005-01–2021-06 |  | 2005-01–2026-09 | 2005-01–2026-09 | 2005-01–2021-06 |
 | us10y | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
 | dxy | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
 | vix | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 | 2005-01–2026-10 |
