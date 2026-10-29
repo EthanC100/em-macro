@@ -149,3 +149,112 @@ def bcb_focus_selic(refresh: bool = False) -> pd.DataFrame:
            "&$top=1000000")
     d = json.loads(_get(url, RAW / "bcb" / "focus_selic.json", refresh, timeout=300))
     return pd.DataFrame(d["value"])
+
+
+def _bondspot_day(d: pd.Timestamp) -> list[dict]:
+    import html
+    import re
+    url = f"https://www.bondspot.pl/fixing_obligacji?date={d:%Y%m%d}&month={d.month}&year={d.year}"
+    t = None
+    for i in range(4):
+        try:
+            r = SESSION.get(url, timeout=60)
+            r.raise_for_status()
+            t = r.text
+            break
+        except requests.RequestException:
+            time.sleep(2 ** (i + 1))
+    if t is None:
+        return [{"date": d.date(), "name": None}]      # mark as attempted
+    out = []
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", t, flags=re.S):
+        c = [html.unescape(re.sub(r"<[^>]+>", "", x)).strip()
+             for x in re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.S)]
+        if len(c) == 9 and re.fullmatch(r"PL\w{10}", c[2] or ""):
+            out.append({"date": d.date(), "name": c[1], "isin": c[2], "price_fix": c[7], "yield_fix": c[8]})
+    return out or [{"date": d.date(), "name": None}]
+
+
+def bondspot_fixings(refresh: bool = False, workers: int = 3) -> pd.DataFrame:
+    """Treasury BondSpot Poland daily fixing (price and yield of every listed
+    Polish government bond), one page per business day; parsed rows are cached
+    per year under data/raw/bondspot/."""
+    from concurrent.futures import ThreadPoolExecutor
+    folder = RAW / "bondspot"
+    folder.mkdir(parents=True, exist_ok=True)
+    today = pd.Timestamp.today().normalize()
+    frames = []
+    for y in range(2005, today.year + 1):
+        f = folder / f"fixing_{y}.csv"
+        days = pd.bdate_range(f"{y}-01-01", min(pd.Timestamp(f"{y}-12-31"), today - pd.Timedelta(days=1)))
+        have = pd.read_csv(f) if f.exists() and not refresh else pd.DataFrame(columns=["date", "name"])
+        done = set(pd.to_datetime(have["date"]).dt.date) if len(have) else set()
+        todo = [d for d in days if d.date() not in done]
+        if todo:
+            with ThreadPoolExecutor(workers) as ex:
+                rows = [r for day in ex.map(_bondspot_day, todo) for r in day]
+            have = pd.concat([have, pd.DataFrame(rows)], ignore_index=True)
+            have.to_csv(f, index=False)
+        frames.append(have)
+    df = pd.concat(frames, ignore_index=True).dropna(subset=["name"])
+    df["date"] = pd.to_datetime(df["date"])
+    df["yield_fix"] = pd.to_numeric(df["yield_fix"], errors="coerce")
+    return df
+
+
+def _bist_day(d: pd.Timestamp) -> list[dict]:
+    import zipfile
+    url = f"https://www.borsaistanbul.com/data/ttb/{d:%Y}/{d:%m}/ttb{d:%Y%m%d}3.zip"
+    content = None
+    for i in range(3):
+        try:
+            r = SESSION.get(url, timeout=60)
+            if r.status_code == 404:
+                return [{"date": d.date(), "isin": None}]
+            r.raise_for_status()
+            content = r.content
+            break
+        except requests.RequestException:
+            time.sleep(2 ** (i + 1))
+    if content is None:
+        return []                                    # transient failure: retry on next run
+    try:
+        z = zipfile.ZipFile(io.BytesIO(content))
+        df = pd.read_csv(z.open(z.namelist()[0]), sep=";", encoding="latin-1", skiprows=[1], dtype=str)
+    except Exception:
+        return [{"date": d.date(), "isin": None}]
+    df = df[df["PAZAR ISMI"].str.contains("KES", na=False) & (df["PARA BIRIMI"] == "TRY")
+            & df["ISIN/KOD"].str.startswith("TRT", na=False)]
+    out = [{"date": d.date(), "isin": r["ISIN/KOD"], "dtm": r["VKG/REPO SURESI"],
+            "wavg_compound": r["AG. ORT. BILESIK GETIRI"], "close_compound": r["KAPANIS BILESIK GETIRI"],
+            "volume": r["ISLEM HACMI"]} for _, r in df.iterrows()]
+    return out or [{"date": d.date(), "isin": None}]
+
+
+def bist_bonds(refresh: bool = False, workers: int = 3, start: str = "2018-07-02") -> pd.DataFrame:
+    """Borsa Istanbul Debt Securities Market end-of-day bulletin (CSV format,
+    available from July 2018): fixed-coupon TRY government bonds (ISIN TRT...)
+    with days to maturity and compound yields.  Cached per year."""
+    from concurrent.futures import ThreadPoolExecutor
+    folder = RAW / "bist"
+    folder.mkdir(parents=True, exist_ok=True)
+    today = pd.Timestamp.today().normalize()
+    frames = []
+    for y in range(pd.Timestamp(start).year, today.year + 1):
+        f = folder / f"ttb_{y}.csv"
+        days = pd.bdate_range(max(pd.Timestamp(start), pd.Timestamp(f"{y}-01-01")),
+                              min(pd.Timestamp(f"{y}-12-31"), today - pd.Timedelta(days=1)))
+        have = pd.read_csv(f) if f.exists() and not refresh else pd.DataFrame(columns=["date", "isin"])
+        done = set(pd.to_datetime(have["date"]).dt.date) if len(have) else set()
+        todo = [d for d in days if d.date() not in done]
+        if todo:
+            with ThreadPoolExecutor(workers) as ex:
+                rows = [r for day in ex.map(_bist_day, todo) for r in day]
+            have = pd.concat([have, pd.DataFrame(rows)], ignore_index=True)
+            have.to_csv(f, index=False)
+        frames.append(have)
+    df = pd.concat(frames, ignore_index=True).dropna(subset=["isin"])
+    df["date"] = pd.to_datetime(df["date"])
+    for c in ["dtm", "wavg_compound", "close_compound", "volume"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
