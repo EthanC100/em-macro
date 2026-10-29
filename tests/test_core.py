@@ -56,3 +56,24 @@ def test_stats_drawdown():
     r = pd.Series([0.1, -0.5, 0.2, 0.0, 0.0, 0.0],
                   index=pd.period_range("2010-01", periods=6, freq="M"))
     assert carry.stats(r)["max_drawdown_%"] == pytest.approx(-50.0)
+
+
+def test_repricing_window_drops_first_round_result_day():
+    from em_macro.repricing import _window
+    d = _window(pd.Timestamp("2026-10-04"), pd.Timestamp("2026-10-25"))
+    assert pd.Timestamp("2026-10-05") not in d          # round-1 result day
+    assert pd.Timestamp("2026-10-02") in d and d[-1] == pd.Timestamp("2026-10-23")
+    assert d[0] >= pd.Timestamp("2026-10-04") - pd.Timedelta(days=183)
+
+
+def test_poll_average_latest_per_pollster_and_release_lag():
+    from em_macro.repricing import poll_average
+    polls = pd.DataFrame({"pollster": ["A", "A", "B"],
+                          "field_end": pd.to_datetime(["2022-01-03", "2022-01-10", "2022-01-05"]),
+                          "published": pd.to_datetime([None, None, "2022-01-07"]),
+                          "a_pct": [50, 54, 48], "b_pct": [40, 40, 44]})
+    days = pd.bdate_range("2022-01-04", "2022-01-12")
+    s = poll_average(polls, days)
+    assert s[pd.Timestamp("2022-01-04")] == 10                  # A's first poll released 01-04
+    assert s[pd.Timestamp("2022-01-07")] == (10 + 4) / 2        # B released 01-07
+    assert s[pd.Timestamp("2022-01-11")] == (14 + 4) / 2        # A's newer poll replaces the old

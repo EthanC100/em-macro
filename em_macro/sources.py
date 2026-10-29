@@ -258,3 +258,23 @@ def bist_bonds(refresh: bool = False, workers: int = 3, start: str = "2018-07-02
     for c in ["dtm", "wavg_compound", "close_compound", "volume"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
+
+
+def polymarket_daily(event_id: int, market_title: str, refresh: bool = False) -> pd.Series:
+    """Daily price (implied probability, 0-1) of the YES token of one market in a
+    Polymarket event, from the public CLOB price-history endpoint.  Points are
+    stamped ~00:00 UTC; each is assigned to the previous calendar date, i.e. the
+    price at the end of that day (UTC)."""
+    cache = RAW / "polymarket" / f"{event_id}_{market_title.replace(' ', '_')}.json"
+    if cache.exists() and not refresh:
+        hist = json.loads(cache.read_text())["history"]
+    else:
+        ev = json.loads(_get(f"https://gamma-api.polymarket.com/events/{event_id}",
+                             RAW / "polymarket" / f"event_{event_id}.json", refresh))
+        m = next(m for m in ev["markets"] if market_title in (m.get("groupItemTitle") or m["question"]))
+        token = json.loads(m["clobTokenIds"])[0]
+        url = f"https://clob.polymarket.com/prices-history?market={token}&interval=max&fidelity=1440"
+        hist = json.loads(_get(url, cache, True))["history"]
+    t = pd.to_datetime([h["t"] for h in hist], unit="s")
+    s = pd.Series([h["p"] for h in hist], index=t.normalize() - pd.Timedelta(days=1), name=market_title)
+    return s[~s.index.duplicated(keep="last")].sort_index()
