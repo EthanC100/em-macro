@@ -98,3 +98,13 @@ def chile_dolar_observado(refresh: bool = False) -> pd.Series:
         rows += [(r["fecha"][:10], r["valor"]) for r in d["serie"]]
     s = pd.Series({pd.Timestamp(f): float(v) for f, v in rows}, name="dolar_observado")
     return s[~s.index.duplicated()].sort_index()
+
+
+def bis_cpi_index(area: str, refresh: bool = False) -> pd.Series:
+    """BIS long consumer price index level (unit 628), monthly."""
+    url = f"https://stats.bis.org/api/v1/data/WS_LONG_CPI/M.{area}.628?format=csv"
+    raw = _get(url, RAW / "bis" / f"CPIIDX_{area}.csv", refresh)
+    d = pd.read_csv(io.BytesIO(raw), usecols=["TIME_PERIOD", "OBS_VALUE"])
+    s = pd.Series(pd.to_numeric(d["OBS_VALUE"], errors="coerce").values,
+                  index=pd.PeriodIndex(d["TIME_PERIOD"], freq="M"), name=f"cpiidx_{area}")
+    return s.dropna().sort_index()

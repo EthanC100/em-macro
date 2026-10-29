@@ -1,0 +1,71 @@
+term,label,coef_per_sd,se_dk,t_dk,coef_per_unit,lag_months
+debt,"gross debt, % GDP",6.29,0.57281,10.981,0.3268,12
+deficit,"fiscal deficit, % GDP",-1.3692,0.70086,-1.9536,-0.51226,12
+debt_traj,"debt trajectory (3y avg change, pp/yr)",0.81596,0.61261,1.3319,0.26828,12
+foreign_share,"debt held abroad, %",4.9914,0.83901,5.9491,0.3529,6
+cbi,central bank independence (CBIE),0.91872,0.51317,1.7903,7.0009,12
+infl_gap,"inflation minus target, pp",3.3822,0.57979,5.8336,1.3606,1
+real_rate,"real policy rate, %",1.6521,0.65379,2.527,0.60411,1
+seat_share,"government seat share, %",-1.708,0.46772,-3.6517,-0.13197,0
+n_gov5y,governments in prior 5 years,1.6087,0.60069,2.6781,0.94077,0
+lr_vparty,"governing parties' economic position (V-Party, + = right)",0.69296,0.66416,1.0434,0.59509,0
+populism_vparty,governing parties' populism (V-Party),1.488,0.78092,1.9055,5.7668,0
+lr_ches,governing parties' economic position (CHES),-2.3698,0.96274,-2.4615,-1.4708,0
+populist_popu_list,populist party in government (PopuList),0.58074,0.97569,0.59521,1.428,0
+wgi,governance (WGI mean),-1.5633,0.8548,-1.8289,-2.4347,12
+jucon,judicial constraints (V-Dem),-8.1427,0.87754,-9.279,-59.354,12
+high_court_indep,high-court independence (V-Dem),2.6102,0.76282,3.4218,4.9186,12
+current_account,"current account, % GDP",-0.79835,0.34909,-2.2869,-0.35024,12
+reserves_months,"reserves, months of imports",0.62738,0.96985,0.64688,0.22528,12
+imf_programme,IMF programme,1.3757,0.49848,2.7597,3.1286,0
+rating,average rating (notches),-2.6325,0.82043,-3.2086,-0.7977,0
+us10y,"US 10y yield, %",-1.4526,0.68822,-2.1107,-1.451,0
+log_vix,VIX (log),1.054,0.42269,2.4934,2.9388,0
+ecb_rate,"ECB deposit rate, %",-2.4436,0.61682,-3.9615,-2.1936,0
+rate_diff,"policy rate minus fed funds, pp",-1.9496,1.1149,-1.7487,-0.50251,0
+debt_x_seat,debt x government seat share,-1.4222,0.78707,-1.8069,,0
+commod_all:BR,commodity all:BR,-2.3516,0.68422,-3.4369,,0
+commod_all:MX,commodity all:MX,-1.843,0.50163,-3.674,,0
+commod_all:ZA,commodity all:ZA,-1.3015,1.0513,-1.238,,0
+commod_all:TR,commodity all:TR,-2.5889,0.58882,-4.3968,,0
+commod_all:ID,commodity all:ID,-0.49909,0.43593,-1.1449,,0
+commod_all:PL,commodity all:PL,-3.1147,0.9183,-3.3918,,0
+commod_all:GB,commodity all:GB,-1.5039,0.51097,-2.9433,,0
+commod_all:CO,commodity all:CO,-2.093,0.41535,-5.0391,,0
+commod_all:CL,commodity all:CL,-1.9227,0.37263,-5.1599,,0
+commod_oil:BR,commodity oil:BR,-1.1599,0.7055,-1.6441,,0
+commod_oil:MX,commodity oil:MX,-3.6964,0.92056,-4.0153,,0
+commod_oil:ZA,commodity oil:ZA,-3.6968,1.3567,-2.7248,,0
+commod_oil:TR,commodity oil:TR,-1.322,0.74028,-1.7858,,0
+commod_oil:ID,commodity oil:ID,1.021,0.71308,1.4318,,0
+commod_oil:PL,commodity oil:PL,-2.3922,0.61803,-3.8707,,0
+commod_oil:GB,commodity oil:GB,-2.5316,0.83449,-3.0337,,0
+commod_oil:CO,commodity oil:CO,-2.545,0.5808,-4.3819,,0
+commod_oil:CL,commodity oil:CL,-1.8271,0.60885,-3.0009,,0
+commod_copper:BR,commodity copper:BR,-2.0729,0.85416,-2.4269,,0
+commod_copper:MX,commodity copper:MX,1.296,1.0727,1.2081,,0
+commod_copper:ZA,commodity copper:ZA,-0.50722,1.912,-0.26528,,0
+commod_copper:TR,commodity copper:TR,-0.039831,0.99156,-0.04017,,0
+commod_copper:ID,commodity copper:ID,-2.4119,0.70292,-3.4312,,0
+commod_copper:PL,commodity copper:PL,-1.713,0.8671,-1.9755,,0
+commod_copper:GB,commodity copper:GB,-0.67237,0.78121,-0.86067,,0
+commod_copper:CO,commodity copper:CO,0.34852,0.83896,0.41542,,0
+commod_copper:CL,commodity copper:CL,-1.6468,0.7008,-2.3499,,0
+commod_soy:BR,commodity soy:BR,-2.5483,0.89009,-2.863,,0
+commod_soy:MX,commodity soy:MX,0.41316,0.78958,0.52327,,0
+commod_soy:ZA,commodity soy:ZA,2.0034,1.2379,1.6184,,0
+commod_soy:TR,commodity soy:TR,-2.8727,1.0069,-2.8529,,0
+commod_soy:ID,commodity soy:ID,-1.1382,0.6997,-1.6267,,0
+commod_soy:PL,commodity soy:PL,-0.81998,1.0113,-0.81082,,0
+commod_soy:GB,commodity soy:GB,-1.4939,0.70336,-2.1239,,0
+commod_soy:CO,commodity soy:CO,-2.0023,0.71993,-2.7813,,0
+commod_soy:CL,commodity soy:CL,-2.1754,0.74444,-2.9222,,0
+commod_iron_ore:BR,commodity iron_ore:BR,-6.7844,0.95052,-7.1375,,0
+commod_iron_ore:MX,commodity iron_ore:MX,-0.21915,0.7646,-0.28662,,0
+commod_iron_ore:ZA,commodity iron_ore:ZA,-3.7537,0.93267,-4.0247,,0
+commod_iron_ore:TR,commodity iron_ore:TR,1.9527,1.0986,1.7774,,0
+commod_iron_ore:ID,commodity iron_ore:ID,-3.9802,0.75059,-5.3028,,0
+commod_iron_ore:PL,commodity iron_ore:PL,1.8177,1.2014,1.513,,0
+commod_iron_ore:GB,commodity iron_ore:GB,2.2649,0.65595,3.4528,,0
+commod_iron_ore:CO,commodity iron_ore:CO,-3.6356,0.92034,-3.9503,,0
+commod_iron_ore:CL,commodity iron_ore:CL,0.3465,0.70328,0.49269,,0

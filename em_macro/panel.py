@@ -53,8 +53,8 @@ SOURCES: dict[str, str] = {}          # column -> source description (filled whi
 NOTES: dict[str, str] = {}            # column -> caveat
 
 
-def _months(end: pd.Period) -> pd.PeriodIndex:
-    return pd.period_range(START, end, freq="M")
+def _months(end: pd.Period, start=START) -> pd.PeriodIndex:
+    return pd.period_range(start, end, freq="M")
 
 
 def _monthly(s: pd.Series, how: str = "mean") -> pd.Series:
@@ -460,10 +460,12 @@ def _party_score(pc: pd.DataFrame, party, col: str, year: int) -> float:
 
 
 # ---------------------------------------------------------------- assembly
-def build() -> pd.DataFrame:
+def build(start: str | None = None, write: bool = True) -> pd.DataFrame:
+    """start: first month (default 2005-01).  The risk model builds from 2004-01
+    with write=False so that 12-month publication lags have data for 2005."""
     daily = pd.read_csv(PROC / "daily_panel.csv", index_col=0, parse_dates=True)
     end = pd.Period(daily.index.max(), "M")
-    months = _months(end)
+    months = _months(end, pd.Period(start, "M") if start else START)
     blocks = {}
     for f in (market_block, annual_block, external_block, ratings_block, politics_block):
         blocks.update(f(months))
@@ -488,6 +490,8 @@ def build() -> pd.DataFrame:
     glob = global_block(months).reset_index().rename(columns={"index": "month"})
     panel = panel.merge(glob, on="month", how="left")
     panel["month"] = panel["month"].astype(str)
+    if not write:
+        return panel
     PROC.mkdir(parents=True, exist_ok=True)
     panel.to_csv(PROC / "country_month_panel.csv", index=False, float_format="%.6g")
     coverage(panel, months)
