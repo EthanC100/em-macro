@@ -15,6 +15,9 @@ COUNTRIES = ["BR", "MX", "ZA", "TR", "ID", "PL"]
 NAMES = {"BR": "Brazil", "MX": "Mexico", "ZA": "South Africa",
          "TR": "Turkey", "ID": "Indonesia", "PL": "Poland"}
 ISO3 = {"BR": "BRA", "MX": "MEX", "ZA": "ZAF", "TR": "TUR", "ID": "IDN", "PL": "POL"}
+# 13-country extension (country-month panel and event calendar; Germany = European benchmark)
+ISO3_ALL = {**ISO3, "FR": "FRA", "IT": "ITA", "ES": "ESP", "GB": "GBR", "CO": "COL", "CL": "CHL", "DE": "DEU"}
+
 CCY = {"BR": "BRL", "MX": "MXN", "ZA": "ZAR", "TR": "TRY", "ID": "IDR", "PL": "PLN"}
 
 # Spot FX, local currency per USD.  Primary source per country; the others are

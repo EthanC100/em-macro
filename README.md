@@ -19,6 +19,8 @@ python -m em_macro.run fit    # 2005-2021 only -> results/fit/, frozen_params.js
 python -m em_macro.run test   # 2022+ with frozen parameters -> results/test/ (refuses to run twice)
 python -m em_macro.figures    # README charts
 python -m em_macro.repricing  # exploratory pre-election repricing (section 7)
+python -m em_macro.panel      # 13-country country-month panel + coverage report (section 9)
+python -m em_macro.calendar   # 13-country dated event calendar + coverage report (section 9)
 pytest -q
 ```
 
@@ -379,6 +381,111 @@ candidate's poll margin or win probability?
 - **What the regressions measure:** association, not causation. Campaign news, fiscal announcements and global shocks
   move polls and markets together.
 
+## 9. Extension: 13-country panel and event calendar (data only, no modelling yet)
+
+**Countries.**
+- **The original six:** Brazil, Mexico, South Africa, Turkey, Indonesia, Poland.
+- **Added:** France, Italy, Spain, United Kingdom, Colombia, Chile.
+- **European benchmark:** Germany.
+
+**Focus countries** for later outputs: **Brazil, Mexico, France** (`focus = True` in the panel).
+
+**Outputs.**
+- `data/processed/country_month_panel.csv`: 13 countries × 262 months (2005-01 to 2026-10), 78 factors.
+- `results/panel_coverage.md`: coverage by factor and country. Each cell is the % of months with a value, with
+  first and last months; the source and caveats for every column are listed there too. A machine-readable copy is
+  `data/processed/panel_coverage.csv`.
+- `data/events/calendar_13.csv`: 2,755 dated events, all with a source URL. Coverage is in
+  `results/calendar_coverage.md`.
+- **Research inputs**, each with a NOTES or SOURCE file stating method, rules and doubtful rows:
+  `data/events/raw/` (elections, government events, rating actions) and `data/external/` (politics, structural).
+
+**Timing convention.**
+- **Market data** are monthly averages; FX is also month-end.
+- **Annual data** (IMF WEO, WGI, V-Dem, central bank independence) are assigned to every month of their calendar
+  year; quarterly data to the months of their quarter.
+- **Values are latest-vintage, not real-time.** No lags are applied, so the panel is not yet safe for forecasting
+  without adding publication lags.
+
+### Factors and sources
+
+| block | panel columns | source |
+|---|---|---|
+| 10y yield and spread | `y10`; `spread_vs_de_bp`, `spread_vs_us_bp`; `spread_bench_bp` (vs Bund for FR, IT, ES, GB, PL; vs UST otherwise) | BR/MX/ZA/PL/TR: monthly means of the project's daily series (§1); FR/IT/ES/DE: ECB IRS convergence yields; GB/CO/CL/ID: OECD MEI `IRLT`; US: FRED `DGS10` |
+| currency | `fx_per_usd_avg/_end`, `fx_ret_vs_usd_pct` | FRED H.10 (BRL, MXN, ZAR, EUR, GBP); Yahoo (TRY, IDR, PLN); official fixings for COP (BanRep TRM) and CLP (BCCh *dólar observado*) — Yahoo's COP history has bad prints |
+| fiscal | `fiscal_balance_gdp`, `primary_balance_gdp`, `gross_debt_gdp`, `net_debt_gdp`, `debt_change_1y_pp`, `debt_change_next5y_pp` | IMF WEO via the IMF SDMX API, latest vintage (Sep 2026 country updates), projections to 2031 |
+| debt holders | `debt_foreign_share_{at,qpsd,eurostat}`, `debt_fx_share_{qpsd,eurostat}` | Arslanalp–Tsuda investor base (2016 vintage, to 2016Q2), World Bank/IMF QPSD, Eurostat. One column per source: they measure different things, so they are **not spliced** |
+| monetary | `policy_rate`, `cpi_yoy`, `real_policy_rate`, `inflation_target(_low/_high)`, `inflation_vs_target_pp`, `inflation_outside_band` | BIS policy rates (euro countries: BIS euro-area series) and BIS CPI. Targets: central-bank sources (`data/external/structural/inflation_targets.csv`) |
+| central bank independence | `cbie_index`, `garriga_lvau`, `garriga_lvaw` | Romelli CBIE (2025) and Garriga (2025). Annual, to 2023. Garriga gives all euro members the ECB's score |
+| external | `current_account_gdp`, `reserves_usd_m` (monthly), `reserves_months_imports`, `reserves_usd_annual`, `imf_programme`, `imf_facility` | IMF WEO; IMF IFS reserves via FRED; World Bank WDI; IMF lending history (`imf_programmes.csv`) |
+| ratings | `rating_sp`, `rating_moodys`, `rating_fitch` (21 = AAA/Aaa … 1 = C/default), `rating_avg_outlook_adj` (outlook ±1/3, watch ±2/3), `rating_upgrades_n`, `rating_downgrades_n` | Hand-compiled histories (`rating_actions_*.csv`, 682 actions) from treasury/central-bank investor pages, agency releases, countryeconomy and Trading Economics, with cross-checks |
+| government | `gov_seat_share`, `gov_n_parties`, `gov_minority`, `n_governments_prior5y` | ParlGov (to 2023) extended from Wikipedia/official pages for EU+TR; IPEA, Figueiredo, the Presidential Cabinets Project, DPI 2020 and Wikipedia for presidential systems (`data/external/politics/`) |
+| party positions | `head_party_*`, `gov_parties_*` × {`lr_parlgov`, `lr_econ_ches`, `lr_econ_vparty`, `lr_econ_gps`, `populism_vparty`, `populism_gps`, `populist_popu_list`} | ParlGov expert left-right; CHES; V-Party v2 (V-Dem, to 2019 elections); Global Party Survey 2019; PopuList 4.0 (Europe only). **Manifesto Project not included** (needs an API key) |
+| governance | `wgi_{va,pv,ge,rq,rl,cc}`, `vdem_{v2x_jucon,v2juhcind,v2juncind,v2x_rule,v2x_corr}` | World Bank WGI (API, to 2025); V-Dem v16 (to 2025) |
+| global | `us10y`, `dxy`, `vix`, `fed_funds`, `ecb_deposit_rate`, `ecb_mro_rate` | FRED, Yahoo (ICE DXY), ECB data portal |
+
+### Coverage of the focus countries
+
+- **All three** are complete from 2005 for:
+  - yields, spreads, FX, policy rate, CPI and inflation-vs-target;
+  - WEO fiscal and external data;
+  - ratings (all three agencies), government seat share, coalition size and governments in the prior five years;
+  - WGI and V-Dem, through 2025;
+  - central bank independence, through 2023.
+- **France:**
+  - **Debt held abroad:** Arslanalp–Tsuda to 2016Q2, then Eurostat from 2020, so **2016Q3–2019 is missing**.
+  - **Foreign-currency share of debt:** none (immaterial for euro debt).
+  - **Party positions:** ParlGov, CHES, V-Party and PopuList; the Global Party Survey does not cover France.
+- **Brazil and Mexico:**
+  - **Debt held abroad and in foreign currency:** World Bank QPSD from 2009Q3 (Brazil) and 2008Q1 (Mexico), plus
+    Arslanalp–Tsuda 2005–2016.
+  - **Party positions:** V-Party and the Global Party Survey only. ParlGov, CHES and PopuList are Europe-only.
+
+### Main gaps and caveats
+
+- **10y yields:**
+  - Turkey only from July 2018, since no keyless source before that.
+  - Indonesia only for 2012–2024 (OECD).
+- **Monthly reserves** are missing for Colombia and Chile. The annual World Bank series covers them.
+- **Real-time data:** WEO, WGI and V-Dem values are final, latest-vintage numbers, and imf.org's historical WEO
+  vintage files were rate-limited (HTTP 429). `debt_change_next5y_pp` is **ex post**: realised history plus the
+  current projections.
+- **Party scores:** V-Party ends with 2019 elections, so later months carry forward each party's latest scored
+  election. Many newer parties have no V-Party or Global Party Survey score.
+- **Debt holders:** the three sources differ by up to ~10pp for the same quarter (UK 2010Q4: 26.2% Arslanalp–Tsuda vs
+  16.8% QPSD). Chile and Colombia have no foreign-share data after 2016Q2.
+- **Ratings:**
+  - Changes are near-complete for most pairs.
+  - Weaker coverage: UK Fitch after 2016, Spain Fitch 2019–24, and Mexico/Chile before 2016 (mostly single-source).
+  - Affirmations are partial. 24 European and ~10 EM rows are flagged DOUBTFUL in the notes.
+- **Government data:**
+  - Seats are counted at cabinet start, with no defections.
+  - Brazil's coalition spells follow IPEA and Figueiredo; 8 rows are flagged doubtful.
+  - Turkey after 2018 counts People's Alliance seats.
+  - ParlGov counts LR as governing under Philippe II and Castex; the alternative share is in the notes.
+
+### Event calendar for the new countries
+
+For France, Italy, Spain, the UK, Germany, Colombia and Chile, `calendar_13.csv` adds:
+
+| event type | rows (new countries) | what |
+|---|---|---|
+| elections | 99 | all national votes with rounds, referendums, final-poll margins, odds where public, market-preferred coding |
+| government collapses | 159 | resignations, censure defeats, dissolutions, snap-election calls, every new government; finance-minister changes in CO/CL |
+| confidence votes | 193 | e.g. every French *motion de censure* since 2005 (with votes), Italian investitures, Spanish investiture/censure ballots, UK and German confidence votes, Chilean constitutional accusations, flagship reform votes |
+| budgets | 343 | draft and final budget dates, UK fiscal events, EU excessive-deficit-procedure steps, special laws, fiscal-rule changes, IMF FCL dates |
+| rating actions | 255 (+388 for the original six) | upgrades, downgrades, outlook/watch changes, partial affirmations |
+
+Calendar gaps:
+- **Rate decisions** are compiled only for the original six. ECB, BoE, BanRep and BCCh decisions are not yet in.
+- **Government and budget events** are compiled only for the new countries.
+- **Thin budget dates:** German annual budget dates (official sites blocked) and most Colombian and Chilean
+  budget-cycle dates.
+- **Prediction-market odds** exist for few of the new elections.
+- **Search budget:** three research agents hit a shared web-search limit, which left the gaps above. Each NOTES
+  file lists what is missing.
+- **Undated rows:** five research rows have only a month and are kept in `data/events/calendar_13_undated.csv`.
+
 ## 8. Limitations
 
 - **Small samples.**
@@ -433,8 +540,13 @@ em_macro/
   event_study.py   windows, factor betas, abnormal moves, summaries, drift regression, placebo days
   run.py           data / fit / test stages, drift-rule backtest
   repricing.py     exploratory pre-election repricing (polls, Polymarket odds) -> results/repricing/
+  panel.py         13-country country-month panel + results/panel_coverage.md
+  panel_sources.py ECB, OECD, BIS, IMF WEO, World Bank, BanRep, BCCh fetchers for the panel
+  calendar.py      13-country event calendar + results/calendar_coverage.md
   figures.py       README charts
-data/events/       elections.csv, rate_decisions.csv (+ raw/ research files with NOTES)
+data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
+data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V-Dem, WGI, debt holders,
+                   inflation targets, IMF programmes), each with NOTES/SOURCE files
 data/processed/    daily_panel.csv, carry_monthly_returns.csv, event_table.csv, coverage.csv
 results/           coverage_report.md, carry_benchmark.csv, fit/, test/, test_run1_superseded/, figures
 tests/             unit tests (bond maths, windows, carry formula, spike filter)

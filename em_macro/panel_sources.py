@@ -73,7 +73,8 @@ def worldbank(iso3: list[str], indicator: str, source: int | None = None, refres
     src = f"&source={source}" if source else ""
     url = (f"https://api.worldbank.org/v2/country/{';'.join(iso3)}/indicator/{indicator}"
            f"?format=json&date=2000:2030&per_page=2000{src}")
-    d = json.loads(_get(url, RAW / "worldbank" / f"{indicator}.json", refresh))
+    tag = f"{indicator}_{len(iso3)}_{abs(hash(';'.join(sorted(iso3)))) % 10**8}"
+    d = json.loads(_get(url, RAW / "worldbank" / f"{tag}.json", refresh))
     rows = [(r["countryiso3code"], int(r["date"]), r["value"]) for r in (d[1] or []) if r["value"] is not None]
     out = pd.DataFrame(rows, columns=["iso3", "year", "value"])
     return out.pivot_table(index="year", columns="iso3", values="value")

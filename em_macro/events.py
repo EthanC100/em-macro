@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 
 from . import sources as S
-from .config import EVENTS, ISO3, START
+from .config import EVENTS, ISO3_ALL, START
 
-ISO2 = {v: k for k, v in ISO3.items()}
+ISO2 = {v: k for k, v in ISO3_ALL.items()}
 
 
 def brazil_copom(refresh: bool = False) -> pd.DataFrame:

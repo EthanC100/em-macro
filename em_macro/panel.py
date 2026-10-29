@@ -165,9 +165,12 @@ def global_block(months) -> pd.DataFrame:
     g["vix"] = _monthly(daily["VIX"]).reindex(months)
     g["fed_funds"] = _monthly(daily["US_FF"]).reindex(months)
     g["ecb_deposit_rate"] = _monthly(PS.ecb_series("FM/D.U2.EUR.4F.KR.DFR.LEV")).reindex(months)
-    g["ecb_mro_rate"] = _monthly(PS.ecb_series("FM/D.U2.EUR.4F.KR.MRR_FR.LEV")).reindex(months)
+    mro = PS.ecb_series("FM/D.U2.EUR.4F.KR.MRR_FR.LEV")            # fixed-rate tenders from Oct 2008
+    mbr = PS.ecb_series("FM/D.U2.EUR.4F.KR.MRR_MBR.LEV")           # minimum bid rate before that
+    g["ecb_mro_rate"] = _monthly(mro.dropna().combine_first(mbr.dropna())).reindex(months)
     SOURCES.update({"us10y": "FRED DGS10", "dxy": "Yahoo DX-Y.NYB", "vix": "FRED VIXCLS", "fed_funds": "FRED DFF",
-                    "ecb_deposit_rate": "ECB FM DFR", "ecb_mro_rate": "ECB FM MRO"})
+                    "ecb_deposit_rate": "ECB FM DFR",
+                    "ecb_mro_rate": "ECB FM MRO fixed rate (from Oct 2008), minimum bid rate before"})
     return g
 
 
@@ -399,7 +402,7 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
     keys = ["gov_seat_share", "gov_n_parties", "gov_minority", "n_governments_prior5y"]
     keys += [f"{who}_{suf}" for suf, _ in measures.values() for who in ("head_party", "gov_parties")]
     out = {k: pd.DataFrame(index=months, columns=COUNTRIES, dtype=float) for k in keys}
-    me = months.to_timestamp(how="end")
+    me = months.to_timestamp(how="end").normalize()      # last calendar day of the month
     for c in COUNTRIES:
         g = cab[cab["iso3"] == ISO3[c]]
         if g.empty:
@@ -408,7 +411,7 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
         for m, t in zip(months, me):
             out["n_governments_prior5y"].loc[m, c] = ((g["start"] > t - pd.DateOffset(years=5))
                                                       & (g["start"] <= t)).sum()
-            cur = g[(g["start"] <= t) & (g["end"].isna() | (g["end"] > t))]
+            cur = g[(g["start"] <= t) & (g["end"].isna() | (g["end"] >= t))]
             if cur.empty:
                 continue
             r = cur.iloc[-1]
@@ -416,10 +419,11 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
             share = pd.to_numeric(r.get("seat_share"), errors="coerce")
             if pd.notna(share) and share <= 1:
                 share *= 100
-            if not parts:                 # technocratic cabinet without party ministers (e.g. Monti)
+            technocratic = not parts and str(r.get("caretaker", "")).upper() == "Y"
+            if technocratic:              # technocratic cabinet without party ministers (Monti): not 0%
                 share = np.nan
             out["gov_seat_share"].loc[m, c] = share
-            out["gov_n_parties"].loc[m, c] = len(parts) if parts else np.nan
+            out["gov_n_parties"].loc[m, c] = np.nan if technocratic else len(parts)
             out["gov_minority"].loc[m, c] = float(share < 50) if pd.notna(share) else np.nan
             for col, (suf, _) in measures.items():
                 out[f"head_party_{suf}"].loc[m, c] = _party_score(pc, r.get("head_party"), col, t.year)

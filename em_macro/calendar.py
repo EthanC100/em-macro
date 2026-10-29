@@ -70,26 +70,30 @@ def build() -> pd.DataFrame:
     cal = pd.concat([_elections(), _govt(), _ratings(), _rate_decisions()], ignore_index=True)
     name = {ISO3[k]: v for k, v in NAMES.items()}
     cal["date"] = pd.to_datetime(cal["date"], errors="coerce")
+    undated = cal[cal["date"].isna()]
+    undated.to_csv(EVENTS / "calendar_13_undated.csv", index=False)
     cal["country"] = cal["iso3"].map(name)
     cal = cal[cal["date"] >= "2005-01-01"].sort_values(["date", "iso3", "event_type"])[COLS]
     cal.to_csv(EVENTS / "calendar_13.csv", index=False, date_format="%Y-%m-%d")
-    coverage(cal)
+    coverage(cal, len(undated))
     return cal
 
 
-def coverage(cal: pd.DataFrame):
+def coverage(cal: pd.DataFrame, n_undated: int = 0):
     order = list(ISO3.values())
     t = cal.pivot_table(index="event_type", columns="iso3", values="date", aggfunc="count").reindex(columns=order)
     span = cal.groupby(["event_type", "iso3"])["date"].agg(["min", "max"])
     nosrc = cal["source"].isna().sum()
     L = ["# Event calendar coverage (13 countries)", "",
          f"`data/events/calendar_13.csv`: {len(cal)} dated events from {cal['date'].min():%Y-%m-%d} to "
-         f"{cal['date'].max():%Y-%m-%d}; rows without a source URL: {nosrc}.", "",
+         f"{cal['date'].max():%Y-%m-%d}; rows without a source URL: {nosrc}. {n_undated} research rows have no "
+         "exact date (month-only sources) and are listed in `data/events/calendar_13_undated.csv` instead.", "",
          "| event type | " + " | ".join(order) + " |", "|---|" + "---|" * len(order)]
     for et, r in t.iterrows():
         L.append(f"| {et} | " + " | ".join("" if pd.isna(v) else str(int(v)) for v in r.values) + " |")
     L += ["", "Rate decisions are compiled for the original six countries only (ECB, BoE, BanRep and BCCh "
-          "decisions are not in the calendar yet).", "",
+          "decisions are not in the calendar yet). Government collapses, confidence votes and budgets are "
+          "compiled for the seven new countries only (not yet for BR, MX, ZA, TR, ID, PL).", "",
           "## Subtypes", ""]
     for et, g in cal.groupby("event_type"):
         vc = g["subtype"].value_counts()
