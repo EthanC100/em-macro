@@ -90,20 +90,29 @@ def rate_surprise_regressions(m: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def drift_table(m: pd.DataFrame) -> pd.DataFrame:
+def drift_table(m: pd.DataFrame, placebo: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Drift/reversal slopes by asset and event type, on abnormal and raw moves.
+    If placebo moves (ordinary days) are given, their slopes are reported as the
+    benchmark: event-specific drift/reversal = event slope minus placebo slope."""
     rows = []
     for asset in ("FX", "Y10"):
-        for et in ("election", "rate_decision", "all"):
-            g = m[(m.asset == asset) & ((m.event_type == et) | (et == "all"))]
-            for h in ES.HORIZONS[1:]:
-                rows.append({"asset": asset, "event_type": et, "h": h, **ES.drift_regression(g, h)})
+        for et in ("election", "rate_decision", "all", "placebo"):
+            src = placebo if et == "placebo" else m
+            if src is None:
+                continue
+            g = src[(src.asset == asset) & ((src.event_type == et) | (et in ("all", "placebo")))]
+            for kind in ("ab", "raw"):
+                for h in ES.HORIZONS[1:]:
+                    rows.append({"asset": asset, "event_type": et, "moves": kind, "h": h,
+                                 **ES.drift_regression(g, h, kind)})
     return pd.DataFrame(rows)
 
 
 # ------------------------------------------------------------ drift strategy
 def strategy_returns(m: pd.DataFrame, panel: pd.DataFrame, direction: dict, h: int) -> pd.DataFrame:
-    """Per-event FX trade from close of day 1 to close of day h, long the local
-    currency if direction * sign(day-1 abnormal move) > 0, short otherwise;
+    """Per-event FX trade from the day-1 price to the day-h price, long the local
+    currency if direction * sign(raw day-1 move) > 0, short otherwise (the raw
+    move is known at the entry price, so there is no look-ahead);
     earns/pays the policy-rate differential; 0.10% round-trip cost per trade.
     Returns monthly returns of an equal-weight book of the open trades (cash
     when no trade is open), comparable with the carry benchmark."""
@@ -114,9 +123,9 @@ def strategy_returns(m: pd.DataFrame, panel: pd.DataFrame, direction: dict, h: i
     trades = []
     for r in m[m.asset == "FX"].itertuples():
         d = direction.get(r.event_type, 0)
-        if d == 0 or not np.isfinite(r.ab_1) or r.ab_1 == 0:
+        if d == 0 or not np.isfinite(r.raw_1) or r.raw_1 == 0:
             continue
-        sgn = d * np.sign(r.ab_1)
+        sgn = d * np.sign(r.raw_1)
         w = ES.window_dates(r.event_date, bdays)
         dates = bdays[(bdays > w[1]) & (bdays <= w[h])]
         s = fx[f"FX_{r.country}"]
@@ -160,18 +169,25 @@ def stage_fit():
 
     er = election_regressions(moves); er.to_csv(FIT_DIR / "election_surprise_regressions.csv", index=False, float_format="%.4f")
     rr = rate_surprise_regressions(moves); rr.to_csv(FIT_DIR / "rate_surprise_regressions.csv", index=False, float_format="%.4f")
-    dr = drift_table(moves); dr.to_csv(FIT_DIR / "drift_regressions.csv", index=False, float_format="%.4f")
+    pb = split(ES.event_moves(ES.placebo_events(ev, "2005-01-03", FIT_END), levels, betas), "fit")
+    dr = drift_table(moves, pb); dr.to_csv(FIT_DIR / "drift_regressions.csv", index=False, float_format="%.4f")
 
-    # trading rule: direction per event type = sign of the fit-sample FX drift slope at h=5
+    # trading rule (pre-registered before the hold-out): for each event type, trade
+    # in the direction of the fit-sample raw FX drift slope at h=5, but only if that
+    # slope is significant at the 10% level; otherwise do not trade that type
     direction = {}
     for et in ("election", "rate_decision"):
-        row = dr[(dr.asset == "FX") & (dr.event_type == et) & (dr.h == 5)]
-        direction[et] = int(np.sign(row["slope"].iloc[0])) if len(row) and np.isfinite(row["slope"].iloc[0]) else 0
+        row = dr[(dr.asset == "FX") & (dr.event_type == et) & (dr.moves == "raw") & (dr.h == 5)]
+        ok = len(row) and np.isfinite(row["slope"].iloc[0]) and row["p"].iloc[0] < 0.10
+        direction[et] = int(np.sign(row["slope"].iloc[0])) if ok else 0
     strat = {}
     for h in (5, 20):
         monthly, trades = strategy_returns(moves, panel, direction, h)
-        trades.to_csv(FIT_DIR / f"drift_rule_trades_h{h}.csv", index=False, float_format="%.5f")
-        strat[h] = carry.stats(monthly.loc[:FIT_END[:7]]) if len(monthly) else {}
+        trades.sort_values("event_date").to_csv(FIT_DIR / f"drift_rule_trades_h{h}.csv", index=False, float_format="%.5f")
+        if len(monthly):
+            monthly = monthly.reindex(pd.period_range("2005-01", FIT_END[:7], freq="M"), fill_value=0.0)
+            strat[h] = {**carry.stats(monthly), "n_trades": len(trades), "mean_trade_%": 100 * trades["return"].mean(),
+                        "hit_rate": (trades["return"] > 0).mean()}
 
     frozen = {
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -202,7 +218,8 @@ def stage_test(force: bool = False):
     ES.summarize(moves, ["asset", "event_type", "country"]).to_csv(TEST_DIR / "summary_by_country_type.csv", index=False, float_format="%.4f")
     ES.summarize(moves, ["asset", "event_type"]).to_csv(TEST_DIR / "summary_by_type.csv", index=False, float_format="%.4f")
     ES.summarize(moves, ["asset", "event_type", "subtype"]).to_csv(TEST_DIR / "summary_by_subtype.csv", index=False, float_format="%.4f")
-    drift_table(moves).to_csv(TEST_DIR / "drift_regressions.csv", index=False, float_format="%.4f")
+    pb = split(ES.event_moves(ES.placebo_events(ev, TEST_START, panel.index.max()), levels, betas), "test")
+    drift_table(moves, pb).to_csv(TEST_DIR / "drift_regressions.csv", index=False, float_format="%.4f")
 
     # out-of-sample predictions from frozen regressions
     oos = []
@@ -236,6 +253,8 @@ def stage_test(force: bool = False):
                  **carry.stats(cr["EW"].loc[TEST_START[:7]:last_full])})
     for h in (5, 20):
         monthly, trades = strategy_returns(moves, panel, frozen["drift_rule_direction"], h)
+        if len(trades):
+            trades = trades.sort_values("event_date")
         trades.to_csv(TEST_DIR / f"drift_rule_trades_h{h}.csv", index=False, float_format="%.5f")
         if len(monthly):
             monthly = monthly.reindex(pd.period_range(TEST_START[:7], last_full, freq="M"), fill_value=0.0)

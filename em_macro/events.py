@@ -70,6 +70,8 @@ def rate_decisions(refresh: bool = False) -> pd.DataFrame:
     df = pd.concat(parts, ignore_index=True)[RATE_COLS]
     df["announce_date"] = pd.to_datetime(df["announce_date"]).dt.date
     df = df[pd.to_datetime(df["announce_date"]) >= START]
+    # NBP extraordinary meeting on liquidity measures, no rate vote (see NOTES)
+    df = df[~((df["iso3"] == "POL") & (pd.to_datetime(df["announce_date"]) == "2008-10-08"))]
     df = df.sort_values(["iso3", "announce_date"]).reset_index(drop=True)
     df.to_csv(EVENTS / "rate_decisions.csv", index=False)
     return df

@@ -1,0 +1,33 @@
+series,source,description,frequency,first,last,n_obs,pct_weekdays_since_2005,pct_weekdays_since_first,max_gap_days
+FX_BR,FRED DEXBZUS,"BRL per USD, spot",daily,2005-01-03,2026-10-23,5465,96.0,96.0,5
+FXCHK_BR,BCB SGS 1,"BRL per USD, cross-check source",daily,2005-01-03,2026-10-28,5479,96.2,96.2,5
+FX_MX,FRED DEXMXUS,"MXN per USD, spot",daily,2005-01-03,2026-10-23,5465,96.0,96.0,5
+FXCHK_MX,Banxico SIE SF43718,"MXN per USD, cross-check source",daily,2005-01-03,2026-10-28,5491,96.4,96.4,5
+FX_ZA,FRED DEXSFUS,"ZAR per USD, spot",daily,2005-01-03,2026-10-23,5465,96.0,96.0,5
+FXCHK_ZA,SARB EXCX135D,"ZAR per USD, cross-check source",daily,2005-01-03,2026-10-28,5455,95.8,95.8,5
+FX_TR,Yahoo Finance TRY=X,"TRY per USD, spot",daily,2005-01-03,2026-10-29,5674,99.6,99.6,5
+FX_ID,Yahoo Finance IDR=X,"IDR per USD, spot",daily,2005-01-03,2026-10-29,5654,99.3,99.3,26
+FX_PL,Yahoo Finance PLN=X,"PLN per USD, spot",daily,2005-01-03,2026-10-29,5660,99.4,99.4,26
+FXCHK_PL,NBP usd,"PLN per USD, cross-check source",daily,2005-01-03,2026-10-28,5512,96.8,96.8,6
+Y10_BR,Tesouro Direto (Tesouro Transparente) NTN-F,"~10y fixed-rate NTN-F yield, mid of buy/sell, interpolated to 10y (shorter before 2007)",daily,2005-01-03,2026-10-27,5446,95.6,95.6,7
+Y10MAT_BR,derived,maturity (years) underlying Y10_BR,daily,2005-01-03,2026-10-27,5446,95.6,95.6,7
+Y10_MX,Banxico SIE CF300 (SF45455/45478/45430),"YTM of on-the-run Bono M in 7-10y bucket, computed from dirty price",daily,2005-01-03,2026-10-28,5491,96.4,96.4,5
+Y10MAT_MX,derived,maturity (years) underlying Y10_MX,daily,2005-01-03,2026-10-28,5491,96.4,96.4,5
+Y10_ZA,SARB CMJD004A,"daily average yield, govt bonds 10y and longer",daily,2005-01-03,2026-10-27,5447,95.7,95.7,6
+Y10_TR,Borsa Istanbul debt market bulletin,"compound yield of traded TRY fixed-coupon bond closest to 10y (6-12y), from 2018-07",daily,2018-07-02,2026-10-28,2073,36.4,95.4,7
+Y10_PL,Treasury BondSpot Poland fixing,fixed-rate bond fixing yields interpolated to 10y,daily,2005-01-03,2026-10-28,5456,95.8,95.8,6
+POL_BR,BIS WS_CBPOL D.BR,"central bank policy rate, %",daily,2005-01-01,2026-10-20,7963,99.9,99.9,1
+POL_MX,BIS WS_CBPOL D.MX,"central bank policy rate, %",daily,2005-01-03,2026-10-20,7521,99.3,99.3,5
+POL_ZA,BIS WS_CBPOL D.ZA,"central bank policy rate, %",daily,2005-01-03,2026-10-19,6565,95.7,95.7,4
+POL_TR,BIS WS_CBPOL D.TR,"central bank policy rate, %",daily,2005-01-03,2026-10-16,5481,96.3,96.3,7
+POL_ID,BIS WS_CBPOL D.ID,"central bank policy rate, %",daily,2005-07-05,2026-10-19,5207,91.1,93.3,12
+POL_PL,BIS WS_CBPOL D.PL,"central bank policy rate, %",daily,2005-01-03,2026-10-20,5506,96.7,96.7,6
+POL_US,BIS WS_CBPOL D.US,"central bank policy rate, %",daily,2005-01-01,2026-10-20,7962,99.9,99.9,2
+STR_BR,BCB SGS 12,"CDI overnight, % p.a. (252-day)",daily,2005-01-03,2026-10-27,5478,96.2,96.2,5
+STR_MX,Banxico SF43783,"TIIE 28-day, %",daily,2005-01-03,2026-10-29,5492,96.5,96.5,5
+STR_ZA,SARB MMRD403A,"JIBAR 3-month, %",daily,2008-09-01,2026-10-27,5030,79.7,95.8,5
+US10Y,FRED DGS10,US10Y,daily,2005-01-03,2026-10-27,5459,95.9,95.9,4
+VIX,FRED VIXCLS,VIX,daily,2005-01-03,2026-10-27,5522,97.0,97.0,5
+DXY,Yahoo Finance DX-Y.NYB,DXY,daily,2005-01-03,2026-10-29,5497,96.5,96.5,5
+USD_BROAD,FRED DTWEXBGS,USD_BROAD,daily,2006-01-02,2026-10-23,5217,91.6,96.0,7
+US_FF,FRED DFF,US_FF,daily,2005-01-01,2026-10-27,7970,100.0,100.0,1

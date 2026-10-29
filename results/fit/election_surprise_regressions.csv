@@ -1,0 +1,19 @@
+asset,h,spec,n,r2,const,b_surprise_mp_pp,t_surprise_mp_pp,p_surprise_mp_pp,b_abs_poll_error_pp,t_abs_poll_error_pp,p_abs_poll_error_pp
+FX,1,"signed poll surprise (pp, + = market-preferred beat polls)",27,0.0722,0.0462,0.0601,1.3171,0.1878,,,
+FX,1,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+FX,1,|move| on |poll error| (pp),48,0.0204,1.0940,,,,-0.0245,-1.3270,0.1845
+FX,5,"signed poll surprise (pp, + = market-preferred beat polls)",27,0.0512,0.5568,0.0578,1.1329,0.2572,,,
+FX,5,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+FX,5,|move| on |poll error| (pp),48,0.0054,1.5312,,,,-0.0168,-0.7325,0.4638
+FX,20,"signed poll surprise (pp, + = market-preferred beat polls)",27,0.0010,0.5363,-0.0116,-0.1866,0.8519,,,
+FX,20,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+FX,20,|move| on |poll error| (pp),48,0.0013,1.9411,,,,0.0090,0.3043,0.7609
+Y10,1,"signed poll surprise (pp, + = market-preferred beat polls)",17,0.3075,-16.5124,-2.4092,-1.9874,0.0469,,,
+Y10,1,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+Y10,1,|move| on |poll error| (pp),34,0.0000,15.3150,,,,0.0011,0.0027,0.9979
+Y10,5,"signed poll surprise (pp, + = market-preferred beat polls)",17,0.2578,-16.6467,-3.0686,-1.6932,0.0904,,,
+Y10,5,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+Y10,5,|move| on |poll error| (pp),34,0.0202,20.2240,,,,0.9766,1.3324,0.1827
+Y10,20,"signed poll surprise (pp, + = market-preferred beat polls)",17,0.0239,0.6675,-1.1529,-0.8196,0.4124,,,
+Y10,20,odds surprise (+ = market-preferred beat odds),0,,,,,,,,
+Y10,20,|move| on |poll error| (pp),34,0.0017,31.4462,,,,-0.1701,-0.3270,0.7437

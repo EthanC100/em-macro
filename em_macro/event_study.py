@@ -106,6 +106,7 @@ def event_moves(events: pd.DataFrame, levels: dict, betas: pd.DataFrame,
                     r[f"{f}_{h}"] = fac[f][h]
             for h in horizons[1:]:
                 r[f"post_{h}"] = r[f"ab_{h}"] - r[f"ab_1"]               # move from day 1 to day h
+                r[f"postraw_{h}"] = r[f"raw_{h}"] - r[f"raw_1"]
             rows.append(r)
     out = pd.DataFrame(rows)
     return out.merge(events, on=["event_id", "country"], how="left")
@@ -135,14 +136,35 @@ def summarize(m: pd.DataFrame, by: list[str], horizons=HORIZONS) -> pd.DataFrame
     return pd.DataFrame(rows)
 
 
-def drift_regression(m: pd.DataFrame, h: int) -> dict:
-    """post_h = a + b * ab_1 : b>0 continuation (drift), b<0 reversal.
+def drift_regression(m: pd.DataFrame, h: int, kind: str = "ab") -> dict:
+    """post_h = a + b * day1 : b>0 continuation (drift), b<0 reversal.
+    kind='ab' uses factor-adjusted moves, kind='raw' unadjusted moves (the
+    tradeable version: the raw day-1 move is known at the day-1 price).
     Moves are standardized by normal-time sd so countries are comparable."""
-    d = m[["ab_1", f"post_{h}", "sd_1", f"sd_{h}"]].dropna()
+    x1, post = ("ab_1", f"post_{h}") if kind == "ab" else ("raw_1", f"postraw_{h}")
+    d = m[[x1, post, "sd_1"]].dropna()
     if len(d) < 8:
         return {"n": len(d)}
-    x = d["ab_1"] / d["sd_1"]
-    y = d[f"post_{h}"] / d["sd_1"]
+    x = d[x1] / d["sd_1"]
+    y = d[post] / d["sd_1"]
     res = sm.OLS(y, sm.add_constant(x)).fit(cov_type="HC1")
     return {"n": len(d), "slope": res.params.iloc[1], "t": res.tvalues.iloc[1], "p": res.pvalues.iloc[1],
             "intercept": res.params.iloc[0], "r2": res.rsquared}
+
+
+def placebo_events(events: pd.DataFrame, start: str, end: str, step: int = 7, gap: int = 3) -> pd.DataFrame:
+    """Pseudo-events: every `step`-th weekday per country, excluding weekdays
+    within `gap` weekdays of a real event of that country."""
+    bdays = pd.bdate_range(start, end)
+    rows = []
+    for c in COUNTRIES:
+        real = pd.DatetimeIndex(events.loc[events.country == c, "event_date"])
+        pos = bdays.searchsorted(real)
+        near = set()
+        for p in pos:
+            near.update(range(p - gap, p + gap + 1))
+        for i in range(0, len(bdays), step):
+            if i not in near:
+                rows.append({"event_id": f"PB_{c}_{bdays[i]:%Y%m%d}", "country": c, "event_type": "placebo",
+                             "subtype": "placebo", "event_date": bdays[i]})
+    return pd.DataFrame(rows)

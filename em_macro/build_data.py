@@ -152,7 +152,7 @@ def write_report(panel, cov, monthly, notes):
         d = pd.concat([panel[f"Y10_{c}"].resample("MS").mean(), m], axis=1).dropna()
         d = d[d.index >= START]
         L.append(f"| {NAMES[c]} | {d.corr().iloc[0, 1]:.3f} | {(d.iloc[:, 0] - d.iloc[:, 1]).mean():+.2f} | {len(d)} |")
-    L += ["", "## Gaps and caveats", ""] + [f"- {n}" for n in notes] + XY.CAVEATS
+    L += ["", "## Gaps and caveats", ""] + [f"- {n}" for n in notes + XY.CAVEATS]
     (RESULTS).mkdir(parents=True, exist_ok=True)
     (RESULTS / "coverage_report.md").write_text("\n".join(L) + "\n")
 
