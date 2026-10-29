@@ -92,6 +92,10 @@ def to_event_table(rates: pd.DataFrame, elec: pd.DataFrame) -> pd.DataFrame:
         "change_bp": pd.to_numeric(rates["change_bp"], errors="coerce"),
         "expected_change_bp": pd.to_numeric(rates["expected_change_bp"], errors="coerce"),
         "scheduled": rates["scheduled"]})
+    # operational-framework changes coded as rate moves in the source calendar but
+    # with no change in the effective policy stance (see rate_decisions_tr_id_NOTES.md)
+    technical = (rates["iso3"] == "TUR") & (pd.to_datetime(rates["announce_date"]) == "2018-05-28")
+    r.loc[technical.values, "subtype"] = "technical"
     r["surprise_bp"] = r["change_bp"] - r["expected_change_bp"]
     r["event_id"] = "RD_" + r["country"] + "_" + r["event_date"].dt.strftime("%Y%m%d")
 
