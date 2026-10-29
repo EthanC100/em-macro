@@ -77,3 +77,33 @@ def test_poll_average_latest_per_pollster_and_release_lag():
     assert s[pd.Timestamp("2022-01-04")] == 10                  # A's first poll released 01-04
     assert s[pd.Timestamp("2022-01-07")] == (10 + 4) / 2        # B released 01-07
     assert s[pd.Timestamp("2022-01-11")] == (14 + 4) / 2        # A's newer poll replaces the old
+
+
+def test_ridge_tends_to_ols_and_shrinks():
+    from em_macro.risk_model import _ridge
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 3))
+    y = X @ np.array([1.0, -2.0, 0.5]) + rng.normal(scale=0.1, size=200)
+    ols = np.linalg.lstsq(X, y, rcond=None)[0]
+    assert np.allclose(_ridge(X, y, 1e-9), ols, atol=1e-6)
+    assert np.linalg.norm(_ridge(X, y, 1e4)) < np.linalg.norm(ols)
+
+
+def test_driscoll_kraay_zero_lags_is_time_clustered_sandwich():
+    from em_macro.risk_model import _driscoll_kraay
+    rng = np.random.default_rng(1)
+    X = rng.normal(size=(60, 2))
+    e = rng.normal(size=60)
+    month = np.repeat(np.arange(20), 3)
+    h = pd.DataFrame(X * e[:, None]).groupby(month).sum().values
+    A = np.linalg.inv(X.T @ X + 2.0 * np.eye(2))
+    assert np.allclose(_driscoll_kraay(X, e, month, 2.0, lags=0), A @ (h.T @ h) @ A)
+
+
+def test_annual_values_enter_with_twelve_month_lag():
+    from em_macro.risk_model import _annual_prev_year, COUNTRIES
+    ann = pd.DataFrame({c: [1.0, 2.0] for c in COUNTRIES}, index=[2010, 2011])
+    m = pd.period_range("2011-01", "2012-12", freq="M")
+    out = _annual_prev_year(ann, m)
+    assert out.loc[pd.Period("2011-06", "M"), "BR"] == 1.0      # 2010 value used during 2011
+    assert out.loc[pd.Period("2012-01", "M"), "BR"] == 2.0      # 2011 value from Jan 2012

@@ -1,0 +1,21 @@
+country,date,asset,scenario,description,estimate,lo90,hi90,se,note
+FRA,2026-09-01,spread_bp,lose_majority,government loses its majority (seat share to 45%; already-minority governments: -10pp),19.08,9.00,29.16,6.13,already a minority (28%): seat share -10pp
+FRA,2026-09-01,spread_bp,deficit_plus1,fiscal deficit +1 point of GDP (enters with the 12-month publication lag),9.34,6.24,12.44,1.88,
+FRA,2026-09-01,spread_bp,downgrade_1,one-notch rating downgrade (average of the three agencies),36.95,29.09,44.81,4.78,
+FRA,2026-09-01,spread_bp,populism_plus1sd,governing parties' populism (V-Party) up one standard deviation,12.44,-9.15,34.02,13.12,
+BRA,2026-10-01,spread_bp,lose_majority,government loses its majority (seat share to 45%; already-minority governments: -10pp),-30.46,-58.62,-2.30,17.12,already a minority (48%): seat share -10pp
+BRA,2026-10-01,spread_bp,deficit_plus1,fiscal deficit +1 point of GDP (enters with the 12-month publication lag),5.01,0.68,9.34,2.63,
+BRA,2026-10-01,spread_bp,downgrade_1,one-notch rating downgrade (average of the three agencies),10.14,5.31,14.97,2.93,
+BRA,2026-10-01,spread_bp,populism_plus1sd,governing parties' populism (V-Party) up one standard deviation,-0.20,-4.22,3.81,2.44,
+MEX,2026-10-01,spread_bp,lose_majority,government loses its majority (seat share to 45%; already-minority governments: -10pp),-29.76,-69.10,9.58,23.91,
+MEX,2026-10-01,spread_bp,deficit_plus1,fiscal deficit +1 point of GDP (enters with the 12-month publication lag),5.01,0.68,9.34,2.63,
+MEX,2026-10-01,spread_bp,downgrade_1,one-notch rating downgrade (average of the three agencies),10.14,5.31,14.97,2.93,
+MEX,2026-10-01,spread_bp,populism_plus1sd,governing parties' populism (V-Party) up one standard deviation,-0.20,-4.22,3.81,2.44,
+BRA,2026-09-01,fx_pct,lose_majority,government loses its majority (seat share to 45%; already-minority governments: -10pp),2.80,1.86,3.74,0.57,already a minority (48%): seat share -10pp
+BRA,2026-09-01,fx_pct,deficit_plus1,fiscal deficit +1 point of GDP (enters with the 12-month publication lag),-0.51,-0.94,-0.08,0.26,
+BRA,2026-09-01,fx_pct,downgrade_1,one-notch rating downgrade (average of the three agencies),0.80,0.39,1.21,0.25,
+BRA,2026-09-01,fx_pct,populism_plus1sd,governing parties' populism (V-Party) up one standard deviation,1.49,0.20,2.77,0.78,
+MEX,2026-09-01,fx_pct,lose_majority,government loses its majority (seat share to 45%; already-minority governments: -10pp),4.14,3.11,5.18,0.63,
+MEX,2026-09-01,fx_pct,deficit_plus1,fiscal deficit +1 point of GDP (enters with the 12-month publication lag),-0.51,-0.94,-0.08,0.26,
+MEX,2026-09-01,fx_pct,downgrade_1,one-notch rating downgrade (average of the three agencies),0.80,0.39,1.21,0.25,
+MEX,2026-09-01,fx_pct,populism_plus1sd,governing parties' populism (V-Party) up one standard deviation,1.49,0.20,2.77,0.78,

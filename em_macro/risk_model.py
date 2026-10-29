@@ -421,6 +421,7 @@ def forecast_eval(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     without the five largest moves (pooled: five largest |actual| overall;
     by country: that country's five largest)."""
     rows = []
+    frame = frame.reset_index(drop=True)          # unique labels, so "drop top 5" drops exactly five rows
     for h, g in frame.groupby("h"):
         top5 = g["actual"].abs().nlargest(5).index
         rows.append({"model": label, "h": h, "scope": "pooled", "drop_top5": False, **_eval(g, h)})

@@ -11,6 +11,10 @@ estimated on 2005–2021, and the 2022+ hold-out was evaluated once against froz
   out of sample.
 - **Drift and reversal:** the fit sample's election-reversal pattern did not survive the hold-out. The trading rule
   built on it lost money against the carry benchmark.
+- **Sovereign risk model (§8–9):** the project now also covers 13 countries with a monthly panel and a sovereign
+  risk model, fitted on 2005–2019 and tested once on 2020+. It explains spread levels reasonably well within each
+  country. Its mispricing signal and past-cases finder do **not** forecast 3- or 6-month spread changes better than
+  "no change".
 
 ```
 pip install -r requirements.txt
@@ -19,8 +23,12 @@ python -m em_macro.run fit    # 2005-2021 only -> results/fit/, frozen_params.js
 python -m em_macro.run test   # 2022+ with frozen parameters -> results/test/ (refuses to run twice)
 python -m em_macro.figures    # README charts
 python -m em_macro.repricing  # exploratory pre-election repricing (section 7)
-python -m em_macro.panel      # 13-country country-month panel + coverage report (section 9)
-python -m em_macro.calendar   # 13-country dated event calendar + coverage report (section 9)
+python -m em_macro.panel      # 13-country country-month panel + coverage report (section 8)
+python -m em_macro.calendar   # 13-country dated event calendar + coverage report (section 8)
+python -m em_macro.risk_model data      # lagged design matrix (section 9)
+python -m em_macro.risk_model fit       # 2005-2019 only, freezes parameters (v1; add --v2 for the post-hoc version)
+python -m em_macro.risk_model test      # 2020+ once, with frozen parameters (refuses to run twice)
+python -m em_macro.risk_model outputs   # fair value, factor contributions, similar cases, what-if, dashboard files
 pytest -q
 ```
 
@@ -381,7 +389,7 @@ candidate's poll margin or win probability?
 - **What the regressions measure:** association, not causation. Campaign news, fiscal announcements and global shocks
   move polls and markets together.
 
-## 9. Extension: 13-country panel and event calendar (data only, no modelling yet)
+## 8. Extension: 13-country panel and event calendar (data)
 
 **Countries.**
 - **The original six:** Brazil, Mexico, South Africa, Turkey, Indonesia, Poland.
@@ -486,7 +494,267 @@ Calendar gaps:
   file lists what is missing.
 - **Undated rows:** five research rows have only a month and are kept in `data/events/calendar_13_undated.csv`.
 
-## 8. Limitations
+## 9. Sovereign risk model (13-country panel)
+
+> **Plain-English summary.**
+> - **Explaining levels:** the model explains much of the variation in each country's spread over time (within-country
+>   R² 0.57). It explains even more for currencies (0.86).
+> - **Forecasting:** the gap between a spread and its model value does **not** forecast the spread's next 3 or 6
+>   months better than "no change" in 2020–2026, for the pool or for Brazil, Mexico or France. Neither does the
+>   past-cases finder.
+> - **Specification error:** after the one-time test, the frozen model turned out to give non-credible fair values
+>   for some countries (France most visibly). It treats two different kinds of spread as one. A corrected version
+>   with separate equations ("v2") feeds the dashboard. Its test results are labelled post-hoc because the change
+>   was made after seeing the test period. The v2 test also fails to beat "no change".
+>
+> Treat the fair values as a description of where spreads sit relative to 2005–2019 relationships, not as a
+> trading signal. The frozen event-study results (§5–6) are untouched.
+
+### Data and look-ahead control
+
+The design matrix is `data/processed/risk_model_input.csv`. Every factor enters with its realistic publication
+delay:
+
+| factor group | lag | how |
+|---|---|---|
+| IMF WEO and annual fiscal data (debt, deficit, debt trajectory, current account) | 12 months | each month uses the **previous calendar year's** value |
+| World Bank governance (WGI), V-Dem judicial scores | 12 months | previous year's value |
+| central bank independence (CBIE), reserves in months of imports (WDI) | 12 months | previous year's value; CBIE ends 2023 and is carried forward |
+| foreign-held share of government debt (quarterly) | 6 months | my choice: these are quarterly data published with about a quarter's delay |
+| monthly macro: CPI inflation (inflation gap, real policy rate) | 1 month | the policy rate itself is unlagged |
+| ratings, government structure (seat share, coalition, turnover), party positions, IMF programme | none | known on the day |
+| market data: US 10y, VIX, ECB deposit rate, policy-rate differential, commodity prices | none | |
+
+Design choices:
+
+- **Debt trajectory** is the average annual change in debt over the previous three years. The panel's
+  `debt_change_next5y_pp` is not used: it is ex post.
+- **Foreign-held share:**
+  - Built from Arslanalp–Tsuda to 2016Q2, then extended with QPSD (or Eurostat), ratio-spliced at the last
+    overlapping quarter.
+  - Where there is no overlap (France, Poland), the new source is level-matched to the last earlier value.
+  - After the last observation, the value is carried forward (Chile and Colombia from 2016).
+- **Missing values** are carried forward within a country. Anything still missing is set to that country's
+  2005–2019 average, which contributes zero.
+- **Party measures that don't apply:** CHES and PopuList exist only for European parties, so they are 0 for the
+  other countries.
+- **Party scores and publication timing:** the identity of the governing parties is known immediately, but their
+  expert scores were published after each election. This look-ahead is minor and not lagged.
+
+### Model
+
+**What is modelled.**
+- **Spread:** the 10-year spread, monthly average, in bp.
+  - **Benchmarks:** over the Bund for France, Italy, Spain, the UK and Poland; over US Treasuries for Brazil, Mexico,
+    South Africa, Turkey, Indonesia, Colombia and Chile.
+  - **Germany** is the benchmark and is not modelled.
+  - **These are local-currency yield gaps**, so the emerging-market ones contain inflation and policy-rate
+    differentials, not just credit risk.
+- **Currency:** 100 × log of the real exchange rate against the USD (local per USD, deflated by CPI, so + means a
+  weaker local currency). It covers the nine non-euro currencies.
+
+**Spread equation.**
+- **Fundamentals:** debt, deficit, debt trajectory, foreign-held share, central bank independence (CBIE), inflation
+  gap and real policy rate.
+- **Government:** seat share and the number of governments in the prior five years.
+- **Governing parties:** economic left-right (V-Party, CHES) and populism (V-Party, PopuList).
+- **Governance and external:** WGI governance, V-Dem judicial constraints and high-court independence, current
+  account, reserves and IMF programme.
+- **Rating and global factors:** average rating, US 10y, log VIX and the ECB deposit rate.
+- **Interaction:** debt × government seat share (both centred on the country's own average).
+- **Fixed effects:** country fixed effects.
+
+**Currency equation.** The same factors, plus the policy-rate differential against fed funds, and log commodity
+prices (all-commodity index, Brent, copper, soybeans, iron ore) with **country-specific slopes**.
+
+**Estimation.**
+- **Ridge:** on factors standardised with 2005–2019 pooled means and standard deviations, demeaned within country.
+- **Penalty:** chosen by blocked cross-validation with 3-year blocks inside 2005–2019 (`results/risk_model/fit/cv_*.csv`).
+- **Standard errors:** Driscoll–Kraay with a Bartlett kernel and 12 lags. They are robust to cross-country
+  correlation and autocorrelation. They describe sampling noise of the shrunk estimate, not its bias towards zero.
+
+**Mispricing and its forecast.**
+- **Mispricing** = actual − fitted. `gap_z` scales it by the country's 2005–2019 residual standard deviation.
+- **Forecast:** Δspread(t, t+h) = −κ_h × gap_t. κ_h was estimated on **out-of-fold** 2005–2019 gaps:
+  - v1: κ₃ = 0.08 and κ₆ = 0.18, meaning 8% and 18% of a gap closes over 3 and 6 months.
+  - v2: κ = 0.08–0.10 at 3 months and 0.14–0.24 at 6.
+
+### Coefficients (fit 2005–2019; full tables in `results/risk_model/fit*/coefficients_*.csv`)
+
+All figures are within-country associations, not causal effects. The tables list per-unit effects with
+Driscoll–Kraay t-statistics.
+
+**v1 spread equation** (one pool of 12 countries, λ = 34, within R² 0.57, n = 1,914):
+
+| factor | effect on spread | t |
+|---|---|---|
+| average rating, per notch | −26bp | −5.7 |
+| inflation gap, per pp | +37bp | 8.6 |
+| real policy rate, per pp | +24bp | 5.8 |
+| deficit, per pp of GDP | +6bp | 2.1 |
+| government seat share, per pp | −1.7bp | −2.3 |
+| VIX, per 10% rise | about +4.5bp | 4.3 |
+| US 10y, per pp | −28bp | −4.4 |
+| ECB rate, per pp | −42bp | −4.3 |
+| debt, per pp of GDP | −1.4bp | −2.1 |
+
+How to read the less intuitive rows:
+- **Debt:** the negative sign is a within-country artefact. Debt ratios rose in years when local-currency spreads
+  compressed.
+- **US 10y:** partly mechanical, since a higher Treasury yield narrows a spread measured over Treasuries.
+- **Debt × seat share:** +58bp per joint standard deviation (t = 3.5).
+- **Party positions:** the populism and party-position terms are small or of mixed sign.
+
+**v2 (post-hoc) equations.**
+- **Spreads over Bunds** (France, Italy, Spain, UK, Poland; within R² 0.82):
+  - rating −37bp per notch (t −7.7);
+  - deficit +9bp per pp of GDP (t 5.0);
+  - inflation gap +30bp per pp;
+  - current account −10bp per pp of GDP;
+  - debt × seat share −30bp per joint SD (t −5.1).
+  - Here the interaction means high debt hurts most when the government's seat share is low.
+- **Spreads over US Treasuries** (seven emerging markets; within R² 0.50):
+  - rating −10bp per notch (t −3.5);
+  - inflation gap +22bp per pp;
+  - real rate +16bp per pp;
+  - deficit +5bp per pp of GDP (t 1.9);
+  - VIX +7bp per 10% rise.
+- **Penalty:** the cross-validated penalty for the European equation sits at the bottom of the grid (λ = 0.9), so
+  that equation is barely shrunk.
+
+**Currency equation** (v1, nine currencies, within R² 0.86). The local currency is weaker in real terms with:
+- higher debt: +0.33% per pp of GDP (t 11.0);
+- a higher foreign-held share: +0.35% per pp;
+- a higher inflation gap: +1.4% per pp;
+- an IMF programme: +3.1%.
+
+It is stronger with stronger judicial constraints (t −9.3) and a better rating (−0.8% per notch).
+
+### One-time test, 2020 onward (`results/risk_model/test/`, v1 as specified)
+
+The forecast of each spread change is −κ × gap. It is compared with "no change" by RMSE ratio (below 1 means the
+model is better) and a Diebold–Mariano t-statistic (positive means better), and also after dropping the five
+largest moves.
+
+| v1 spread mispricing | 3 months: RMSE ratio (DM t) | without top-5 moves | 6 months: RMSE ratio (DM t) | without top-5 moves |
+|---|---|---|---|---|
+| all 12 countries | 1.00 (−0.2) | 1.01 (−0.5) | 0.98 (0.6) | 1.01 (−0.4) |
+| **Brazil** | 0.99 (1.1) | 0.99 (1.1) | 0.98 (0.5) | 0.97 (0.9) |
+| **Mexico** | 0.99 (0.9) | 0.99 (0.7) | 0.98 (0.6) | 1.00 (0.0) |
+| **France** | 1.59 (−3.3) | 1.72 (−3.4) | 2.34 (−3.6) | 2.44 (−3.5) |
+
+- **Brazil and Mexico:** at best 1–3% better than no change, not significant.
+- **France:** far worse. Its spread kept widening in 2024–26 while the v1 model put its fair value far below.
+- **The 6-month pooled edge (0.98)** disappears once the five largest moves are removed.
+- **Other countries:** the only ones with a gain of 5% or more are South Africa (0.88 at 6 months, DM 1.7) and
+  Indonesia (0.92). Spain and France are clearly worse.
+- **Currency mispricing** is worse than no change (pooled 1.04 and 1.10). Mexico is 0.95–0.99; Brazil is 1.09–1.29.
+
+**Post-hoc v2** (`results/risk_model/test_v2_posthoc/`, not a clean test):
+
+| | 3 months | 6 months |
+|---|---|---|
+| pooled | 1.00 (DM −0.3) | 0.98 (DM 0.3) |
+| pooled, without top-5 moves | 1.01 | 1.02 |
+| Brazil | 0.98 | 0.97 |
+| Mexico | 0.99 | 0.97 |
+| France | 1.08 | 1.18 |
+
+v2 fixes France's level problem but does not create forecasting power.
+
+**Conclusion: no version of the mispricing signal beats no-change out of sample, and nothing survives removing the
+largest moves.**
+
+### Past-cases finder (`results/risk_model/similar_cases.csv`)
+
+**How it works.**
+- **Factors compared:** the 17 lagged country factors (fiscal, monetary, government, party, governance, external,
+  rating), each standardised with 2005–2019 pooled means and SDs.
+- **Distance:** RMS over factors both cases have, with at least 8 shared.
+- **Candidates:** other countries' months up to the query month, or the same country more than 24 months earlier.
+- **Spacing:** at most one case per country within any 12-month window.
+- **Output:** for each country-month since 2007, the five nearest cases. Each comes with its spread and currency
+  moves over the next 3, 6 and 12 months, shown "n/a" where they were not yet known at the query date.
+
+**Out-of-sample validation, 2020+.** Only cases whose outcome was already known are used. The average of the five
+cases' moves is **worse than no change**:
+
+| | 3 months | 6 months |
+|---|---|---|
+| spreads | 1.04 (DM −2.4) | 1.05 (DM −2.9) |
+| currencies | 1.09 (DM −3.3) | 1.05 (DM −1.7) |
+
+It is worse for Brazil, Mexico and France too, except Mexico's currency (0.96, not significant). The cases are
+useful as context, not as a forecast.
+
+### What-if tool (`results/risk_model/what_if.csv`; latest month; 90% bands from the Driscoll–Kraay covariance)
+
+These are the model's estimated **level** shifts, holding every other factor fixed.
+
+| scenario | France spread, bp | Brazil spread, bp | Mexico spread, bp |
+|---|---|---|---|
+| government loses its majority¹ | +19 [9, 29] | −31 [−59, −2] | −30 [−69, +10] |
+| deficit +1pt of GDP | +9 [6, 12] | +5 [1, 9] | +5 [1, 9] |
+| one-notch downgrade | +37 [29, 45] | +10 [5, 15] | +10 [5, 15] |
+| populism +1 SD (V-Party) | +12 [−9, +34] | 0 [−4, +4] | 0 [−4, +4] |
+
+¹ France (28%) and Brazil (48%) already govern without a majority, so for them the scenario is a further 10-point
+fall in seat share. Mexico's coalition goes to 45%.
+
+Currency effects for Brazil and Mexico (v1 currency equation; + = weaker in real terms):
+
+| scenario | Brazil | Mexico |
+|---|---|---|
+| loses majority | +2.8% | +4.1% |
+| deficit +1pt | −0.5% | −0.5% |
+| downgrade | +0.8% | +0.8% |
+| populism +1 SD | +1.5% | +1.5% |
+
+How to read the scenarios:
+- **Same estimate in every country:** a linear model gives every country in an equation the same effect for the
+  same shock. Only the majority scenario differs, through the debt × seat-share interaction.
+- **Negative seat-share effect in Brazil and Mexico:** this reflects 2005–2019 co-movement in the emerging-market
+  equation. Broad coalitions coincided with higher local-currency yields. It is not a causal estimate.
+- **Bands** cover parameter uncertainty only, not model uncertainty.
+
+### Dashboard files
+
+These follow forecast-panel `site/config.yaml`; the country column holds ISO3 codes and dates are YYYY-MM-01.
+
+| file | columns | content |
+|---|---|---|
+| `results/risk_model/fair_value.csv` | `country,date,asset,actual,fair_value,gap,gap_z` | asset `spread_bp`, from v2 |
+| `results/risk_model/factors.csv` | `country,date,asset,factor,contribution` | bp, from 2015; contributions are measured against the country's 2005–2019 average and, with the "baseline" row, sum to the fair value |
+| `results/risk_model/similar_cases.csv` | `country,date,asset,case_country,case_date,similarity,outcome_note` | similarity = 1/(1 + RMS distance) |
+
+Other files:
+- `what_if.csv`: the scenario estimates above.
+- `fx_fair_value.csv`, `fx_factors.csv`: the v1 currency equation. Not shown on the dashboard, because its
+  out-of-sample levels are not credible (see below).
+- `v1_frozen/`: the as-specified v1 spread outputs.
+
+### Limitations
+
+- **Out-of-sample fair values drift:**
+  - **Spreads (v2):** in 2026, Italy sits 213bp below fair value (z −5.3), the UK 212bp above (z 6.1) and Turkey
+    1,364bp above. ECB backstops, the UK's 2022 shock and Turkey's 2023–26 policy regime are outside the 2005–2019
+    experience.
+  - **Currencies:** the BRL fair value (2.9 per USD against 5.1 actual) comes from commodity prices far above their
+    2005–2019 range, extrapolated through Brazil's own commodity slope.
+- **Data limits:**
+  - **Short histories:** Turkey's spread has only 18 months in the fit sample, and Indonesia's spread ends in 2024.
+  - **Latest-vintage annual data:** they are lagged 12 months but are not the real-time vintages.
+  - **Assumptions in the inputs:** foreign-share splices and carry-forwards are assumptions. V-Party scores end with
+    2019 elections, and the Manifesto Project is unavailable.
+- **Modelling limits:**
+  - **Collinearity:** coefficients are within-country associations among collinear factors. V-Dem judicial
+    constraints and high-court independence take opposite signs.
+  - **Bands:** ridge shrinks towards zero, and the Driscoll–Kraay bands do not account for that bias.
+- **What the test can and can't say:**
+  - **Small samples:** about 75–80 overlapping monthly forecasts per country, so per-country DM statistics are noisy.
+  - **Post-hoc v2:** it was chosen after seeing 2020+ output, so its numbers are not an independent test.
+
+## 10. Limitations of the event study (§1–7)
 
 - **Small samples.**
   - There are 66 election days, of which only 27 fit-sample elections have a signed, coded surprise (26 with a day-1
@@ -543,6 +811,7 @@ em_macro/
   panel.py         13-country country-month panel + results/panel_coverage.md
   panel_sources.py ECB, OECD, BIS, IMF WEO, World Bank, BanRep, BCCh fetchers for the panel
   calendar.py      13-country event calendar + results/calendar_coverage.md
+  risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
 data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V-Dem, WGI, debt holders,
