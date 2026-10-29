@@ -99,11 +99,15 @@ def to_event_table(rates: pd.DataFrame, elec: pd.DataFrame) -> pd.DataFrame:
     num = lambda c: pd.to_numeric(e[c], errors="coerce")
     poll_err = num("actual_margin_pp") - num("poll_margin_pp")       # positive: poll leader beat polls
     orient = e["market_preferred"].map({"a": 1.0, "b": -1.0})
-    # odds surprise: did the market-preferred side win, minus its pre-vote probability
-    fav_is_a = e["odds_favourite"].astype(str).str.strip().str.lower() == e["cand_a"].astype(str).str.strip().str.lower()
-    p_a = np.where(fav_is_a, num("odds_prob_favourite"), 1 - num("odds_prob_favourite"))
-    a_won = (e["winner"].astype(str).str.strip().str.lower() == e["cand_a"].astype(str).str.strip().str.lower()).astype(float)
-    odds_surprise_a = a_won - p_a
+    # odds surprise: did candidate a win, minus its pre-vote probability.  Only for
+    # votes that settle the contest (not first rounds that went to a run-off,
+    # where the quoted market was on the eventual winner).
+    fav = e["odds_favourite"].fillna("").astype(str).str.lower().str.split().str[0]
+    fav_is_a = pd.Series([isinstance(f, str) and bool(f) and f in str(a).lower() for f, a in zip(fav, e["cand_a"])], index=e.index)
+    p_a = pd.Series(np.where(fav_is_a, num("odds_prob_favourite"), 1 - num("odds_prob_favourite")), index=e.index)
+    a_won = (num("actual_margin_pp") > 0).astype(float)
+    went_to_runoff = e["winner"].astype(str).str.contains("runoff|run-off", case=False)
+    odds_surprise_a = (a_won - p_a).where(~went_to_runoff)
     el = pd.DataFrame({
         "country": e["iso3"].map(ISO2), "event_type": "election",
         "subtype": e["type"].astype(str) + np.where(num("round") == 2, "_r2", ""),
@@ -114,4 +118,6 @@ def to_event_table(rates: pd.DataFrame, elec: pd.DataFrame) -> pd.DataFrame:
         "odds_surprise_mp": odds_surprise_a * orient,             # + = market-preferred side did better than odds
         "market_preferred": e["market_preferred"], "election": e["election"], "round": num("round")})
     el["event_id"] = ("EL_" + el["country"] + "_" + el["event_date"].dt.strftime("%Y%m%d"))
+    # one event per country-day: a referendum held alongside a general vote is dropped
+    el = el.sort_values("subtype", key=lambda s: s.str.startswith("referendum")).drop_duplicates("event_id")
     return pd.concat([r, el], ignore_index=True)
