@@ -3,6 +3,8 @@
     python -m em_macro.risk_model data      # lagged design matrix -> data/processed/risk_model_input.csv
     python -m em_macro.risk_model fit       # 2005-2019 only -> results/risk_model/fit/ (frozen_params.json)
     python -m em_macro.risk_model test      # 2020+ with frozen parameters, once -> results/risk_model/test/
+    python -m em_macro.risk_model fit --v2  # post-hoc v2: separate spread equations over Bunds / over USTs
+    python -m em_macro.risk_model test --v2
     python -m em_macro.risk_model outputs   # fair value, factor contributions, similar cases, what-if
 
 Spread equation: 10y spread (bp; over Germany for FR/IT/ES/GB/PL, over US
@@ -32,11 +34,14 @@ from .config import PROC, RESULTS, ROOT
 from .panel import COUNTRIES, EURO, FOCUS, ISO3, NAMES
 
 OUT = RESULTS / "risk_model"
-FIT_DIR, TEST_DIR = OUT / "fit", OUT / "test"
+FIT_DIR, TEST_DIR = OUT / "fit", OUT / "test"                     # v1: as specified, frozen and tested once
+FIT_DIR_V2, TEST_DIR_V2 = OUT / "fit_v2_posthoc", OUT / "test_v2_posthoc"
 EXT = ROOT / "data" / "external" / "structural"
 FIT_END, TEST_START = pd.Period("2019-12", "M"), pd.Period("2020-01", "M")
 HORIZONS = (3, 6)
 SPREAD_C = [c for c in COUNTRIES if c != "DE"]
+EU_C = ["FR", "IT", "ES", "GB", "PL"]                                 # spreads over Bunds
+EM_C = ["BR", "MX", "ZA", "TR", "ID", "CO", "CL"]                     # spreads over US Treasuries
 FX_C = [c for c in COUNTRIES if c not in EURO]
 DK_LAGS = 12
 
@@ -341,16 +346,29 @@ def _future_change(d: pd.DataFrame, col: str, h: int) -> pd.Series:
 
 
 # ===================================================================== fit
-def stage_fit():
-    FIT_DIR.mkdir(parents=True, exist_ok=True)
+EQUATIONS = {
+    # v1: one pooled spread equation + currency equation, exactly as specified (frozen, tested once)
+    "v1": [("spread", "spread", SPREAD_F, SPREAD_C, False), ("fx", "fx_rer", FX_F, FX_C, True)],
+    # v2 (post hoc): separate spread equations for spreads over Bunds and over US Treasuries,
+    # because v1 pools two different dependent variables (see README)
+    "v2": [("spread_eu", "spread", SPREAD_F, EU_C, False), ("spread_em", "spread", SPREAD_F, EM_C, False)],
+}
+
+
+def _dirs(version):
+    return (FIT_DIR, TEST_DIR) if version == "v1" else (FIT_DIR_V2, TEST_DIR_V2)
+
+
+def stage_fit(version: str = "v1"):
+    fit_dir = _dirs(version)[0]
+    fit_dir.mkdir(parents=True, exist_ok=True)
     d = load_data()
-    frozen = {"created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    frozen = {"created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "version": version,
               "fit_end": str(FIT_END), "test_start": str(TEST_START), "lags_months": LAGS, "equations": {}}
-    for name, y, feats, cs, commod in (("spread", "spread", SPREAD_F, SPREAD_C, False),
-                                       ("fx", "fx_rer", FX_F, FX_C, True)):
+    for name, y, feats, cs, commod in EQUATIONS[version]:
         eq = _fit_equation(d, y, feats, cs, commod)
-        eq["_coef"].to_csv(FIT_DIR / f"coefficients_{name}.csv", index=False, float_format="%.5g")
-        pd.DataFrame(eq["cv"]).to_csv(FIT_DIR / f"cv_{name}.csv", index=False, float_format="%.5g")
+        eq["_coef"].to_csv(fit_dir / f"coefficients_{name}.csv", index=False, float_format="%.5g")
+        pd.DataFrame(eq["cv"]).to_csv(fit_dir / f"cv_{name}.csv", index=False, float_format="%.5g")
         # mispricing -> future change, estimated on out-of-fold gaps (fit sample only)
         dd = eq["_d"]
         gap_oof = dd[y] - eq["_oof"].reindex(dd.index)
@@ -363,11 +381,11 @@ def stage_fit():
         eq["kappa"] = kappa
         frozen["equations"][name] = {k: v for k, v in eq.items() if not k.startswith("_")}
         print(f"{name}: lambda={eq['lambda']:.3g}, within R2={eq['within_r2']:.2f}, n={eq['n_obs']}, kappa={kappa}")
-    (FIT_DIR / "frozen_params.json").write_text(json.dumps(frozen, indent=1, default=float))
+    (fit_dir / "frozen_params.json").write_text(json.dumps(frozen, indent=1, default=float))
 
 
-def load_frozen() -> dict:
-    fr = json.loads((FIT_DIR / "frozen_params.json").read_text())
+def load_frozen(version: str = "v1") -> dict:
+    fr = json.loads((_dirs(version)[0] / "frozen_params.json").read_text())
     for eq in fr["equations"].values():
         eq["kappa"] = {int(k): v for k, v in eq["kappa"].items()}
     return fr
@@ -414,12 +432,13 @@ def forecast_eval(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def stage_test(force: bool = False):
-    TEST_DIR.mkdir(parents=True, exist_ok=True)
-    guard = TEST_DIR / "TEST_RUN.json"
+def stage_test(force: bool = False, version: str = "v1"):
+    test_dir = _dirs(version)[1]
+    test_dir.mkdir(parents=True, exist_ok=True)
+    guard = test_dir / "TEST_RUN.json"
     if guard.exists() and not force:
         sys.exit(f"hold-out already evaluated ({guard}); re-running would turn 2020+ into a fit sample.")
-    fr = load_frozen()
+    fr = load_frozen(version)
     d = load_data()
     allres = []
     for name, eq in fr["equations"].items():
@@ -432,17 +451,21 @@ def stage_test(force: bool = False):
                                         "gap": pdx.loc[ok, "gap"], "forecast": -eq["kappa"][h] * pdx.loc[ok, "gap"],
                                         "actual": dy[ok]}))
         fc = pd.concat(frames)
-        fc.assign(month=fc["month"].astype(str)).to_csv(TEST_DIR / f"mispricing_forecasts_{name}.csv", index=False,
+        fc.assign(month=fc["month"].astype(str)).to_csv(test_dir / f"mispricing_forecasts_{name}.csv", index=False,
                                                         float_format="%.4f")
         allres.append(forecast_eval(fc, f"mispricing_{name}"))
-    # past-cases (analog) forecasts, out of sample
-    an = analog_forecasts(d, fr)
-    an.assign(month=an["month"].astype(str)).to_csv(TEST_DIR / "analog_forecasts.csv", index=False,
-                                                    float_format="%.4f")
-    for asset, g in an.groupby("asset"):
-        allres.append(forecast_eval(g, f"analog_{asset}"))
+    if version == "v2":                     # the two group equations evaluated together as well
+        both = pd.concat([pd.read_csv(test_dir / f"mispricing_forecasts_{n}.csv") for n in ("spread_eu", "spread_em")])
+        allres.append(forecast_eval(both, "mispricing_spread_v2"))
+    if version == "v1":
+        # past-cases (analog) forecasts, out of sample; they use no fitted coefficients
+        an = analog_forecasts(d, fr)
+        an.assign(month=an["month"].astype(str)).to_csv(test_dir / "analog_forecasts.csv", index=False,
+                                                        float_format="%.4f")
+        for asset, g in an.groupby("asset"):
+            allres.append(forecast_eval(g, f"analog_{asset}"))
     res = pd.concat(allres, ignore_index=True)
-    res.to_csv(TEST_DIR / "forecast_tests.csv", index=False, float_format="%.4f")
+    res.to_csv(test_dir / "forecast_tests.csv", index=False, float_format="%.4f")
     guard.write_text(json.dumps({"run_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                  "frozen_params_created_utc": fr["created_utc"]}, indent=1))
     print(res[(res.scope == "pooled")].round(3).to_string())
@@ -511,20 +534,26 @@ def analog_forecasts(d: pd.DataFrame, fr: dict) -> pd.DataFrame:
 
 
 # ================================================================= outputs
-def stage_outputs():
-    OUT.mkdir(parents=True, exist_ok=True)
-    fr = load_frozen()
-    d = load_data()
+def _fair_value_and_factors(fr: dict, d: pd.DataFrame, names: list[str]):
+    """Fair value rows and factor contributions.  Contributions are measured
+    against the country's own 2005-2019 average of each factor, so
+    baseline + contributions = fair value."""
     fv_rows, fac_rows = [], []
-    for name, eq in fr["equations"].items():
+    for name in names:
+        eq = fr["equations"][name]
         pdx, X = predict(eq, d)
-        cm = eq["cmeans"]
-        b = eq["beta"]
-        ymean = {c: eq["alpha"][c] + sum(b[k] * cm[k].get(c, 0.0) for k in eq["feats"]) for c in eq["alpha"]}
+        cols = eq["cols"]
+        b = pd.Series(eq["beta"])[cols]
+        fitmask = (pdx["month"] <= FIT_END) & pdx[eq["y"]].notna()
+        xbar = X[fitmask].groupby(pdx.loc[fitmask, "c"]).mean()[cols]
+        base = {c: eq["alpha"][c] + float(xbar.loc[c] @ b) for c in xbar.index}
+        is_fx = eq["y"] == "fx_rer"
+        asset = "fx_pct" if is_fx else "spread_bp"
+        group = {k: ("commodities" if k.startswith("commod_") else k) for k in cols}
         for i in pdx.index[pdx["fitted"].notna()]:
             c, m = pdx.at[i, "c"], pdx.at[i, "month"]
             date = f"{m}-01"
-            if name == "spread":
+            if not is_fx:
                 if pd.isna(pdx.at[i, "spread"]):
                     continue
                 fv_rows.append({"country": ISO3[c], "date": date, "asset": "spread_bp", "actual": pdx.at[i, "spread"],
@@ -535,28 +564,41 @@ def stage_outputs():
                     continue
                 fv_rows.append({"country": ISO3[c], "date": date, "asset": "fx_per_usd", "actual": spot,
                                 "fair_value": spot * np.exp(-gap / 100), "gap": gap, "gap_z": pdx.at[i, "gap_z"]})
-            if m.year < 2015:
+            if m.year < 2015 or c not in xbar.index:
                 continue
-            asset = "spread_bp" if name == "spread" else "fx_pct"
             fac_rows.append({"country": ISO3[c], "date": date, "asset": asset,
-                             "factor": "baseline (country average 2005-2019)", "contribution": ymean.get(c, np.nan)})
-            contrib = {}
-            for k in eq["cols"]:
-                base = k.split(":")[0]
-                key = "commodities" if base.startswith("commod_") else base
-                ctr = b[k] * (X.at[i, k] - (cm[base].get(c, 0.0) if base in cm else
-                                            (0.0 if not base.startswith("commod_") else
-                                             (0.0 if not k.endswith(":" + c) else -0.0))))
-                contrib[key] = contrib.get(key, 0.0) + ctr
-            # commodity terms are measured relative to the fit-sample mean (z=0), not a country mean
-            for key, v in contrib.items():
+                             "factor": "baseline (country average 2005-2019)", "contribution": base[c]})
+            ctr = (X.loc[i, cols] - xbar.loc[c]) * b
+            for key, v in ctr.groupby(group).sum().items():
                 fac_rows.append({"country": ISO3[c], "date": date, "asset": asset,
-                                 "factor": LABELS.get(key, key), "contribution": v})
-    fv = pd.DataFrame(fv_rows)
+                                 "factor": LABELS.get(key, key), "contribution": float(v)})
+    return pd.DataFrame(fv_rows), pd.DataFrame(fac_rows)
+
+
+def stage_outputs():
+    """Dashboard files (names and columns fixed by forecast-panel's
+    site/config.yaml): spread fair value and factors from the v2 (post-hoc,
+    group-specific) spread equations; similar cases (model-free); what-if from
+    v2.  The v1 (frozen, tested) outputs and the currency equation are written
+    to subfolders/files of their own."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    d = load_data()
+    v1, v2 = load_frozen("v1"), load_frozen("v2")
+    fv, fac = _fair_value_and_factors(v2, d, ["spread_eu", "spread_em"])
     fv.to_csv(OUT / "fair_value.csv", index=False, float_format="%.4f")
-    pd.DataFrame(fac_rows).to_csv(OUT / "factors.csv", index=False, float_format="%.3f")
-    similar_cases(d, fr).to_csv(OUT / "similar_cases.csv", index=False, float_format="%.3f")
-    what_if(d, fr).to_csv(OUT / "what_if.csv", index=False, float_format="%.2f")
+    fac.to_csv(OUT / "factors.csv", index=False, float_format="%.3f")
+    similar_cases(d, v1).to_csv(OUT / "similar_cases.csv", index=False, float_format="%.3f")
+    pd.concat([what_if(d, v2, ["spread_eu", "spread_em"]), what_if(d, v1, ["fx"])]).to_csv(
+        OUT / "what_if.csv", index=False, float_format="%.2f")
+    fxv, fxf = _fair_value_and_factors(v1, d, ["fx"])
+    fxv.to_csv(OUT / "fx_fair_value.csv", index=False, float_format="%.4f")
+    fxf.to_csv(OUT / "fx_factors.csv", index=False, float_format="%.3f")
+    sub = OUT / "v1_frozen"
+    sub.mkdir(exist_ok=True)
+    f1, a1 = _fair_value_and_factors(v1, d, ["spread"])
+    f1.to_csv(sub / "fair_value.csv", index=False, float_format="%.4f")
+    a1.to_csv(sub / "factors.csv", index=False, float_format="%.3f")
+    what_if(d, v1, ["spread"]).to_csv(sub / "what_if.csv", index=False, float_format="%.2f")
 
 
 def similar_cases(d: pd.DataFrame, fr: dict, start="2007-01") -> pd.DataFrame:
@@ -593,9 +635,10 @@ SCENARIOS = {
 }
 
 
-def what_if(d: pd.DataFrame, fr: dict) -> pd.DataFrame:
+def what_if(d: pd.DataFrame, fr: dict, names: list[str]) -> pd.DataFrame:
     rows = []
-    for name, eq in fr["equations"].items():
+    for name in names:
+        eq = fr["equations"][name]
         cols, b = eq["cols"], np.array([eq["beta"][k] for k in eq["cols"]])
         V = np.array(eq["cov"])
         std, cm = eq["std"], eq["cmeans"]
@@ -625,7 +668,7 @@ def what_if(d: pd.DataFrame, fr: dict) -> pd.DataFrame:
                 dx = (x1 - x0).values
                 eff, se = float(dx @ b), float(np.sqrt(dx @ V @ dx))
                 rows.append({"country": ISO3[c], "date": f"{d.at[i, 'month']}-01",
-                             "asset": "spread_bp" if name == "spread" else "fx_pct", "scenario": sc,
+                             "asset": "fx_pct" if eq["y"] == "fx_rer" else "spread_bp", "scenario": sc,
                              "description": desc, "estimate": eff, "lo90": eff - 1.645 * se, "hi90": eff + 1.645 * se,
                              "se": se, "note": note})
     return pd.DataFrame(rows)
@@ -633,8 +676,14 @@ def what_if(d: pd.DataFrame, fr: dict) -> pd.DataFrame:
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    {"data": build_data, "fit": stage_fit, "outputs": stage_outputs}.get(cmd, lambda: None)()
-    if cmd == "test":
-        stage_test("--force" in sys.argv)
-    elif cmd not in ("data", "fit", "outputs"):
+    ver = "v2" if "--v2" in sys.argv else "v1"
+    if cmd == "data":
+        build_data()
+    elif cmd == "fit":
+        stage_fit(ver)
+    elif cmd == "test":
+        stage_test("--force" in sys.argv, ver)
+    elif cmd == "outputs":
+        stage_outputs()
+    else:
         sys.exit(__doc__)

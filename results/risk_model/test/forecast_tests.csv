@@ -1,0 +1,185 @@
+model,h,scope,drop_top5,n,rmse_model,rmse_no_change,rmse_ratio,dm_t,hit_rate
+mispricing_spread,3,pooled,False,919,120.4334,120.3748,1.0005,-0.1799,0.5174
+mispricing_spread,3,pooled,True,914,99.6804,99.2301,1.0045,-0.4609,0.5170
+mispricing_spread,3,Brazil,False,79,96.7181,97.9579,0.9873,1.0674,0.5190
+mispricing_spread,3,Brazil,True,74,82.6725,83.7437,0.9872,1.0526,0.5270
+mispricing_spread,3,Chile,False,78,57.6646,54.8610,1.0511,-1.5317,0.4744
+mispricing_spread,3,Chile,True,73,42.0918,40.1285,1.0489,-1.3245,0.4795
+mispricing_spread,3,Colombia,False,78,90.7358,89.8760,1.0096,-0.3338,0.4231
+mispricing_spread,3,Colombia,True,73,77.9397,74.8479,1.0413,-1.2644,0.3973
+mispricing_spread,3,Spain,False,78,15.9489,14.2921,1.1159,-1.1843,0.5000
+mispricing_spread,3,Spain,True,73,12.2094,9.1048,1.3410,-1.9648,0.4932
+mispricing_spread,3,France,False,78,14.5209,9.1140,1.5933,-3.2904,0.4675
+mispricing_spread,3,France,True,73,13.0000,7.5486,1.7222,-3.3844,0.4722
+mispricing_spread,3,United Kingdom,False,78,26.6270,26.6940,0.9975,0.0557,0.6154
+mispricing_spread,3,United Kingdom,True,73,20.5467,19.3570,1.0615,-0.9736,0.6027
+mispricing_spread,3,Indonesia,False,57,52.6257,54.1234,0.9723,1.2221,0.5614
+mispricing_spread,3,Indonesia,True,52,32.0543,34.1052,0.9399,1.6673,0.5577
+mispricing_spread,3,Italy,False,78,26.3583,26.8103,0.9831,0.3218,0.4359
+mispricing_spread,3,Italy,True,73,21.7334,20.9037,1.0397,-0.6257,0.4110
+mispricing_spread,3,Mexico,False,79,38.6813,39.1617,0.9877,0.9278,0.4684
+mispricing_spread,3,Mexico,True,74,30.1454,30.5798,0.9858,0.6650,0.4459
+mispricing_spread,3,Poland,False,78,57.7882,58.0282,0.9959,0.2617,0.5513
+mispricing_spread,3,Poland,True,73,44.1658,43.5178,1.0149,-0.5866,0.5205
+mispricing_spread,3,Turkey,False,79,366.6869,366.2356,1.0012,-0.0834,0.5696
+mispricing_spread,3,Turkey,True,74,293.5013,291.3055,1.0075,-0.3722,0.5676
+mispricing_spread,3,South Africa,False,79,69.7393,72.2616,0.9651,1.3371,0.6329
+mispricing_spread,3,South Africa,True,74,49.6410,54.6286,0.9087,2.0477,0.6622
+mispricing_spread,6,pooled,False,883,181.9734,186.0123,0.9783,0.5704,0.5243
+mispricing_spread,6,pooled,True,878,146.3065,145.5292,1.0053,-0.4131,0.5216
+mispricing_spread,6,Brazil,False,76,125.3971,127.3244,0.9849,0.5179,0.5658
+mispricing_spread,6,Brazil,True,71,108.9916,112.3180,0.9704,0.8580,0.5915
+mispricing_spread,6,Chile,False,75,90.4930,83.4132,1.0849,-1.2928,0.4667
+mispricing_spread,6,Chile,True,70,71.7608,61.8105,1.1610,-1.5634,0.4429
+mispricing_spread,6,Colombia,False,75,129.2923,122.8736,1.0522,-0.7803,0.4000
+mispricing_spread,6,Colombia,True,70,116.1043,105.7732,1.0977,-1.3919,0.3857
+mispricing_spread,6,Spain,False,75,25.4520,17.4364,1.4597,-1.9032,0.5333
+mispricing_spread,6,Spain,True,70,23.4407,13.5085,1.7352,-2.4478,0.5286
+mispricing_spread,6,France,False,75,27.5867,11.8060,2.3367,-3.5470,0.4933
+mispricing_spread,6,France,True,70,25.1351,10.3059,2.4389,-3.4485,0.5286
+mispricing_spread,6,United Kingdom,False,75,33.4093,30.5158,1.0948,-0.7449,0.6533
+mispricing_spread,6,United Kingdom,True,70,30.0134,25.2991,1.1863,-1.0344,0.6286
+mispricing_spread,6,Indonesia,False,54,62.3912,68.1465,0.9155,1.2893,0.6481
+mispricing_spread,6,Indonesia,True,49,53.8852,57.8208,0.9319,1.1590,0.6531
+mispricing_spread,6,Italy,False,75,37.5622,37.8750,0.9917,0.0631,0.4400
+mispricing_spread,6,Italy,True,70,34.1291,31.9903,1.0669,-0.5102,0.4286
+mispricing_spread,6,Mexico,False,76,50.3955,51.6175,0.9763,0.6335,0.4605
+mispricing_spread,6,Mexico,True,71,43.5410,43.5545,0.9997,0.0069,0.4225
+mispricing_spread,6,Poland,False,75,86.1958,86.5267,0.9962,0.1039,0.5200
+mispricing_spread,6,Poland,True,70,67.9575,66.4864,1.0221,-0.3869,0.4857
+mispricing_spread,6,Turkey,False,76,567.5615,583.4941,0.9727,0.8021,0.5132
+mispricing_spread,6,Turkey,True,71,444.6194,442.7510,1.0042,-0.1217,0.4789
+mispricing_spread,6,South Africa,False,76,76.0678,86.2380,0.8821,1.6618,0.6316
+mispricing_spread,6,South Africa,True,71,60.9251,73.2442,0.8318,1.6701,0.6338
+mispricing_fx,3,pooled,False,684,5.9143,5.6718,1.0428,-1.9052,0.5278
+mispricing_fx,3,pooled,True,679,5.5076,5.2577,1.0475,-1.9011,0.5272
+mispricing_fx,3,Brazil,False,76,7.1639,6.5726,1.0900,-1.3514,0.5921
+mispricing_fx,3,Brazil,True,71,5.5059,4.4668,1.2326,-1.7594,0.5775
+mispricing_fx,3,Chile,False,76,5.9456,5.6691,1.0488,-1.2302,0.4605
+mispricing_fx,3,Chile,True,71,4.9658,4.6143,1.0762,-1.7713,0.4648
+mispricing_fx,3,Colombia,False,76,6.6222,6.5028,1.0184,-0.3534,0.5789
+mispricing_fx,3,Colombia,True,71,5.6600,5.4477,1.0390,-0.6042,0.5775
+mispricing_fx,3,United Kingdom,False,76,3.4551,3.5332,0.9779,0.5857,0.4737
+mispricing_fx,3,United Kingdom,True,71,3.0206,2.9589,1.0209,-0.5649,0.4507
+mispricing_fx,3,Indonesia,False,76,4.7721,3.6102,1.3218,-4.3568,0.3684
+mispricing_fx,3,Indonesia,True,71,4.3414,2.9629,1.4653,-4.6446,0.3380
+mispricing_fx,3,Mexico,False,76,5.7430,5.8191,0.9869,1.2890,0.5526
+mispricing_fx,3,Mexico,True,71,3.9560,4.0287,0.9820,0.9043,0.5352
+mispricing_fx,3,Poland,False,76,4.4928,4.5624,0.9847,0.5363,0.5395
+mispricing_fx,3,Poland,True,71,3.8288,3.7970,1.0084,-0.2725,0.5211
+mispricing_fx,3,Turkey,False,76,7.8074,7.5865,1.0291,-0.6856,0.5789
+mispricing_fx,3,Turkey,True,71,5.6824,5.8480,0.9717,0.5774,0.6197
+mispricing_fx,3,South Africa,False,76,5.9546,5.8440,1.0189,-0.6402,0.6053
+mispricing_fx,3,South Africa,True,71,4.4521,4.2596,1.0452,-0.8085,0.5915
+mispricing_fx,6,pooled,False,657,8.0276,7.2791,1.1028,-2.1506,0.5297
+mispricing_fx,6,pooled,True,652,7.7604,7.0465,1.1013,-2.1072,0.5307
+mispricing_fx,6,Brazil,False,73,9.5792,7.4453,1.2866,-1.4679,0.6575
+mispricing_fx,6,Brazil,True,68,8.7370,5.8739,1.4874,-1.6327,0.6471
+mispricing_fx,6,Chile,False,73,8.5345,7.9413,1.0747,-1.0823,0.3973
+mispricing_fx,6,Chile,True,68,8.1570,6.9623,1.1716,-3.0000,0.3529
+mispricing_fx,6,Colombia,False,73,9.4053,9.0861,1.0351,-0.2976,0.5753
+mispricing_fx,6,Colombia,True,68,8.4705,8.0135,1.0570,-0.5192,0.5735
+mispricing_fx,6,United Kingdom,False,73,4.7404,4.9479,0.9580,0.7448,0.5616
+mispricing_fx,6,United Kingdom,True,68,3.8283,4.1060,0.9324,0.8975,0.5735
+mispricing_fx,6,Indonesia,False,73,7.5161,4.1203,1.8242,-5.0349,0.2603
+mispricing_fx,6,Indonesia,True,68,7.0467,3.7371,1.8856,-5.0362,0.2794
+mispricing_fx,6,Mexico,False,73,7.3946,7.7500,0.9541,1.7599,0.5890
+mispricing_fx,6,Mexico,True,68,6.4177,6.7506,0.9507,1.4984,0.5735
+mispricing_fx,6,Poland,False,73,6.0461,6.2789,0.9629,0.6571,0.5616
+mispricing_fx,6,Poland,True,68,5.1583,5.1795,0.9959,0.0619,0.5441
+mispricing_fx,6,Turkey,False,73,9.8616,9.0106,1.0944,-0.9567,0.5616
+mispricing_fx,6,Turkey,True,68,8.1079,7.8793,1.0290,-0.3003,0.6029
+mispricing_fx,6,South Africa,False,73,7.7118,7.3265,1.0526,-0.7680,0.6027
+mispricing_fx,6,South Africa,True,68,6.7314,6.2068,1.0845,-0.9421,0.6029
+analog_fx,3,pooled,False,711,7.0899,6.5222,1.0870,-3.2947,0.5148
+analog_fx,3,pooled,True,706,6.3678,5.7972,1.0984,-3.7993,0.5156
+analog_fx,3,Brazil,False,79,7.6590,6.5853,1.1630,-1.7501,0.4557
+analog_fx,3,Brazil,True,74,6.3026,5.0961,1.2368,-1.8606,0.4595
+analog_fx,3,Chile,False,79,6.9566,6.0933,1.1417,-1.8009,0.4684
+analog_fx,3,Chile,True,74,6.0411,5.2239,1.1564,-1.8653,0.4865
+analog_fx,3,Colombia,False,79,6.9855,6.3242,1.1046,-1.3628,0.4937
+analog_fx,3,Colombia,True,74,5.8074,5.2826,1.0993,-0.9131,0.5135
+analog_fx,3,United Kingdom,False,79,4.5715,3.8148,1.1983,-1.9749,0.4430
+analog_fx,3,United Kingdom,True,74,4.0560,3.3125,1.2245,-2.0789,0.4459
+analog_fx,3,Indonesia,False,79,4.3692,3.6567,1.1948,-2.1761,0.5443
+analog_fx,3,Indonesia,True,74,3.5507,2.8963,1.2260,-2.6858,0.5541
+analog_fx,3,Mexico,False,79,5.3457,5.5962,0.9552,0.6372,0.6203
+analog_fx,3,Mexico,True,74,4.0814,4.2731,0.9551,0.6027,0.6216
+analog_fx,3,Poland,False,79,5.6047,4.9425,1.1340,-3.2835,0.3797
+analog_fx,3,Poland,True,74,4.8564,4.2127,1.1528,-2.9374,0.4054
+analog_fx,3,Turkey,False,79,11.9907,12.0240,0.9972,0.0593,0.8354
+analog_fx,3,Turkey,True,74,7.5749,8.1394,0.9306,1.3398,0.8649
+analog_fx,3,South Africa,False,79,7.2663,5.8413,1.2440,-3.5688,0.3924
+analog_fx,3,South Africa,True,74,6.3262,4.8124,1.3146,-3.5079,0.4054
+analog_fx,6,pooled,False,684,9.9807,9.4656,1.0544,-1.7308,0.5687
+analog_fx,6,pooled,True,679,9.1608,8.6037,1.0648,-1.7069,0.5714
+analog_fx,6,Brazil,False,76,9.2111,7.6057,1.2111,-1.5888,0.5921
+analog_fx,6,Brazil,True,71,8.1039,6.4090,1.2645,-2.0070,0.5915
+analog_fx,6,Chile,False,76,9.1097,8.4224,1.0816,-1.0692,0.4737
+analog_fx,6,Chile,True,71,8.5332,7.3880,1.1550,-2.0132,0.4648
+analog_fx,6,Colombia,False,76,9.9564,8.8775,1.1215,-0.7773,0.6579
+analog_fx,6,Colombia,True,71,9.6771,7.7659,1.2461,-1.3597,0.6338
+analog_fx,6,United Kingdom,False,76,6.4925,5.1942,1.2500,-3.0815,0.4605
+analog_fx,6,United Kingdom,True,71,5.8412,4.2025,1.3899,-3.2396,0.4648
+analog_fx,6,Indonesia,False,76,4.7915,4.1863,1.1446,-0.7893,0.5395
+analog_fx,6,Indonesia,True,71,4.2173,3.7353,1.1290,-0.7177,0.5493
+analog_fx,6,Mexico,False,76,7.3673,7.6530,0.9627,0.5812,0.7105
+analog_fx,6,Mexico,True,71,6.4279,6.5967,0.9744,0.3186,0.7183
+analog_fx,6,Poland,False,76,7.5642,6.4680,1.1695,-1.6327,0.4211
+analog_fx,6,Poland,True,71,6.8445,5.5409,1.2353,-1.9303,0.4225
+analog_fx,6,Turkey,False,76,18.8638,19.8907,0.9484,3.0850,0.8421
+analog_fx,6,Turkey,True,71,14.9597,16.3782,0.9134,3.3574,0.8873
+analog_fx,6,South Africa,False,76,9.8553,7.6318,1.2913,-2.3617,0.4211
+analog_fx,6,South Africa,True,71,8.7765,6.4865,1.3530,-2.5395,0.4085
+analog_spread,3,pooled,False,919,125.0144,120.3748,1.0385,-2.3760,0.4662
+analog_spread,3,pooled,True,914,105.6171,99.2301,1.0644,-3.0995,0.4644
+analog_spread,3,Brazil,False,79,107.2624,97.9579,1.0950,-1.3882,0.5570
+analog_spread,3,Brazil,True,74,100.7490,83.7437,1.2031,-2.6647,0.5270
+analog_spread,3,Chile,False,78,58.0068,54.8610,1.0573,-1.9288,0.5256
+analog_spread,3,Chile,True,73,43.9611,40.1285,1.0955,-2.0414,0.5205
+analog_spread,3,Colombia,False,78,93.6938,89.8760,1.0425,-1.1615,0.4487
+analog_spread,3,Colombia,True,73,80.1298,74.8479,1.0706,-1.4137,0.4521
+analog_spread,3,Spain,False,78,21.7477,14.2921,1.5217,-2.9343,0.4872
+analog_spread,3,Spain,True,73,19.4706,9.1048,2.1385,-3.1647,0.4795
+analog_spread,3,France,False,78,15.3831,9.1140,1.6879,-1.9952,0.4416
+analog_spread,3,France,True,73,14.5797,7.5486,1.9314,-1.9016,0.4444
+analog_spread,3,United Kingdom,False,78,27.5942,26.6940,1.0337,-0.7909,0.4231
+analog_spread,3,United Kingdom,True,73,21.1254,19.3570,1.0914,-2.1346,0.4110
+analog_spread,3,Indonesia,False,57,61.7317,54.1234,1.1406,-1.4559,0.5439
+analog_spread,3,Indonesia,True,52,47.0772,34.1052,1.3804,-1.7118,0.5192
+analog_spread,3,Italy,False,78,32.5717,26.8103,1.2149,-2.1905,0.4103
+analog_spread,3,Italy,True,73,27.6523,20.9037,1.3228,-2.4093,0.4110
+analog_spread,3,Mexico,False,79,46.0758,39.1617,1.1766,-2.3209,0.4304
+analog_spread,3,Mexico,True,74,40.8148,30.5798,1.3347,-3.1322,0.4189
+analog_spread,3,Poland,False,78,59.7978,58.0282,1.0305,-0.9781,0.4872
+analog_spread,3,Poland,True,73,47.0647,43.5178,1.0815,-2.0406,0.4658
+analog_spread,3,Turkey,False,79,372.9068,366.2356,1.0182,-0.9554,0.4810
+analog_spread,3,Turkey,True,74,303.5525,291.3055,1.0420,-1.5124,0.4595
+analog_spread,3,South Africa,False,79,91.3721,72.2616,1.2645,-2.8175,0.3797
+analog_spread,3,South Africa,True,74,78.5831,54.6286,1.4385,-3.2133,0.3784
+analog_spread,6,pooled,False,883,195.5419,186.0123,1.0512,-2.9132,0.4632
+analog_spread,6,pooled,True,878,157.2353,145.5292,1.0804,-2.9342,0.4636
+analog_spread,6,Brazil,False,76,140.3662,127.3244,1.1024,-1.0958,0.4474
+analog_spread,6,Brazil,True,71,132.6358,112.3180,1.1809,-1.8037,0.4225
+analog_spread,6,Chile,False,75,80.4491,83.4132,0.9645,0.8760,0.6667
+analog_spread,6,Chile,True,70,58.4112,61.8105,0.9450,0.8201,0.6857
+analog_spread,6,Colombia,False,75,124.6476,122.8736,1.0144,-0.1855,0.5067
+analog_spread,6,Colombia,True,70,115.7781,105.7732,1.0946,-1.3628,0.4857
+analog_spread,6,Spain,False,75,37.9561,17.4364,2.1768,-2.3312,0.3467
+analog_spread,6,Spain,True,70,38.4590,13.5085,2.8470,-2.5881,0.3000
+analog_spread,6,France,False,75,16.8221,11.8060,1.4249,-3.0616,0.4800
+analog_spread,6,France,True,70,15.7945,10.3059,1.5326,-2.8792,0.5000
+analog_spread,6,United Kingdom,False,75,32.0810,30.5158,1.0513,-1.0018,0.4933
+analog_spread,6,United Kingdom,True,70,28.3303,25.2991,1.1198,-1.9416,0.4714
+analog_spread,6,Indonesia,False,54,79.6012,68.1465,1.1681,-1.2705,0.4444
+analog_spread,6,Indonesia,True,49,70.8566,57.8208,1.2255,-1.3217,0.4286
+analog_spread,6,Italy,False,75,48.5381,37.8750,1.2815,-2.4462,0.4800
+analog_spread,6,Italy,True,70,40.6296,31.9903,1.2701,-2.2922,0.5143
+analog_spread,6,Mexico,False,76,62.1906,51.6175,1.2048,-1.9384,0.5000
+analog_spread,6,Mexico,True,71,52.8703,43.5545,1.2139,-1.7515,0.5211
+analog_spread,6,Poland,False,75,80.4477,86.5267,0.9297,1.3346,0.5733
+analog_spread,6,Poland,True,70,63.2943,66.4864,0.9520,0.9400,0.5429
+analog_spread,6,Turkey,False,76,608.2964,583.4941,1.0425,-1.9867,0.3026
+analog_spread,6,Turkey,True,71,475.6858,442.7510,1.0744,-2.0574,0.2958
+analog_spread,6,South Africa,False,76,114.0367,86.2380,1.3223,-3.3774,0.3158
+analog_spread,6,South Africa,True,71,101.0617,73.2442,1.3798,-3.6664,0.3239

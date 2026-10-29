@@ -1,0 +1,25 @@
+term,label,coef_per_sd,se_dk,t_dk,coef_per_unit,lag_months
+debt,"gross debt, % GDP",-4.896,5.1282,-0.95472,-0.28711,12
+deficit,"fiscal deficit, % GDP",12.761,6.709,1.902,5.0107,12
+debt_traj,"debt trajectory (3y avg change, pp/yr)",10.293,10.448,0.98512,3.5872,12
+foreign_share,"debt held abroad, %",10.973,5.3539,2.0494,0.74208,6
+cbi,central bank independence (CBIE),2.9762,1.4141,2.1047,28.51,12
+infl_gap,"inflation minus target, pp",56.117,10.707,5.2411,21.522,1
+real_rate,"real policy rate, %",44.969,11.004,4.0866,15.964,1
+seat_share,"government seat share, %",-20.933,10.579,-1.9787,-1.459,0
+n_gov5y,governments in prior 5 years,-17.857,6.2572,-2.8538,-9.8734,0
+lr_vparty,"governing parties' economic position (V-Party, + = right)",-17.864,8.1427,-2.1938,-14.236,0
+populism_vparty,governing parties' populism (V-Party),-0.20382,2.4388,-0.083573,-0.79466,0
+lr_ches,governing parties' economic position (CHES),0,0,,0,0
+populist_popu_list,populist party in government (PopuList),0,0,,,0
+wgi,governance (WGI mean),-12.2,3.9444,-3.093,-23.591,12
+jucon,judicial constraints (V-Dem),3.6397,2.775,1.3116,25.741,12
+high_court_indep,high-court independence (V-Dem),26.469,8.4359,3.1377,59.397,12
+current_account,"current account, % GDP",2.3689,6.5341,0.36254,0.99688,12
+reserves_months,"reserves, months of imports",-23.572,10.542,-2.2361,-8.8222,12
+imf_programme,IMF programme,-9.3609,6.5807,-1.4225,-21.453,0
+rating,average rating (notches),-24.657,7.1359,-3.4554,-10.139,0
+us10y,"US 10y yield, %",-16.717,7.6783,-2.1771,-16.696,0
+log_vix,VIX (log),25.102,6.5063,3.8581,69.987,0
+ecb_rate,"ECB deposit rate, %",-18.647,12.75,-1.4625,-16.738,0
+debt_x_seat,debt x government seat share,42.542,12.468,3.4121,,0
