@@ -369,6 +369,7 @@ def stage_update():
             c = FX_INSTR.get(k, k[:2])
             desc = (f"{k} vs USD ({NAME.get(c, c)})" if b == "fx" else
                     f"{NAME[c]} 10y bond spread over the Bund (long {NAME[c]}, short Bund)" if k.endswith("-DE")
+                    else "German 10y Bund (excess over the ECB rate)" if k == "DE10Y"
                     else f"{NAME[c]} 10y local-currency bond (excess over local policy rate)")
             rows.append({"as_of": f"{t}", "effective_from": f"{t + 1}", "book": b, "instrument": k, "description": desc,
                          "side": "long" if w > 0 else "short", "size_pct_of_capital": round(100 * w, 2),

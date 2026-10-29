@@ -15,6 +15,12 @@ estimated on 2005–2021, and the 2022+ hold-out was evaluated once against froz
   risk model, fitted on 2005–2019 and tested once on 2020+. It explains spread levels reasonably well within each
   country. Its mispricing signal and past-cases finder do **not** forecast 3- or 6-month spread changes better than
   "no change".
+- **Systematic macro strategy (§10):** carry, trend and value across currencies and 10-year bonds of the 13
+  countries.
+  - **Design:** set on 2005–2019 and frozen.
+  - **Test, 2020 to Sep 2026:** +6.0% a year, Sharpe 0.65, worst drawdown −18%.
+  - **Comparison:** simply holding the EM carry basket made −0.5% a year over the same period.
+  - **What drove it:** almost all the gain came from carry. Trend and value did not help.
 
 ```
 pip install -r requirements.txt
@@ -29,6 +35,9 @@ python -m em_macro.risk_model data      # lagged design matrix (section 9)
 python -m em_macro.risk_model fit       # 2005-2019 only, freezes parameters (v1; add --v2 for the post-hoc version)
 python -m em_macro.risk_model test      # 2020+ once, with frozen parameters (refuses to run twice)
 python -m em_macro.risk_model outputs   # fair value, factor contributions, similar cases, what-if, dashboard files
+python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
+python -m em_macro.systematic test      # 2020+ once
+python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
 pytest -q
 ```
 
@@ -757,7 +766,133 @@ Other files:
   - **Small samples:** about 75–80 overlapping monthly forecasts per country, so per-country DM statistics are noisy.
   - **v2 is **post-hoc: chosen after the 2020+ test; not a clean out-of-sample result**.** Its numbers are not an independent test.
 
-## 10. Limitations of the event study (§1–7)
+## 10. Systematic macro strategy
+
+> **Plain-English summary.**
+> - **What it does:** each month the strategy ranks 10 currencies and 13 bond positions by three signals:
+>   - **carry:** how much they pay;
+>   - **trend:** how they have performed;
+>   - **value:** how cheap they look.
+>
+>   It buys the best third, sells the worst third, sizes every position to the same risk and runs the whole book at
+>   10% volatility, after realistic trading costs.
+> - **Testing:** every rule was fixed on 2005–2019 data and frozen (commit `2dbfeb1`), then tested once on
+>   Jan 2020 to Sep 2026.
+> - **Result:** the combined strategy made **+6.0% a year (Sharpe 0.65)**, with a worst fall of 18% and slightly
+>   negative correlation with US stocks (−0.17). Simply holding the emerging-market carry basket made −0.5% a year.
+> - **Caveats:** the edge came almost entirely from carry; trend was flat and value lost money. Leverage is high
+>   (about 5.5× gross on average) and bond returns are approximations from monthly-average yields. Treat this as a
+>   research backtest, not a ready-to-trade product.
+
+### What it trades
+
+| book | instruments | return measured as |
+|---|---|---|
+| currencies (10) | BRL, MXN, ZAR, TRY, IDR, PLN, GBP, COP, CLP and EUR (once, for France, Italy, Spain and Germany), each against USD | spot move plus local policy rate minus US fed funds, month-end to month-end |
+| bonds (13) | 10y local-currency bonds of Brazil, Mexico, South Africa, Turkey, Indonesia, Colombia and Chile; 10y spreads over the Bund for France, Italy, Spain, UK and Poland; the Bund itself | excess return over the funding rate: (yield − funding)/12 − duration × yield change + convexity term. Funding is the local policy rate; for spreads it is the Bund; for the Bund it is the ECB rate |
+
+Bonds start trading once they have 12 months of data: Turkey from mid-2019, Indonesia from 2013. Indonesia's
+yields stop at Dec 2024, so its bond drops out from 2025.
+
+### Signals, portfolio and costs
+
+| | rule |
+|---|---|
+| carry | currencies: local policy rate minus US fed funds. Bonds: 10y yield minus policy rate; spread level for the European spreads; Bund yield minus ECB rate |
+| trend | average of the cross-country z-scores of the past 12-month and 3-month return |
+| value | currencies: log real exchange rate (CPI lagged one month) minus its 5-year average, with at least 3 years required. Positive means cheap. Bonds: the risk model's **v1 frozen** mispricing (spread minus fair value; positive means cheap). The Bund has no value signal |
+| combine | each signal is z-scored across the instruments of a book every month; the three are averaged equally |
+| select | rank each book; long the top third and short the bottom third |
+| size | each position gets 1/(its trailing 36-month volatility). Each book is scaled to 10% volatility on its trailing 36-month history, the two books are mixed 50/50, and the total is rescaled to 10% |
+| limits | gross leverage capped at 6× on target positions. **No-trade band:** keep a position unless its target moves by more than 25% (exits and sign flips always trade) |
+| costs | 0.1% of notional traded for major currencies and bonds; 0.3% for Turkey, Indonesia, Colombia and Chile. Spread trades pay twice (two bonds) |
+| timing | currency positions decided at month-end earn the next month's return. Bond yields are monthly averages, so bond positions earn the change between the next two monthly averages. This one-month delay avoids using information from inside the month |
+
+**How the design was chosen (2005–2019 only).** Almost all the rules above are yours or were fixed in advance. I
+tried exactly one alternative: the no-trade band (none vs 25%). On 2005–2019, the band raised the combined Sharpe
+from 0.37 to 0.40 and cut costs from 5.9% to 5.3% a year, so it was kept. Nothing else was tuned. Everything was
+frozen in `results/systematic/fit/frozen_design.json`, including a fingerprint of the code. The test refuses to run
+twice or after a code change.
+
+### Results
+
+Net of costs; annual return, Sharpe ratio, worst drawdown, and correlation with the S&P 500 (monthly returns).
+
+| | 2005–2019 (design) | | | | **2020 – Sep 2026 (test, once)** | | | |
+|---|---|---|---|---|---|---|---|---|
+| strategy | return | Sharpe | worst DD | corr. S&P | **return** | **Sharpe** | **worst DD** | **corr. S&P** |
+| **combined (carry + trend + value)** | +3.6% | 0.40 | −14% | 0.00 | **+6.0%** | **0.65** | **−18%** | **−0.17** |
+| carry only | +3.5% | 0.38 | −14% | 0.04 | +10.1% | 0.96 | −17% | −0.14 |
+| trend only | −11.0% | −1.08 | −81% | 0.00 | −0.4% | 0.01 | −35% | 0.05 |
+| value only | +4.8% | 0.48 | −20% | 0.00 | −2.3% | −0.20 | −27% | −0.13 |
+| hold the carry basket (6 EM currencies, §2) | +1.1% | 0.16 | −33% | 0.61 | −0.5% | −0.02 | −18% | 0.57 |
+| S&P 500 total return | +9.2% | 0.71 | −51% | — | +15.3% | 0.93 | −24% | — |
+
+By book, in the test: the currency book made +2.6% a year (Sharpe 0.30) and the bond book +6.2% (Sharpe 0.67).
+Full tables, including each signal per book, are in `results/systematic/fit/performance_2005_2019.csv` and
+`results/systematic/test/performance_2020_on.csv`.
+
+What the numbers say:
+- **Combined vs the benchmark:** the combined strategy beat holding the carry basket in both periods. Unlike the
+  basket, it barely moves with US stocks.
+- **Carry:** the most reliable signal.
+- **Trend:** lost heavily in 2005–2019, even before costs. Emerging-market currency and bond trends reverted more
+  than they persisted, and the high turnover made it worse. It was flat in the test.
+- **Value:** worked in 2005–2019 but lost in the test. For bonds the 2005–2019 value signal is flattered, because
+  the risk model was fitted on those same years.
+- **Costs:** large. Trading costs take 3.7% a year from the combined strategy in the test, and more in the design
+  period. Without them the design-period Sharpe would be about 0.9.
+
+### This month's positions and paper trading
+
+- **`results/systematic/positions.csv`:** the positions decided at the latest month-end (`as_of`), to hold through
+  the next month (`effective_from`). Each row gives:
+  - instrument and plain-English description;
+  - long or short;
+  - size in % of capital (notional, signed) and share of portfolio risk;
+  - the instrument's volatility;
+  - the three signal z-scores;
+  - the cost rate.
+
+  The first file is as of Sep 2026: six currency positions (long TRY, IDR and BRL; short PLN, GBP and EUR) and eight
+  bond positions.
+- **`results/systematic/paper_pnl.csv`:** the full monthly history from Feb 2006. Columns:
+  - gross P&L of each book, cost and net return;
+  - gross leverage and cumulative net value;
+  - the carry basket and S&P 500 for comparison;
+  - a `sample` label: design (2005–2019), test (2020 to freeze month) or **live paper trading** (months after the
+    freeze, Oct 2026).
+- **`.github/workflows/systematic.yml`:** runs on the 3rd of every month. It refreshes the data and recomputes
+  positions and paper P&L with the frozen design. It runs the tests, then commits the two files and the refreshed
+  data. Nothing frozen is re-estimated.
+  - **Incremental scrapes:** the parsed BondSpot and Borsa Istanbul scrapes are committed (`data/raw/bondspot/`,
+    `data/raw/bist/`, about 10 MB), so each run fetches only new days.
+  - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings.
+
+### Limitations
+
+- **Leverage and funding.**
+  - About 5.5× gross on average, peaking at 6.6×. The cap applies to target positions, and positions held inside
+    the no-trade band can drift above it.
+  - The European spread positions need large notionals because they move little (France–Germany about 2.5% a year).
+  - Financing, margin and FX-hedging costs beyond the policy-rate carry are not modelled.
+- **Bond return accuracy.**
+  - Bond returns are approximations from monthly-average yields: duration and convexity of a par bond, no roll-down,
+    no actual bond prices.
+  - Averaging smooths volatility, so bond risk is somewhat understated and leverage overstated.
+  - Brazil's pre-2007 yield is a shorter bond.
+- **Costs** are a flat rate per unit traded, with no market impact or crisis widening. Turkish and Indonesian bonds
+  can be far costlier to trade in stress.
+- **Data quality.**
+  - Currency returns use noon-NY or Yahoo closes.
+  - The lira was heavily managed in 2020–2023.
+  - Indonesia's yields end in Dec 2024 and Turkey's start in Jul 2018.
+- **Sampling noise:** 81 test months give a Sharpe standard error of about ±0.4. The test result is encouraging but
+  not conclusive, and it comes almost entirely from carry.
+- **Code change after the test:** a description label was corrected. This changed the code fingerprint but not the
+  design or any number. `update` checks only that the design is unchanged; the one-time `test` cannot be re-run.
+
+## 11. Limitations of the event study (§1–7)
 
 - **Small samples.**
   - There are 66 election days, of which only 27 fit-sample elections have a signed, coded surprise (26 with a day-1
@@ -815,6 +950,7 @@ em_macro/
   panel_sources.py ECB, OECD, BIS, IMF WEO, World Bank, BanRep, BCCh fetchers for the panel
   calendar.py      13-country event calendar + results/calendar_coverage.md
   risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
+  systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
 data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V-Dem, WGI, debt holders,

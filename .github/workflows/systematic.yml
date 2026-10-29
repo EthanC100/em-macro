@@ -1,0 +1,53 @@
+# Monthly update of the systematic macro strategy (positions + paper P&L).
+# Refreshes the input data and applies the FROZEN design (results/systematic/fit/frozen_design.json);
+# no frozen result (event study, risk model, strategy test) is re-estimated or re-tested.
+name: systematic-monthly
+
+on:
+  schedule:
+    - cron: "23 7 3 * *"     # 07:23 UTC on the 3rd of every month, after month-end data are published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: systematic-monthly
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Refresh data (daily panel, 13-country panel, risk-model inputs)
+        run: python -m em_macro.systematic refresh
+
+      - name: Positions and paper P&L (frozen design)
+        run: python -m em_macro.systematic update
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/systematic/positions.csv results/systematic/paper_pnl.csv \
+                  data/processed data/raw/bondspot data/raw/bist \
+                  results/coverage_report.md results/panel_coverage.md
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "Monthly systematic update $(date -u +%Y-%m-%d)"
+            git push
+          fi

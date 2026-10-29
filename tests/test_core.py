@@ -107,3 +107,19 @@ def test_annual_values_enter_with_twelve_month_lag():
     out = _annual_prev_year(ann, m)
     assert out.loc[pd.Period("2011-06", "M"), "BR"] == 1.0      # 2010 value used during 2011
     assert out.loc[pd.Period("2012-01", "M"), "BR"] == 2.0      # 2011 value from Jan 2012
+
+
+def test_no_trade_band_holds_small_changes_and_always_exits():
+    from em_macro.systematic import _apply_band
+    idx = pd.period_range("2020-01", periods=4, freq="M")
+    tgt = pd.DataFrame({"A": [1.0, 1.1, 1.5, 0.0], "B": [-1.0, 1.0, 1.0, 1.0]}, index=idx)
+    held = _apply_band(tgt, 0.25)
+    assert list(held["A"]) == [1.0, 1.0, 1.5, 0.0]       # +10% held, +50% traded, exit traded
+    assert list(held["B"]) == [-1.0, 1.0, 1.0, 1.0]      # sign flip always trades
+
+
+def test_par_bond_duration():
+    from em_macro.systematic import _duration
+    D, C = _duration(pd.DataFrame({"y": [0.05]}))
+    assert D.iloc[0, 0] == pytest.approx(7.7217, abs=1e-3)   # modified duration, 10y 5% par bond
+    assert C.iloc[0, 0] > D.iloc[0, 0]

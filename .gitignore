@@ -220,4 +220,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # em-macro: cached raw downloads (re-created by `python -m em_macro.run data`)
-data/raw/
+data/raw/*
+# parsed BondSpot / Borsa Istanbul scrapes are kept so the monthly workflow only fetches new days
+!data/raw/bondspot/
+!data/raw/bist/
