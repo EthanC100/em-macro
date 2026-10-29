@@ -1,5 +1,5 @@
 {
- "created_utc": "2026-10-29T06:27:36+00:00",
+ "created_utc": "2026-10-29T06:30:40+00:00",
  "fit_end": "2021-12-31",
  "test_start": "2022-01-01",
  "factor_betas": [
@@ -141,12 +141,12 @@
    "asset": "FX",
    "h": 1,
    "spec": "signed poll surprise (pp, + = market-preferred beat polls)",
-   "n": 27,
-   "r2": 0.07215280871460739,
-   "const": 0.04615891102140278,
-   "b_surprise_mp_pp": 0.060132590701389876,
-   "t_surprise_mp_pp": 1.3170840901434278,
-   "p_surprise_mp_pp": 0.18781043933154695,
+   "n": 26,
+   "r2": 0.07024679563369363,
+   "const": 0.03678801912273604,
+   "b_surprise_mp_pp": 0.05955035849223677,
+   "t_surprise_mp_pp": 1.2794469907277575,
+   "p_surprise_mp_pp": 0.2007396952693582,
    "b_abs_poll_error_pp": NaN,
    "t_abs_poll_error_pp": NaN,
    "p_abs_poll_error_pp": NaN
@@ -169,15 +169,15 @@
    "asset": "FX",
    "h": 1,
    "spec": "|move| on |poll error| (pp)",
-   "n": 48,
-   "r2": 0.02043800008873453,
-   "const": 1.093982967123338,
+   "n": 47,
+   "r2": 0.023933753787426904,
+   "const": 1.121198329687153,
    "b_surprise_mp_pp": NaN,
    "t_surprise_mp_pp": NaN,
    "p_surprise_mp_pp": NaN,
-   "b_abs_poll_error_pp": -0.02447408447644514,
-   "t_abs_poll_error_pp": -1.3269856752319042,
-   "p_abs_poll_error_pp": 0.1845134212748245
+   "b_abs_poll_error_pp": -0.026526100137474452,
+   "t_abs_poll_error_pp": -1.4319073272510707,
+   "p_abs_poll_error_pp": 0.15217034498503082
   },
   {
    "asset": "FX",

@@ -1,0 +1,15 @@
+event_id,country,event_type,event_date,side,return
+EL_MX_20220410,MX,election,2022-04-10,short local,-0.00499
+EL_BR_20221002,BR,election,2022-10-02,short local,0.00341
+EL_BR_20221030,BR,election,2022-10-30,short local,-0.04206
+EL_TR_20230514,TR,election,2023-05-14,long local,-0.00949
+EL_TR_20230528,TR,election,2023-05-28,long local,-0.04358
+EL_PL_20231015,PL,election,2023-10-15,short local,-0.00909
+EL_ID_20240214,ID,election,2024-02-14,short local,0.00577
+EL_TR_20240331,TR,election,2024-03-31,short local,-0.02280
+EL_ZA_20240529,ZA,election,2024-05-29,long local,-0.01825
+EL_MX_20240602,MX,election,2024-06-02,long local,-0.03779
+EL_PL_20250518,PL,election,2025-05-18,long local,0.01260
+EL_PL_20250601,PL,election,2025-06-01,long local,0.00507
+EL_MX_20250601,MX,election,2025-06-01,short local,-0.00802
+EL_BR_20261004,BR,election,2026-10-04,short local,-0.00441

@@ -39,12 +39,13 @@ def asset_levels(panel: pd.DataFrame) -> dict[str, pd.Series]:
         out[f"FX_{c}"] = -100 * np.log(panel[f"FX_{c}"])          # % value of local ccy in USD
         if f"Y10_{c}" in panel:
             out[f"Y10_{c}"] = 100 * panel[f"Y10_{c}"]                # bp
-    return {k: v.ffill(limit=5) for k, v in out.items()}
+    return out
 
 
 def factor_betas(levels: dict, step: int = 5, end: str = FIT_END) -> pd.DataFrame:
     """OLS of non-overlapping `step`-day changes on factor changes, fit sample only."""
     rows = []
+    levels = {k: v.ffill(limit=5) for k, v in levels.items()}
     X = pd.concat({f: levels[f] for f in FACTORS}, axis=1).loc[:end]
     for k, s in levels.items():
         if k in FACTORS:
@@ -70,13 +71,24 @@ def window_dates(event_date, bdays: pd.DatetimeIndex, horizons=HORIZONS) -> dict
     return out
 
 
-def _at(s: pd.Series, d):
+def _at(s: pd.Series, d, after=None):
+    """Last observation on or before d (at most 7 calendar days, i.e. 5 weekdays,
+    stale -- the same tolerance as forward-filling 5 weekdays); if `after` is
+    given, the observation must be dated strictly after it (so a window end
+    never reuses the base-day price when the series has stopped updating)."""
     if d is None:
         return np.nan
     v = s.loc[:d].dropna()
-    if v.empty or (pd.Timestamp(d) - v.index[-1]).days > 5:
+    if v.empty or (pd.Timestamp(d) - v.index[-1]).days > 7:
+        return np.nan
+    if after is not None and v.index[-1] <= after:
         return np.nan
     return v.iloc[-1]
+
+
+def _obs_date(s: pd.Series, d):
+    v = s.loc[:d].dropna() if d is not None else s.iloc[:0]
+    return v.index[-1] if len(v) else None
 
 
 def event_moves(events: pd.DataFrame, levels: dict, betas: pd.DataFrame,
@@ -87,16 +99,17 @@ def event_moves(events: pd.DataFrame, levels: dict, betas: pd.DataFrame,
     rows = []
     for ev in events.itertuples():
         w = window_dates(ev.event_date, bdays, horizons)
+        # factors: a US holiday (no fresh print) correctly counts as no move
         fac = {f: {h: _at(levels[f], w[h]) - _at(levels[f], w["base"]) for h in horizons} for f in FACTORS}
         for kind in ("FX", "Y10"):
             key = f"{kind}_{ev.country}"
             if key not in levels or key not in betas.index:
                 continue
             s, b = levels[key], betas.loc[key]
-            base = _at(s, w["base"])
+            base, base_obs = _at(s, w["base"]), _obs_date(s, w["base"])
             r = {"event_id": ev.event_id, "asset": kind, "country": ev.country, "base_date": w["base"]}
             for h in horizons:
-                raw = _at(s, w[h]) - base
+                raw = _at(s, w[h], base_obs) - base
                 ndays = h + 1                               # weekdays from base to e_h
                 pred = b.alpha_per_day * ndays + sum(b[f"b_{f}"] * fac[f][h] for f in FACTORS)
                 r[f"raw_{h}"] = raw

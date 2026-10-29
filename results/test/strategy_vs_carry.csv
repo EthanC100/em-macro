@@ -1,0 +1,4 @@
+strategy,start,end,months,ann_return_%,ann_mean_%,ann_vol_%,sharpe,max_drawdown_%,worst_month_%,n_trades,mean_trade_%,hit_rate
+"carry benchmark, equal-weight basket",2022-01,2026-09,57,2.5809,2.7241,5.9295,0.4594,-10.1256,-3.6372,,,
+"event drift rule, hold day 1 -> day 5",2022-01,2026-09,57,-3.3131,-3.3090,3.3269,-0.9946,-15.7255,-4.2061,14.0000,-1.2403,0.2857
+"event drift rule, hold day 1 -> day 20",2022-01,2026-09,57,-4.7974,-4.5144,8.4778,-0.5325,-26.1530,-16.9820,14.0000,-2.4248,0.4286
