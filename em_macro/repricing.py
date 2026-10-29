@@ -11,7 +11,8 @@ same-day changes in DXY, US 10y and log VIX:
 Signals are oriented to the *leading candidate* (cand_a in elections.csv):
   * odds:  implied win probability of cand_a, in percentage points
            (sensitivity reported per 10pp)
-  * polls: poll-of-polls margin cand_a - cand_b, pp (sensitivity per 1pp)
+  * polls: poll-of-polls two-party margin 100*(a-b)/(a+b), pp (sensitivity per
+           1pp); two-party shares make polls on different bases comparable
 
 Lead/lag: y_d on dS_{d+k} for k = -5..5 (k > 0: today's market move vs. a
 later signal change, i.e. the market leads).  Reversal: local projections of
@@ -101,34 +102,62 @@ def poll_average(polls: pd.DataFrame, days: pd.DatetimeIndex, max_age: int = 30)
     return pd.Series(out, dtype=float)
 
 
-def poll_signals() -> list[dict]:
-    el = _elections()
-    files = sorted((EVENTS / "raw").glob("prevote_polls_*.csv"))
-    if not files:
-        return []
-    P = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+def clean_polls(P: pd.DataFrame) -> pd.DataFrame:
+    """Harmonise the poll-level research files before averaging."""
+    P = P.copy()
     for c in ("field_start", "field_end", "published", "vote_date"):
         P[c] = pd.to_datetime(P[c], errors="coerce")
     for c in ("a_pct", "b_pct"):
         P[c] = pd.to_numeric(P[c], errors="coerce")
+    P["field_end"] = P["field_end"].fillna(P["published"])       # MX 2006: publication date only
+    notes = P["notes"].fillna("")
+    P = P[~notes.str.startswith("scenario with Lula")]            # BR 2018: hypothetical line-up
     P = P.dropna(subset=["field_end", "a_pct", "b_pct"])
-    P = P[P["contest"].isin(["round1", "single"])]   # run-off windows (2-4 weeks) are too short
+    # several scenario rows of one poll -> one poll (mean shares)
+    key = ["iso3", "vote_date", "contest"]
+    P = (P.groupby(key + ["pollster", "field_end", "cand_a", "cand_b"], as_index=False, dropna=False)
+          .agg(published=("published", "first"), a_pct=("a_pct", "mean"), b_pct=("b_pct", "mean"),
+               basis=("basis", "first")))
+    # bases (total / decided / valid / unclear) are mixed within elections, so use
+    # two-party shares: the margin becomes 100 * (a - b) / (a + b), basis-free
+    tot = P["a_pct"] + P["b_pct"]
+    P["a_pct"], P["b_pct"] = 100 * P["a_pct"] / tot, 100 * P["b_pct"] / tot
+    return P[tot > 0]
+
+
+def poll_signals() -> list[dict]:
+    """Poll-of-polls signals.  'polls' = first-round (or single-round) voting
+    intention; 'polls_h2h' = head-to-head run-off simulations fielded before
+    round 1 (Brazil, Poland), oriented to the run-off's cand_a."""
+    el = _elections()
+    files = sorted((EVENTS / "raw").glob("prevote_polls_*.csv"))
+    if not files:
+        return []
+    P = clean_polls(pd.concat([pd.read_csv(f) for f in files], ignore_index=True))
     out = []
     for (iso, vd, contest), g in P.groupby(["iso3", "vote_date", "contest"]):
+        if contest in ("round1", "single"):
+            anchor, kind = vd, "polls"
+        elif contest == "runoff_simulation":
+            r1 = el[(el.iso3 == iso) & (el.vote_date < vd) & (el.vote_date > vd - pd.Timedelta(days=60))]
+            if r1.empty:
+                continue
+            anchor, kind = r1.vote_date.max(), "polls_h2h"
+        else:
+            continue                                   # run-off windows (2-4 weeks) are too short
         match = el[(el.iso3 == iso) & (el.vote_date == vd)]
         if match.empty:
             continue
         row = match.iloc[0]
-        days = _window(vd)
-        g = g[(g["field_end"] >= days[0] - pd.Timedelta(days=30)) & (g["field_end"] < vd)]
+        days = _window(anchor)
+        g = g[(g["field_end"] >= days[0] - pd.Timedelta(days=30)) & (g["field_end"] < anchor)]
         in_window = g[g["field_end"] >= days[0]]
         weeks = max(len(days) / 5, 1)
-        out.append({"iso3": iso, "vote_date": vd, "last_vote": vd, "days": days, "kind": "polls",
+        out.append({"iso3": iso, "vote_date": anchor, "last_vote": anchor, "days": days, "kind": kind,
                     "cand_a": row.cand_a, "market_preferred": row.market_preferred,
-                    "signal_note": f"{contest} polls, {len(in_window)} in window, "
-                                   f"{len(in_window) / weeks:.1f}/week, basis {','.join(sorted(g['basis'].dropna().unique()))}",
-                    "level": poll_average(g, days), "n_obs": len(in_window),
-                    "per_week": len(in_window) / weeks})
+                    "signal_note": f"{contest} polls ({row.cand_a} minus {row.cand_b}), {len(in_window)} in window, "
+                                   f"{len(in_window) / weeks:.1f}/week, two-party margin",
+                    "level": poll_average(g, days), "n_obs": len(in_window), "per_week": len(in_window) / weeks})
     return out
 
 
@@ -254,6 +283,36 @@ def pooled(sigs: list[dict], panel: pd.DataFrame, kind: str, asset: str) -> dict
             "b_toward_market_preferred": m.params[0], "t": m.tvalues[0]}
 
 
+def evidence_counts(res: pd.DataFrame, rev: pd.DataFrame) -> pd.DataFrame:
+    """How many elections support each reading, by signal and asset.
+    'Expected sign' = local currency up / yield down when the market-preferred
+    side gains (only elections with a coded market-preferred side)."""
+    res = res[res["b"].notna()].copy()           # windows too short to estimate are not counted
+    orient = res["market_preferred"].map({"a": 1.0, "b": -1.0})
+    res["b_mp"] = res["b"] * orient
+    rows = []
+    for (kind, asset), g in res.groupby(["kind", "asset"]):
+        exp_sign = 1 if asset == "FX" else -1
+        coded = g[g["b_mp"].notna()]
+        sig = g["t"].abs() >= 1.96
+        r = rev[(rev.kind == kind) & (rev.asset == asset)]
+        rows.append({
+            "signal": kind, "asset": asset, "elections": len(g),
+            "contemp_significant": int(sig.sum()),
+            "coded_market_preferred": len(coded),
+            "coded_expected_sign": int((np.sign(coded["b_mp"]) == exp_sign).sum()),
+            "coded_expected_sign_and_significant": int(((np.sign(coded["b_mp"]) == exp_sign)
+                                                        & (coded["t"].abs() >= 1.96)).sum()),
+            "coded_wrong_sign_and_significant": int(((np.sign(coded["b_mp"]) == -exp_sign)
+                                                     & (coded["t"].abs() >= 1.96)).sum()),
+            "market_leads_significant": int((g["t_lead_sum"].abs() >= 1.96).sum()),
+            "market_lags_significant": int((g["t_lag_sum"].abs() >= 1.96).sum()),
+            "initial_response_significant": int(r["initial_response_significant"].sum()),
+            "of_which_reversed_half_by_h10": int((r["retained_h10"] < 0.5).sum()),
+        })
+    return pd.DataFrame(rows)
+
+
 def run(refresh: bool = False):
     OUT.mkdir(parents=True, exist_ok=True)
     panel = pd.read_csv(PROC / "daily_panel.csv", index_col=0, parse_dates=True)
@@ -269,8 +328,10 @@ def run(refresh: bool = False):
     lp = pd.DataFrame(lps)
     res.to_csv(OUT / "sensitivity_leadlag.csv", index=False, float_format="%.4f")
     lp.to_csv(OUT / "local_projections.csv", index=False, float_format="%.4f")
-    summarize_lp(lp).to_csv(OUT / "reversal.csv", index=False, float_format="%.4f")
-    pd.DataFrame([pooled(sigs, panel, k, a) for k in ("odds", "polls") for a in ("FX", "Y10")]).to_csv(
+    rev = summarize_lp(lp)
+    rev.to_csv(OUT / "reversal.csv", index=False, float_format="%.4f")
+    evidence_counts(res, rev).to_csv(OUT / "evidence_counts.csv", index=False)
+    pd.DataFrame([pooled(sigs, panel, k, a) for k in ("odds", "polls", "polls_h2h") for a in ("FX", "Y10")]).to_csv(
         OUT / "pooled.csv", index=False, float_format="%.4f")
     # signal series used, for inspection
     sig_df = pd.concat({f"{s['kind']}_{s['iso3']}_{s['vote_date']:%Y%m%d}": s["level"] for s in sigs}, axis=1,

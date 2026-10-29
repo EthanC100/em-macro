@@ -18,6 +18,7 @@ python -m em_macro.run data   # download, build panel + calendars, coverage repo
 python -m em_macro.run fit    # 2005-2021 only -> results/fit/, frozen_params.json
 python -m em_macro.run test   # 2022+ with frozen parameters -> results/test/ (refuses to run twice)
 python -m em_macro.figures    # README charts
+python -m em_macro.repricing  # exploratory pre-election repricing (section 7)
 pytest -q
 ```
 
@@ -272,7 +273,113 @@ read as a small-sample artefact, not a tradeable effect.
   (Sheinbaum led by 17pp and won by 33pp). The worry was Morena's congressional supermajority, which a two-candidate
   margin cannot capture.
 
-## 7. Limitations
+## 7. Exploratory: pre-election repricing as polls and odds move
+
+> **Exploratory.** This section was added after the hold-out evaluation. It uses all dates, including 2022+, and is
+> not part of the frozen fit/test design. Nothing in it was pre-registered, and it runs many regressions, so isolated
+> significant coefficients are expected by chance.
+
+**Question.** In the six months before a vote, do currencies and 10y yields move day by day with the leading
+candidate's poll margin or win probability?
+
+**Signals.**
+- **Betting odds:** daily Polymarket prices for the 6 elections that have a stored price history.
+  - Brazil 2026 (Lula), Mexico 2024 (Sheinbaum), Turkey 2023 (Kılıçdaroğlu, i.e. 1 − Erdoğan) and Poland 2025
+    (Trzaskowski) price who wins.
+  - Indonesia 2024 (Prabowo) and South Africa 2024 (ANC wins a seat majority) also have histories.
+  - Polymarket's Brazil 2022 market has no stored history, and there were no markets for earlier votes.
+  - For markets that price the eventual winner, the window runs on to the run-off. The round-1 result day is dropped
+    (it is the election-day event in §4–6).
+- **Polls:** 2,497 poll rows compiled from Wikipedia poll tables (exact page revisions cited). Files:
+  `data/events/raw/prevote_polls_*.csv` and their NOTES.
+  - **Daily poll-of-polls:** the mean, across pollsters, of each pollster's latest released poll from the last 30 days.
+  - **Release date:** fieldwork end + 1 day where no publication date is given (almost always).
+  - **Two-party margin:** 100·(a−b)/(a+b). Bases (total, decided, valid) are mixed within elections, so two-party
+    shares keep polls comparable.
+  - **Eligibility:** ≥1 poll per week over the window. Brazil 2018 scenarios with Lula as the candidate are excluded.
+  - **Head-to-head run-off simulations** fielded before round 1 are a separate signal (Brazil 2018/22/26, Poland 2025,
+    Turkey 2023).
+  - **What qualified:** 21 elections with a first-round/single-round poll signal and 5 with a head-to-head signal.
+    Poland 2020 qualified but the window is too short to estimate.
+- **Orientation:** every signal is oriented to the **leading candidate** (`cand_a` in `elections.csv`). For pooling
+  and sign checks it is re-oriented toward the side the press called market-preferred, where that is coded.
+
+**Regression** (`em_macro/repricing.py`):
+`ΔFX_d (or Δy10_d) = a + b·ΔS_d + c1·ΔDXY_d + c2·ΔUS10y_d + c3·ΔlogVIX_d`, on weekdays, with HAC(5) standard errors.
+- **Sensitivity units:** FX % (+ = local currency up) or bp, per **1pp of two-party poll margin** or per **10pp of win
+  probability**.
+- **Lead/lag:** a distributed lag of ΔS from 5 days before to 5 days after. Sums over the 5 future signal changes mean
+  the market leads; sums over the 5 past changes mean it lags.
+- **Partial reversal:** local projections of the cumulative move from d−1 to d+h (h = 0…10) on ΔS_d. The share of the
+  day-0/1 response still present at h = 10 is computed only when that initial response is significant.
+
+**Brazil 2022 and Mexico 2024** (`results/repricing/sensitivity_leadlag.csv`; t in parentheses):
+
+| | signal | FX % per unit | 10y bp per unit | currency leads (Σ leads) | currency lags (Σ lags) |
+|---|---|---|---|---|---|
+| Brazil 2022 (Lula − Bolsonaro) | poll margin, per 1pp | −0.01 (−0.1) | −2.3 (−2.5) | FX −0.10 (−0.6); 10y +9.9 (2.8) | FX −0.41 (−2.6); 10y +3.8 (1.0) |
+| Brazil 2022 | run-off simulation, per 1pp | −0.02 (−0.2) | −2.7 (−2.4) | FX −0.25 (−1.2); 10y +9.2 (2.4) | FX −0.46 (−2.3) |
+| Mexico 2024 (Sheinbaum − Gálvez) | poll margin, per 1pp | 0.00 (0.4) | +0.2 (1.0) | FX −0.02 (−0.7) | FX −0.05 (−1.9); 10y +0.6 (2.6) |
+| Mexico 2024 | Polymarket, per 10pp | −0.14 (−1.0) | +0.1 (0.1) | FX −0.40 (−0.6) | FX +0.33 (0.6) |
+
+- **Mexico 2024** shows nothing: Sheinbaum led by a wide margin and was priced at about 93% throughout, so neither signal
+  carried news.
+- **Brazil 2022** shows no same-day BRL response to polls. One item fits a delayed reaction: a Lula gain is followed
+  by a weaker BRL over the next five days (Σ lags −0.41% per pp, t=−2.6).
+- **Brazil 2022 10y yields** go the "wrong" way on the day: −2.3bp per pp of Lula margin. Their lead terms go the other
+  way (+9.9bp, t=2.8). This sign flip, combined with Tesouro Direto's morning quote times, points to timing noise, or
+  to a common cause, rather than a clean poll effect. The mid-2022 fiscal package moved Bolsonaro's polls and yields at
+  the same time.
+
+**All elections** (`results/repricing/evidence_counts.csv`, `pooled.csv`; significance means |t| ≥ 1.96):
+
+| signal / asset | elections | same-day b significant | expected sign¹ (of coded) | expected sign & significant | market leads signif. | market lags signif. |
+|---|---|---|---|---|---|---|
+| odds / FX | 6 | 0 | 1 of 4 | 0 | 1 | 1 |
+| odds / 10y | 5 | 1 (South Africa) | 1 of 3 | 0 | 1 | 1 |
+| polls / FX | 21 | 0 | 10 of 17 | 0 | 3 | 5 |
+| polls / 10y | 15 | 1 (Brazil 2022, wrong sign) | 5 of 12 | 0 | 4 | 2 |
+| run-off sims / FX | 5 | 0 | 3 of 5 | 0 | 2 | 1 |
+| run-off sims / 10y | 5 | 1 (Brazil 2022, wrong sign) | 1 of 5 | 0 | 2 | 0 |
+
+¹ "Expected sign" means the local currency rises, or the yield falls, as the market-preferred side gains.
+
+**Pooled** (oriented toward the market-preferred side, election-specific controls):
+
+| signal | elections | FX per unit | t |
+|---|---|---|---|
+| polls | 17 | +0.017% per pp | 0.9 |
+| run-off simulations | 5 | −0.006% per pp | −0.2 |
+| odds | 4 | −0.11% per 10pp | −1.6 |
+
+**Reading.**
+- **Sensitivity:** no election shows a significant same-day currency response to poll or odds changes. Signs split
+  roughly 50/50 around the market-friendly hypothesis: 10 of 17, 3 of 5 and 1 of 4. The largest point estimates are
+  economically small:
+  - **Brazil 2026:** −0.46% BRL per 10pp rise in Lula's win probability, t=−1.9. This has the expected sign, since
+    Flávio Bolsonaro was coded market-preferred.
+  - **Poland 2025:** −0.30% PLN per 10pp for Trzaskowski, t=−1.9. This is the wrong sign.
+- **The only significant same-day coefficient** is South Africa 2024: the 10y falls 2.6bp per 10pp of ANC-majority
+  probability (t=−5.1). It rests on 32 trading days of a thin market.
+- **Lead/lag:** significant lead sums appear in 1–4 elections and lag sums in 0–5 per signal/asset row, with no
+  consistent direction. For polls this is also limited by dating: fieldwork end + 1 is only a proxy for when a poll
+  became public. For FX against odds, FRED's noon-New-York FX predates Polymarket's end-of-day (UTC) price, which by
+  itself would make FX look one day late. **No conclusion about leading or lagging is supported.**
+- **Partial reversal:** the initial response is significant in only 1–2 elections per row. Among those, only 1 (polls,
+  FX) gives back half or more within 10 days. **There are too few events to say anything about reversal.**
+- **Bottom line:** with free daily polls and odds, pre-election repricing is not detectable day by day in these six
+  markets. The election-day jump (§5–6) is where the information shows up.
+
+**Caveats specific to this section.**
+- **Odds history:** Polymarket covers only 2023–26, and several markets were thin (South Africa, Indonesia,
+  Mexico 2024).
+- **Turkish lira:** TRY was heavily managed in 2023, so FX sensitivities there are mechanically near zero.
+- **Poll timing and noise:** fieldwork-to-publication lags vary. The daily poll average jumps when a pollster with a
+  large house effect publishes.
+- **What the regressions measure:** association, not causation. Campaign news, fiscal announcements and global shocks
+  move polls and markets together.
+
+## 8. Limitations
 
 - **Small samples.**
   - There are 66 election days, of which only 27 fit-sample elections have a signed, coded surprise (26 with a day-1
@@ -325,6 +432,7 @@ em_macro/
   events.py        Copom + Focus calendar; merges research calendars; surprise measures
   event_study.py   windows, factor betas, abnormal moves, summaries, drift regression, placebo days
   run.py           data / fit / test stages, drift-rule backtest
+  repricing.py     exploratory pre-election repricing (polls, Polymarket odds) -> results/repricing/
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv (+ raw/ research files with NOTES)
 data/processed/    daily_panel.csv, carry_monthly_returns.csv, event_table.csv, coverage.csv
