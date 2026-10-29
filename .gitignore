@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# em-macro: cached raw downloads (re-created by `python -m em_macro.run data`)
+data/raw/
