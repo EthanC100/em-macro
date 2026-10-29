@@ -1,0 +1,99 @@
+{
+ "created_utc": "2026-10-29T13:10:34+00:00",
+ "code_sha256_16": "6a0234d9b1a92102",
+ "fit_end": "2019-12",
+ "test_start": "2020-01",
+ "design": {
+  "signals": [
+   "carry",
+   "trend",
+   "value"
+  ],
+  "signal_weights": "equal (mean of the available signal z-scores)",
+  "trend_windows_months": [
+   12,
+   3
+  ],
+  "value_fx_window_months": 60,
+  "value_fx_min_months": 36,
+  "zscore": "cross-sectional within each book every month, at least 3 instruments",
+  "selection": "long top third, short bottom third of each book (n = floor(N/3) per side, N >= 3)",
+  "vol_lookback_months": 36,
+  "vol_min_months": 12,
+  "position_sizing": "inverse of trailing annualised volatility (equal risk per position)",
+  "book_target_vol": 0.1,
+  "portfolio_target_vol": 0.1,
+  "book_mix": "50/50 after scaling each book to 10%",
+  "gross_leverage_cap": 6.0,
+  "no_trade_band": 0.25,
+  "costs": {
+   "major": 0.001,
+   "high_cost": 0.003,
+   "high_cost_countries": [
+    "TR",
+    "ID",
+    "CO",
+    "CL"
+   ],
+   "spread_legs": 2,
+   "basis": "per unit of notional traded (one-way), charged at each rebalance"
+  },
+  "bond_execution_lag_months": 1,
+  "bond_return": "excess return from monthly-average yields: (y - funding)/12 - D*dy + C*dy^2/2, D and C of a 10-year par bond; weights decided at the end of month t earn the change between the averages of t+1 and t+2 (avoids the look-ahead in month averages)",
+  "rebalance": "monthly, month-end"
+ },
+ "instruments": {
+  "fx": [
+   "BRL",
+   "MXN",
+   "ZAR",
+   "TRY",
+   "IDR",
+   "PLN",
+   "GBP",
+   "COP",
+   "CLP",
+   "EUR"
+  ],
+  "bond": [
+   "BR10Y",
+   "MX10Y",
+   "ZA10Y",
+   "TR10Y",
+   "ID10Y",
+   "CO10Y",
+   "CL10Y",
+   "FR-DE",
+   "IT-DE",
+   "ES-DE",
+   "GB-DE",
+   "PL-DE",
+   "DE10Y"
+  ]
+ },
+ "costs": {
+  "BRL": 0.001,
+  "MXN": 0.001,
+  "ZAR": 0.001,
+  "TRY": 0.003,
+  "IDR": 0.003,
+  "PLN": 0.001,
+  "GBP": 0.001,
+  "COP": 0.003,
+  "CLP": 0.003,
+  "EUR": 0.001,
+  "BR10Y": 0.001,
+  "MX10Y": 0.001,
+  "ZA10Y": 0.001,
+  "TR10Y": 0.003,
+  "ID10Y": 0.003,
+  "CO10Y": 0.003,
+  "CL10Y": 0.003,
+  "FR-DE": 0.002,
+  "IT-DE": 0.002,
+  "ES-DE": 0.002,
+  "GB-DE": 0.002,
+  "PL-DE": 0.002,
+  "DE10Y": 0.001
+ }
+}
