@@ -61,9 +61,19 @@ def turkey_10y(refresh: bool = False) -> tuple[pd.Series, pd.Series]:
     df["y"] = df["wavg_compound"].fillna(df["close_compound"])
     df["mat"] = df["dtm"] / 365.25
     df = df.dropna(subset=["y"])
-    df = df[df["mat"].between(6, 12) & (df["y"] > 0)]
+    df = df[df["y"] > 0]
+    # TRT ISINs include CPI-linked bonds quoted in real yield; drop bonds whose
+    # yield is persistently below half of the same-day cross-sectional median
+    rel = df["y"] / df.groupby("date")["y"].transform("median")
+    linker = rel.groupby(df["isin"]).median() < 0.5
+    df = df[~df["isin"].map(linker)]
+    df = df[df["mat"].between(6, 12)]
     df["dist"] = (df["mat"] - 10).abs()
     best = df.sort_values(["date", "dist"]).groupby("date").first()
+    # thin trading produces off-market prints (e.g. 0.01%): drop prints more than
+    # 3pp away from the centred 11-day rolling median
+    med = best["y"].rolling(11, center=True, min_periods=5).median()
+    best = best[(best["y"] - med).abs() <= 3]
     return best["y"].rename("TR_10Y"), best["mat"].rename("TR_10Y_mat")
 
 
