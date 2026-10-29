@@ -351,7 +351,9 @@ def ratings_block(months) -> dict[str, pd.DataFrame]:
     for kind in ("upgrade", "downgrade"):
         g = acts[acts["action"] == kind]
         cnt = g.groupby([g["iso3"].map(iso2), g["date"].dt.to_period("M")]).size().unstack(0)
-        out[f"rating_{kind}s_n"] = cnt.reindex(index=months, columns=COUNTRIES).fillna(0)
+        have = [c for c in COUNTRIES if (ra["iso3"] == ISO3[c]).any()]   # zero only where histories exist
+        out[f"rating_{kind}s_n"] = cnt.reindex(index=months, columns=COUNTRIES)
+        out[f"rating_{kind}s_n"][have] = out[f"rating_{kind}s_n"][have].fillna(0)
         SOURCES[f"rating_{kind}s_n"] = f"number of {kind}s across S&P/Moody's/Fitch in the month"
     return out
 
@@ -418,6 +420,8 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
     for col, (suf, desc) in measures.items():
         SOURCES[f"head_party_{suf}"] = f"{desc}; party of the head of government; latest reference election <= year"
         SOURCES[f"gov_parties_{suf}"] = f"{desc}; unweighted mean over cabinet parties"
+    NOTES["head_party_lr_econ_vparty"] = ("V-Party (v2) ends with 2019 elections; later months carry forward each "
+                                          "party's latest scored election. Same for gov_parties_* V-Party columns.")
     NOTES["gov_seat_share"] = ("Seat counts are at cabinet start (not updated for defections). Turkey after 2018: "
                                "People's Alliance; France 2017-2020: ParlGov counts LR in Philippe II/Castex "
                                "(see politics NOTES).")
