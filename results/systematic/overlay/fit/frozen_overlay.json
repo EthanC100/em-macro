@@ -1,0 +1,46 @@
+{
+ "created_utc": "2026-10-30T10:10:46+00:00",
+ "code_sha256_16": "f745c1894854f9e9",
+ "chosen_rule": "c_no_change",
+ "scale_in_window": 1.0,
+ "window_business_days": [
+  5,
+  1
+ ],
+ "election_subtypes": [
+  "general",
+  "legislative",
+  "legislative_r2",
+  "presidential",
+  "presidential_r2",
+  "referendum"
+ ],
+ "budget_subtypes": [
+  "autumn_statement",
+  "budget",
+  "budget_approved",
+  "budget_final_approval",
+  "pge_final_approval",
+  "plf_rejected_first_reading",
+  "pre_budget_report",
+  "spring_statement"
+ ],
+ "rating_reviews": "rating actions of ['DEU', 'ESP', 'FRA', 'GBR', 'ITA', 'POL'] from 2014-01-01",
+ "instruments_covered": [
+  "BRL",
+  "MXN",
+  "ZAR",
+  "TRY",
+  "IDR",
+  "PLN",
+  "GBP",
+  "EUR",
+  "COP",
+  "CLP",
+  "BR10Y",
+  "MX10Y",
+  "ZA10Y",
+  "TR10Y"
+ ],
+ "v1_frozen_design": "results/systematic/fit/frozen_design.json"
+}

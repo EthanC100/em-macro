@@ -1,0 +1,2 @@
+iso3,country,date,event_type,subtype,description,outcome,source,notes
+ESP,Spain,2026-11-29,election,general,Spanish snap general election,,https://en.wikipedia.org/wiki/2026_Spanish_general_election,"called 5 Oct 2026, Cortes dissolved 6 Oct 2026 (see govt_events_es_gb_de.csv)"

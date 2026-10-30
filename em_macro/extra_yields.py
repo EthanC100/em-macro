@@ -43,7 +43,8 @@ def _interp(m: np.ndarray, r: np.ndarray, target: float = 10.0, tol: float = 2.0
 
 
 def poland_10y(refresh: bool = False) -> tuple[pd.Series, pd.Series]:
-    df = S.bondspot_fixings()   # incremental: only days not yet in the committed cache are fetched.dropna(subset=["yield_fix"])
+    # incremental: only days not yet in the committed cache are fetched
+    df = S.bondspot_fixings().dropna(subset=["yield_fix"])
     mm = df["name"].str.extract(r"^[A-Z]{2}(\d{2})(\d{2})$").astype(float)
     df = df[mm[0].between(1, 12)].copy()
     mm = mm.loc[df.index]
