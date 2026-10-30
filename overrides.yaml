@@ -1,0 +1,24 @@
+# Manual overrides applied by the monthly run on top of the model's positions.
+# Every entry is logged in results/systematic/overrides_log.csv and its P&L is tracked
+# separately (paper_pnl.csv: override_pnl, final_net vs model_net), so your judgement
+# is scored against the pure model.
+#
+# Fields (all required):
+#   country:    ISO3 code (BRA, MEX, FRA, ...) or name ("Brazil")
+#   instrument: one of the country's instruments, or "all"
+#                 BRA: BRL, BR10Y   MEX: MXN, MX10Y   ZAF: ZAR, ZA10Y   TUR: TRY, TR10Y   IDN: IDR, ID10Y
+#                 POL: PLN, PL-DE   FRA: EUR, FR-DE   ITA: EUR, IT-DE   ESP: EUR, ES-DE   DEU: EUR, DE10Y
+#                 GBR: GBP, GB-DE   COL: COP, CO10Y   CHL: CLP, CL10Y
+#   action:     zero | halve | scale <factor>   (e.g. "scale 0.25", "scale 1.5", "scale -1" to reverse)
+#   start, end: YYYY-MM-DD, inclusive
+#   reason:     why you are overriding the model (free text)
+#
+# Example (not active - remove the leading '#' to use):
+# overrides:
+#   - country: BRA
+#     instrument: BRL
+#     action: halve
+#     start: 2026-11-02
+#     end: 2026-11-13
+#     reason: fiscal-framework vote uncertainty after the run-off
+overrides: []

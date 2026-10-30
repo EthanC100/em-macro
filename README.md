@@ -21,6 +21,10 @@ estimated on 2005–2021, and the 2022+ hold-out was evaluated once against froz
   - **Test, 2020 to Sep 2026:** +6.0% a year, Sharpe 0.65, worst drawdown −18%.
   - **Comparison:** simply holding the EM carry basket made −0.5% a year over the same period.
   - **What drove it:** almost all the gain came from carry. Trend and value did not help.
+- **Political-risk overlay (§11):** cutting or halving positions around elections, budget votes and scheduled rating
+  reviews lowered the Sharpe ratio in 2005–2019, so the frozen rule is "no change". Cutting would also have hurt in
+  2020+. A manual override file lets you trade on your own judgement, and every override is logged and scored
+  against the pure model.
 
 ```
 pip install -r requirements.txt
@@ -38,6 +42,9 @@ python -m em_macro.risk_model outputs   # fair value, factor contributions, simi
 python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
+python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
+python -m em_macro.overlay test         # 2020+ once, overlay vs v1
+python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
 pytest -q
 ```
 
@@ -892,7 +899,101 @@ What the numbers say:
 - **Code change after the test:** a description label was corrected. This changed the code fingerprint but not the
   design or any number. `update` checks only that the design is unchanged; the one-time `test` cannot be re-run.
 
-## 11. Limitations of the event study (§1–7)
+## 11. Political-risk overlay and manual overrides
+
+> **Plain-English summary.**
+> - **The question:** should the strategy step aside before big scheduled political events? These are national
+>   elections and run-offs, budget votes, and pre-scheduled rating reviews.
+> - **The answer from 2005–2019: no.** Cutting positions to zero, or halving them, from 5 business days before to
+>   1 day after each event lowered returns. It gave up profit the model was earning and paid extra trading costs.
+>   The rule chosen and frozen is therefore **"no change"**.
+> - **The one-time test on 2020 onward agreed:** cutting would have cost 1.5% a year and halving 0.7%.
+> - **Your judgement:** a manual override file lets you trade on your own views. Every override is logged, and its
+>   P&L is kept separate so you can see whether your calls beat the model.
+>
+> The frozen v1 strategy (§10) is untouched. The overlay is a separate adjustment on top of it.
+
+### Which events
+
+The selection was fixed before any result was seen (`results/systematic/overlay/fit/frozen_overlay.json`):
+
+| category | included | 2005–2019 events |
+|---|---|---|
+| national elections and run-offs | general, presidential and legislative elections (both rounds) and national referendums, all 13 countries | 102 |
+| budget votes | final parliamentary budget approvals (France, Spain, and one Colombian vote; Chile's calendar has no vote dates), French first-reading rejections, and the UK's scheduled fiscal statements (Budget, Autumn and Spring Statements, Pre-Budget Report) | 59 |
+| rating reviews | S&P, Moody's and Fitch reviews of France, Italy, Spain, UK, Germany and Poland from 2014. Since 2014 EU rules require these to be **pre-scheduled** | 58 |
+
+What is left out, and why:
+- **Emerging-market rating actions:** they are not announced in advance, so using them would be look-ahead.
+- **Snap elections:** they are announced weeks ahead, so they are included.
+- **Future events:** `data/events/upcoming_events.csv` holds future scheduled events for the live run. It currently
+  contains Spain's general election of 29 Nov 2026.
+
+### The rules tested (2005–2019 only)
+
+For each event, the positions in that country's instruments are scaled from 5 business days before the event to 1
+business day after. Rule (a) cuts them to zero, (b) halves them, and (c) leaves them unchanged. The two cuts pay
+the normal trading costs to exit and re-enter.
+
+**Which instruments:** a country's currency and its bond position. Euro-country events act on EUR and that
+country's spread over the Bund.
+
+**Daily-data limit:** a 5-day window can only be measured with daily prices. Those exist for all 10 currencies and
+the Brazilian, Mexican, South African and Turkish 10-year bonds. For the other bond positions (European spreads,
+the Bund, and the Colombian, Chilean and Indonesian bonds) only monthly-average yields exist. So the overlay leaves
+them unchanged, in the backtest and live alike.
+
+| rule, 2005–2019 | annual return | Sharpe | worst drawdown | effect of the overlay |
+|---|---|---|---|---|
+| (a) cut to zero | +2.1% | 0.25 | −16% | −1.45% a year: 0.63% profit given up + 0.71% extra costs |
+| (b) halve | +2.8% | 0.33 | −14% | −0.73% a year |
+| **(c) no change — chosen** | +3.6% | 0.40 | −14% | 0 |
+
+### One-time test, 2020 to Sep 2026 (`results/systematic/overlay/test/`)
+
+| | annual return | Sharpe | worst drawdown |
+|---|---|---|---|
+| v1 (frozen) | +6.0% | 0.65 | −18% |
+| **v1 + frozen overlay (no change)** | +6.0% | 0.65 | −18% |
+| for information: cut to zero | +4.5% | 0.53 | −18% |
+| for information: halve | +5.2% | 0.60 | −18% |
+
+The test confirms the choice: stepping aside before these events would have cost money in 2020–26 as well.
+
+### Manual overrides (`overrides.yaml`)
+
+The monthly run applies `overrides.yaml` on top of the model. Each entry has a country, an instrument (or `all`), an
+action (`zero`, `halve`, or `scale <factor>`, e.g. `scale -1` to reverse), start and end dates, and a reason. The
+file has a commented example.
+
+How overrides are checked and scored:
+- **Validation:** every entry is checked. Unknown countries or instruments, bad actions and missing reasons are
+  **rejected and logged**, never silently ignored.
+- **Log** (`results/systematic/overrides_log.csv`): one row per override per month, with its P&L relative to the
+  model and its status (applied, pending, or rejected and why).
+- **Scoring** (`results/systematic/paper_pnl.csv`):
+  - `model_net` is the pure model (v1 plus the frozen overlay);
+  - `override_pnl` is what your overrides added or lost after their trading costs;
+  - `final_net` is the two together;
+  - `cumulative_model` vs `cumulative_final` tracks your record against the model.
+- **Pricing:** overrides on currencies and the four daily-priced bonds use daily prices. Overrides on the other bond
+  positions use their monthly return pro rata to the business days covered, which is an approximation and is noted
+  in the log.
+- **Adjustments file** (`results/systematic/position_adjustments.csv`): lists the adjustments that apply in the month
+  being held — manual overrides, plus overlay windows if the frozen rule ever cuts.
+- **Monthly workflow:** it runs the overlay and override step after the strategy update and commits these files.
+
+### Limitations
+
+- **Coverage:** the overlay covers only the 14 instruments with daily prices; most European and some emerging-market
+  bond positions are outside it.
+- **Missing budget votes:** none are compiled for Brazil, Mexico, South Africa, Turkey, Indonesia or Poland, and those for Italy, Germany and Chile lack vote dates.
+- **Bond accounting:** daily window returns for bonds are combined with the strategy's monthly-average bond
+  accounting, which is approximate.
+- **Narrow test:** only a fixed 5-days-before/1-day-after window and three scaling rules were tested. Other windows
+  (e.g. stepping aside only on the result day) were not explored, by design, to avoid tuning on the data.
+
+## 12. Limitations of the event study (§1–7)
 
 - **Small samples.**
   - There are 66 election days, of which only 27 fit-sample elections have a signed, coded surprise (26 with a day-1
@@ -951,6 +1052,7 @@ em_macro/
   calendar.py      13-country event calendar + results/calendar_coverage.md
   risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
   systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
+  overlay.py       political-risk overlay (frozen rule) and manual overrides (overrides.yaml), logged and scored
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
 data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V-Dem, WGI, debt holders,

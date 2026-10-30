@@ -35,6 +35,9 @@ jobs:
       - name: Positions and paper P&L (frozen design)
         run: python -m em_macro.systematic update
 
+      - name: Political-risk overlay (frozen rule) and manual overrides from overrides.yaml
+        run: python -m em_macro.overlay update
+
       - name: Tests
         run: python -m pytest -q tests
 
@@ -43,6 +46,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add results/systematic/positions.csv results/systematic/paper_pnl.csv \
+                  results/systematic/position_adjustments.csv results/systematic/overrides_log.csv \
                   data/processed data/raw/bondspot data/raw/bist \
                   results/coverage_report.md results/panel_coverage.md
           if git diff --cached --quiet; then

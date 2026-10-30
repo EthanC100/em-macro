@@ -123,3 +123,26 @@ def test_par_bond_duration():
     D, C = _duration(pd.DataFrame({"y": [0.05]}))
     assert D.iloc[0, 0] == pytest.approx(7.7217, abs=1e-3)   # modified duration, 10y 5% par bond
     assert C.iloc[0, 0] > D.iloc[0, 0]
+
+
+def test_overlay_window_five_days_before_one_after():
+    from em_macro.overlay import windows
+    ev = pd.DataFrame({"iso3": ["BRA"], "date": [pd.Timestamp("2022-10-30")], "category": ["election"]})  # Sunday
+    w = windows(ev)
+    brl = w[w.instrument == "BRL"].iloc[0]
+    assert brl.start == pd.Timestamp("2022-10-24") and brl.end == pd.Timestamp("2022-10-31")
+    assert set(w.instrument) == {"BRL", "BR10Y"}
+
+
+def test_override_validation(tmp_path, monkeypatch):
+    from em_macro import overlay as O
+    f = tmp_path / "overrides.yaml"
+    f.write_text("""overrides:
+  - {country: Brazil, instrument: all, action: halve, start: 2026-11-02, end: 2026-11-13, reason: test}
+  - {country: BRA, instrument: EUR, action: zero, start: 2026-11-02, end: 2026-11-13, reason: wrong instrument}
+  - {country: MEX, instrument: MXN, action: scale -1, start: 2026-11-02, end: 2026-11-13}
+""")
+    monkeypatch.setattr(O, "OVERRIDES_FILE", f)
+    ok, bad = O.load_overrides()
+    assert list(ok.instrument) == ["BRL", "BR10Y"] and set(ok.factor) == {0.5}
+    assert len(bad) == 2 and all(b["status"].startswith("rejected") for b in bad)

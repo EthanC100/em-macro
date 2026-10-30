@@ -343,7 +343,7 @@ def stage_update():
     nxt = months[-1] + 1
     adj = []
     for r in win.itertuples():
-        if r.end.to_period("M") >= nxt and r.start.to_period("M") <= nxt:
+        if k != 1.0 and r.end.to_period("M") >= nxt and r.start.to_period("M") <= nxt:
             adj.append({"instrument": r.instrument, "start": r.start.date(), "end": r.end.date(),
                         "scale": k, "source": f"overlay rule {fr['chosen_rule']}", "reason": r.events})
     for r in ovr.itertuples():
