@@ -125,3 +125,168 @@ Average gross position is the mean |weight| in the months the position earns.
   costs. FR-DE and ES-DE alone are 32% of turnover and 33% of costs.
 - **Totals match v1.0.** The per-instrument costs add up exactly to v1.0's cost line: 3.734%/yr, the
   `cost_drag_%_pa` of the committed test table.
+
+## Step 2 — Assumed costs compared with published evidence
+
+### Method
+
+**Definitions.**
+- **One-way cost** is half the bid-ask spread (plus impact where the source measures it), in bp of notional.
+- **Bonds quoted in yield** are converted as ½ × yield spread × modified duration. Durations used: Bund, OAT, Bono
+  and gilt 8.5; BTP 8; Poland 7.5; Mbono, R-series and Indonesia 7; TES 6.5; Chile 8; NTN-F 5.5; Turkey 4.5.
+- **Spread trades** sum the country leg and the Bund leg per unit of notional, as v1.0 does.
+
+**How the estimates were set.**
+- **Central:** roughly an institutional ticket of about $10m.
+- **Low:** an interdealer or best-execution floor.
+- **High:** a $25m sweep, or the widest normal-market published level.
+- Crisis spikes are listed separately and are not in the high column.
+
+**Evidence quality.**
+- A: recent per-instrument data.
+- B: indirect or older data, or one source.
+- C: only pre-2009 data or a chart reading.
+- D: no verified level; inference from comparable markets.
+
+The literature search was delegated to a research sub-task. The key FX tables (MPW Tables 1–2, G&H Table 6) were
+checked against the source PDFs.
+
+### Per-instrument estimates (one-way, bp of notional)
+
+| instrument | v1.0 | spec §8 range | low | central | high | quality | v1.0 vs central | main sources |
+|---|---|---|---|---|---|---|---|---|
+| EUR | 10 | 1–2 | 0.5 | 1.0 | 2.5 | A | above (10×) | MPW T1: EBS half-spread $1m / $10m / $25m 0.47 / 0.80 / 1.29 (2014–18); MRW effective 0.31; G&H forward half-spread 1.15 |
+| GBP | 10 | 1–2 | 0.8 | 1.5 | 3.0 | A | above | MPW T1: 0.90 / 1.49 / 2.51; MRW effective 0.81; G&H 1.25 |
+| MXN | 10 | 3–6 | 2.5 | 5.0 | 10.0 | A | above | MPW T2: 2.30 / 5.20 / 10.53; G&H 2.75 |
+| ZAR | 10 | 3–6 | 5.0 | 9.0 | 20.0 | A | above (by 1bp) | MPW T2: 4.92 / 10.38 / 21.55; G&H 8.3 |
+| TRY | 30 | not listed (flagged) | 5.0 | 12.0 | 30.0 | B | above; equal to high | MPW T2: 3.14 / 6.90 / 14.22 (2014–18); G&H 18.6 (2004–08); raised for post-2018 conditions (BIS TRY turnover $71bn in 2019, $27bn in 2022, $55bn in 2025) |
+| PLN | 10 | 3–6 | 4.0 | 7.0 | 14.0 | A | above | MPW T2: 3.80 / 7.32 / 13.96 (against EUR) |
+| BRL (NDF) | 10 | 5–15 | 5.0 | 10.0 | 20.0 | C | **equal** | G&H 9.65 (WM/R 2004–08) only; range scaled by MPW EM size ratios |
+| IDR (NDF) | 30 | 5–15 | 5.0 | 10.0 | 20.0 | C | above | G&H 7.3 (2007–08); G&H say WM/R is too low for IDR |
+| COP (NDF) | 30 | 5–15 | 6.0 | 12.0 | 25.0 | C | above | G&H 10.05; G&H say WM/R is too low for COP |
+| CLP (NDF) | 30 | 5–15 | 4.0 | 7.0 | 15.0 | C | above | G&H 4.55; G&H say WM/R is too low for CLP |
+| BR10Y | 10 | 10–30 | 5.0 | 12.0 | 25.0 | B | **below** | IMF–WB G20 note (2020) Fig. 1: about 5bp yield (2018), i.e. about 14 one-way; CGFS 28: 2.0 (2005) |
+| MX10Y | 10 | 10–30 | 4.0 | 7.0 | 15.0 | A | above | IMF WP/20/141 T3: 10y Mbono interdealer 1.4bp yield (2013–20), i.e. about 4.9; G20 chart about 3bp yield, i.e. about 10.5 |
+| ZA10Y | 10 | 10–30 | 5.0 | 10.0 | 20.0 | C | **equal** | G20 chart "SA" about 3bp yield, i.e. about 10.5 (the label may mean Saudi Arabia); SARB WP/22/03 (March 2020) |
+| TR10Y | 30 | 10–30 | 15.0 | 30.0 | 60.0 | B | **equal** | G20 chart: about 13bp yield (2018), the widest of 13 EMs, i.e. about 29; single source |
+| ID10Y | 30 | 10–30 | 10.0 | 15.0 | 30.0 | A | above | ADB AsianBondsOnline surveys: on-the-run 4.1bp yield (2019), i.e. about 14; 30.2 cents of price (2016), i.e. about 15 |
+| CO10Y | 30 | 10–30 | 8.0 | 15.0 | 30.0 | D | above | no verified TES level (BanRep reports not reachable); inferred |
+| CL10Y | 30 | 10–30 | 8.0 | 15.0 | 30.0 | D | above | CGFS 28: 2.0 (2005) only; thin secondary trading; inferred |
+| FR-DE | 20 | 2–4 | 0.9 | 2.0 | 5.0 | B | above (10×) | OAT leg 0.5 / 1.2 / 3 plus Bund leg 0.4 / 0.8 / 2 (Eurex tick 0.01, i.e. about 0.4bp half-tick; Tradeweb 2025) |
+| IT-DE | 20 | 2–4 | 0.9 | 2.3 | 7.0 | B | above | BTP leg 0.5 / 1.5 / 5 (ECB FSR Nov-2018 Box 3: MTS 10y spread normally <0.1% of price) plus Bund leg |
+| ES-DE | 20 | 2–4 | 0.9 | 2.3 | 6.0 | C | above | Bono leg inferred from OAT and BTP, plus Bund leg |
+| GB-DE | 20 | 2–4 | 0.9 | 2.3 | 6.0 | B | above | gilt leg 0.5 / 1.5 / 4 (ICE tick about 1bp; Benos–Zikes 2008–11 effective 6.5bp one-way as upper bound) plus Bund leg; GBP/EUR hedge excluded |
+| PL-DE | 20 | 11–32 | 4.4 | 8.8 | 17.0 | B | above | Polish leg 4 / 8 / 15 (G20 chart about 3bp yield, i.e. about 11; CGFS 28: 2.5 in 2005) plus Bund leg |
+| DE10Y | 10 | 1–2 | 0.4 | 0.8 | 2.0 | A | above | Eurex FGBL half-tick about 0.4; Tradeweb 10y Bund 0.2bp yield, 0.6 in a sell-off |
+
+**Spec §8 ranges used.**
+
+| instrument group | spec §8 one-way range |
+|---|---|
+| EUR, GBP (G10 forwards) | 1–2 |
+| MXN, ZAR, PLN | 3–6 |
+| BRL, COP, CLP, IDR (NDFs) | 5–15 |
+| EM local bonds | 10–30 |
+| Bund (DM bond futures) | 1–2 |
+| spreads over the Bund | country leg plus Bund leg (2–4; PL-DE 11–32) |
+
+The spec gives no TRY figure; it lists TRY with the deliverable forwards and flags it.
+
+**Flags: v1.0's assumption below the central estimate.**
+
+| instrument | v1.0 | central | high | quality | cost share in v1.0 |
+|---|---|---|---|---|---|
+| BR10Y | 10 | 12 | 25 | B | 1.4% |
+
+**At the central estimate (not below):** BRL (10), ZA10Y (10) and TR10Y (30).
+
+**Below the high estimate:**
+- BRL, ZAR, BR10Y, MX10Y, ZA10Y and TR10Y.
+- IDR and CLP at 30 are above their highs; COP's high is 25.
+- Every EM local bond's high is at least v1.0's figure.
+
+The other 18 instruments are assumed at more than the central estimate. The largest gaps are in the instruments
+that dominate v1.0's turnover:
+- **Spreads over the Bund:** v1.0 assumes 20bp against a central of 2.0–2.3bp.
+- **Bund:** 10 against 0.8.
+- **EUR and GBP:** 10 against 1.0–1.5.
+
+**Weighted by turnover (2020-01..2026-09 positions).**
+
+| cost vector | average one-way cost per unit traded |
+|---|---|
+| v1.0 | 19.6bp |
+| literature low | see Step 3 |
+| literature central | see Step 3 |
+| literature high | see Step 3 |
+
+### Costs v1.0 does not charge at all
+
+**Rolls.**
+- **FX forwards and NDFs** must be rolled monthly on the whole position. G&H Table 6 gives annualised 1-month roll
+  costs for 2004–08 (WM/R), equal to these monthly amounts in bp:
+  - EUR 0.07, GBP 0.09, MXN 0.38, ZAR 0.63, PLN 0.31
+  - CLP 1.1, IDR 2.3, TRY 3.5, BRL 4.5, COP 5.8
+- G&H say these are too low for IDR, COP and CLP.
+- The spec's convention is 0.5 × the one-way cost per roll. Step 3 applies it monthly to FX and quarterly to bond
+  positions. At the central estimates this matches or exceeds the G&H levels: for example BRL 5.0 against 4.5 and
+  COP 6.0 against 5.8 bp a month.
+
+**Forward points, NDF–onshore basis, cross-currency basis and repo spreads.** v1.0 builds forwards from policy rates,
+so none of these are in its returns. They are not costed here: no per-instrument published estimates for 2020–26
+were found.
+
+**Stress.** v1.0's costs are constant through time. Published stress episodes:
+
+| episode | what happened | source |
+|---|---|---|
+| Oct 2008, AUD/USD | top-of-book spread went from 2.64 to 54.03bp | MRW |
+| Oct 2008, AUD | effective cost went from 0.9 to 4.1bp | KRS |
+| Mar 2020, Mexico | the Mbono market's largest liquidity shock of 2013–20, driven by the bid-ask spread | IMF WP/20/141 |
+| Mar 2020, Bund | spread more than doubled | SAFE |
+| 29 May 2018, BTP | spread to mid went from <0.1% to >5% of price intraday | ECB FSR |
+| 2008–09, gilts | costs about doubled | Benos–Zikes |
+
+### Caveats
+
+- **Interdealer data.** Most recent data are interdealer (EBS/Reuters, MTS, broker quotes). Dealer-to-client
+  costs are higher, and the low column is a floor.
+- **Units not stated.** Several bond sources do not state units (yield or price): CGFS 28, the G20 chart and
+  Tradeweb. The conversions assume yield.
+- **NDF currencies.** BRL, IDR, COP and CLP rest on 2004–08 WM/R data, which G&H themselves call too low for three
+  of the four.
+- **Colombian and Chilean bonds.** These have no verified level (quality D).
+- **Sources not reached.** Menkhoff et al. (2012) directly (the 50%-of-quoted haircut is confirmed only through
+  MPW's footnote 8), Hasbrouck–Levich per-currency levels, Fleming, Pelizzon et al., Jeanneau–Tovar, and Su and
+  Tokmakcioglu (2021) on Turkish bonds.
+
+### References
+
+- **MPW20:** Melvin, Pan and Wikstrom (2020), "Retaining Alpha: The Effect of Trade Size and Rebalancing Frequency
+  on FX Strategy Returns", CESifo WP 8143. Tables 1–2: EBS/Reuters sweep-to-fill half-spreads, 2014-01..2018-03.
+  https://www.ifo.de/DocDL/cesifo1_wp8143.pdf
+- **GH11:** Gilmore and Hayashi (2011), "Emerging Market Currency Excess Returns", AEJ: Macroeconomics 3(4).
+  Working version FS-2011-E-002, Table 6: WM/R bid/offer and roll costs, 2004-03..2008-06.
+  https://www.sba.hub.hit-u.ac.jp/assets/files/research/fs_wp/FS-2011-E-002.pdf
+- **MRW13:** Mancini, Ranaldo and Wrampelmeyer (2013), "Liquidity in the Foreign Exchange Market", JF 68(5).
+  Table I (EBS 2007–09).
+- **KRS15:** Karnaukh, Ranaldo and Söderlind (2015), "Understanding FX Liquidity", RFS 28(11). Table 1 of the 2013
+  draft (EBS 2007–12).
+- **BIS Triennial Survey 2025:** statistical annex, Table 25.2.
+  https://www.bis.org/publications/commentary-otc-derivatives/statistics-rpfx25-fx-annex.pdf
+- **IMF–World Bank (2020):** G20 IFAWG staff note, "Recent Developments on Local Currency Bond Markets in Emerging
+  Economies", Figure 1. Average bid-offer on 10-year benchmarks, 2018; values read off the chart.
+- **IMF WP/20/141:** Hoyos, Liu, Miao and Saborowski (2020), Table 3. Mbono spreads, 2013-01..2020-03.
+- **ADB AsianBondsOnline:** bond market liquidity surveys, Nov 2016 and Nov 2019, Table 8 (Indonesia).
+- **CGFS 28:** BIS CGFS Papers No 28 (2007), "Financial stability and local currency bond markets", annex table 10.
+- **ECB FSR:** ECB Financial Stability Review, Nov 2018, Box 3 (MTS BTP spreads).
+- **SAFE:** Moench, Pelizzon and Schneider, SAFE Finance Blog (2020), "Market liquidity of European sovereign bonds
+  during the COVID-19 crisis".
+- **Tradeweb via fi-desk:** Barnes (2025), fi-desk. Tradeweb Bund and BTP spreads; trade press.
+- **Benos–Zikes:** Benos and Zikes (2014 draft), "Liquidity and Dealer Activity in the UK Gilt Market During the
+  Financial Crisis". Quoted and effective spreads, 2008–11.
+- **SARB WP/22/03:** Havemann et al. (2022).
+- **GFXC (2020):** "Overview of market conditions".
+- **Exchange specifications:** Eurex FGBL / FOAT / FBTP / FBON, and ICE Long Gilt.
+
+Table: `results/cost_audit/cost_estimates.csv`.
