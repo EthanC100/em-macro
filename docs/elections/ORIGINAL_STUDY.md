@@ -126,7 +126,13 @@ rounds, Turkey 2023 both rounds, Brazil 2022 both rounds, Brazil 2026 round 1, I
 - The aggregator option is dropped because it cannot be reproduced point-in-time; the tracker uses the mechanical
   fallback the study itself used where no aggregator existed: the mean of each pollster's last poll with fieldwork
   ending in the final 7 days, widened to 10 days (Poland rule) and then 21 days (South Africa / Turkey / Indonesia
-  rule) when fewer than 2 pollsters qualify. Normalisation follows the table in §2.
+  rule) when fewer than 2 pollsters qualify. Normalisation follows the table in §2 and is set per election
+  (`exclude_from_base` in `data/elections/tracker.yaml`): Poland as published (don't-knows kept), Mexico midterms
+  on the effective vote, other party races with an explicit undecided share removed. Rows that are poll averages
+  (e.g. ewybory.eu) or earlier results are dropped; a firm polling for several clients counts once.
+- **Validation:** applied to the last Wikipedia revision of the Poland 2023 polling page saved before the vote
+  (rev 1180142234, 14 Oct 2023 19:54 UTC), the rule reproduces the study's row exactly: PiS 34.31 vs KO 27.71,
+  margin 6.60, 13 pollsters, 7-day window (`tests/test_election_tracker.py`).
 - Expected day-1 move = 0.03679 + 0.05955 × surprise (abnormal %, local currency vs USD).
 - The spec 4.10 rule says `result_share − final 7-day poll average`. The tracker keeps the study's **margin**
   (≈ 2 × the share error in a two-way race) because the frozen slope is per pp of margin.

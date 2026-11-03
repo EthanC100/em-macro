@@ -13,7 +13,7 @@ UA = {"User-Agent": "em-macro-election-tracker/0.1 (https://github.com/ethanc100
 API = "https://{lang}.wikipedia.org/w/api.php"
 
 
-def api(params: dict, lang: str = "en", tries: int = 7) -> dict:
+def api(params: dict, lang: str = "en", tries: int = 8) -> dict:
     params = {**params, "format": "json", "formatversion": "2", "maxlag": "5"}
     last = None
     for i in range(tries):
@@ -28,7 +28,7 @@ def api(params: dict, lang: str = "en", tries: int = 7) -> dict:
                     raise RuntimeError(f"MediaWiki error: {j['error']}")
         except requests.RequestException as e:      # network blip: retry
             last = e
-        wait = 5 + 4 * i
+        wait = 5 + 6 * i
         if isinstance(last, requests.Response) and last.headers.get("retry-after", "").isdigit():
             wait = int(last.headers["retry-after"]) + 2 + 2 * i
         time.sleep(wait)
@@ -50,8 +50,18 @@ def revision(title: str, before: str | None = None, lang: str = "en") -> dict | 
             "wikitext": rv["slots"]["main"]["content"]}
 
 
-def html(revid: int, lang: str = "en") -> str:
-    """Rendered HTML of a specific revision (immutable, so snapshots are reproducible)."""
+def html(title: str, revid: int, lang: str = "en") -> str:
+    """Rendered HTML of a specific revision (immutable, so snapshots are reproducible).
+    Wikimedia REST endpoint first; the Action API's parse as a fallback."""
+    url = f"https://{lang}.wikipedia.org/api/rest_v1/page/html/{requests.utils.quote(title.replace(' ', '_'), safe='')}/{revid}"
+    for i in range(4):
+        try:
+            r = requests.get(url, headers=UA, timeout=60)
+            if r.status_code == 200 and "<table" in r.text:
+                return r.text
+        except requests.RequestException:
+            pass
+        time.sleep(5 + 5 * i)
     return api({"action": "parse", "oldid": str(revid), "prop": "text", "disabletoc": "1"}, lang)["parse"]["text"]
 
 

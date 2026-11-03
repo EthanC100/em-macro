@@ -5,7 +5,9 @@
 # race_kind          party | candidate | two_option   (normalisation, docs/elections/ORIGINAL_STUDY.md section 2)
 # options            {option: regex matched against poll-table column headers}
 # table_filter       regex the section heading above a poll table must match (skips scenario/regional tables)
-# exclude_from_base  regexes of non-vote columns removed from the base for party races (study: "effective vote")
+# exclude_from_base  regexes of non-vote columns removed from the base for party races ([] = as published;
+#                    default: undecided/don't-know columns, the study's ZA/TR/ID rule; Mexico: effective vote)
+# exclude_pollsters  regex of pollster labels to drop (party-commissioned polls); aggregators are always dropped
 # result_match       {option: regex matched against the first cells of the results table}
 # market_preferred   option the pre-vote analyst coverage calls market-friendly; null = not classified (excluded)
 #                    Set it, with the justification and sources, BEFORE the pre-registration date (vote - 14 days).
@@ -53,7 +55,7 @@ elections:
     race_kind: party
     options: {KO: "KO", PiS: "PiS", Konfederacja: "Konfederacja", KKP: "KKP", Lewica: "Lewica", PSL: "PSL", "Polska 2050": "Polska 2050", Razem: "Razem"}
     table_filter: "^20\\d\\d$"
-    exclude_from_base: ["don.?t know", "und"]
+    exclude_from_base: []      # as published, as in the study's Poland rows (don't-knows kept in the base)
     result_match:
       KO: "Civic Coalition|\\bKO\\b"
       PiS: "Law and Justice|\\bPiS\\b"
@@ -65,7 +67,7 @@ elections:
       Razem: "Razem|Together"
     quantity: >-
       Vote margin (pp) between the two leading parties in the final poll average (on current polls KO and PiS),
-      shares as published with don't-knows removed from the base, as in the study's Poland parliamentary rows.
+      shares as published (don't-knows kept in the base), as in the study's Poland parliamentary rows.
     quantity_note: >-
       Government formation depends on coalition seat totals (KO with partners vs PiS with Konfederacja/KKP); the
       two-party margin is the study's quantity and is the only one used for the signal.
