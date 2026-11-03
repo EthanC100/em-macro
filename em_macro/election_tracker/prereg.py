@@ -155,14 +155,17 @@ def due() -> list[str]:
     return out
 
 
-def committed_block(eid: str, cutoff_utc: str) -> dict | None:
-    """The yaml block of the last version of docs/elections/<id>.md committed before `cutoff_utc`."""
+def committed_block(eid: str, cutoff_utc: str, root=ROOT) -> dict | None:
+    """The yaml block of the last version of docs/elections/<id>.md committed before `cutoff_utc`
+    (committer date, so a back-dated author date does not count)."""
     rel = f"docs/elections/{eid}.md"
-    sha = subprocess.run(["git", "log", "-1", f"--before={cutoff_utc}", "--format=%H", "--", rel],
-                         cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    log = subprocess.run(["git", "log", "--format=%H %cI", "--", rel], cwd=root, capture_output=True, text=True).stdout
+    cutoff = dt.datetime.fromisoformat(cutoff_utc.replace("Z", "+00:00"))
+    sha = next((h for h, t in (ln.split() for ln in log.splitlines() if ln.strip())
+                if dt.datetime.fromisoformat(t) < cutoff), None)
     if not sha:
         return None
-    text = subprocess.run(["git", "show", f"{sha}:{rel}"], cwd=ROOT, capture_output=True, text=True).stdout
+    text = subprocess.run(["git", "show", f"{sha}:{rel}"], cwd=root, capture_output=True, text=True).stdout
     return parse_block(text) | {"commit": sha}
 
 
