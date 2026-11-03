@@ -11,6 +11,18 @@ from ledger import build, intake, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
 TODAY = date(2026, 11, 3)
+FREEZE_MONTH = "2026-09"      # last month of the frozen v1.0 test; later months are live paper trading
+
+
+def _live_results():
+    """(number of current positions, number of live months) from the committed results, which
+    the monthly workflow rewrites before running the tests."""
+    with open(ROOT / "results/systematic/positions.csv", newline="") as f:
+        n_pos = sum(1 for _ in csv.DictReader(f))
+    with open(ROOT / "results/systematic/paper_pnl.csv", newline="") as f:
+        n_live = sum(1 for r in csv.DictReader(f)
+                     if "live" in (r.get("sample") or "").lower() or (r.get("month") or "") > FREEZE_MONTH)
+    return n_pos, n_live
 
 
 # ----------------------------------------------------------------------------- schema / scoring
@@ -99,7 +111,8 @@ def test_build_writes_site_and_json(tmp_path):
     assert alg["backtest"]["months"] == 81
     assert abs(alg["backtest"]["ann_return_pct"] - 5.959) < 0.01
     assert alg["frozen"]["test_2020_on"]["sharpe"] == pytest.approx(0.6536, abs=1e-3)
-    assert len(alg["positions"]) == 14 and {s["sleeve"] for s in alg["by_sleeve"]} == {"Bonds", "Currencies"}
+    n_pos, _ = _live_results()
+    assert len(alg["positions"]) == n_pos and {s["sleeve"] for s in alg["by_sleeve"]} == {"Bonds", "Currencies"}
     tr = json.loads((out / "data/trials.json").read_text())
     assert tr["summary"]["n"] >= 12 and next(t for t in tr["items"] if t["trial_id"] == "T01")["status"] == "pass"
     assert next(t for t in tr["items"] if t["trial_id"] == "T12")["status"] == "fail"
@@ -295,7 +308,8 @@ def test_evidence_groups_and_status(tmp_path):
     ev = json.loads((out / "data/evidence.json").read_text())
     groups = {g["key"]: g["items"] for g in ev["groups"]}
     live = groups["live"][0]
-    assert live["trial_id"] == "T01" and live["months_needed"] == 55 and live["live_months"] == 0
+    _, n_live = _live_results()
+    assert live["trial_id"] == "T01" and live["months_needed"] == 55 and live["live_months"] == n_live
     assert live["backtest_sharpe"] == pytest.approx(0.654, abs=1e-3)
     rule = groups["prospective"][0]
     assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
@@ -303,7 +317,8 @@ def test_evidence_groups_and_status(tmp_path):
     failed = {t["id"]: t for t in groups["failed"]}
     assert "T12" in failed and failed["T12"]["reason"].startswith("rejected (failed pre-registered pass rule)")
     assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
-    assert ev["overall"].startswith("No validated discretionary edge yet; v1.0 live for 0 months")
+    assert ev["overall"].startswith(f"No validated discretionary edge yet; v1.0 live for {n_live} month"
+                                    f"{'s' if n_live != 1 else ''}")
     assert "11 rejected" in ev["overall"]
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
