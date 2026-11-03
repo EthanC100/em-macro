@@ -1,0 +1,29 @@
+{
+ "period": "2020-01..2026-09",
+ "months": 81,
+ "total_turnover_x_pa": 19.085198280990987,
+ "total_cost_drag_%_pa": 3.734200491380213,
+ "v1_cost_drag_%_pa_from_run": 3.734200491380212,
+ "avg_cost_bp_per_unit_traded": 19.565950724753574,
+ "fx_turnover_x_pa": 5.471626804712599,
+ "bond_turnover_x_pa": 13.613571476278386,
+ "fx_cost_%_pa": 1.0640190804089638,
+ "bond_cost_%_pa": 2.670181410971249,
+ "gross_%_pa_arith": 9.984580412303004,
+ "net_%_pa_arith": 6.250379920922791,
+ "sharpe_1x": 0.6535875796544269,
+ "ann_return_1x_%": 5.959003575361432,
+ "maxdd_1x_%": -18.479380704550884,
+ "avg_gross_leverage": 5.486103930673359,
+ "cash_interest_included": false,
+ "code_refs": {
+  "cost_params": "em_macro/systematic.py:58-59 (DESIGN['costs']: major 0.001, high_cost 0.003, high_cost_countries TR ID CO CL, spread_legs 2); also results/systematic/fit/frozen_design.json",
+  "cost_map": "em_macro/systematic.py:153-158 (build_inputs: per-instrument cost dict)",
+  "cost_charge": "em_macro/systematic.py:264-265 (run: cost = |w_t - w_{t-1}| x cost, charged in the month the new weight starts earning)",
+  "fx_return": "em_macro/systematic.py:118-125 (FX excess return: spot change x (1 + local policy rate x tau) - (1 + fed funds x tau); BIS policy rates, FRED DFF, monthly averages)",
+  "bond_return": "em_macro/systematic.py:131-142 (bond excess return: (y - funding)/12 - D dy + C dy^2/2; funding = local policy rate for EM 10y and the Bund, 0 for the spreads)",
+  "net": "em_macro/systematic.py:266-270 (net = gross - cost; nothing else is added)"
+ },
+ "systematic_py_sha256": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+ "reproduction_max_abs_diff_4dp": 0.0
+}
