@@ -85,6 +85,9 @@ def section_risk() -> list[str]:
          "",
          "Cross terms are split between the two factors by this formula, so a single factor's share can be negative or "
          "above 100%.", "",
+         "**Shrinkage effect.** σ_p² uses the Ledoit-Wolf-shrunk covariance; the spec formula's factor covariance is not "
+         "shrunk. In the unit test, a pure single-factor position therefore reads about 93% instead of 100%, so factor "
+         "shares are slightly understated.", "",
          "Two versions are reported:",
          "- **A — spec version: Ledoit-Wolf on non-overlapping 3-day returns**, trailing 252 business days (84 "
          "observations). Daily prices exist only for the 10 currencies and the Brazilian, Mexican, South African and "
