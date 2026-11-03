@@ -379,3 +379,181 @@ in Step 2: forward-point spreads beyond the roll convention, the NDF and cross-c
 stress widening.
 
 Tables: `results/cost_audit/step3_sensitivity.csv`, `step3_grid.csv`, `step3_breakeven.json`.
+
+## Step 4 — Where v1.0's turnover comes from
+
+### Method
+
+The method is an accounting of v1.0's executed trades. It uses the frozen functions; no alternative rule is run.
+
+**How v1.0 sizes a position.** In v1.0 a signal decides only whether an instrument is long, short or flat (top
+third, bottom third). Size is set by volatility:
+
+target_i = sign × (1/σ_i) × book vol scaler × ½ × portfolio vol scaler × leverage-cap factor.
+
+**Rebuilding the components.** Each component is rebuilt from the frozen code and checked to reproduce v1.0's
+weights exactly:
+- `systematic._vol`, `book_weights`;
+- `run(band=0)` for the pre-band targets, which is the identical code path up to the band;
+- `_apply_band` for the executed weights.
+
+**How each trade is classified.** Every executed trade (a change in the post-band weight) is one of two kinds:
+- **Selection change (signal):** entry, exit or sign flip. The whole trade is attributed to the signal.
+  - These trades are further split by which signal's z-score moved: each signal's absolute change in its share of
+    the composite, z_k/K, between t−1 and t.
+  - This is approximate, because ranks are cross-sectional and other instruments' moves also matter.
+- **Resize (volatility rescaling):** same sign, size changed enough to clear the 25% band. It is split exactly by a
+  log-mean Divisia (LMDI) decomposition into four components, measured from the position's last trade:
+  - instrument volatility;
+  - book vol scaler;
+  - portfolio vol scaler;
+  - leverage cap.
+  - These shares are signed and sum to the trade.
+
+**No-trade band.** Its effect is the difference between the turnover of the pre-band targets and the executed
+turnover. Dating is as in Step 1, and totals reconcile exactly to 19.09×/yr.
+
+### Executed turnover by source, 2020-01..2026-09
+
+| source | turnover ×/yr | share % |
+|---|---|---|
+| **signal: selection changes** (entries, exits, flips) | **17.44** | **91.4** |
+| volatility rescaling: instrument vol (1/σ_i) | 0.43 | 2.2 |
+| volatility rescaling: book vol scaler | 0.67 | 3.5 |
+| volatility rescaling: portfolio vol scaler | 0.13 | 0.7 |
+| volatility rescaling: 6× leverage cap | 0.42 | 2.2 |
+| **total executed** | **19.09** | 100 |
+
+| trade type | trades | turnover ×/yr | share % |
+|---|---|---|---|
+| entry | 138 | 8.73 | 45.8 |
+| exit | 138 | 8.69 | 45.5 |
+| sign flip | 1 | 0.03 | 0.1 |
+| resize | 92 | 1.64 | 8.6 |
+
+**By book (×/yr).**
+
+| book | selection | instrument vol | book scaler | portfolio scaler | leverage cap | total |
+|---|---|---|---|---|---|---|
+| FX | 4.87 | 0.11 | 0.11 | -0.07 | 0.46 | 5.47 |
+| bonds | 12.58 | 0.32 | 0.56 | 0.20 | -0.04 | 13.61 |
+
+**Selection turnover by which signal moved (approximate, ×/yr).**
+
+| book | carry | trend | value | total selection |
+|---|---|---|---|---|
+| FX | 0.45 | 2.99 | 1.43 | 4.87 |
+| bonds | 2.47 | 6.91 | 3.13 | 12.58 |
+| **total** | **2.92 (17%)** | **9.90 (57%)** | **4.56 (26%)** | 17.44 |
+
+0.06×/yr of bond selection turnover could not be attributed: no signal change was recorded at the decision date.
+
+### The no-trade band
+
+| path | selection ×/yr | resize ×/yr | total ×/yr |
+|---|---|---|---|
+| pre-band targets (all target changes traded) | 17.38 | 4.46 | 21.84 |
+| executed (25% band) | 17.44 | 1.64 | 19.09 |
+| difference | +0.07 | −2.82 | **−2.76 (−12.6%)** |
+
+**What the band does.**
+- **Turnover.** Exits and sign changes always trade, so the band acts only on resizes. It removes 63% of
+  resize turnover and 12.6% of total turnover.
+- **Selection turnover.** This is slightly higher with the band, because exits close positions that the band had
+  left at stale sizes.
+- **Leverage cap.** The 6× cap binds in 42 of the 81 decision months.
+
+### Turnover by instrument, 2020-01..2026-09
+
+| instrument | turnover ×/yr | share % | average gross position × | turnover per unit held | trades | selection trades/yr | from selection % | months held inside band | band-suppressed ×/yr |
+|---|---|---|---|---|---|---|---|---|---|
+| FR-DE | 3.21 | 16.8 | 0.81 | 4.0 | 15 | 1.6 | 92 | 33 | 0.19 |
+| ES-DE | 2.90 | 15.2 | 0.68 | 4.3 | 18 | 2.4 | 96 | 38 | 0.36 |
+| GB-DE | 1.48 | 7.7 | 0.29 | 5.1 | 16 | 2.2 | 99 | 25 | 0.05 |
+| IT-DE | 1.29 | 6.8 | 0.15 | 8.5 | 18 | 2.2 | 95 | 17 | 0.03 |
+| DE10Y | 1.12 | 5.9 | 0.46 | 2.4 | 18 | 2.1 | 89 | 52 | 0.21 |
+| IDR | 0.96 | 5.0 | 0.10 | 9.3 | 22 | 2.8 | 95 | 11 | 0.04 |
+| COP | 0.77 | 4.1 | 0.10 | 7.6 | 26 | 3.6 | 97 | 24 | 0.07 |
+| GBP | 0.74 | 3.9 | 0.29 | 2.6 | 18 | 1.9 | 87 | 56 | 0.24 |
+| MX10Y | 0.71 | 3.7 | 0.15 | 4.7 | 12 | 1.8 | 100 | 24 | 0.10 |
+| CLP | 0.69 | 3.6 | 0.06 | 11.2 | 24 | 3.4 | 98 | 12 | 0.01 |
+| CL10Y | 0.66 | 3.4 | 0.15 | 4.3 | 14 | 1.8 | 95 | 29 | 0.08 |
+| ZAR | 0.65 | 3.4 | 0.09 | 7.2 | 21 | 3.0 | 99 | 25 | 0.06 |
+| EUR | 0.52 | 2.7 | 0.30 | 1.7 | 13 | 1.2 | 82 | 54 | 0.22 |
+| BR10Y | 0.52 | 2.7 | 0.21 | 2.5 | 21 | 1.9 | 81 | 51 | 0.08 |
+| ID10Y | 0.50 | 2.6 | 0.19 | 2.7 | 9 | 1.0 | 94 | 38 | 0.11 |
+| CO10Y | 0.49 | 2.6 | 0.19 | 2.6 | 15 | 1.8 | 94 | 50 | 0.11 |
+| PLN | 0.40 | 2.1 | 0.21 | 1.9 | 15 | 1.2 | 78 | 61 | 0.14 |
+| MXN | 0.38 | 2.0 | 0.10 | 3.8 | 14 | 1.3 | 85 | 21 | 0.03 |
+| TR10Y | 0.31 | 1.6 | 0.08 | 3.7 | 20 | 2.4 | 93 | 53 | 0.03 |
+| PL-DE | 0.30 | 1.6 | 0.24 | 1.3 | 9 | 0.3 | 62 | 44 | 0.12 |
+| BRL | 0.20 | 1.1 | 0.13 | 1.5 | 12 | 0.9 | 67 | 48 | 0.13 |
+| TRY | 0.16 | 0.8 | 0.15 | 1.1 | 12 | 0.3 | 29 | 63 | 0.12 |
+| ZA10Y | 0.13 | 0.7 | 0.35 | 0.4 | 7 | 0.0 | 0 | 74 | 0.21 |
+
+**Column definitions.**
+- **Turnover per unit held** = turnover ÷ average |position|.
+- **Selection trades per year** counts entries, exits and flips.
+- **Months held inside band** counts months in which the held position differed from a same-sign target.
+
+### Turnover by year (×/yr; 2026 annualised from January–September)
+
+| year | selection | instrument vol | book scaler | portfolio scaler | leverage cap | total |
+|---|---|---|---|---|---|---|
+| 2020 | 11.58 | 0.59 | 0.15 | 0.12 | 0.20 | 12.64 |
+| 2021 | 13.63 | 0.32 | 0.65 | 0.60 | 0.30 | 15.50 |
+| 2022 | 14.07 | 0.43 | 0.40 | 0.38 | 0.04 | 15.33 |
+| 2023 | 23.40 | 0.80 | 0.07 | 0.37 | 0.00 | 24.64 |
+| 2024 | 24.16 | 0.18 | 1.34 | 0.14 | -0.12 | 25.70 |
+| 2025 | 28.74 | 0.31 | 1.27 | -0.54 | 2.17 | 31.96 |
+| 2026 | 17.19 | 0.79 | 1.22 | -0.01 | 0.42 | 19.62 |
+
+Tables: `results/cost_audit/step4_*.csv`, `step4_meta.json`.
+
+## Summary (factual; no recommendations)
+
+- **Cost model.**
+  - v1.0 charges a flat one-way cost on traded notional: 10bp, or 30bp for TR, ID, CO and CL; spreads over the
+    Bund pay two legs (20bp). The parameters are set in `systematic.py:58-59` and `:153-158`, and charged at
+    `:264-265`.
+  - It charges no roll costs and no forward-point, NDF-basis or repo spreads, and costs do not vary with volatility.
+- **Cash collateral.** Reported returns exclude interest on cash collateral. All returns are excess returns over
+  the funding rate, and net = gross − costs.
+- **Turnover and cost drag, 2020-01..2026-09.**
+  - Turnover is 19.1× capital a year (FX 5.5×, bonds 13.6×) and cost drag is 3.73% a year, 37% of the gross
+    P&L of 9.98% a year (arithmetic).
+  - The spreads over the Bund for FR, ES, GB and IT are 47% of turnover and 48% of costs; FR-DE and ES-DE alone are
+    33% of costs.
+- **Against published evidence.**
+  - Of 23 instruments, only BR10Y is assumed below the central estimate (10bp against 12bp; 1.4% of v1.0's costs).
+    BRL, ZA10Y and TR10Y equal it.
+  - v1.0's assumptions are 5–25× the central estimates for the G10 currencies, the Bund and the spreads over the
+    Bund, which account for most of v1.0's turnover.
+  - The NDF currencies (BRL, IDR, COP, CLP) and the Colombian, Chilean and Turkish bonds rest on old or indirect
+    evidence (quality C–D).
+  - Turnover-weighted average cost per unit traded: v1.0 19.6bp; literature low 2.9bp, central 5.7bp, high 12.4bp.
+- **Sensitivity, 2020-01..2026-09.**
+
+  | costs | Sharpe | return %/yr |
+  |---|---|---|
+  | 0.5× | 0.85 | 7.9 |
+  | 1× | 0.65 | 6.0 |
+  | 1.5× | 0.46 | 4.0 |
+  | 2× | 0.26 | 2.1 |
+  | 3× | −0.13 | −1.7 |
+  | literature central | 0.92 | 8.8 |
+  | literature central with rolls | 0.82 | 7.6 |
+  | literature high with rolls | 0.56 | 5.0 |
+
+  - Max drawdown ranges from −17.0% (literature low) to −25.7% (3×).
+- **Break-even.**
+  - The Sharpe reaches zero at **2.67×** v1.0's costs (about 52bp average one-way) and falls below 0.3 at
+    **1.90×** (about 37bp).
+  - In the 2005–2019 design sample the multiples are 1.75× and 1.18×.
+- **Turnover sources.**
+  - 91% of executed turnover is entries and exits of positions as signal ranks change. Volatility rescaling is 9%:
+    instrument vol 2.2%, book scaler 3.5%, portfolio scaler 0.7% and leverage cap 2.2%.
+  - The trend z-score is the largest mover behind selection trades (57%), then value (26%) and carry (17%).
+  - The 25% band removes 2.8×/yr (12.6%) of target turnover, all of it in resizes.
+  - Turnover rose from 12.6×/yr in 2020 to 32.0×/yr in 2025.
+  - Per unit held, CLP, IDR, IT-DE, COP and ZAR trade most (7–11× their average position a year).
