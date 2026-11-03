@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import re
 
 import numpy as np
@@ -19,7 +20,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from . import fx, prereg, snapshots, wiki
-from .common import SIGNALS, load_calendar, load_config, post_issue, today
+from .common import DATA, SIGNALS, load_calendar, load_config, post_issue, today
 from .rule import (expected_day1_move, implied_position, load_frozen_fit, surprise)
 
 ALERT_LABEL = "election-alert"
@@ -31,7 +32,8 @@ SIGNAL_COLS = [
     "provisional", "market_sign", "surprise_pp", "expected_day1_pct", "direction", "p", "b", "kelly", "risk_frac",
     "sigma_daily_pct", "stop_pct", "notional_frac", "entry_date", "exit_date", "fx_source", "issue_url",
     "actual_day1_raw_pct", "actual_day1_abn_pct", "actual_day5_raw_pct", "actual_day5_abn_pct",
-    "trade_return_pct", "trade_stopped", "scored_utc"]
+    "actual_day1_raw_ecb_pct", "actual_day5_raw_ecb_pct", "trade_return_pct", "trade_stopped", "fx_file",
+    "scored_utc"]
 
 
 # ------------------------------------------------------------------ results
@@ -118,7 +120,7 @@ def build_signal(eid: str, shares: dict[str, float], source: str, results_known:
         "poll_margin": fin.get("margin"), "poll_window_days": fin.get("window_days"),
         "poll_n_pollsters": fin.get("n_pollsters"), "poll_revid": fin.get("revid"),
         "actual_share_a": shares.get(a), "actual_share_b": shares.get(b), "actual_margin": actual_margin,
-        "result_source": source, "provisional": provisional, "market_sign": sign, "surprise_pp": s,
+        "result_shares": json.dumps(shares), "result_source": source, "provisional": provisional, "market_sign": sign, "surprise_pp": s,
         "expected_day1_pct": expected, "direction": pos.direction if pos else None, "p": pos.p if pos else None,
         "b": pos.b if pos else None, "kelly": pos.kelly if pos else None, "risk_frac": pos.risk_frac if pos else None,
         "sigma_daily_pct": sigma, "stop_pct": pos.stop_pct if pos else None,
@@ -138,8 +140,8 @@ def issue_text(sig: dict) -> tuple[str, str]:
 
 | | |
 |---|---|
-| Final poll average | {sig['cand_a']} {_f(sig['poll_share_a'], '{:.1f}')}% vs {sig['cand_b']} {_f(sig['poll_share_b'], '{:.1f}')}% (margin {_f(sig['poll_margin'], '{:+.1f}')}pp; {_f(sig['poll_window_days'], '{:.0f}')}-day window, {_f(sig['poll_n_pollsters'], '{:.0f}')} pollsters; Wikipedia rev {sig['poll_revid']}) |
-| Result{' (provisional)' if sig['provisional'] else ''} | {sig['cand_a']} {_f(sig['actual_share_a'], '{:.1f}')}% vs {sig['cand_b']} {_f(sig['actual_share_b'], '{:.1f}')}% (margin {_f(sig['actual_margin'], '{:+.1f}')}pp) — {sig['result_source']} |
+| Final poll average{' (**THIN: fewer than 2 pollsters within 21 days**)' if (sig['poll_n_pollsters'] or 0) < 2 else ''} | {sig['cand_a']} {_f(sig['poll_share_a'], '{:.1f}')}% vs {sig['cand_b']} {_f(sig['poll_share_b'], '{:.1f}')}% (margin {_f(sig['poll_margin'], '{:+.1f}')}pp; {_f(sig['poll_window_days'], '{:.0f}')}-day window, {_f(sig['poll_n_pollsters'], '{:.0f}')} pollsters; Wikipedia rev {sig['poll_revid']}) |
+| Result{' (provisional)' if sig['provisional'] else ''} | {sig['cand_a']} {_f(sig['actual_share_a'], '{:.1f}')}% vs {sig['cand_b']} {_f(sig['actual_share_b'], '{:.1f}')}% (margin {_f(sig['actual_margin'], '{:+.1f}')}pp); all shares read: {', '.join(f'{k} {v:.1f}%' for k, v in json.loads(sig['result_shares']).items())} — {sig['result_source']} |
 | Market-preferred (pre-registered, commit {str(sig['prereg_commit'])[:7]}) | {sig['market_preferred'] or 'not classified'} → sign {_f(sig['market_sign'], '{:+.0f}')} |
 | **Surprise** | **{_f(s, '{:+.2f}')} pp** (+ = market-preferred side beat its polls) |
 | **Expected day-1 move** | **{_f(sig['expected_day1_pct'], '{:+.2f}')}%** {sig['currency']} vs USD, abnormal (0.0368 + 0.0596 × surprise) |
@@ -203,7 +205,8 @@ def score() -> list[str]:
     """Fill actual day-1/day-5 moves and the trade return once the data exist."""
     if not SIGNALS.exists():
         return []
-    df = pd.read_csv(SIGNALS)
+    df = pd.read_csv(SIGNALS, dtype={"trade_stopped": "object", "scored_utc": "object", "fx_source": "object",
+                                     "fx_file": "object"})
     cfg, done = load_config(), []
     for i, r in df.iterrows():
         if pd.notna(r.get("scored_utc")) or today() <= dt.date.fromisoformat(r["exit_date"]):
@@ -228,6 +231,20 @@ def score() -> list[str]:
             df.loc[i, ["trade_return_pct", "trade_stopped"]] = [t["trade_return_pct"], t["stopped"]]
         if pd.isna(raw[5]):
             continue                            # data not in yet: try again tomorrow
+        # Save the exact series used (reproducible scoring) and cross-check against the ECB reference
+        # rate (14:15 CET fixing, so day-1 moves differ from closes by timing).
+        frames = {"primary": series}
+        try:
+            ecb = fx._frankfurter(r["currency"], start, end)
+            raw_ecb = fx.raw_moves(fx.level(ecb), r["vote_date"])
+            df.loc[i, ["actual_day1_raw_ecb_pct", "actual_day5_raw_ecb_pct"]] = [raw_ecb[1], raw_ecb[5]]
+            frames["ecb"] = ecb
+        except Exception as e:
+            print(f"{r['id']}: ECB cross-check unavailable ({e})")
+        out = DATA / "fx" / f"{r['id']}.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(frames).loc[str(pd.Timestamp(r["vote_date"]) - pd.Timedelta(days=120)):].to_csv(out, index_label="date")
+        df.loc[i, "fx_file"] = str(out.relative_to(DATA.parents[1]))
         df.loc[i, "scored_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         df.loc[i, "fx_source"] = f"{r['fx_source']}; scored with {src}"
         done.append(r["id"])

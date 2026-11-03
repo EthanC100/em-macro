@@ -61,7 +61,7 @@ def spot(ccy: str, ticker: str | None, start: str, end: str) -> tuple[pd.Series,
     if ticker:
         try:
             s = _yahoo(ticker, start, end)
-            if len(s) > 20:
+            if len(s):
                 return s, f"Yahoo {ticker}"
         except Exception as e:                  # fall through to the ECB rate
             print(f"Yahoo {ticker} failed: {e}")
