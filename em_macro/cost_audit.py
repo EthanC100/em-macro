@@ -373,6 +373,28 @@ def stage_turnover():
             rec.append(row)
     tr = pd.DataFrame(rec)
     tr["book"] = np.where(tr.instrument.isin(FX), "FX", "bonds")
+    # which signal moved: for entry / exit / flip trades, split |trade| by each signal's absolute change in its
+    # share of the composite, c_k = z_k / K (K = signals available), between t-1 and t: share_k = |dc_k| / sum |dc|.
+    # Ranks are cross-sectional, so other instruments' moves also matter; this is an approximation.
+    zc = {}
+    for bk in ("fx", "bond"):
+        sig = SY.signals(inp[bk])
+        K = sum(sig[g].notna().astype(float) for g in V1).replace(0, np.nan)
+        for g in V1:
+            zc.setdefault(g, []).append(sig[g].fillna(0.0) / K)
+    zc = {g: pd.concat(v, axis=1)[cols] for g, v in zc.items()}
+    for g in V1:
+        tr[f"sig_{g}"] = 0.0
+    for j, row in tr.iterrows():
+        if row["kind"] == "resize":
+            continue
+        t, k = row["decision_month"], row["instrument"]
+        dz = {g: float(zc[g].at[t, k] - zc[g].at[t - 1, k]) if t - 1 in zc[g].index else np.nan for g in V1}
+        tot = sum(abs(v) for v in dz.values())
+        if not np.isfinite(tot) or abs(tot) < 1e-12:
+            continue
+        for g in V1:
+            tr.at[j, f"sig_{g}"] = row["traded"] * abs(dz[g]) / tot
     # date the trades like v1.0's costs (month the trade starts earning) to match the step-1 totals
     tr["cost_month"] = [m + LAG["fx" if k in FX else "bond"] for m, k in zip(tr.decision_month, tr.instrument)]
     sel = tr[(tr.cost_month >= TEST[0]) & (tr.cost_month <= TEST[1])]
@@ -389,6 +411,10 @@ def stage_turnover():
     by_kind["turnover_x_pa"] = by_kind.pop("turnover") / yrs
     by_kind["share_%"] = 100 * by_kind["turnover_x_pa"] / tot
     by_book = sel.groupby("book")[comp + ["traded"]].sum() / yrs
+    sigcols = [f"sig_{g}" for g in V1]
+    by_signal = (sel.groupby("book")[sigcols + ["signal"]].sum() / yrs)
+    by_signal.loc["total"] = by_signal.sum()
+    by_signal["unattributed"] = by_signal["signal"] - by_signal[sigcols].sum(axis=1)
     # band: turnover of the pre-band targets vs executed, same dating
     tt = _sl(traded(target, res.index), TEST)
     th = _sl(traded(heldW, res.index), TEST)
@@ -433,6 +459,7 @@ def stage_turnover():
     by_src.to_csv(OUT / "step4_by_source.csv", float_format="%.4f")
     by_kind.to_csv(OUT / "step4_by_kind.csv", float_format="%.4f")
     by_book.to_csv(OUT / "step4_by_book.csv", float_format="%.4f")
+    by_signal.to_csv(OUT / "step4_selection_by_signal.csv", float_format="%.4f")
     inst.to_csv(OUT / "step4_by_instrument.csv", float_format="%.4f")
     yr.to_csv(OUT / "step4_by_year.csv", float_format="%.4f")
     band.to_csv(OUT / "step4_band.csv", float_format="%.4f")
@@ -443,6 +470,7 @@ def stage_turnover():
             "months_test": int(len(_sl(capf, TEST)))}
     (OUT / "step4_meta.json").write_text(json.dumps(meta, indent=1))
     print(by_src.round(3).to_string()); print(by_kind.round(3).to_string()); print(by_book.round(3).to_string())
+    print(by_signal.round(3).to_string())
     print(inst.round(3).to_string()); print(yr.round(3).to_string()); print(json.dumps(meta, indent=1))
 
 

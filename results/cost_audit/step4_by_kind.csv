@@ -1,0 +1,5 @@
+kind,trades,turnover_x_pa,share_%
+entry,138,8.7318,45.7518
+exit,138,8.6876,45.5200
+flip,1,0.0250,0.1312
+resize,92,1.6407,8.5969

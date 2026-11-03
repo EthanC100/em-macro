@@ -1,0 +1,9 @@
+{
+ "total_turnover_x_pa": 19.08519828099098,
+ "target_turnover_x_pa": 21.840477668552897,
+ "executed_turnover_x_pa": 19.085198280990987,
+ "target_path_selection_x_pa": 17.378698004930538,
+ "target_path_resize_x_pa": 4.461779663622358,
+ "leverage_cap_binding_months_test": 42,
+ "months_test": 81
+}
