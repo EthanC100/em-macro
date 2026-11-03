@@ -68,7 +68,7 @@ def turnover(res: pd.DataFrame) -> pd.Series:
 
 def metrics(res: pd.DataFrame, period) -> dict:
     a, b = period
-    r = res["net"].loc[a:b]
+    r = _net(res).loc[a:b]
     yrs = len(r) / 12
     w = (1 + r).cumprod()
     return {"start": str(r.index[0]), "end": str(r.index[-1]), "months": len(r),
@@ -112,6 +112,11 @@ def dsr_row(r: pd.Series, N: int) -> dict:
             "PSR(SR*=0)": MT.psr(sr_m, T, g3, g4),
             "SR0_noise_ann": MT.sr0(N, sd_noise) * np.sqrt(12), "DSR_noise": MT.dsr(sr_m, T, N, sd_noise, g3, g4),
             "SR0_dispersed_ann": MT.sr0(N, sd_disp) * np.sqrt(12), "DSR_dispersed": MT.dsr(sr_m, T, N, sd_disp, g3, g4)}
+
+
+def _net(res: pd.DataFrame) -> pd.Series:
+    """Monthly net returns without the frame's attrs (pandas 3 propagates attrs, which holds the weights)."""
+    return pd.Series(res["net"].to_numpy(), index=res.index, name="net")
 
 
 def annual(r: pd.Series) -> pd.Series:
@@ -176,7 +181,7 @@ def stage_run():
     perf.to_csv(OUT / "performance.csv", index=False, float_format="%.4f")
 
     # ---- monthly net returns
-    mon = pd.DataFrame({f"{uni}|{cm:g}x|{s}": r["net"] for (uni, cm, s), r in runs.items()})
+    mon = pd.DataFrame({f"{uni}|{cm:g}x|{s}": _net(r) for (uni, cm, s), r in runs.items()})
     mon.index.name = "month"
     mon.reset_index().assign(month=lambda d: d["month"].astype(str)).to_csv(OUT / "monthly_net.csv", index=False,
                                                                            float_format="%.6f")
@@ -185,7 +190,7 @@ def stage_run():
     ann = []
     for cm in (1.0, 2.0):
         for s in ("v1.0", "T01", "trend sleeve (T01)", "core sleeve alone (diagnostic)"):
-            a = annual(runs[("all", cm, s)]["net"].loc[TEST[0]:TEST[1]])
+            a = annual(_net(runs[("all", cm, s)]).loc[TEST[0]:TEST[1]])
             for y, v in a.items():
                 ann.append({"costs": f"{cm:g}x", "strategy": s, "year": int(y), "return_%": 100 * v})
     pd.DataFrame(ann).to_csv(OUT / "annual_2020_2026.csv", index=False, float_format="%.4f")
@@ -194,14 +199,14 @@ def stage_run():
     crit = {}
     for cm in (1.0, 2.0):
         tag = f"{cm:g}x"
-        v1 = runs[("all", cm, "v1.0")]["net"].loc[TEST[0]:TEST[1]]
-        t1 = runs[("all", cm, "T01")]["net"].loc[TEST[0]:TEST[1]]
+        v1 = _net(runs[("all", cm, "v1.0")]).loc[TEST[0]:TEST[1]]
+        t1 = _net(runs[("all", cm, "T01")]).loc[TEST[0]:TEST[1]]
         assert len(v1) == len(t1) == 81 and (v1.index == t1.index).all()
         bs = bootstrap_delta_sharpe(t1, v1)
-        vB = runs[("half B", cm, "v1.0")]["net"].loc[TEST[0]:TEST[1]]
-        tB = runs[("half B", cm, "T01")]["net"].loc[TEST[0]:TEST[1]]
-        carry = runs[("all", cm, "carry sleeve (v1.0 carry only)")]["net"]
-        trend = runs[("all", cm, "trend sleeve (T01)")]["net"]
+        vB = _net(runs[("half B", cm, "v1.0")]).loc[TEST[0]:TEST[1]]
+        tB = _net(runs[("half B", cm, "T01")]).loc[TEST[0]:TEST[1]]
+        carry = _net(runs[("all", cm, "carry sleeve (v1.0 carry only)")])
+        trend = _net(runs[("all", cm, "trend sleeve (T01)")])
         cw = {}
         for pname, (a, b) in {**PERIODS, "2006-2026 (all months)": (None, TEST[1])}.items():
             c, tr = carry.loc[a:b], trend.reindex(carry.loc[a:b].index)
