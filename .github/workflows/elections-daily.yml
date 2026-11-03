@@ -1,0 +1,85 @@
+# Election tracker (alerts only): daily pre-registration check, results check during each
+# election window (vote day to vote day + 3) and scoring of past signals. The job does
+# nothing outside those windows. Results-night alerts are posted as GitHub issues
+# "[ELECTION] <country> <date>: surprise <value>" (label election-alert), which reach the
+# GitHub mobile app as notifications.
+# Scheduled workflows run only on the repository's default branch.
+name: elections-daily
+
+on:
+  schedule:
+    - cron: "41 6 * * *"     # daily 06:41 UTC: after results nights in the Americas and Europe
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "daily | prereg | final | results | score"
+        default: daily
+      id:
+        description: "election id (calendar.csv), for prereg/final/results"
+        default: ""
+      result:
+        description: "manual result shares, e.g. Morena=41.2,PAN=17.5 (results only)"
+        default: ""
+      source:
+        description: "source URL of the manual result"
+        default: "manual entry"
+      results_known:
+        description: "date the result became known, YYYY-MM-DD (default: vote date)"
+        default: ""
+      force:
+        description: "prereg: rewrite an existing pre-registration (only before the vote day)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: elections
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # the alert reads the pre-registration as committed before the vote
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-elections.txt
+
+      - name: Run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CMD: ${{ github.event.inputs.command || 'daily' }}
+          ID: ${{ github.event.inputs.id }}
+          RESULT: ${{ github.event.inputs.result }}
+          SOURCE: ${{ github.event.inputs.source }}
+          KNOWN: ${{ github.event.inputs.results_known }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          args=("$CMD")
+          [ -n "$ID" ] && args+=(--id "$ID")
+          [ -n "$RESULT" ] && args+=(--result "$RESULT" --source "$SOURCE")
+          [ -n "$KNOWN" ] && args+=(--results-known "$KNOWN")
+          [ "$FORCE" = "true" ] && args+=(--force)
+          python -m em_macro.election_tracker "${args[@]}"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/elections docs/elections
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "Elections daily: $(date -u +%Y-%m-%d)"
+            git push
+          fi
