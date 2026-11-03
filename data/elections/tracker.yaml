@@ -40,8 +40,8 @@ elections:
     quantity_note: >-
       The market-relevant stake is whether Morena and its allies (PVEM, PT) keep a two-thirds supermajority in the
       Chamber, which lets them amend the constitution (as with the 2024 judicial reform). The study's party margin
-      does not measure this (its 2024 Mexico row was left uncoded for that reason). The alert reports the seat
-      outcome as context only; it does not enter the signal.
+      does not measure this (its 2024 Mexico row was left uncoded for that reason). Seat outcomes are not used
+      by the signal; read them from the results page.
     market_preferred: null
     market_sign_justification: null
     market_sign_sources: []
