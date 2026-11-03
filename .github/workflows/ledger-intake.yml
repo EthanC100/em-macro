@@ -1,0 +1,111 @@
+# Turn a filled-in Ledger issue form (Decision record, Forecast, Resolve, Report) into a
+# ledger entry. Validates it; on success appends it to the right file under data/ledger/,
+# commits, comments with the new id and closes the issue; on failure comments with what is
+# wrong and leaves the issue open (editing the issue re-runs the check).
+#
+# Repository settings needed once: Settings > Actions > General > Workflow permissions =
+# "Read and write permissions".
+name: ledger-intake
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: ledger-intake          # one at a time, so ids never collide
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    if: >-
+      github.event.issue.state == 'open' &&
+      (startsWith(github.event.issue.title, '[Decision]') || startsWith(github.event.issue.title, '[Forecast]') ||
+       startsWith(github.event.issue.title, '[Resolve]') || startsWith(github.event.issue.title, '[Report]') ||
+       contains(join(github.event.issue.labels.*.name, ','), 'ledger:'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Only the repository owner and collaborators may log entries
+        if: >-
+          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
+            --body "Only the repository owner or collaborators can log Ledger entries. This issue was not processed."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Make sure the ledger labels exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for l in ledger ledger:decision ledger:forecast ledger:resolve ledger:report; do
+            gh label create "$l" --repo "${{ github.repository }}" --color 1d4ed8 --force >/dev/null 2>&1 || true
+          done
+
+      - name: Validate and write the entry
+        id: intake
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m ledger.intake --out /tmp/intake.json
+          echo "ok=$(python -c "import json;print(str(json.load(open('/tmp/intake.json'))['ok']).lower())")" >> "$GITHUB_OUTPUT"
+          echo "skip=$(python -c "import json;print(str(json.load(open('/tmp/intake.json')).get('skip', False)).lower())")" >> "$GITHUB_OUTPUT"
+          echo "id=$(python -c "import json;print(json.load(open('/tmp/intake.json')).get('id', ''))")" >> "$GITHUB_OUTPUT"
+          echo "kind=$(python -c "import json;print(json.load(open('/tmp/intake.json')).get('kind') or '')")" >> "$GITHUB_OUTPUT"
+          python -c "import json;print(json.load(open('/tmp/intake.json'))['comment'])" > /tmp/comment.md
+          python -c "import json;print(' '.join(json.load(open('/tmp/intake.json'))['files']))" > /tmp/files.txt
+
+      - name: Ledger tests still pass with the new entry
+        if: steps.intake.outputs.ok == 'true'
+        run: |
+          pip install pytest
+          python -m pytest -q tests/test_ledger.py
+
+      - name: Commit and push
+        if: steps.intake.outputs.ok == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $(cat /tmp/files.txt)
+          git commit -m "Ledger ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }} (issue #${{ github.event.issue.number }})"
+          for i in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            sleep $((i * 3)); git pull --rebase origin main
+          done
+          exit 1
+
+      - name: Comment and close
+        if: steps.intake.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/comment.md
+          gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --reason completed
+          gh workflow run ledger-pages.yml --repo "${{ github.repository }}" --ref main || true
+
+      - name: Comment with what is wrong
+        if: steps.intake.outputs.ok != 'true' && steps.intake.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/comment.md

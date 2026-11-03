@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ledger</title>
+<meta name="description" content="The single place to view and log everything in the Horizons paper-trading programme.">
+<meta name="application-name" content="Ledger">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.ico" sizes="32x32">
+<link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
+<link rel="stylesheet" href="app.css">
+<script>
+  // apply the saved theme before first paint (light is the default)
+  try { var t = localStorage.getItem('ledger.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/home" aria-label="Ledger home"><span class="brand-mark">L</span><span class="brand-name">Ledger</span></a>
+    <div class="topbar-meta">
+      <span class="updated" id="updated">Loading…</span>
+    </div>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch theme" title="Switch theme">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path class="sun" d="M12 4.5a1 1 0 0 1 1 1V7a1 1 0 1 1-2 0V5.5a1 1 0 0 1 1-1Zm0 12.5a1 1 0 0 1 1 1v1.5a1 1 0 1 1-2 0V18a1 1 0 0 1 1-1Zm7.5-5a1 1 0 0 1-1 1H17a1 1 0 1 1 0-2h1.5a1 1 0 0 1 1 1ZM7 12a1 1 0 0 1-1 1H4.5a1 1 0 1 1 0-2H6a1 1 0 0 1 1 1Zm5-4a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path class="moon" d="M14.5 3.5a8.5 8.5 0 1 0 6 14.3A7 7 0 0 1 14.5 3.5Z"/></svg>
+    </button>
+  </div>
+  <div class="page-head">
+    <h1 id="page-title">Home</h1>
+    <p class="page-sub" id="page-sub"></p>
+  </div>
+</header>
+
+<main id="view" class="view" aria-live="polite">
+  <p class="loading">Loading the ledger…</p>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<nav class="tabbar" aria-label="Sections">
+  <a href="#/home" data-tab="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5h-6v5H4z"/></svg><span>Home</span></a>
+  <a href="#/decisions" data-tab="decisions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke-width="2" fill="none" stroke="currentColor"/></svg><span>Decisions</span></a>
+  <a href="#/algorithm" data-tab="algorithm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 9 11l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15 6h6v6" fill="none" stroke="currentColor" stroke-width="2.2"/></svg><span>Algorithm</span></a>
+  <a href="#/forecasts" data-tab="forecasts"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1"/></svg><span>Forecasts</span></a>
+  <a href="#/more" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>More</span></a>
+</nav>
+
+<script src="vendor/chart-4.4.1.umd.js"></script>
+<script src="vendor/marked-12.0.0.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
