@@ -513,8 +513,111 @@ def build_reports(out_dir: Path, today: date) -> dict:
             "countries": sorted({r["country"] for r in items})}
 
 
+# ----------------------------------------------------------------------------- evidence
+MIN_TRACK_RECORD_YEARS = 4.6          # spec MinTRL for 90% confidence in v1.0's Sharpe
+ELECTION_RULE_THRESHOLD = 15          # scored EM elections before the continuation rule is judged
+SCORED_COLUMNS = ("scored", "outcome", "result", "rule_return", "rule_pnl", "pnl", "realised", "realized")
+
+
+def count_scored_elections(path: Path, today: date) -> dict:
+    """Scored elections for the EM election continuation rule from data/elections/signals.csv.
+
+    A row counts as scored when any of SCORED_COLUMNS has a value, or, if the file has none
+    of those columns, when its election/vote date is in the past. The file is optional: when
+    it is missing the count is 0 and the note says so."""
+    rel = path.relative_to(ROOT).as_posix() if path.is_absolute() and ROOT in path.parents else path.as_posix()
+    if not path.exists():
+        return {"scored": 0, "pending": 0, "rows": 0, "found": False,
+                "note": f"{rel} not found; the count starts when the file exists (one row per election, with a scored/outcome column)."}
+    rows = read_csv(path)
+    if not rows:
+        return {"scored": 0, "pending": 0, "rows": 0, "found": True, "note": f"{rel} is empty."}
+    cols = {c.lower(): c for c in rows[0].keys()}
+    score_col = next((cols[c] for c in SCORED_COLUMNS if c in cols), None)
+    date_col = next((cols[c] for c in ("vote_date", "election_date", "date") if c in cols), None)
+    scored = pending = 0
+    for r in rows:
+        if score_col is not None:
+            ok = bool(str(r.get(score_col) or "").strip())
+        else:
+            d = parse_date(r.get(date_col)) if date_col else None
+            ok = d is not None and d <= today
+        scored += ok
+        pending += (not ok)
+    basis = f"column '{score_col}'" if score_col else (f"past '{date_col}'" if date_col else "all rows")
+    return {"scored": scored, "pending": pending, "rows": len(rows), "found": True,
+            "note": f"{rel}: {scored} scored of {len(rows)} rows (by {basis})."}
+
+
+def one_line_reason(t: dict, limit: int = 160) -> str:
+    dec = " ".join((t.get("decision") or "").split())
+    res = " ".join((t.get("result") or "").split())
+    first = re.split(r"(?<=[.;])\s", res, maxsplit=1)[0] if res else ""
+    text = dec if not first else (f"{dec}: {first}" if dec else first)
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "\u2026"
+
+
+def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
+    live = algorithm["live"]
+    live_months = live.get("months", 0)
+    months_needed = round(MIN_TRACK_RECORD_YEARS * 12)
+    v1 = next((t for t in trials["items"] if t.get("trial_id") == "T01"), None)
+    live_entry = {
+        "id": "v1.0", "trial_id": v1["trial_id"] if v1 else None,
+        "name": "v1.0 systematic macro strategy (carry, trend, value; FX and bonds)",
+        "status": "live", "live_months": live_months, "live_sharpe": live.get("sharpe"),
+        "live_return_pct": live.get("total_return_pct"), "live_max_drawdown_pct": live.get("max_drawdown_pct"),
+        "backtest_sharpe": algorithm["backtest"].get("sharpe"),
+        "backtest_max_drawdown_pct": algorithm["backtest"].get("max_drawdown_pct"),
+        "months_needed": months_needed, "progress_pct": round(100 * min(live_months, months_needed) / months_needed, 1),
+        "live_since": algorithm["rebalance"]["live_since"], "last_month": algorithm["months"][-1]["month"] if algorithm["months"] else None,
+        "reason": one_line_reason(v1) if v1 else "", "link": "#/algorithm",
+    }
+    elections = count_scored_elections(ROOT / "data/elections/signals.csv", today)
+    prospective = [{
+        "id": "election-rule", "name": "EM election continuation rule (trade the post-result surprise, hold 5 days)",
+        "status": "under test", "scored": elections["scored"], "threshold": ELECTION_RULE_THRESHOLD,
+        "progress_pct": round(100 * min(elections["scored"], ELECTION_RULE_THRESHOLD) / ELECTION_RULE_THRESHOLD, 1),
+        "reason": f"{elections['scored']} of {ELECTION_RULE_THRESHOLD} elections scored. {elections['note']}",
+        "link": "#/elections", "source": "data/elections/signals.csv",
+    }]
+    for t in trials["items"]:
+        if t["status"] == "pending":
+            prospective.append({"id": t["trial_id"], "name": t["name"], "status": "under test", "scored": None,
+                                "threshold": None, "progress_pct": None, "reason": one_line_reason(t) or "not yet run",
+                                "link": "#/trials", "source": "trials.csv"})
+    passed = [{"id": t["trial_id"], "name": t["name"], "status": "passed", "date": t.get("date_tested"),
+               "reason": one_line_reason(t), "link": "#/trials"}
+              for t in trials["items"] if t["status"] == "pass" and t.get("trial_id") != "T01"]
+    failed = [{"id": t["trial_id"], "name": t["name"], "status": "failed", "date": t.get("date_tested"),
+               "group": t.get("trial_group"), "reason": one_line_reason(t), "link": "#/trials"}
+              for t in trials["items"] if t["status"] == "fail"]
+    n_live = live_months
+    if passed:
+        overall = (f"{len(passed)} validated discretionary idea{'s' if len(passed) != 1 else ''}; "
+                   f"v1.0 live for {n_live} month{'s' if n_live != 1 else ''} of the {months_needed} needed; "
+                   f"{len(failed)} rejected.")
+    else:
+        overall = (f"No validated discretionary edge yet; v1.0 live for {n_live} month{'s' if n_live != 1 else ''} "
+                   f"({months_needed} needed for a 90%-confidence track record); "
+                   f"{len(prospective)} idea{'s' if len(prospective) != 1 else ''} under prospective test; "
+                   f"{len(failed)} rejected.")
+    return {
+        "overall": overall, "as_of": today.isoformat(),
+        "groups": [
+            {"key": "live", "title": "Live and under test", "items": [live_entry]},
+            {"key": "prospective", "title": "Under prospective test", "items": prospective},
+            {"key": "passed", "title": "Passed trials", "items": passed},
+            {"key": "failed", "title": "Failed or rejected ideas", "items": failed},
+        ],
+        "counts": {"live": 1, "prospective": len(prospective), "passed": len(passed), "failed": len(failed)},
+        "sources": ["trials.csv", "results/systematic/paper_pnl.csv", "data/elections/signals.csv"],
+        "min_track_record": {"years": MIN_TRACK_RECORD_YEARS, "months": months_needed, "confidence": "90%"},
+    }
+
+
 # ----------------------------------------------------------------------------- home
-def build_home(today: date, decisions, forecasts, algorithm, elections, reports) -> dict:
+def build_home(today: date, decisions, forecasts, algorithm, elections, reports, evidence) -> dict:
     horizon = today + timedelta(days=30)
     cat = []
     for e in elections["upcoming"]:
@@ -550,6 +653,7 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports)
         "latest_report": reports["items"][0] if reports["items"] else None,
         "rebalance": algorithm["rebalance"],
         "open_forecasts": forecasts["summary"]["open"],
+        "evidence_status": evidence["overall"],
     }
 
 
@@ -572,7 +676,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     trials = build_trials()
     elections = build_elections(today)
     reports = build_reports(out_dir, today)
-    home = build_home(today, decisions, forecasts, algorithm, elections, reports)
+    evidence = build_evidence(trials, algorithm, today)
+    home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
     commit = git("rev-parse", "--short", "HEAD")
     meta = {
         "app": "Ledger", "built_at": now.replace(microsecond=0).isoformat(), "today": today.isoformat(),
@@ -595,7 +700,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     data = out_dir / "data"
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
-                      ("reports", reports)):
+                      ("reports", reports), ("evidence", evidence)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

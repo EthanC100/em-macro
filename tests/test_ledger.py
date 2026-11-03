@@ -275,3 +275,35 @@ def test_report_intake_writes_markdown(ledger_root):
     assert meta["type"] == "weekly review" and rest.strip().startswith("# Week 45")
     res = intake.process("report", body.replace("weekly review", "memo"), 71, TODAY, ledger_root)
     assert not res["ok"] and "Type must be one of" in res["comment"]
+
+
+# ----------------------------------------------------------------------------- evidence
+def test_scored_elections_count(tmp_path):
+    missing = build.count_scored_elections(tmp_path / "signals.csv", TODAY)
+    assert missing["scored"] == 0 and not missing["found"] and "not found" in missing["note"]
+    p = tmp_path / "signals.csv"
+    p.write_text("country,vote_date,surprise,outcome\nBrazil,2026-10-04,2.1,win\nMexico,2027-06-06,,\nPoland,2025-05-18,-1.3,loss\n")
+    c = build.count_scored_elections(p, TODAY)
+    assert c == {"scored": 2, "pending": 1, "rows": 3, "found": True, "note": f"{p.as_posix()}: 2 scored of 3 rows (by column 'outcome')."}
+    p.write_text("country,vote_date\nBrazil,2026-10-04\nMexico,2027-06-06\n")
+    assert build.count_scored_elections(p, TODAY)["scored"] == 1      # no score column: past votes count
+
+
+def test_evidence_groups_and_status(tmp_path):
+    out = tmp_path / "app"
+    build.build(out, today=TODAY)
+    ev = json.loads((out / "data/evidence.json").read_text())
+    groups = {g["key"]: g["items"] for g in ev["groups"]}
+    live = groups["live"][0]
+    assert live["trial_id"] == "T01" and live["months_needed"] == 55 and live["live_months"] == 0
+    assert live["backtest_sharpe"] == pytest.approx(0.654, abs=1e-3)
+    rule = groups["prospective"][0]
+    assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
+    assert groups["passed"] == []                      # T01 is the live entry, not a passed trial
+    failed = {t["id"]: t for t in groups["failed"]}
+    assert "T12" in failed and failed["T12"]["reason"].startswith("rejected (failed pre-registered pass rule)")
+    assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
+    assert ev["overall"].startswith("No validated discretionary edge yet; v1.0 live for 0 months")
+    assert "11 rejected" in ev["overall"]
+    home = json.loads((out / "data/home.json").read_text())
+    assert home["evidence_status"] == ev["overall"]

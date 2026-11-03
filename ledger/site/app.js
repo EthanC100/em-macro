@@ -39,6 +39,16 @@
   function fmtProb(x) { return isNum(x) ? `${fmtNum(x, 0)}%` : '—'; }
   const signClass = (x) => (!isNum(x) || x === 0) ? '' : (x > 0 ? 'good' : 'bad');
   function pill(text, cls = '') { return `<span class="pill ${esc(cls)}">${esc(text)}</span>`; }
+  // status badges: open, won, lost, passed, failed, under test, and the rest
+  const BADGE = {
+    open: ['open', 'open'], right: ['won', 'good'], wrong: ['lost', 'bad'], scratched: ['scratched', ''],
+    'no trade': ['no trade', ''], yes: ['yes', 'purple'], no: ['no', 'purple'], void: ['void', ''],
+    pass: ['passed', 'good'], passed: ['passed', 'good'], fail: ['failed', 'bad'], failed: ['failed', 'bad'],
+    pending: ['under test', 'warn'], 'under test': ['under test', 'warn'], live: ['live', 'c-algorithm'],
+    resolved: ['resolved', 'purple'], long: ['long', 'good'], short: ['short', 'bad'],
+    Buy: ['Buy', 'good'], Sell: ['Sell', 'bad'], 'No trade': ['No trade', ''],
+  };
+  function badge(value) { const b = BADGE[value] || [value, '']; return pill(b[0], b[1]); }
   function daysLabel(n) {
     if (!isNum(n)) return '';
     if (n === 0) return 'today';
@@ -132,7 +142,7 @@
 
   function monthlyBarChart(id, months) {
     const labels = months.map((m) => m.month);
-    const good = cssVar('--good'), bad = cssVar('--bad'), live = cssVar('--series-live');
+    const good = cssVar('--series-up'), bad = cssVar('--series-down'), live = cssVar('--series-live');
     return mkChart(id, {
       type: 'bar',
       data: { labels, datasets: [{ label: 'Net monthly return', data: months.map((m) => (isNum(m.net) ? m.net * 100 : null)),
@@ -147,7 +157,7 @@
 
   function drawdownChart(id, months) {
     const labels = months.map((m) => m.month);
-    const bad = cssVar('--bad');
+    const bad = cssVar('--series-down');
     return mkChart(id, {
       type: 'line',
       data: { labels, datasets: [{ label: 'Drawdown', data: months.map((m) => m.drawdown_pct), borderColor: bad, backgroundColor: withAlpha(bad, 0.18), fill: true, borderWidth: 1.6, pointRadius: 0, tension: 0 }] },
@@ -206,11 +216,12 @@
     const live = home.live || {};
     const months = alg.months.filter((m) => m.month >= '2020-01');
     const posRows = home.positions.map((p) => `
-      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.country)}</td><td>${pill(p.side, p.side === 'long' ? 'good' : 'bad')}</td>
+      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.country)}</td><td>${badge(p.side)}</td>
       <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td></tr>`).join('');
+    const CAT_CLASS = { election: 'c-elections', 'decision horizon': 'c-decisions', 'forecast resolves': 'c-forecasts', 'algorithm rebalance': 'c-algorithm' };
     const cats = home.catalysts.length ? home.catalysts.map((c) => `
-      <a class="row-link" href="${esc(c.link)}"><div class="row-top"><span class="row-title">${esc(c.label)}</span><span class="muted small">${fmtDate(c.date)}</span></div>
-      <div class="row-meta">${pill(c.kind, 'accent')} ${c.country ? esc(c.country) : ''}</div></a>`).join('') : '<p class="empty">Nothing scheduled in the next 30 days.</p>';
+      <a class="row-link ${CAT_CLASS[c.kind] || ''}" href="${esc(c.link)}"><div class="row-top"><span class="row-title">${esc(c.label)}</span><span class="muted small">${fmtDate(c.date)}</span></div>
+      <div class="row-meta">${pill(c.kind, CAT_CLASS[c.kind] || '')} ${c.country ? esc(c.country) : ''}</div></a>`).join('') : '<p class="empty">Nothing scheduled in the next 30 days.</p>';
     const rep = home.latest_report;
     view.innerHTML = `
       <section class="section">
@@ -225,6 +236,10 @@
           <div class="stat"><span class="k">Open decisions</span><span class="v">${home.open_decisions.length}</span><span class="s">${home.open_forecasts} open forecasts</span></div>
           <div class="stat"><span class="k">Last rebalance</span><span class="v sm">${fmtDate(home.rebalance.date)}</span><span class="s">positions as of ${fmtMonth(home.rebalance.as_of)}</span></div>
         </div>
+      </section>
+      <section class="section">
+        <a class="row-link c-evidence" href="#/evidence"><div class="row-top"><span class="row-title" style="color:var(--c-evidence)">Evidence status</span><span class="muted small">${fmtDate(meta.today)}</span></div>
+        <div class="row-meta" style="color:var(--fg)">${esc(home.evidence_status)}</div></a>
       </section>
       <section class="section">
         <div class="section-head"><h2>Equity curve</h2><a class="more" href="#/algorithm">Algorithm detail</a></div>
@@ -252,9 +267,9 @@
 
   function decisionRow(d) {
     const score = d.status === 'resolved' ? ` · Brier ${fmtNum(d.brier, 3)}${isNum(d.pnl_pct) ? ` · P&L ${fmtPct(d.pnl_pct, 2, true)}` : ''}` : (isNum(d.days_to_horizon) ? ` · horizon ${daysLabel(d.days_to_horizon)}` : '');
-    return `<a class="row-link" href="#/decisions/${esc(d.id)}">
-      <div class="row-top"><span class="row-title">${esc(d.instrument)} ${pill(d.action, d.action === 'Buy' ? 'good' : d.action === 'Sell' ? 'bad' : '')}</span><span class="mono muted small">${esc(d.id)}</span></div>
-      <div class="row-meta"><b>${esc(d.country)}</b> · ${fmtDate(d.date)} · ${fmtPct(d.size_pct, 1)} at risk · p ${fmtProb(d.probability)} ${d.status === 'resolved' ? pill(d.outcome, d.outcome) : pill('open', 'open')}${score}</div></a>`;
+    return `<a class="row-link c-decisions" href="#/decisions/${esc(d.id)}">
+      <div class="row-top"><span class="row-title">${esc(d.instrument)} ${badge(d.action)}</span><span class="mono muted small">${esc(d.id)}</span></div>
+      <div class="row-meta"><b>${esc(d.country)}</b> · ${fmtDate(d.date)} · ${fmtPct(d.size_pct, 1)} at risk · p ${fmtProb(d.probability)} ${d.status === 'resolved' ? badge(d.outcome) : badge('open')}${score}</div></a>`;
   }
 
   async function pageDecisions(id) {
@@ -263,11 +278,12 @@
     const f = filters.decisions;
     setHead('Decisions', `${dec.summary.n} logged · ${dec.summary.open} open · ${dec.summary.resolved} resolved`);
     const items = dec.items.filter((d) => (!f.country || d.country === f.country) && (!f.status || d.status === f.status) && (!f.outcome || d.outcome === f.outcome));
-    const sel = (name, label, opts, cur) => `<select id="f-${name}" aria-label="${esc(label)}"><option value="">${esc(label)}: all</option>${opts.map((o) => `<option value="${esc(o)}" ${o === cur ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    const OUT_LABEL = { right: 'won', wrong: 'lost' };
+    const sel = (name, label, opts, cur) => `<select id="f-${name}" aria-label="${esc(label)}"><option value="">${esc(label)}: all</option>${opts.map((o) => `<option value="${esc(o)}" ${o === cur ? 'selected' : ''}>${esc(OUT_LABEL[o] || o)}</option>`).join('')}</select>`;
     view.innerHTML = `
       <section class="section">
         <div class="stats">
-          <div class="stat"><span class="k">Resolved</span><span class="v">${dec.summary.resolved}</span><span class="s">${dec.summary.right} right · ${dec.summary.wrong} wrong</span></div>
+          <div class="stat"><span class="k">Resolved</span><span class="v">${dec.summary.resolved}</span><span class="s">${dec.summary.right} won · ${dec.summary.wrong} lost</span></div>
           <div class="stat"><span class="k">Brier (mine)</span><span class="v">${fmtNum(dec.summary.brier, 3)}</span><span class="s">${dec.summary.brier_n ? `over ${dec.summary.brier_n} resolved` : 'none resolved yet'}</span></div>
           <div class="stat"><span class="k">P&L logged</span><span class="v ${signClass(dec.summary.pnl_pct_total)}">${fmtPct(dec.summary.pnl_pct_total, 2, true)}</span><span class="s">% of account, resolved positions</span></div>
           <div class="stat"><span class="k">Open</span><span class="v">${dec.summary.open}</span><span class="s">of ${dec.summary.n}</span></div>
@@ -290,13 +306,13 @@
     const kelly = isNum(d.kelly_cap_pct) ? `${fmtPct(d.kelly_cap_pct, 2)} of account (half of quarter-Kelly at ${fmtProb(d.probability)}, even odds)` : '—';
     const scoreBlock = d.status === 'resolved' ? `
       <div class="stats">
-        <div class="stat"><span class="k">Outcome</span><span class="v sm">${pill(d.outcome, d.outcome)}</span><span class="s">resolved ${fmtDate(d.resolved_date)}</span></div>
+        <div class="stat"><span class="k">Outcome</span><span class="v sm">${badge(d.outcome)}</span><span class="s">resolved ${fmtDate(d.resolved_date)}</span></div>
         <div class="stat"><span class="k">Brier (mine)</span><span class="v">${fmtNum(d.brier, 3)}</span><span class="s">p ${fmtProb(d.probability)} → ${d.outcome01 === 1 ? 'right' : d.outcome01 === 0 ? 'wrong' : 'n/a'}</span></div>
         <div class="stat"><span class="k">Brier (Claude)</span><span class="v">${fmtNum(d.brier_claude, 3)}</span><span class="s">${isNum(d.claude_probability) ? `p ${fmtProb(d.claude_probability)}` : 'no Claude probability'}</span></div>
         <div class="stat"><span class="k">P&L</span><span class="v ${signClass(d.pnl_pct)}">${fmtPct(d.pnl_pct, 2, true)}</span><span class="s">${isNum(d.exit_price) ? `exit ${fmtNum(d.exit_price, 2)}` : 'not computable'}</span></div>
       </div>` : `
       <div class="stats">
-        <div class="stat"><span class="k">Status</span><span class="v sm">${pill('open', 'open')}</span><span class="s">horizon ${fmtDate(d.horizon)} (${daysLabel(d.days_to_horizon)})</span></div>
+        <div class="stat"><span class="k">Status</span><span class="v sm">${badge('open')}</span><span class="s">horizon ${fmtDate(d.horizon)} (${daysLabel(d.days_to_horizon)})</span></div>
         <div class="stat"><span class="k">My probability</span><span class="v">${fmtProb(d.probability)}</span><span class="s">${isNum(d.claude_probability) ? `Claude ${fmtProb(d.claude_probability)}` : 'that the view is right'}</span></div>
         <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%)</span></div>
         <div class="stat"><span class="k">Event-bet size</span><span class="v">${isNum(d.kelly_cap_pct) ? fmtPct(d.kelly_cap_pct, 2) : '—'}</span><span class="s">half of quarter-Kelly</span></div>
@@ -307,7 +323,7 @@
       <section class="card rule record">
         <h2>Decision record</h2>
         ${field('Date', fmtDate(d.date))}${field('Country', esc(d.country))}${field('Instrument', esc(d.instrument))}
-        ${field('Action', pill(d.action, d.action === 'Buy' ? 'good' : d.action === 'Sell' ? 'bad' : ''))}
+        ${field('Action', badge(d.action))}
         ${field('Size (% of account at risk)', fmtPct(d.size_pct, 2))}
         ${field('Probability my view is right', fmtProb(d.probability) + (isNum(d.claude_probability) ? ` <span class="muted">(Claude ${fmtProb(d.claude_probability)})</span>` : ''))}
         ${field('Horizon', fmtDate(d.horizon))}
@@ -339,7 +355,7 @@
     const liveMonths = months.filter((m) => m.live);
     const liveNote = live.months ? `${live.months} live month${live.months === 1 ? '' : 's'} since the ${fmtDate(alg.rebalance.live_since)} rebalance` : `No live month has closed yet. The first live month is ${fmtMonth(nextMonth(alg.frozen.freeze_month))}, booked by the monthly run on the 3rd of the following month.`;
     const posRows = alg.positions.map((p) => `
-      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${pill(p.side, p.side === 'long' ? 'good' : 'bad')}</td>
+      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${badge(p.side)}</td>
       <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td><td class="num">${fmtPct(p.instrument_vol_pct, 1)}</td>
       <td class="num">${fmtNum(p.carry_z, 2)}</td><td class="num">${fmtNum(p.trend_z, 2)}</td><td class="num">${fmtNum(p.value_z, 2)}</td></tr>`).join('');
     const maxRisk = Math.max(...alg.by_country.map((c) => c.risk_share_pct), 1);
@@ -376,7 +392,7 @@
       </section>
       <section class="section">
         <h2>Monthly net P&L</h2>
-        <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div>${legend([['Up month', '--good'], ['Down month', '--bad'], ['Live month', '--series-live']])}</div>
+        <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div>${legend([['Up month', '--series-up'], ['Down month', '--series-down'], ['Live month', '--series-live']])}</div>
       </section>
       <section class="section">
         <h2>Drawdown</h2>
@@ -413,7 +429,7 @@
     const rows = fc.items.slice().reverse().map((f) => `
       <div class="card fcard">
         <div class="row-top"><span class="row-title">${esc(f.question)}</span><span class="mono muted small">${esc(f.id)}</span></div>
-        <div class="row-meta"><b>${esc(f.country)}</b> · ${fmtDate(f.date)} · resolves ${fmtDate(f.resolution_date)} ${f.status === 'resolved' ? pill(f.outcome, f.outcome) : pill('open', 'open')}</div>
+        <div class="row-meta"><b>${esc(f.country)}</b> · ${fmtDate(f.date)} · resolves ${fmtDate(f.resolution_date)} ${f.status === 'resolved' ? badge(f.outcome) : badge('open')}</div>
         ${probTrack(f)}
         <div class="probs"><span><i style="background:var(--series-me)"></i>Me <b>${fmtProb(f.my_prob)}</b></span><span><i style="background:var(--series-claude)"></i>Claude <b>${fmtProb(f.claude_prob)}</b></span><span><i style="background:var(--series-market)"></i>Market <b>${fmtProb(f.market_prob)}</b></span></div>
         <div class="row-meta">${esc(f.market_source)}${f.status === 'resolved' ? ` · Brier me ${fmtNum(f.brier_me, 3)} · Claude ${fmtNum(f.brier_claude, 3)} · market ${fmtNum(f.brier_market, 3)}` : ''}${f.result ? ` · ${esc(f.result)}` : ''}</div>
@@ -426,7 +442,7 @@
         .ptrack .dot { position: absolute; top: -3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; border: 2px solid var(--surface); }
         .dot.me { background: var(--series-me); z-index: 3; } .dot.claude { background: var(--series-claude); z-index: 2; } .dot.market { background: var(--series-market); }
         .probs { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.86rem; color: var(--fg-2); } .probs i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; } .probs b { color: var(--fg); }
-        .fcard { display: grid; gap: 4px; }
+        .fcard { display: grid; gap: 4px; border-left: 5px solid var(--c-forecasts); }
       </style>
       <section class="section">
         <div class="stats">
@@ -459,8 +475,8 @@
     const tr = await load('trials');
     setHead('Trials', `${tr.summary.n} trials · ${tr.summary.pass} pass · ${tr.summary.fail} fail · trials.csv updated ${fmtDate(tr.updated)}`);
     const rows = tr.items.map((t) => `
-      <details class="card">
-        <summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="mono">${esc(t.trial_id)}</span>${pill(t.status, t.status)}<span class="row-title" style="flex:1 1 200px;min-width:0">${esc(t.name)}</span><span class="muted small">${fmtDate(t.date_tested)}</span></summary>
+      <details class="card" style="border-left:5px solid ${t.status === 'pass' ? 'var(--good)' : t.status === 'fail' ? 'var(--bad)' : 'var(--warn-fill)'}">
+        <summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="mono" style="color:var(--c-trials);font-weight:700">${esc(t.trial_id)}</span>${badge(t.status)}<span class="row-title" style="flex:1 1 200px;min-width:0">${esc(t.name)}</span><span class="muted small">${fmtDate(t.date_tested)}</span></summary>
         <dl class="kv" style="margin-top:10px">
           <dt>Hypothesis</dt><dd>${esc(t.hypothesis)}</dd>
           <dt>Result</dt><dd>${esc(t.result)}</dd>
@@ -477,9 +493,9 @@
     view.innerHTML = `
       <section class="section">
         <div class="stats">
-          <div class="stat"><span class="k">Pass</span><span class="v good">${tr.summary.pass}</span><span class="s">kept or frozen</span></div>
-          <div class="stat"><span class="k">Fail</span><span class="v bad">${tr.summary.fail}</span><span class="s">rejected, null or not adopted</span></div>
-          <div class="stat"><span class="k">Pending</span><span class="v">${tr.summary.pending}</span><span class="s">not yet run</span></div>
+          <div class="stat"><span class="k">Passed</span><span class="v good">${tr.summary.pass}</span><span class="s">kept or frozen</span></div>
+          <div class="stat"><span class="k">Failed</span><span class="v bad">${tr.summary.fail}</span><span class="s">rejected, null or not adopted</span></div>
+          <div class="stat"><span class="k">Under test</span><span class="v warn">${tr.summary.pending}</span><span class="s">not yet run</span></div>
           <div class="stat"><span class="k">Counted (N = 7)</span><span class="v">${tr.summary.counted_n7}</span><span class="s">in the spec's multiple-testing count</span></div>
         </div>
       </section>
@@ -513,12 +529,12 @@
       </section>
       ${older.length ? `<section class="section"><h2>Earlier signal series</h2><div class="table-wrap"><table><thead><tr><th>Country</th><th>Election</th><th>Signal</th><th class="num">Last value</th><th>Last date</th><th class="num">Obs.</th></tr></thead><tbody>${older.map((s) => `<tr><td>${esc(s.country)}</td><td>${fmtDate(s.election_date)}</td><td class="wrap">${esc(s.label)}</td><td class="num">${fmtNum(s.last_value, 1)}</td><td>${fmtDate(s.last)}</td><td class="num">${s.n}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
     document.getElementById('f-ecountry').onchange = (e) => { f.country = e.target.value; pageElections(); };
-    active.forEach((s, i) => sparkChart(`c-sig-${i}`, s.series, cssVar(s.kind === 'odds' ? '--series-market' : '--series-me')));
+    active.forEach((s, i) => sparkChart(`c-sig-${i}`, s.series, cssVar(s.kind === 'odds' ? '--series-claude' : '--series-me')));
   }
 
   function reportRow(r) {
-    return `<a class="row-link" href="#/reports/${esc(r.id)}"><div class="row-top"><span class="row-title">${esc(r.title)}</span><span class="muted small">${fmtDate(r.date)}</span></div>
-      <div class="row-meta">${pill(r.type, 'accent')} <b>${esc(r.country)}</b> · ${r.format.toUpperCase()}${r.words ? ` · ${r.words.toLocaleString('en-GB')} words` : ''}</div></a>`;
+    return `<a class="row-link c-reports" href="#/reports/${esc(r.id)}"><div class="row-top"><span class="row-title">${esc(r.title)}</span><span class="muted small">${fmtDate(r.date)}</span></div>
+      <div class="row-meta">${pill(r.type, 'c-reports')} <b>${esc(r.country)}</b> · ${r.format.toUpperCase()}${r.words ? ` · ${r.words.toLocaleString('en-GB')} words` : ''}</div></a>`;
   }
 
   async function pageReports(id) {
@@ -541,7 +557,7 @@
     const r = rp.items.find((x) => x.id === id);
     if (!r) { setHead('Report', ''); view.innerHTML = `<p class="empty">No report with id ${esc(id)}.</p><a class="back" href="#/reports">← Reports</a>`; return; }
     setHead(r.title, `${r.type} · ${r.country} · ${fmtDate(r.date)}`);
-    const head = `<a class="back" href="#/reports">← Reports</a><div class="row-meta">${pill(r.type, 'accent')} <b>${esc(r.country)}</b> · ${fmtDate(r.date)} · <a href="${esc(r.source_url)}" target="_blank" rel="noopener">source file</a>${r.issue_url ? ` · <a href="${esc(r.issue_url)}" target="_blank" rel="noopener">issue</a>` : ''}</div>`;
+    const head = `<a class="back" href="#/reports">← Reports</a><div class="row-meta">${pill(r.type, 'c-reports')} <b>${esc(r.country)}</b> · ${fmtDate(r.date)} · <a href="${esc(r.source_url)}" target="_blank" rel="noopener">source file</a>${r.issue_url ? ` · <a href="${esc(r.issue_url)}" target="_blank" rel="noopener">issue</a>` : ''}</div>`;
     if (r.format === 'pdf') {
       view.innerHTML = `${head}<iframe class="pdf-frame" src="${esc(r.file)}" title="${esc(r.title)}"></iframe><div class="btn-row"><a class="btn" href="${esc(r.file)}" target="_blank" rel="noopener">Open the PDF</a></div>`;
       return;
@@ -565,19 +581,20 @@
     view.innerHTML = `
       <section class="section">
         <div class="menu">
-          <a href="#/trials"><span><span class="t">Trials</span><br><span class="d">The trial ledger with pass/fail</span></span><span class="chev">›</span></a>
-          <a href="#/elections"><span><span class="t">Elections</span><br><span class="d">Calendar and live signals</span></span><span class="chev">›</span></a>
-          <a href="#/reports"><span><span class="t">Reports</span><br><span class="d">Archive by date, type and country</span></span><span class="chev">›</span></a>
+          <a href="#/evidence" style="--item:var(--c-evidence)"><span><span class="t">Evidence</span><br><span class="d">Status of every idea the programme has tested</span></span><span class="chev">›</span></a>
+          <a href="#/trials" style="--item:var(--c-trials)"><span><span class="t">Trials</span><br><span class="d">The trial ledger with pass/fail</span></span><span class="chev">›</span></a>
+          <a href="#/elections" style="--item:var(--c-elections)"><span><span class="t">Elections</span><br><span class="d">Calendar and live signals</span></span><span class="chev">›</span></a>
+          <a href="#/reports" style="--item:var(--c-reports)"><span><span class="t">Reports</span><br><span class="d">Archive by date, type and country</span></span><span class="chev">›</span></a>
         </div>
       </section>
       <section class="section">
         <h2>Log an entry</h2>
         <p class="small muted">Each button opens a GitHub issue form; the GitHub app on your phone handles it. A workflow checks the entry, writes it to the ledger files and closes the issue with its new id, or comments with what to fix.</p>
         <div class="menu">
-          <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener"><span><span class="t">Decision record</span><br><span class="d">Trade or no-trade, with size, probability, stop and thesis</span></span><span class="chev">↗</span></a>
-          <a href="${esc(m.issue_forms.forecast)}" target="_blank" rel="noopener"><span><span class="t">Forecast</span><br><span class="d">A question with my, the market's and Claude's probability</span></span><span class="chev">↗</span></a>
-          <a href="${esc(m.issue_forms.resolve)}" target="_blank" rel="noopener"><span><span class="t">Resolve</span><br><span class="d">Close a decision or forecast with its outcome</span></span><span class="chev">↗</span></a>
-          <a href="${esc(m.issue_forms.report)}" target="_blank" rel="noopener"><span><span class="t">Report</span><br><span class="d">Briefing, review, notebook or research, as text or a file</span></span><span class="chev">↗</span></a>
+          <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener" style="--item:var(--c-decisions)"><span><span class="t">Decision record</span><br><span class="d">Trade or no-trade, with size, probability, stop and thesis</span></span><span class="chev">↗</span></a>
+          <a href="${esc(m.issue_forms.forecast)}" target="_blank" rel="noopener" style="--item:var(--c-forecasts)"><span><span class="t">Forecast</span><br><span class="d">A question with my, the market's and Claude's probability</span></span><span class="chev">↗</span></a>
+          <a href="${esc(m.issue_forms.resolve)}" target="_blank" rel="noopener" style="--item:var(--c-algorithm)"><span><span class="t">Resolve</span><br><span class="d">Close a decision or forecast with its outcome</span></span><span class="chev">↗</span></a>
+          <a href="${esc(m.issue_forms.report)}" target="_blank" rel="noopener" style="--item:var(--c-reports)"><span><span class="t">Report</span><br><span class="d">Briefing, review, notebook or research, as text or a file</span></span><span class="chev">↗</span></a>
         </div>
       </section>
       <section class="section">
@@ -604,12 +621,48 @@
     };
   }
 
+  async function pageEvidence() {
+    const ev = await load('evidence');
+    setHead('Evidence', `Every idea the programme has tested · as of ${fmtDate(ev.as_of)}`);
+    const G_COLOR = { live: 'var(--c-algorithm)', prospective: 'var(--warn)', passed: 'var(--good)', failed: 'var(--bad)' };
+    const progress = (pct, left, right) => `<div class="progress"><div class="bar ${pct >= 100 ? 'good' : 'warn'}"><i style="width:${Math.max(0, Math.min(100, pct || 0)).toFixed(1)}%"></i></div><div class="lbl"><span>${esc(left)}</span><span>${esc(right)}</span></div></div>`;
+    const item = (g, it) => {
+      if (g === 'live') return `
+        <div class="card ev-item"><div class="row-top"><span class="row-title"><a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge('live')}</div>
+        <div class="stats">
+          <div class="stat"><span class="k">Live months</span><span class="v">${it.live_months}</span><span class="s">since ${fmtDate(it.live_since)}</span></div>
+          <div class="stat"><span class="k">Live Sharpe</span><span class="v">${fmtNum(it.live_sharpe, 2)}</span><span class="s">backtest ${fmtNum(it.backtest_sharpe, 2)}</span></div>
+          <div class="stat"><span class="k">Live drawdown</span><span class="v ${signClass(it.live_max_drawdown_pct)}">${fmtPct(it.live_max_drawdown_pct, 1)}</span><span class="s">backtest ${fmtPct(it.backtest_max_drawdown_pct, 1)}</span></div>
+          <div class="stat"><span class="k">Live return</span><span class="v ${signClass(it.live_return_pct)}">${fmtPct(it.live_return_pct, 1, true)}</span><span class="s">net of costs, to ${fmtMonth(it.last_month)}</span></div>
+        </div>
+        ${progress(it.progress_pct, `Track record: ${it.live_months} of ${it.months_needed} months`, `${fmtNum(it.progress_pct, 0)}% of ${ev.min_track_record.years} years (${ev.min_track_record.confidence} confidence)`)}
+        <div class="reason">${esc(it.reason)}</div></div>`;
+      if (g === 'prospective') return `
+        <div class="card ev-item"><div class="row-top"><span class="row-title"><a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge('under test')}</div>
+        ${isNum(it.threshold) ? progress(it.progress_pct, `${it.scored} of ${it.threshold} elections scored`, `${fmtNum(it.progress_pct, 0)}%`) : ''}
+        <div class="reason">${esc(it.reason)}</div><div class="row-meta">source ${esc(it.source)}</div></div>`;
+      return `
+        <div class="card ev-item"><div class="row-top"><span class="row-title"><span class="mono" style="color:var(--g)">${esc(it.id)}</span> <a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge(it.status)}</div>
+        <div class="reason">${esc(it.reason)}</div><div class="row-meta">${it.date ? `tested ${fmtDate(it.date)}` : ''}${it.group ? ` · ${esc(it.group)}` : ''}</div></div>`;
+    };
+    const EMPTY = { live: 'Nothing live.', prospective: 'Nothing under prospective test.', passed: 'None yet: no discretionary idea has passed a pre-registered test.', failed: 'None.' };
+    view.innerHTML = `
+      <section class="section">
+        <div class="card ev-status"><span class="k">Overall status</span><span class="v">${esc(ev.overall)}</span><span class="s">Computed on every build from ${esc(ev.sources.join(', '))}. Minimum track record for ${ev.min_track_record.confidence} confidence in v1.0's Sharpe: about ${ev.min_track_record.years} years (${ev.min_track_record.months} months).</span></div>
+      </section>
+      ${ev.groups.map((g) => `
+      <section class="section ev-group" style="--g:${G_COLOR[g.key]}">
+        <div class="section-head"><h2>${esc(g.title)}</h2><span class="muted small">${g.items.length}</span></div>
+        <div class="list">${g.items.length ? g.items.map((it) => item(g.key, it)).join('') : `<p class="empty">${EMPTY[g.key]}</p>`}</div>
+      </section>`).join('')}`;
+  }
+
   // ------------------------------------------------------------------ router
   const routes = {
     home: pageHome, decisions: pageDecisions, algorithm: pageAlgorithm, forecasts: pageForecasts,
-    trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
+    trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore, evidence: pageEvidence,
   };
-  const TAB_OF = { trials: 'more', elections: 'more', reports: 'more' };
+  const TAB_OF = { trials: 'more', elections: 'more', reports: 'more', evidence: 'more' };
 
   async function render() {
     const hash = location.hash.replace(/^#\/?/, '');
@@ -617,6 +670,7 @@
     const fn = routes[page] || routes.home;
     const key = routes[page] ? page : 'home';
     setTab(TAB_OF[key] || key);
+    document.body.dataset.page = key;
     destroyCharts();
     window.scrollTo(0, 0);
     try {
@@ -634,14 +688,14 @@
     document.documentElement.setAttribute('data-theme', t);
     try { localStorage.setItem('ledger.theme', t); } catch (e) { /* ignore */ }
     const mc = document.querySelector('meta[name="theme-color"]');
-    if (mc) mc.setAttribute('content', t === 'light' ? '#f5f2ea' : '#0f151c');
+    if (mc) mc.setAttribute('content', t === 'dark' ? '#121633' : '#ffffff');
   }
   document.getElementById('theme-toggle').onclick = () => {
-    const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
     applyTheme(cur === 'dark' ? 'light' : 'dark');
     render();
   };
-  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
 
   // ------------------------------------------------------------------ service worker
   if ('serviceWorker' in navigator) {

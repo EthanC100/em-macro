@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,9 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ledger">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f151c">
-<meta name="color-scheme" content="dark light">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.ico" sizes="32x32">
 <link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96.png">
@@ -21,7 +21,7 @@
 <link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
 <link rel="stylesheet" href="app.css">
 <script>
-  // apply the saved theme before first paint (dark is the default)
+  // apply the saved theme before first paint (light is the default)
   try { var t = localStorage.getItem('ledger.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
 </script>
 </head>

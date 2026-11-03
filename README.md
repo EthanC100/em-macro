@@ -1046,7 +1046,7 @@ earlier Horizons app. It displays and archives only: no chat, no AI features.
 - **Build:** `python -m ledger.build` writes JSON and the static site to `app/` (gitignored; the
   `ledger-pages` workflow builds and deploys it). `python -m pytest -q tests/test_ledger.py` tests the build and
   the intake. Nothing in `ledger/` touches the v1.0 code or its result files.
-- **Pages** (bottom tabs Home, Decisions, Algorithm, Forecasts, More; Trials, Elections and Reports sit under More):
+- **Pages** (bottom tabs Home, Decisions, Algorithm, Forecasts, More; Evidence, Trials, Elections and Reports sit under More):
   - *Home:* paper account value (indexed to 100 at the Sep 2026 freeze) and equity curve, open positions,
     catalysts in the next 30 days, latest report, latest rebalance date.
   - *Decisions:* list with country, status and outcome filters; the full record, its event-bet sizing
@@ -1057,15 +1057,34 @@ earlier Horizons app. It displays and archives only: no chat, no AI features.
     cumulative Brier scores for all three on the same resolved questions.
   - *Trials:* `trials.csv` with pass/fail. *Elections:* calendar and live signals. *Reports:* archive by date,
     type and country; Markdown renders in the app, PDFs open in place.
+  - *Evidence* (under More): the status of every idea the programme has tested, generated on every build from
+    `trials.csv`, the v1.0 live record and `data/elections/signals.csv`, never edited by hand. Groups: *Live and
+    under test* (v1.0, with live months, live Sharpe, drawdown and progress towards the minimum track record of
+    about 4.6 years, 55 months, for 90% confidence); *Under prospective test* (the EM election continuation rule,
+    with scored elections towards its 15-election threshold, plus any pending trial); *Passed trials*; *Failed or
+    rejected ideas*, each with a one-line reason from its `decision` and `result`. A one-sentence overall status
+    sits at the top (for example "No validated discretionary edge yet; v1.0 live for 0 months (55 needed for a
+    90%-confidence track record); 1 idea under prospective test; 11 rejected.") and repeats on Home.
+  - `data/elections/signals.csv` (optional, one row per election) feeds the election-rule count: a row is scored
+    when its `scored`, `outcome`, `result`, `rule_return`, `rule_pnl` or `pnl` column has a value; if the file has
+    none of those columns, rows whose `vote_date`/`election_date`/`date` is in the past count. Until the file
+    exists the count is 0 of 15 and the page says so.
 - "Last updated" (the build time) is in the top bar of every page; the More page lists each source's date.
+- **Colour:** light mode by default (the moon/sun button switches; the choice is remembered on the phone), with
+  a vivid palette built on blue, purple, red and yellow. Each tab and entry type has its own colour: Home purple-
+  blue, Decisions blue, Algorithm yellow, Forecasts purple, Trials red, Elections magenta, Reports orange,
+  Evidence teal. Status badges: open (blue), won / passed (green), lost / failed (red), under test (yellow),
+  yes / no (purple), scratched / void (grey). Charts use the same series colours (me blue, Claude purple, market
+  red; backtest blue, live yellow; up months green, down months red). Every text colour was checked against its
+  background in both modes at 4.5:1 or better.
 
 ### Install on an iPhone
 
 1. Open https://ethanc100.github.io/em-macro/ in **Safari** (not Chrome; only Safari can install).
 2. Tap the **Share** button (the square with an arrow, at the bottom of the screen).
 3. Scroll the sheet and tap **Add to Home Screen**, then **Add**.
-4. Open **Ledger** from the home screen. It runs full screen with its own icon, in dark mode by default
-   (the sun/moon button switches to light), and keeps working offline from the last build it loaded.
+4. Open **Ledger** from the home screen. It runs full screen with its own icon, in light mode by default
+   (the moon/sun button switches to dark), and keeps working offline from the last build it loaded.
    When a new build is published a "Reload" prompt appears; "Check for a new build" is on the More page.
 
 ### Log an entry from the GitHub app
