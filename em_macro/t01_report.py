@@ -21,7 +21,7 @@ def _md(df: pd.DataFrame, digits: int = 2) -> str:
             return f"{v:.{digits}f}"
         if isinstance(v, bool):
             return "PASS" if v else "FAIL"
-        return str(v)
+        return str(v).replace("|", "\\|")
     head = "| " + " | ".join(map(str, df.columns)) + " |\n|" + "---|" * len(df.columns) + "\n"
     return head + "\n".join("| " + " | ".join(f(v) for v in row) + " |" for row in df.itertuples(index=False))
 
@@ -161,7 +161,24 @@ def write():
     L.append("\nIn-sample context, 2005-2019:\n")
     L.append(_perf(perf, "all", ISP, ["v1.0", "core sleeve alone (diagnostic)", "T01"], costs=("1x",)))
 
-    L.append("\n## 7. Files\n")
+    L.append("\n## 7. Notes\n")
+    L.append("- **Ledger id.** The trial is called T01 in the pre-registration, branch and this report. Its "
+             "`trials.csv` id is T12, because T01 is v1.0's ledger id.")
+    L.append("- **EWMA volatility.** As pre-registered (§2.3), σ is an EWMA on each instrument's monthly "
+             "excess-return series, with the 60-trading-day centre of mass converted to 60/21 months. Daily prices "
+             "exist for only 14 of the 23 instruments, and v1.0's bond returns come from monthly-average yields.")
+    L.append("- **Runs.** The first invocation of the run crashed in the criteria step: pandas 3 propagated a "
+             "DataFrame held in `attrs`. All strategy runs had finished by then, and three tables had been written "
+             "(`performance.csv`, `monthly_net.csv`, `annual_2020_2026.csv`). Those files were deleted without "
+             "being opened. No result was printed or read. The fix (`62524ff`) strips `attrs` from the "
+             "net-return series and changes no calculation. The same code then ran once, end to end, and its "
+             "output is reported here.")
+    L.append("- **v1.0 inputs.** Cached raw downloads (FRED, Yahoo, BIS and others) were re-downloaded in this "
+             "session. The frozen v1.0 still reproduces both of its committed result tables exactly (see the "
+             "header).")
+    L.append("- **Moments and DSR.** Skewness is the pandas bias-corrected skewness; kurtosis is raw (normal = 3).")
+
+    L.append("\n## 8. Files\n")
     L.append("- `results/T01/performance.csv`: every strategy × universe (all, half A, half B) × costs × period.")
     L.append("- `results/T01/monthly_net.csv`: monthly net returns of every run.")
     L.append("- `results/T01/annual_2020_2026.csv`, `results/T01/pass_fail_1x.csv`, `results/T01/pass_fail_2x.csv`, "
