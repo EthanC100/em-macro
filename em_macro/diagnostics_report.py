@@ -143,10 +143,13 @@ def section_stats() -> list[str]:
     mo = _read("stats_moments")
     L = ["## Step 3 — Trial ledger and multiple-testing statistics (spec Build 3)", "",
          f"`trials.csv` has {len(tr)} rows in {tr['trial_group'].nunique()} distinct trial groups. "
-         f"{int(tr['counted_in_spec_N7'].sum())} rows belong to the spec's N = 7 count.", "",
-         _md(tr[["trial_id", "date_tested", "name", "decision", "counted_in_spec_N7"]]), "",
+         f"{int(tr['counted_in_spec_N7'].sum())} rows in {tr.loc[tr['counted_in_spec_N7'], 'trial_group'].nunique()} "
+         "groups are the spec's N = 7. The sovereign fair-value v1 and its post-hoc v2 share one group, as in the spec. "
+         "The rest come from this repository's history and are reported as a second N (\"ledger N\").",
+         "Full hypotheses, samples, results and sources are in `trials.csv`.", "",
+         _md(tr[["trial_id", "trial_group", "date_tested", "name", "result", "decision", "counted_in_spec_N7"]]), "",
          "Functions: `em_macro/mtstats.py`; tests: `tests/test_mtstats.py`, which reproduce every §0.2 number.",
-         "- Inputs, as in the spec: SR 0.65, T = 81 months, monthly SR = 0.65/√12 = 0.1876.",
+         "- Inputs, as in the spec: SR 0.65, T = 81 months, monthly SR = 0.65/√12 = 0.1876. The actual test Sharpe is 0.654.",
          "- **Noise-only null:** trial-Sharpe SD = 1/√(T−1) per month.",
          "- **Dispersed trials:** SD 0.20 annualised.",
          "- **Moments:** kurtosis is raw (normal = 3).", "",

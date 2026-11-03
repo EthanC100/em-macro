@@ -264,3 +264,103 @@ Two versions are reported:
 | B (monthly, full book) | ID10Y | 3.5% | 15.5% | 108 |
 | B (monthly, full book) | TR10Y | 1.5% | 10.4% | 70 |
 
+## Step 3 — Trial ledger and multiple-testing statistics (spec Build 3)
+
+`trials.csv` has 11 rows in 10 distinct trial groups. 8 rows in 7 groups are the spec's N = 7. The sovereign fair-value v1 and its post-hoc v2 share one group, as in the spec. The rest come from this repository's history and are reported as a second N ("ledger N").
+Full hypotheses, samples, results and sources are in `trials.csv`.
+
+| trial_id | trial_group | date_tested | name | result | decision | counted_in_spec_N7 |
+|---|---|---|---|---|---|---|
+| T01 | G01_v1_systematic | 2026-10-29 | v1.0 systematic macro strategy (carry/trend/value; FX and bonds; 10% vol target) | 2020-01..2026-09: +6.0%/yr compounded, Sharpe 0.65, max drawdown -18.5%, S&P 500 correlation -0.17 (design sample Sharpe 0.40) | kept; frozen as v1.0 | True |
+| T02 | G02_gold_event_trades | 2026-10-28 | Gold event trades (geopolitical/macro events; rules a-c) | In-sample Sharpe: a (buy if net 5d > +1%) 0.05 hand / -0.06 mechanical; b (sell if < -1%) -0.06 / -0.25; c (buy after any event) -0.09 / 0.25 vs buy-and-hold gold 0.51. No rule beats gold's own drift after costs; with the 5 best trades removed all rules are negative | rejected as a trading rule; frozen v1 kept as an explanatory model only | True |
+| T03 | G03_fed_decision_model | 2026-10-29 | Fed decision model (v1; v1.1 political-pressure features; v1.2 SEP path and speech tone) | 5-class Brier, 1 day: v1 0.452 / v1.1 0.512 / v1.2 0.466 vs futures 0.162 (n 125); 2 weeks: v1 0.384 / v1.1 0.437 / v1.2 0.391 vs futures 0.181 (n 67). Every version is worse than futures at every horizon with a futures benchmark | rejected (futures dominate) | True |
+| T04 | G04_tension_index | 2026-10-29 | Tension index / geopolitical-risk gold rule (rule d) | Index correlation with daily GPR 0.77. Rule d (buy gold if weekly GPR change > 1 SD): 59 trades, hit rate 56%, +0.16% per trade after cost (t 0.3), Sharpe 0.06 vs buy-and-hold 0.51 | rejected as a trading rule; index kept as a data series | True |
+| T05 | G05_sovereign_fair_value | 2026-10-29 | Sovereign risk / spread fair-value model v1 (ridge + Driscoll-Kraay; spread forecast = -kappa x gap) | Pooled RMSE ratio 1.00 (3m) / 0.98 (6m); 0.98 edge disappears without the 5 largest moves; France 1.59 / 2.34 (much worse) | rejected (does not beat no change) | True |
+| T06 | G05_sovereign_fair_value | 2026-10-29 | Sovereign fair-value model v2 (post-hoc; separate spread equations over Bunds / USTs) | Pooled RMSE ratio 1.00 (3m) / 0.98 (6m); France 1.08 / 1.18. Not an independent test | not adopted as a forecast; shown on the dashboard labelled post-hoc | True |
+| T07 | G06_preelection_repricing | 2026-10-29 | Pre-election daily repricing (polls and Polymarket odds vs FX and 10y yields) | Same-day FX response significant in 0 of 21 elections (polls) and 0 of 6 (odds); pooled polls +0.017% per pp (t 0.9). Only significant same-day coefficient: South Africa 2024 10y (thin market) | null; not traded | True |
+| T08 | G07_euro_spread_elections | 2026-11-02 | Euro-area election spread study (populist-vote surprise vs 10y spread over Bunds) | Primary FAIL: Pearson r = 0.060 (n 40) vs > 0.5 required; right sign 64.7% vs 70% required; ex-Greece r = 0.111 (n 34). Hand-coded robustness r = 0.031 | rejected (failed pre-registered criteria); Spain 2026 forecast only | True |
+| T09 | G08_election_drift_rule | 2026-10-29 | Event-study election drift rule (fade the day-1 FX move; hold to day 5 or day 20) | Hold-out: day-5 hold -3.3%/yr, Sharpe -1.00 (14 trades, hit rate 29%); day-20 hold -4.8%/yr, Sharpe -0.53; carry basket +2.6%/yr, Sharpe 0.46 | rejected | False |
+| T10 | G09_v1_no_trade_band_alternative | 2026-10-29 | v1 design alternative: no no-trade band (vs 25% band) | 2005-2019 combined Sharpe 0.37 without band vs 0.40 with band; costs 5.9% vs 5.3%/yr; band kept | band kept in v1.0; no-band config not adopted | False |
+| T11 | G10_political_risk_overlay | 2026-10-30 | Political-risk overlay rules (a) cut to zero and (b) halve positions from 5 days before to 1 day after scheduled political events | 2005-2019: (a) Sharpe 0.25, (b) 0.33, (c) no change 0.40, so (c) frozen. 2020-26: cut 0.53, halve 0.60, no change 0.65 | rejected (frozen rule is no change) | False |
+
+Functions: `em_macro/mtstats.py`; tests: `tests/test_mtstats.py`, which reproduce every §0.2 number.
+- Inputs, as in the spec: SR 0.65, T = 81 months, monthly SR = 0.65/√12 = 0.1876. The actual test Sharpe is 0.654.
+- **Noise-only null:** trial-Sharpe SD = 1/√(T−1) per month.
+- **Dispersed trials:** SD 0.20 annualised.
+- **Moments:** kurtosis is raw (normal = 3).
+
+Moments of the actual v1.0 monthly net returns:
+
+| sample | months | SR_ann_actual | skew | kurtosis_raw |
+|---|---|---|---|---|
+| 2020-01..2026-09 (test) | 81 | 0.65 | 0.19 | 2.90 |
+| 2006-02..2019-12 (design) | 167 | 0.40 | 0.34 | 3.73 |
+
+### Statistics table
+
+| scenario | trials | skew | kurtosis | t | p_two_sided | PSR(SR*=0) | SR0_noise_ann | DSR_noise | SR0_dispersed_ann | DSR_dispersed | MinTRL_90%_years | MinTRL_95%_years | MinTRL_90%_vs_SR0_years | HL_Bonferroni_SR | HL_Sidak_SR | HL_BHY_SR |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S1 normal (spec) | spec N=7 | 0.00 | 3.00 | 1.689 | 0.091 | 0.952 | 0.54 | 0.614 | 0.28 | 0.830 | 4.04 | 6.60 | 131.19 | 0.18 | 0.27 | 0.00 |
+| S1 normal (spec) | ledger N=10 | 0.00 | 3.00 | 1.689 | 0.091 | 0.952 | 0.61 | 0.541 | 0.31 | 0.804 | 4.04 | 6.60 | 1036.30 | 0.04 | 0.19 | 0.00 |
+| S2 carry-like (spec) | spec N=7 | -0.70 | 5.00 | 1.689 | 0.091 | 0.940 | 0.54 | 0.606 | 0.28 | 0.813 | 4.62 | 7.55 | 150.38 | 0.18 | 0.27 | 0.00 |
+| S2 carry-like (spec) | ledger N=10 | -0.70 | 5.00 | 1.689 | 0.091 | 0.940 | 0.61 | 0.538 | 0.31 | 0.788 | 4.62 | 7.55 | 1187.97 | 0.04 | 0.19 | 0.00 |
+| S3 severe (spec) | spec N=7 | -1.00 | 6.00 | 1.689 | 0.091 | 0.935 | 0.54 | 0.604 | 0.28 | 0.807 | 4.87 | 7.97 | 158.77 | 0.18 | 0.27 | 0.00 |
+| S3 severe (spec) | ledger N=10 | -1.00 | 6.00 | 1.689 | 0.091 | 0.935 | 0.61 | 0.537 | 0.31 | 0.782 | 4.87 | 7.97 | 1254.25 | 0.04 | 0.19 | 0.00 |
+| actual v1 2020-01..2026-09 (skew 0.19, kurt 2.90) | spec N=7 | 0.19 | 2.90 | 1.689 | 0.091 | 0.955 | 0.54 | 0.616 | 0.28 | 0.834 | 3.90 | 6.37 | 126.61 | 0.18 | 0.27 | 0.00 |
+| actual v1 2020-01..2026-09 (skew 0.19, kurt 2.90) | ledger N=10 | 0.19 | 2.90 | 1.689 | 0.091 | 0.955 | 0.61 | 0.542 | 0.31 | 0.809 | 3.90 | 6.37 | 1000.08 | 0.04 | 0.19 | 0.00 |
+
+Notes:
+- **What varies:** the naive t-statistic and the Harvey-Liu haircuts do not depend on skew and kurtosis; they change only with N.
+- **BHY = 0.00:** an adjusted p of at least 1 (a 100% haircut), with v1.0 treated as the top-ranked test.
+- **One spec claim does not reproduce.** §0.2 says MinTRL against SR* = 0.537 is "more than 200 years". The formula gives 131 years (S1, 90%) to 262 years (S3, 95%); 90% values are in the table. It exceeds 200 years only at 95% confidence.
+
+## Flags
+
+| check | threshold | result | flag |
+|---|---|---|---|
+| BRL + MXN share of total P&L, 2005–2019 | > 50% | 42.6% | no |
+| BRL + MXN share of total P&L, 2020-01 to 2026-09 | > 50% | 18.4% | no |
+| USD + EM factor share of portfolio risk, average 2005–2026, version A (3-day, spec) | > 60% | 28.8% | no |
+| USD + EM factor share of portfolio risk, average 2005–2026, version B (monthly, full book) | > 60% | 20.0% | no |
+
+## Summary (factual; no trading recommendations)
+
+- **Freeze.** The 2020-01 to 2026-09 result (+6.0% a year compounded, Sharpe 0.65, maximum drawdown −18.5%) is
+  reproduced exactly from commit 7886867. None of the strategy files changed after that commit
+  (`docs/v1.0_freeze.md`).
+- **Countries.**
+  - 2005–2019: the top three countries (Brazil, Italy, the United Kingdom) account for 144% of total net P&L.
+  - 2020-01 to 2026-09: the top three (Germany, Turkey, South Africa) account for 108%.
+  - BRL and MXN together are 43% and 18% of the total, below the 50% flag. Counting all Brazilian and Mexican
+    instruments (currency and bond), the shares are 67% and 15%.
+- **Asset class.** Bonds earn about two-thirds of net P&L in both periods: 65% in 2005–2019 and 72% in 2020–2026.
+- **Signals.**
+  - Both methods agree that carry is the largest positive contributor in 2020–2026 and value is negative.
+  - Proportional method, 2020–2026: carry +4.5% a year, trend +3.1%, value −1.4%.
+  - Shapley method, 2020–2026: carry +8.7%, trend −0.1%, value −2.4%. Carry alone earns 10.3% a year in the subset
+    runs, more than the full composite (6.25%).
+  - In 2005–2019 both methods give trend a large negative contribution (−7.4% proportional, −6.5% Shapley), and
+    value and carry positive contributions.
+- **Factors.**
+  - The seven factors explain 27% (2005–2019) and 31% (2020–2026) of the variance of monthly returns.
+  - The returns load positively and significantly on both the dollar index and the EM FX basket (t of 4–7), two
+    factors that are strongly negatively correlated with each other.
+  - The intercept is positive and significant in both periods (t 3.1 and 4.0).
+- **Risk.**
+  - The combined USD + EM factor share of ex-ante risk averages 28.8% (version A) and 20.0% (version B), with
+    maxima of 74.8% (December 2013) and 55.2% (May 2022). Current values: 33.7% and 6.8%.
+  - Version A covers on average 42% of the book's gross notional: the instruments with daily prices.
+  - The largest single position averages 25% of portfolio risk in version A.
+- **Multiple testing.**
+  - The ledger (`trials.csv`) has 11 rows in 10 trial groups. Seven groups are the spec's N = 7. Three more come
+    from this repository's history: the election drift rule, the no-trade-band alternative and the political-risk
+    overlay.
+  - Every §0.2 number reproduces, including the naive t, PSR, DSR, the Harvey-Liu haircuts and MinTRL. The one
+    exception is the spec's ">200 years" MinTRL against SR0, which holds only at 95% confidence.
+  - With the actual skew (0.185) and kurtosis (2.90) of v1.0's 2020–2026 monthly returns, which are close to normal:
+    - PSR is 0.955.
+    - DSR is 0.62 under the noise-only null and 0.83 with dispersed trials, at N = 7.
+    - At N = 10, DSR is 0.54 under the noise-only null and 0.81 with dispersed trials.
+    - MinTRL at 90% / 95% confidence against SR* = 0 is 3.9 / 6.4 years. The track record so far is 6.75 years.
+    - The Bonferroni-haircut Sharpe is 0.18 at N = 7 and 0.04 at N = 10.
+

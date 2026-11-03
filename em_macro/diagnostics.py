@@ -346,12 +346,12 @@ def stage_stats():
                 "HL_Sidak_SR": MT.haircut_sidak(sr_ann, T / 12, N),
                 "HL_BHY_SR": MT.haircut_bhy(sr_ann, T / 12, N)})
     tab = pd.DataFrame(rows)
-    tab.to_csv(OUT / "stats_v1.csv", index=False, float_format="%.4f")
+    tab.to_csv(OUT / "stats_v1.csv", index=False, float_format="%.6f")
     extra = pd.DataFrame([{"sample": "2020-01..2026-09 (test)", "months": len(oos), "SR_ann_actual": act_sr_m * np.sqrt(12),
                            "skew": g3, "kurtosis_raw": g4},
                           {"sample": "2006-02..2019-12 (design)", "months": len(fit),
                            "SR_ann_actual": float(fit.mean() / fit.std() * np.sqrt(12)), "skew": g3i, "kurtosis_raw": g4i}])
-    extra.to_csv(OUT / "stats_moments.csv", index=False, float_format="%.4f")
+    extra.to_csv(OUT / "stats_moments.csv", index=False, float_format="%.6f")
     print(tab.round(3).to_string())
     print(extra.round(3).to_string())
 
