@@ -1,0 +1,6 @@
+#,criterion,T01,v1.0,statistic,pass
+1,2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10,SR 0.801,SR 0.654,"dSR +0.148, p = 0.2632",False
+2,"holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse","SR 0.633, MaxDD -14.95%","SR 0.721, MaxDD -22.53%",dSR -0.088; |DD| ratio 0.664,False
+3,2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0,"MaxDD -14.00%, ES 5.40%","MaxDD -18.48%, ES 5.57%",DD ratio 0.758; ES ratio 0.970,True
+4,DSR (noise-only null) of T01 at N = 8 >= DSR of v1.0 at N = 7,DSR 0.731 (N 8),DSR 0.619 (N 7),difference +0.112,True
+5,"corr(trend sleeve, carry sleeve) < 0 in carry's worst 10% of months, 2020-01..2026-09",corr +0.542 (n 8),n/a,worst months: 2020-03 2020-07 2021-10 2022-03 2023-04 2023-11 2023-12 2024-08,False
