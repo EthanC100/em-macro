@@ -1032,6 +1032,84 @@ How overrides are checked and scored:
 - **One re-run.** The hold-out was evaluated a second time after a data-alignment bug fix, as disclosed in §4. Neither
   the frozen rule nor the conclusions changed.
 
+## 13. Ledger app
+
+**Ledger** is the single place to view and log everything in the Horizons paper-trading programme. It replaces the
+earlier Horizons app. It displays and archives only: no chat, no AI features.
+
+- **App:** https://ethanc100.github.io/em-macro/ (GitHub Pages, rebuilt on every push to `main` and daily at 06:41 UTC).
+- **Source of truth:** plain files in this repository. The app never writes anything; it is built from
+  `data/ledger/decisions.csv`, `data/ledger/forecasts.csv`, `data/ledger/reports/`, `trials.csv`, the v1.0 paper
+  P&L and positions (`results/systematic/`), the `results/*.md` write-ups, and the election calendar and signals
+  (`data/elections/calendar.csv` and `signals.csv` if present, otherwise `data/events/elections.csv`,
+  `data/events/upcoming_events.csv` and `results/repricing/signals_daily.csv`).
+- **Build:** `python -m ledger.build` writes JSON and the static site to `app/` (gitignored; the
+  `ledger-pages` workflow builds and deploys it). `python -m pytest -q tests/test_ledger.py` tests the build and
+  the intake. Nothing in `ledger/` touches the v1.0 code or its result files.
+- **Pages** (bottom tabs Home, Decisions, Algorithm, Forecasts, More; Trials, Elections and Reports sit under More):
+  - *Home:* paper account value (indexed to 100 at the Sep 2026 freeze) and equity curve, open positions,
+    catalysts in the next 30 days, latest report, latest rebalance date.
+  - *Decisions:* list with country, status and outcome filters; the full record, its event-bet sizing
+    (half of quarter-Kelly on the stated probability) and, once resolved, its Brier score and P&L.
+  - *Algorithm:* v1.0 live paper months since the 3 Nov 2026 rebalance against the frozen 2020-26 backtest and
+    the 2005-19 design sample; monthly P&L; drawdown; positions by country and sleeve; the `v1.0-frozen` release.
+  - *Forecasts:* every call with my, Claude's and the market's probabilities, a calibration chart and
+    cumulative Brier scores for all three on the same resolved questions.
+  - *Trials:* `trials.csv` with pass/fail. *Elections:* calendar and live signals. *Reports:* archive by date,
+    type and country; Markdown renders in the app, PDFs open in place.
+- "Last updated" (the build time) is in the top bar of every page; the More page lists each source's date.
+
+### Install on an iPhone
+
+1. Open https://ethanc100.github.io/em-macro/ in **Safari** (not Chrome; only Safari can install).
+2. Tap the **Share** button (the square with an arrow, at the bottom of the screen).
+3. Scroll the sheet and tap **Add to Home Screen**, then **Add**.
+4. Open **Ledger** from the home screen. It runs full screen with its own icon, in dark mode by default
+   (the sun/moon button switches to light), and keeps working offline from the last build it loaded.
+   When a new build is published a "Reload" prompt appears; "Check for a new build" is on the More page.
+
+### Log an entry from the GitHub app
+
+Logging goes through GitHub issue forms, which the GitHub mobile app renders as native forms. Open the
+**em-macro** repository in the GitHub app, tap **Issues**, then **+** (New issue), and choose a form. The
+*Log* buttons in the app's Decisions, Forecasts, Reports and More pages open the same forms.
+
+| Form | Fields | What happens |
+|---|---|---|
+| **Decision record** | Date; Country; Instrument; Action (Buy / Sell / No trade); Size (% of account at risk); Probability my view is right; Horizon (date); Entry trigger; Stop / exit if wrong; Thesis; Key factors; What would change my mind; How this differs from market consensus | Appended to `data/ledger/decisions.csv` as the next `Dnnn` |
+| **Forecast** | Question; My probability; Market probability; Market source; Claude probability (optional); Resolution date; Country (optional) | Appended to `data/ledger/forecasts.csv` as the next `Fnnn` |
+| **Resolve** | Decision or forecast id; Outcome (right / wrong / scratched for a decision, yes / no / void for a forecast); Exit price or result; P&L % of account (optional); Note (optional) | Marks the row resolved and scores it |
+| **Report** | Title; Type (daily briefing, weekly review, monthly notebook, research, other); Country; Date (optional); Content (pasted text, or a `.md`, `.txt` or `.pdf` attached in the content box) | Written to `data/ledger/reports/YYYY-MM-DD_slug.md` (or `.pdf` with a `.meta.yml` sidecar) with a front-matter header |
+
+Within a minute the `ledger-intake` workflow checks the issue. If it passes, the workflow commits the entry,
+comments with the new id, closes the issue and triggers a rebuild of the app. If not, it comments with what is
+wrong and leaves the issue open; edit the issue (the pencil on the issue body) and the check runs again.
+Only the repository owner and collaborators can log.
+
+**Validation rules.** The stop must contain a numeric price or yield level (`5.70`, `115bp`, `9.80`; tenors
+such as `10y` do not count). A Buy or Sell may risk at most 2% of the account; a No trade has size 0. The
+probability must be stated; the confirmation comment reports the event-bet size, half of quarter-Kelly on that
+probability at even odds (0.125 × (2p − 1)), and flags a size above it. Every date must parse (`YYYY-MM-DD`
+is safest; `18 April 2027` also works).
+
+**Scoring.** A resolved decision or forecast gets a Brier score, (probability − outcome)², where the outcome is 1
+if the view was right (or the question resolved yes) and 0 otherwise. The market and Claude are scored on the
+same resolved forecasts, so the cumulative scores are comparable; where Claude gave no number its column uses
+only the calls it priced. Decision P&L in % of account is size × (exit − entry) / |entry − stop|, signed by
+which side of the entry the stop sits, when the record has a numeric `entry_level` (add it to the CSV, or put
+the level in the entry trigger and copy it to `entry_level`); otherwise the P&L entered on the Resolve form is
+used, else none.
+
+### Repository settings (once)
+
+1. **Pages:** Settings → Pages → *Build and deployment* → Source: **GitHub Actions**.
+2. **Workflow permissions:** Settings → Actions → General → *Workflow permissions*: **Read and write
+   permissions** (the monthly v1.0 workflow needs this too).
+3. **Labels:** the intake workflow creates `ledger`, `ledger:decision`, `ledger:forecast`, `ledger:resolve` and
+   `ledger:report` on its first run; nothing to do by hand.
+4. Run the `ledger-pages` workflow once (Actions → ledger-pages → Run workflow) or push to `main` to publish
+   the first build.
+
 ## Repository layout
 
 ```
@@ -1059,5 +1137,10 @@ data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V
                    inflation targets, IMF programmes), each with NOTES/SOURCE files
 data/processed/    daily_panel.csv, carry_monthly_returns.csv, event_table.csv, coverage.csv
 results/           coverage_report.md, carry_benchmark.csv, fit/, test/, test_run1_superseded/, figures
-tests/             unit tests (bond maths, windows, carry formula, spike filter)
+tests/             unit tests (bond maths, windows, carry formula, spike filter); test_ledger.py (Ledger build + intake)
+ledger/            Ledger app: build.py (files -> JSON + static site in app/), intake.py (issue forms -> ledger files),
+                   schema.py (validation), scoring.py (Brier, P&L), site/ (HTML, CSS, JS, icons, vendored Chart.js and marked)
+data/ledger/       decisions.csv, forecasts.csv, reports/ (the ledger's source of truth)
+.github/           ISSUE_TEMPLATE/ (Decision record, Forecast, Resolve, Report forms);
+                   workflows/ledger-intake.yml, ledger-pages.yml, systematic.yml
 ```
