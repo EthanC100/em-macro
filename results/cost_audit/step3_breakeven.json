@@ -1,0 +1,34 @@
+{
+ "breakeven": {
+  "2020-01..2026-09": {
+   "sharpe_at_0x": 1.0379703361053834,
+   "sharpe_at_1x": 0.6535875796544269,
+   "multiple_sharpe_0": 2.6738201216969375,
+   "multiple_sharpe_0.3": 1.90386764127156,
+   "central_multiple_sharpe_0": 9.139718039827782,
+   "central_multiple_sharpe_0.3": 6.474554679605189,
+   "central_plus_roll_multiple_sharpe_0": 4.666576503077124,
+   "central_plus_roll_multiple_sharpe_0.3": 3.31850629965999,
+   "breakeven_avg_cost_bp_sharpe_0": 52.315832747976884,
+   "breakeven_avg_cost_bp_sharpe_0.3": 37.25098045557216
+  },
+  "2005-2019 (design, context)": {
+   "sharpe_at_0x": 0.9327428376529235,
+   "sharpe_at_1x": 0.39655863114166334,
+   "multiple_sharpe_0": 1.749149487155282,
+   "multiple_sharpe_0.3": 1.180828164131134,
+   "central_multiple_sharpe_0": 5.858313314944379,
+   "central_multiple_sharpe_0.3": 3.952422002554603,
+   "central_plus_roll_multiple_sharpe_0": 3.5345756169669427,
+   "central_plus_roll_multiple_sharpe_0.3": 2.391555011247339,
+   "breakeven_avg_cost_bp_sharpe_0": 33.55161522766411,
+   "breakeven_avg_cost_bp_sharpe_0.3": 22.65026088613525
+  }
+ },
+ "max_abs_diff_run_vs_identity": 1.3877787807814457e-17,
+ "run_utc": "2026-11-03T12:16:32+00:00",
+ "git_head": "49af27a886c02f06f45b8536b86bf54571584c8a",
+ "systematic_py_sha256": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+ "pandas": "3.0.5",
+ "numpy": "2.5.3"
+}
