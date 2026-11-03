@@ -211,14 +211,14 @@ that dominate v1.0's turnover:
 - **Bund:** 10 against 0.8.
 - **EUR and GBP:** 10 against 1.0–1.5.
 
-**Weighted by turnover (2020-01..2026-09 positions).**
+**Weighted by turnover (2020-01..2026-09 positions; cost drag ÷ 19.09×/yr turnover).**
 
-| cost vector | average one-way cost per unit traded |
-|---|---|
-| v1.0 | 19.6bp |
-| literature low | see Step 3 |
-| literature central | see Step 3 |
-| literature high | see Step 3 |
+| cost vector | average one-way cost per unit traded | cost drag |
+|---|---|---|
+| v1.0 | 19.6bp | 3.73%/yr |
+| literature low | 2.9bp | 0.55%/yr |
+| literature central | 5.7bp | 1.09%/yr |
+| literature high | 12.4bp | 2.36%/yr |
 
 ### Costs v1.0 does not charge at all
 
@@ -290,3 +290,92 @@ were found.
 - **Exchange specifications:** Eurex FGBL / FOAT / FBTP / FBON, and ICE Long Gilt.
 
 Table: `results/cost_audit/cost_estimates.csv`.
+
+## Step 3 — v1.0's 2020-01..2026-09 performance under different costs
+
+**How the runs were done.**
+- **Frozen code, same positions.** Every row is the frozen `systematic.run()` on the same positions, with only the
+  per-instrument cost vector changed (asserted: the weights are identical in every run).
+- **Linear in costs.** Net = gross − m × cost. The rows match that identity to 1e-17. Break-even multiples are found
+  by root-finding on it.
+- **Statistic definitions** are those of `systematic.stats`: Sharpe = mean/SD × √12 of monthly net returns; return
+  compounded; max drawdown on the compounded monthly index.
+- **"+ roll costs"** adds, outside the frozen code, the spec §8 roll convention: 0.5 × the one-way cost on the whole
+  position, monthly for FX and quarterly for bonds. It is charged on v1.0's positions.
+
+### Cost sensitivity, 2020-01..2026-09 (81 months)
+
+| scenario | Sharpe | return %/yr | max drawdown % | vol %/yr | cost drag %/yr |
+|---|---|---|---|---|---|
+| 0× (gross) | 1.04 | 9.96 | -16.7 | 9.62 | 0.00 |
+| 0.5× v1.0 costs | 0.85 | 7.94 | -17.4 | 9.58 | 1.87 |
+| **1× v1.0 costs (reported)** | **0.65** | **5.96** | **-18.5** | 9.56 | 3.73 |
+| 1.5× v1.0 costs | 0.46 | 4.01 | -20.3 | 9.57 | 5.60 |
+| 2× v1.0 costs | 0.26 | 2.08 | -22.1 | 9.59 | 7.47 |
+| 2.5× v1.0 costs | 0.07 | 0.19 | -23.9 | 9.63 | 9.34 |
+| 3× v1.0 costs | -0.13 | -1.67 | -25.7 | 9.70 | 11.20 |
+| literature low (per instrument) | 0.98 | 9.36 | -17.0 | 9.62 | 0.55 |
+| literature central (per instrument) | 0.92 | 8.77 | -17.3 | 9.62 | 1.09 |
+| literature high (per instrument) | 0.79 | 7.41 | -18.0 | 9.62 | 2.36 |
+| literature low + roll costs | 0.93 | 8.79 | -17.2 | 9.61 | 1.08 |
+| literature central + roll costs | 0.82 | 7.65 | -17.7 | 9.61 | 2.14 |
+| literature high + roll costs | 0.56 | 5.04 | -20.4 | 9.60 | 4.60 |
+
+### Break-even cost multiples
+
+| period | Sharpe at 0× | Sharpe at 1× | multiple of v1.0 costs for Sharpe = 0 | for Sharpe = 0.3 | multiple of literature central for Sharpe = 0 | for Sharpe = 0.3 | multiple of central + rolls for Sharpe = 0 | for Sharpe = 0.3 |
+|---|---|---|---|---|---|---|---|---|
+| **2020-01..2026-09** | 1.04 | 0.65 | **2.67×** | **1.90×** | 9.1× | 6.5× | 4.7× | 3.3× |
+| 2005-2019 (design, context) | 0.93 | 0.40 | 1.75× | 1.18× | 5.9× | 4.0× | 3.5× | 2.4× |
+
+**The same break-evens as an average cost per unit traded (turnover-weighted).**
+
+| Sharpe target | average one-way cost, 2020-01..2026-09 | average one-way cost, 2005-2019 |
+|---|---|---|
+| 0 | 52bp | 34bp |
+| 0.3 | 37bp | 23bp |
+
+v1.0's own vector averages 19.6bp.
+
+### Finer grid, multiples of v1.0's costs, 2020-01..2026-09
+
+| multiple | Sharpe | return %/yr | max drawdown % |
+|---|---|---|---|
+| 0.00 | 1.038 | 9.96 | -16.7 |
+| 0.25 | 0.943 | 8.95 | -17.1 |
+| 0.50 | 0.847 | 7.94 | -17.4 |
+| 0.75 | 0.751 | 6.95 | -17.8 |
+| 1.00 | 0.654 | 5.96 | -18.5 |
+| 1.25 | 0.556 | 4.98 | -19.4 |
+| 1.50 | 0.458 | 4.01 | -20.3 |
+| 1.75 | 0.360 | 3.04 | -21.2 |
+| 2.00 | 0.262 | 2.08 | -22.1 |
+| 2.25 | 0.165 | 1.13 | -23.0 |
+| 2.50 | 0.067 | 0.19 | -23.9 |
+| 2.75 | -0.029 | -0.74 | -24.8 |
+| 3.00 | -0.126 | -1.67 | -25.7 |
+
+### Design sample, 2005-2019 (context only; v1.0 was designed on it)
+
+| scenario | Sharpe | return %/yr | max drawdown % | cost drag %/yr |
+|---|---|---|---|---|
+| 0× (gross) | 0.93 | 9.23 | -11.6 | 0.00 |
+| 0.5× | 0.66 | 6.36 | -12.4 | 2.67 |
+| 1× | 0.40 | 3.56 | -13.8 | 5.35 |
+| 1.5× | 0.13 | 0.82 | -19.7 | 8.02 |
+| 2× | -0.13 | -1.85 | -28.3 | 10.69 |
+| 3× | -0.63 | -7.01 | -64.3 | 16.04 |
+| literature low | 0.85 | 8.37 | -11.9 | 0.79 |
+| literature central | 0.77 | 7.51 | -12.2 | 1.60 |
+| literature high | 0.58 | 5.53 | -12.9 | 3.46 |
+| literature central + roll costs | 0.67 | 6.39 | -12.7 | 2.65 |
+| literature high + roll costs | 0.36 | 3.17 | -15.1 | 5.72 |
+
+**Consistency with earlier reports.** The 1× and 2× rows match `results/T01_ts_trend.md`: Sharpe 0.65 and 0.26 in
+2020-01..2026-09, and 0.40 and −0.13 in 2005–2019.
+
+**Scope of these figures.** They exclude interest on cash collateral (Step 1). They also exclude the uncosted items
+in Step 2: forward-point spreads beyond the roll convention, the NDF and cross-currency bases, repo spreads and
+stress widening.
+
+Tables: `results/cost_audit/step3_sensitivity.csv`, `step3_grid.csv`, `step3_breakeven.json`.
