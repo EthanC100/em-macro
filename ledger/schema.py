@@ -31,7 +31,8 @@ FORECAST_OUTCOMES = ("yes", "no", "void")
 MAX_RISK_PCT = 2.0
 KELLY_FRACTION = 0.5 * 0.25      # half of quarter-Kelly
 
-_NUM = re.compile(r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)?")
+_NUM = re.compile(r"(?<![A-Za-z\d.])[-+]?\d+(?:[.,]\d+)?(?P<suffix>[A-Za-z%]*)")
+_TENOR_SUFFIX = re.compile(r"^(y|yr|yrs|m|mo|mth|d|w|wk|s|h|x)$", re.I)   # 10y, 3m, 2s (not bp, %)
 _DATE_FORMATS = ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%d/%m/%Y", "%d.%m.%Y", "%d-%m-%Y",
                  "%B %d %Y", "%b %d %Y", "%B %d, %Y", "%b %d, %Y", "%Y/%m/%d")
 
@@ -51,13 +52,17 @@ def parse_date(text: str | None) -> date | None:
 
 
 def parse_number(text: str | None) -> float | None:
-    """First number in a string ('1.5%', '115bp', '5.70') or None."""
+    """First price-like number in a string ('1.5%', '115bp', '5.70') or None.
+    Tenor tokens such as '10y', '3m' or '2s10s' are skipped."""
     if text is None:
         return None
-    m = _NUM.search(str(text).replace("−", "-"))
-    if not m:
-        return None
-    return float(m.group(0).replace(",", "."))
+    for m in _NUM.finditer(str(text).replace("\u2212", "-")):
+        suffix = m.group("suffix") or ""
+        if _TENOR_SUFFIX.match(suffix):
+            continue
+        num = m.group(0)[: len(m.group(0)) - len(suffix)]
+        return float(num.replace(",", "."))
+    return None
 
 
 def parse_probability(text: str | None) -> float | None:
