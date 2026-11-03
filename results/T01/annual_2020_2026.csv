@@ -1,0 +1,57 @@
+costs,strategy,year,return_%
+1x,v1.0,2020,-13.9030
+1x,v1.0,2021,-4.3935
+1x,v1.0,2022,20.6727
+1x,v1.0,2023,22.4429
+1x,v1.0,2024,13.8089
+1x,v1.0,2025,-0.9912
+1x,v1.0,2026,7.8481
+1x,T01,2020,-9.6414
+1x,T01,2021,-2.5787
+1x,T01,2022,23.9328
+1x,T01,2023,17.7727
+1x,T01,2024,15.1142
+1x,T01,2025,5.4138
+1x,T01,2026,3.3296
+1x,trend sleeve (T01),2020,-16.3597
+1x,trend sleeve (T01),2021,-5.7134
+1x,trend sleeve (T01),2022,8.5158
+1x,trend sleeve (T01),2023,-4.6966
+1x,trend sleeve (T01),2024,-0.5089
+1x,trend sleeve (T01),2025,10.6952
+1x,trend sleeve (T01),2026,10.0922
+1x,core sleeve alone (diagnostic),2020,-8.0815
+1x,core sleeve alone (diagnostic),2021,-3.7415
+1x,core sleeve alone (diagnostic),2022,24.8029
+1x,core sleeve alone (diagnostic),2023,15.2883
+1x,core sleeve alone (diagnostic),2024,17.6214
+1x,core sleeve alone (diagnostic),2025,1.4802
+1x,core sleeve alone (diagnostic),2026,1.9352
+2x,v1.0,2020,-16.1218
+2x,v1.0,2021,-6.6580
+2x,v1.0,2022,17.2802
+2x,v1.0,2023,18.0471
+2x,v1.0,2024,8.3300
+2x,v1.0,2025,-6.9143
+2x,v1.0,2026,5.1552
+2x,T01,2020,-13.8766
+2x,T01,2021,-4.0291
+2x,T01,2022,18.9729
+2x,T01,2023,13.1343
+2x,T01,2024,10.1973
+2x,T01,2025,2.4533
+2x,T01,2026,1.0087
+2x,trend sleeve (T01),2020,-21.6472
+2x,trend sleeve (T01),2021,-10.6276
+2x,trend sleeve (T01),2022,3.1667
+2x,trend sleeve (T01),2023,-11.2198
+2x,trend sleeve (T01),2024,-6.7977
+2x,trend sleeve (T01),2025,5.6593
+2x,trend sleeve (T01),2026,6.6227
+2x,core sleeve alone (diagnostic),2020,-12.0257
+2x,core sleeve alone (diagnostic),2021,-4.5851
+2x,core sleeve alone (diagnostic),2022,20.1721
+2x,core sleeve alone (diagnostic),2023,12.0983
+2x,core sleeve alone (diagnostic),2024,13.0748
+2x,core sleeve alone (diagnostic),2025,-1.1677
+2x,core sleeve alone (diagnostic),2026,0.0177

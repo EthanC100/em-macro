@@ -1,0 +1,15 @@
+unit,stratum,half,instruments
+DE,DM Europe,A,DE10Y
+ES,DM Europe,A,ES-DE
+XM,DM Europe,A,EUR
+ID,EM Asia,A,IDR ID10Y
+PL,"EM Europe, Middle East and Africa",A,PLN PL-DE
+CL,EM Latin America,A,CLP CL10Y
+MX,EM Latin America,A,MXN MX10Y
+FR,DM Europe,B,FR-DE
+GB,DM Europe,B,GBP GB-DE
+IT,DM Europe,B,IT-DE
+TR,"EM Europe, Middle East and Africa",B,TRY TR10Y
+ZA,"EM Europe, Middle East and Africa",B,ZAR ZA10Y
+BR,EM Latin America,B,BRL BR10Y
+CO,EM Latin America,B,COP CO10Y
