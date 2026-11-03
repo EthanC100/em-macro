@@ -408,6 +408,7 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
         if g.empty:
             continue
         pc = parties[parties["iso3"] == ISO3[c]] if len(parties) else pd.DataFrame()
+        tables = {col: _party_tables(pc, col) for col in measures}
         for m, t in zip(months, me):
             out["n_governments_prior5y"].loc[m, c] = ((g["start"] > t - pd.DateOffset(years=5))
                                                       & (g["start"] <= t)).sum()
@@ -426,8 +427,8 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
             out["gov_n_parties"].loc[m, c] = np.nan if technocratic else len(parts)
             out["gov_minority"].loc[m, c] = float(share < 50) if pd.notna(share) else np.nan
             for col, (suf, _) in measures.items():
-                out[f"head_party_{suf}"].loc[m, c] = _party_score(pc, r.get("head_party"), col, t.year)
-                vals = [_party_score(pc, p_, col, t.year) for p_ in parts]
+                out[f"head_party_{suf}"].loc[m, c] = _party_score(tables[col], r.get("head_party"), t.year)
+                vals = [_party_score(tables[col], p_, t.year) for p_ in parts]
                 vals = [v for v in vals if pd.notna(v)]
                 out[f"gov_parties_{suf}"].loc[m, c] = np.mean(vals) if vals else np.nan
     SOURCES["gov_seat_share"] = ("lower-house seat share (%) of parties holding cabinet posts at cabinet start; "
@@ -447,16 +448,30 @@ def politics_block(months) -> dict[str, pd.DataFrame]:
     return out
 
 
-def _party_score(pc: pd.DataFrame, party, col: str, year: int) -> float:
-    if pc is None or not len(pc) or party is None or pd.isna(party):
+def _party_tables(pc: pd.DataFrame, col: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Per party (lower-cased name): the rows of ``pc`` with a value for ``col``
+    as (reference years, values), sorted by year with undated rows last.  Built
+    once per country and measure; filtering the party file inside the
+    month loop took minutes."""
+    if pc is None or not len(pc) or col not in pc:
+        return {}
+    g = pc.dropna(subset=[col])
+    yr = pd.to_numeric(g["vparty_year"], errors="coerce") if "vparty_year" in g else pd.Series(np.nan, g.index)
+    g = g.assign(_k=g["party"].astype(str).str.strip().str.lower(), _y=yr).sort_values("_y", kind="stable")
+    return {k: (h["_y"].to_numpy(dtype=float), h[col].to_numpy(dtype=float)) for k, h in g.groupby("_k", sort=False)}
+
+
+def _party_score(table: dict, party, year: int) -> float:
+    """Latest score of ``party`` with reference year <= ``year`` (undated rows
+    count as always valid and win over dated ones), NaN if unknown."""
+    if party is None or pd.isna(party):
         return np.nan
-    g = pc[pc["party"].astype(str).str.strip().str.lower() == str(party).strip().lower()]
-    if g.empty or col not in g:
+    t = table.get(str(party).strip().lower())
+    if t is None:
         return np.nan
-    yr = pd.to_numeric(g.get("vparty_year"), errors="coerce") if "vparty_year" in g else pd.Series(np.nan, g.index)
-    g = g.assign(_y=yr).dropna(subset=[col])
-    past = g[g["_y"].isna() | (g["_y"] <= year)].sort_values("_y")
-    return float(past[col].iloc[-1]) if len(past) else np.nan
+    y, v = t
+    ok = np.isnan(y) | (y <= year)
+    return float(v[ok][-1]) if ok.any() else np.nan
 
 
 # ---------------------------------------------------------------- assembly

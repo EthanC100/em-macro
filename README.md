@@ -874,6 +874,11 @@ What the numbers say:
   data. Nothing frozen is re-estimated.
   - **Incremental scrapes:** the parsed BondSpot and Borsa Istanbul scrapes are committed (`data/raw/bondspot/`,
     `data/raw/bist/`, about 10 MB), so each run fetches only new days.
+  - **Downloads that fail:** every request is retried on connection errors, timeouts, 429 and 5xx responses
+    (about a minute of backoff in all); a 404 fails at once. The other raw downloads are kept in the Actions cache
+    between runs, so if a source is still down after the retries the previous run's copy is used, with a
+    `WARNING:` line in the job log and an older "last" date in `results/coverage_report.md` /
+    `results/panel_coverage.md`. The run only fails when a source is down and no earlier copy exists.
   - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings.
 
 ### Limitations

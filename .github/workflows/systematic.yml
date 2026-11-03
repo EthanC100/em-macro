@@ -29,8 +29,32 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
 
+      # data/raw is gitignored, so every run starts with an empty download cache.  Restoring the
+      # previous run's copy lets a source that is down (mindicador.cl returned 502 for the whole
+      # of the Nov 2026 run) fall back to last month's file with a warning instead of failing.
+      # The committed BondSpot / Borsa Istanbul scrapes are excluded: git has the right version.
+      - name: Restore last run's raw downloads (fallback when a source is down)
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            !data/raw/bondspot
+            !data/raw/bist
+          key: raw-downloads-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: raw-downloads-
+
       - name: Refresh data (daily panel, 13-country panel, risk-model inputs)
         run: python -m em_macro.systematic refresh
+
+      - name: Save raw downloads for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/raw
+            !data/raw/bondspot
+            !data/raw/bist
+          key: raw-downloads-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Positions and paper P&L (frozen design)
         run: python -m em_macro.systematic update

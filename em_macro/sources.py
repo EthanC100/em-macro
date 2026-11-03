@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -19,20 +21,58 @@ from .config import RAW, START, TESOURO_URL
 SESSION = requests.Session()
 
 
-def _get(url: str, cache: Path, refresh: bool = False, tries: int = 4, timeout: int = 120) -> bytes:
+# HTTP statuses worth retrying: rate limits and server-side errors.  Other 4xx
+# (404 for a series that does not exist, 400 for a bad request) fail at once.
+RETRY_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def _backoff(i: int, response=None) -> float:
+    """Seconds to wait after failed attempt ``i`` (0-based): 2, 4, 8, 16, 32, 60...
+    and never less than a Retry-After header (capped at 2 minutes)."""
+    wait = float(min(2 ** (i + 1), 60))
+    ra = response.headers.get("Retry-After") if response is not None else None
+    if ra and ra.strip().isdigit():
+        wait = max(wait, min(int(ra), 120))
+    return wait
+
+
+def _stale(cache: Path, url: str, err) -> bytes:
+    age = datetime.fromtimestamp(cache.stat().st_mtime).strftime("%Y-%m-%d")
+    print(f"WARNING: {url}: {err} -- using the cached copy {cache} (from {age}) instead",
+          file=sys.stderr, flush=True)
+    return cache.read_bytes()
+
+
+def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: int = 60) -> bytes:
+    """GET ``url`` and cache the body at ``cache``.
+
+    Connection errors, timeouts, 429s and 5xx responses are retried ``tries``
+    times with exponential backoff (about a minute of waiting in all); any
+    other 4xx fails at once.  If every attempt fails and a cached copy exists
+    (i.e. ``refresh=True`` on a cache that is merely being refreshed) the stale
+    copy is used with a warning, so that one source being down does not stop
+    the whole monthly refresh.  Without a cached copy a RuntimeError is raised.
+    """
     cache.parent.mkdir(parents=True, exist_ok=True)
     if cache.exists() and not refresh:
         return cache.read_bytes()
-    err = None
+    err, response = None, None
     for i in range(tries):
         try:
             r = SESSION.get(url, timeout=timeout)
-            r.raise_for_status()
-            cache.write_bytes(r.content)
-            return r.content
-        except requests.RequestException as e:  # network hiccup: back off and retry
-            err = e
-            time.sleep(2 ** (i + 1))
+        except requests.RequestException as e:   # network hiccup / hang: back off and retry
+            err, response = e, None
+        else:
+            if r.status_code < 400:
+                cache.write_bytes(r.content)
+                return r.content
+            err, response = f"HTTP {r.status_code} {r.reason}", r
+            if r.status_code not in RETRY_STATUS:
+                break
+        if i < tries - 1:
+            time.sleep(_backoff(i, response))
+    if cache.exists():
+        return _stale(cache, url, err)
     raise RuntimeError(f"download failed: {url}: {err}")
 
 
@@ -45,13 +85,35 @@ def fred(series_id: str, refresh: bool = False) -> pd.Series:
     return s.dropna()
 
 
-def yahoo(ticker: str, refresh: bool = False) -> pd.Series:
+def yahoo(ticker: str, refresh: bool = False, tries: int = 3) -> pd.Series:
+    """Daily close from Yahoo Finance via yfinance.  Yahoo rate-limits bursts of
+    requests (HTTP 429), so an empty or failed download is retried, and if it
+    keeps failing a cached copy is used with a warning."""
     cache = RAW / "yahoo" / f"{ticker.replace('^', '').replace('=', '_')}.csv"
-    if cache.exists() and not refresh:
+
+    def from_cache():
         df = pd.read_csv(cache, index_col=0, parse_dates=True)
         return df.iloc[:, 0].dropna().rename(ticker)
+
+    if cache.exists() and not refresh:
+        return from_cache()
     import yfinance as yf
-    d = yf.download(ticker, start=START, progress=False, auto_adjust=False)
+    d, err = None, None
+    for i in range(tries):
+        try:
+            d = yf.download(ticker, start=START, progress=False, auto_adjust=False)
+            if d is None or len(d) == 0 or "Close" not in d:
+                raise RuntimeError("empty response (rate-limited or ticker unavailable)")
+            break
+        except Exception as e:      # yfinance reports most failures as an empty frame
+            d, err = None, e
+            if i < tries - 1:
+                time.sleep(_backoff(i + 1))
+    if d is None:
+        if cache.exists():
+            _stale(cache, f"yahoo {ticker}", err)
+            return from_cache()
+        raise RuntimeError(f"download failed: yahoo {ticker}: {err}")
     s = d["Close"]
     if isinstance(s, pd.DataFrame):
         s = s.iloc[:, 0]
@@ -165,7 +227,7 @@ def _bondspot_day(d: pd.Timestamp) -> list[dict]:
         except requests.RequestException:
             time.sleep(2 ** (i + 1))
     if t is None:
-        return [{"date": d.date(), "name": None}]      # mark as attempted
+        return []                                      # transient failure: retry on next run
     out = []
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", t, flags=re.S):
         c = [html.unescape(re.sub(r"<[^>]+>", "", x)).strip()
