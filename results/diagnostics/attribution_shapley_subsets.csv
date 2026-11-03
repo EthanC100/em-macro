@@ -1,0 +1,17 @@
+period,subset,ann_mean_net_%
+2005-2019,(none),0.0000
+2005-2019,carry,3.9748
+2005-2019,trend,-11.1152
+2005-2019,value,5.2403
+2005-2019,carry+trend,-2.0421
+2005-2019,carry+value,7.0132
+2005-2019,trend+value,0.5088
+2005-2019,carry+trend+value,4.0052
+2020-01 to 2026-09,(none),0.0000
+2020-01 to 2026-09,carry,10.2521
+2020-01 to 2026-09,trend,0.1441
+2020-01 to 2026-09,value,-1.9006
+2020-01 to 2026-09,carry+trend,9.4203
+2020-01 to 2026-09,carry+value,6.9342
+2020-01 to 2026-09,trend+value,-0.6050
+2020-01 to 2026-09,carry+trend+value,6.2504

@@ -1,0 +1,15 @@
+period,signal,method,pnl_%pa,share_of_total
+2005-2019,carry,proportional,4.9289,1.2306
+2005-2019,trend,proportional,-7.3880,-1.8446
+2005-2019,value,proportional,6.4644,1.6140
+2005-2019,"unattributed (position held by the no-trade band, no signal at decision)",proportional,0.0000,0.0000
+2020-01 to 2026-09,carry,proportional,4.5226,0.7236
+2020-01 to 2026-09,trend,proportional,3.1306,0.5009
+2020-01 to 2026-09,value,proportional,-1.3844,-0.2215
+2020-01 to 2026-09,"unattributed (position held by the no-trade band, no signal at decision)",proportional,-0.0184,-0.0029
+2005-2019,carry,Shapley,4.2981,1.0731
+2005-2019,trend,Shapley,-6.4991,-1.6227
+2005-2019,value,Shapley,6.2063,1.5495
+2020-01 to 2026-09,carry,Shapley,8.7210,1.3953
+2020-01 to 2026-09,trend,Shapley,-0.1026,-0.0164
+2020-01 to 2026-09,value,Shapley,-2.3680,-0.3789
