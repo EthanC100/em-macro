@@ -45,6 +45,7 @@
     'no trade': ['no trade', ''], yes: ['yes', 'purple'], no: ['no', 'purple'], void: ['void', ''],
     pass: ['passed', 'good'], passed: ['passed', 'good'], fail: ['failed', 'bad'], failed: ['failed', 'bad'],
     pending: ['under test', 'warn'], 'under test': ['under test', 'warn'], live: ['live', 'c-algorithm'],
+    inconclusive: ['inconclusive', ''],
     resolved: ['resolved', 'purple'], long: ['long', 'good'], short: ['short', 'bad'],
     Buy: ['Buy', 'good'], Sell: ['Sell', 'bad'], 'No trade': ['No trade', ''],
   };
