@@ -1,6 +1,8 @@
 # Monthly update of the systematic macro strategy (positions + paper P&L).
 # Refreshes the input data and applies the FROZEN design (results/systematic/fit/frozen_design.json);
 # no frozen result (event study, risk model, strategy test) is re-estimated or re-tested.
+# If any step fails, the last step opens (or comments on) a GitHub issue
+# "[ALERT] systematic-monthly failed <date>" with the failing step and the end of its log.
 name: systematic-monthly
 
 on:
@@ -10,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  issues: write              # failure alerts
 
 concurrency:
   group: systematic-monthly
@@ -19,6 +22,9 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash          # -eo pipefail: a step still fails when its output is piped through tee
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +33,8 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install -r requirements.txt
+        id: install
+        run: pip install -r requirements.txt 2>&1 | tee "$RUNNER_TEMP/install.log"
 
       # data/raw is gitignored, so every run starts with an empty download cache.  Restoring the
       # previous run's copy lets a source that is down (mindicador.cl returned 502 for the whole
@@ -44,7 +51,8 @@ jobs:
           restore-keys: raw-downloads-
 
       - name: Refresh data (daily panel, 13-country panel, risk-model inputs)
-        run: python -m em_macro.systematic refresh
+        id: refresh
+        run: python -m em_macro.systematic refresh 2>&1 | tee "$RUNNER_TEMP/refresh.log"
 
       - name: Save raw downloads for the next run
         if: always()
@@ -57,25 +65,89 @@ jobs:
           key: raw-downloads-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Positions and paper P&L (frozen design)
-        run: python -m em_macro.systematic update
+        id: update
+        run: python -m em_macro.systematic update 2>&1 | tee "$RUNNER_TEMP/update.log"
+
+      - name: Rebalance log (scheduled date vs actual run date)
+        id: rebalance
+        run: python -m em_macro.rebalance 2>&1 | tee "$RUNNER_TEMP/rebalance.log"
 
       - name: Political-risk overlay (frozen rule) and manual overrides from overrides.yaml
-        run: python -m em_macro.overlay update
+        id: overlay
+        run: python -m em_macro.overlay update 2>&1 | tee "$RUNNER_TEMP/overlay.log"
 
       - name: Tests
-        run: python -m pytest -q tests
+        id: tests
+        run: python -m pytest -q tests 2>&1 | tee "$RUNNER_TEMP/tests.log"
 
       - name: Commit and push
+        id: commit
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/systematic/positions.csv results/systematic/paper_pnl.csv \
-                  results/systematic/position_adjustments.csv results/systematic/overrides_log.csv \
-                  data/processed data/raw/bondspot data/raw/bist \
-                  results/coverage_report.md results/panel_coverage.md
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
+          {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add results/systematic/positions.csv results/systematic/paper_pnl.csv \
+                    results/systematic/rebalance_log.csv \
+                    results/systematic/position_adjustments.csv results/systematic/overrides_log.csv \
+                    data/processed data/raw/bondspot data/raw/bist \
+                    results/coverage_report.md results/panel_coverage.md
+            if git diff --cached --quiet; then
+              echo "nothing to commit"
+            else
+              git commit -m "Monthly systematic update $(date -u +%Y-%m-%d)"
+              git push
+            fi
+          } 2>&1 | tee "$RUNNER_TEMP/commit.log"
+
+      - name: Open or update the alert issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          OUTCOMES: >-
+            install=${{ steps.install.outcome }}
+            refresh=${{ steps.refresh.outcome }}
+            update=${{ steps.update.outcome }}
+            rebalance=${{ steps.rebalance.outcome }}
+            overlay=${{ steps.overlay.outcome }}
+            tests=${{ steps.tests.outcome }}
+            commit=${{ steps.commit.outcome }}
+        run: |
+          declare -A names=([install]="Install" [refresh]="Refresh data" [update]="Positions and paper P&L"
+                            [rebalance]="Rebalance log" [overlay]="Political-risk overlay and overrides"
+                            [tests]="Tests" [commit]="Commit and push")
+          step=""
+          for kv in $OUTCOMES; do
+            if [ "${kv#*=}" = "failure" ]; then step="${kv%%=*}"; break; fi
+          done
+          title="[ALERT] systematic-monthly failed $(date -u +%Y-%m-%d)"
+          body="$RUNNER_TEMP/alert.md"
+          {
+            echo "The monthly systematic update failed: $RUN_URL (attempt $RUN_ATTEMPT)."
+            echo
+            if [ -n "$step" ]; then
+              echo "**Failing step:** ${names[$step]:-$step}"
+              echo
+              echo "**End of its log:**"
+              echo
+              echo '```'
+              sed -e 's/\x1b\[[0-9;]*[mK]//g' "$RUNNER_TEMP/$step.log" 2>/dev/null | tail -n 60
+              echo '```'
+            else
+              echo "**Failing step:** a setup step before the pipeline (checkout, Python or the cache); see the run log."
+            fi
+            echo
+            echo "This month's rebalance has not been committed. Fix the cause, then re-run the workflow"
+            echo "(Actions > systematic-monthly > Run workflow); the rebalance log will record the actual run date."
+          } > "$body"
+          gh label create alert --repo "$GITHUB_REPOSITORY" --color d73a4a \
+            --description "Automated failure alert from a workflow" --force >/dev/null 2>&1 || true
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert \
+                       --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+            echo "commented on existing alert issue #$existing"
           else
-            git commit -m "Monthly systematic update $(date -u +%Y-%m-%d)"
-            git push
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body-file "$body"
           fi

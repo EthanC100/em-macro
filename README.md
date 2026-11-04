@@ -42,6 +42,7 @@ python -m em_macro.risk_model outputs   # fair value, factor contributions, simi
 python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
+python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
 python -m em_macro.overlay test         # 2020+ once, overlay vs v1
 python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
@@ -879,7 +880,15 @@ What the numbers say:
     between runs, so if a source is still down after the retries the previous run's copy is used, with a
     `WARNING:` line in the job log and an older "last" date in `results/coverage_report.md` /
     `results/panel_coverage.md`. The run only fails when a source is down and no earlier copy exists.
-  - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings.
+  - **Rebalance dates:** `python -m em_macro.rebalance` runs after the update. It stamps `scheduled_date` (the
+    3rd of the month after `as_of`) and `run_date` on `positions.csv`, keeps one row per rebalance in
+    `results/systematic/rebalance_log.csv`, and prints `LATE by n days` in the job log and step summary when a
+    run is late.
+  - **Failure alert:** if any step fails, the workflow opens a GitHub issue `[ALERT] systematic-monthly failed
+    <date>` (label `alert`) with the failing step and the end of its log, or comments on that day's issue if it
+    already exists.
+  - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings
+    (it commits results and opens alert issues).
 
 ### Limitations
 
