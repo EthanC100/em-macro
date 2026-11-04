@@ -1,0 +1,46 @@
+currency,component,from,to,months,case,source,last_obs_range,max_age_months
+BRL,IP,2022-12,2022-12,1,"first-release, stale, index not updated (last value kept)",OECD editions,2022-05..2022-05,7.0
+BRL,RS,2022-11,2022-11,1,"first-release, ended, index continues on other components",OECD editions,2022-04..2022-04,7.0
+BRL,RS,2022-12,2022-12,1,"first-release, stale, index not updated (last value kept)",OECD editions,2022-04..2022-04,8.0
+BRL,U,2020-01,2026-09,81,omitted (no source),omitted,,
+CLP,CPI,2024-07,2026-09,27,"revised fallback (lag 3), stale, index not updated (last value kept)",revised lag3 (OECD KEI CHL CP _Z),2023-12..2023-12,33.0
+CLP,RS,2020-01,2026-09,81,"first-release, ended, index continues on other components",OECD editions,2018-12..2018-12,93.0
+COP,IP,2020-05,2021-10,18,"first-release, ended, index continues on other components",OECD editions,2018-12..2018-12,34.0
+COP,IP,2022-07,2022-08,2,"first-release, ended, index continues on other components",OECD editions,2021-12..2021-12,8.0
+COP,RS,2020-01,2020-04,4,"first-release, ended, index continues on other components",ALFRED COLSLRTTO01IXOBSAM,2018-12..2018-12,16.0
+COP,RS,2020-05,2020-10,6,"first-release, ended, index continues on other components",OECD editions,2018-12..2018-12,22.0
+COP,RS,2021-03,2021-03,1,"first-release, ended, index continues on other components",OECD editions,2020-08..2020-08,7.0
+COP,RS,2022-07,2022-08,2,"first-release, ended, index continues on other components",OECD editions,2021-12..2021-12,8.0
+COP,RS,2025-12,2026-01,2,"first-release, ended, index continues on other components",OECD editions,2025-05..2025-05,8.0
+COP,U,2020-01,2020-04,4,revised fallback (lag 3),revised lag3 (OECD KEI COL UNEMP _T),2019-10..2020-01,3.0
+EUR,IP,2026-03,2026-09,7,"first-release, ended, index continues on other components",ECB RTD,2025-08..2025-08,13.0
+EUR,RS,2026-03,2026-09,7,"first-release, ended, index continues on other components",ECB RTD,2025-08..2025-08,13.0
+EUR,U,2024-08,2025-06,11,"first-release, ended, index continues on other components",ECB RTD,2024-01..2024-01,17.0
+IDR,IP,2020-01,2023-02,38,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2019-10..2022-11,3.0
+IDR,IP,2023-04,2023-08,5,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2023-01..2023-05,3.0
+IDR,IP,2023-10,2024-12,15,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2023-07..2024-09,3.0
+IDR,IP,2025-04,2025-04,1,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2025-01..2025-01,3.0
+IDR,IP,2025-10,2025-12,3,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2025-07..2025-09,3.0
+IDR,IP,2026-04,2026-04,1,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2026-01..2026-01,3.0
+IDR,IP,2026-07,2026-07,1,revised fallback (lag 3),revised lag3 (OECD revisions latest editions IDN PRVM),2026-04..2026-04,3.0
+IDR,RS,2020-01,2026-09,81,omitted (no source),omitted,,
+IDR,U,2020-01,2026-09,81,omitted (no source),omitted,,
+MXN,CPI,2025-02,2026-01,12,"first-release, stale, index not updated (last value kept)",OECD editions,2024-07..2024-07,18.0
+MXN,CPI,2026-04,2026-09,6,"revised fallback (lag 3), stale, index not updated (last value kept)",revised lag3 (OECD KEI MEX CP _Z),2024-07..2024-07,26.0
+MXN,RS,2020-01,2020-07,7,"first-release, ended, index continues on other components",OECD editions,2018-12..2018-12,19.0
+MXN,RS,2023-10,2023-10,1,"first-release, ended, index continues on other components",OECD editions,2023-03..2023-03,7.0
+PLN,CPI,2026-07,2026-09,3,"revised fallback (lag 3), stale, index not updated (last value kept)",revised lag3 (OECD KEI POL CP _Z),2025-12..2025-12,9.0
+TRY,CPI,2026-07,2026-09,3,"revised fallback (lag 3), stale, index not updated (last value kept)",revised lag3 (OECD KEI TUR CP _Z),2025-12..2025-12,9.0
+TRY,RS,2020-01,2021-10,22,"first-release, ended, index continues on other components",ALFRED TURSLRTTO01IXOBSAM,2018-07..2018-07,39.0
+TRY,RS,2024-04,2026-09,30,revised fallback (lag 3),revised lag3 (OECD KEI TUR TOVM G47),2024-01..2026-06,3.0
+ZAR,CPI,2025-08,2026-09,14,"revised fallback (lag 3), stale, index not updated (last value kept)",revised lag3 (OECD KEI ZAF CP _Z),2025-01..2025-01,20.0
+ZAR,IP,2025-05,2025-05,1,"first-release, ended, index continues on other components",OECD editions,2024-10..2024-10,7.0
+ZAR,RS,2025-05,2025-05,1,"first-release, ended, index continues on other components",OECD editions,2024-10..2024-10,7.0
+ZAR,U,2020-01,2020-02,2,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2019-06..2019-06,8.0
+ZAR,U,2020-10,2020-10,1,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2020-03..2020-03,7.0
+ZAR,U,2022-04,2022-07,4,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2021-09..2021-09,10.0
+ZAR,U,2022-10,2022-10,1,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2022-03..2022-03,7.0
+ZAR,U,2023-01,2023-02,2,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2022-06..2022-06,8.0
+ZAR,U,2023-04,2023-07,4,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2022-09..2022-09,10.0
+ZAR,U,2023-10,2023-10,1,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2023-03..2023-03,7.0
+ZAR,U,2024-01,2024-03,3,"first-release, ended, index continues on other components",ALFRED LRUNTTTTZAQ156S,2023-06..2023-06,9.0
