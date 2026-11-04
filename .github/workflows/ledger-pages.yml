@@ -1,0 +1,56 @@
+# Build the Ledger app (python -m ledger.build) and deploy app/ to GitHub Pages.
+# Runs on every push to main, once a day, and by hand. The issue-intake workflow also
+# dispatches it after it commits an entry (pushes made with GITHUB_TOKEN do not trigger
+# "push" runs by themselves).
+#
+# Repository settings needed once: Settings > Pages > Build and deployment > Source = "GitHub Actions".
+name: ledger-pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 6 * * *"     # 06:41 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ledger-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the build reads commit dates for "last updated"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the site
+        run: python -m ledger.build
+      - name: Ledger tests
+        run: |
+          pip install pytest
+          python -m pytest -q tests/test_ledger.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

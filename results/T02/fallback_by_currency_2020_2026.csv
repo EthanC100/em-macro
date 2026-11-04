@@ -1,0 +1,11 @@
+currency,score_months,months_revised,months_stale,months_revised_or_stale
+BRL,81,0,1,1
+MXN,81,6,18,18
+ZAR,81,14,14,14
+TRY,81,30,3,30
+IDR,81,64,0,64
+PLN,81,3,3,3
+GBP,81,0,0,0
+COP,81,4,0,4
+CLP,81,27,27,27
+EUR,81,0,0,0

@@ -1,0 +1,59 @@
+name: Forecast
+description: Log a probability call in the Ledger. A workflow writes it to data/ledger/forecasts.csv and closes this issue with its id.
+title: "[Forecast] "
+labels: ["ledger", "ledger:forecast"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: A yes/no question that can be resolved on the resolution date.
+      placeholder: "Republicans keep control of the US Senate after the 3 Nov 2026 midterms"
+    validations:
+      required: true
+  - type: input
+    id: my_prob
+    attributes:
+      label: My probability
+      description: Percent, 0-100
+      placeholder: "45"
+    validations:
+      required: true
+  - type: input
+    id: market_prob
+    attributes:
+      label: Market probability
+      description: Percent, 0-100
+      placeholder: "30"
+    validations:
+      required: true
+  - type: input
+    id: market_source
+    attributes:
+      label: Market source
+      description: Where the market probability comes from and when.
+      placeholder: "Polymarket, 3 Nov 2026"
+    validations:
+      required: true
+  - type: input
+    id: claude_prob
+    attributes:
+      label: Claude probability (optional)
+      description: Percent, 0-100, if Claude gave one.
+      placeholder: "41"
+    validations:
+      required: false
+  - type: input
+    id: resolution_date
+    attributes:
+      label: Resolution date
+      placeholder: "2026-11-10"
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country (optional)
+      placeholder: "United States"
+    validations:
+      required: false
