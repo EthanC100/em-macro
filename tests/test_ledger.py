@@ -150,8 +150,9 @@ def test_build_writes_site_and_json(tmp_path):
     assert next(t for t in tr["items"] if t["trial_id"] == "T12")["status"] == "fail"
     status = {t["trial_id"]: t["status"] for t in tr["items"]}
     assert status["T14"] == "inconclusive" and status["T15"] == "pending"      # election study and its live test
-    # T01-T15, then the T16-T19 risk batch (T18 passed; T16, T17, T19 failed)
-    assert tr["summary"]["n"] == 19 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 1
+    # T01-T15, the T16-T19 risk batch (T18 passed; T16, T17, T19 failed), then the pending T20-T22 commodity trials
+    assert tr["summary"]["n"] == 22 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 4
+    assert {status[t] for t in ("T20", "T21", "T22")} == {"pending"}
     assert status["T18"] == "pass" and {status[t] for t in ("T16", "T17", "T19")} == {"fail"}
     # v1.1 (v1.0 + T18) next to v1.0 on the Algorithm page
     v11, sbs = alg["v11"], alg["side_by_side"]
@@ -394,7 +395,8 @@ def test_evidence_groups_and_status(tmp_path):
     assert live["backtest_sharpe"] == pytest.approx(0.654, abs=1e-3)
     rule = groups["prospective"][0]
     assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
-    assert rule["trial_id"] == "T15" and len(groups["prospective"]) == 1     # T15 is the election rule, listed once
+    assert rule["trial_id"] == "T15"                                          # T15 is the election rule, listed first
+    assert [i["id"] for i in groups["prospective"]] == ["election-rule", "T20", "T21", "T22"]   # then the pending T20-T22
     # T01 is the live entry, not a passed trial; T18 passed and runs live as v1.1
     assert [t["id"] for t in groups["passed"]] == ["T18"] and groups["passed"][0]["live_as"] == "v1.1"
     failed = {t["id"]: t for t in groups["failed"]}
