@@ -259,27 +259,62 @@ def stage_run():
     pd.DataFrame(sc).to_csv(OUT / "signal_correlations.csv", index=False, float_format="%.4f")
 
     # ---- fallback share and staleness (robustness b), signal coverage
-    fl = sig["all"]["flagged"].reindex(months)
     sc_all = score["all"].reindex(months)
+    comp = comp.assign(m=pd.PeriodIndex(comp.month, freq="M"))
+    av = comp[comp.available]
+    per_cm = av.groupby(["m", "currency"]).agg(revised=("flagged", "any"))
+    rev = per_cm["revised"].unstack().reindex(index=months, columns=FX).fillna(False).astype(bool)
+    # stale = an index (econ or infl) whose last month is > 6 months before the decision month, so the
+    # sub-signals of that index are computed on old data (the last published value kept, point-in-time)
+    ag = age.assign(m=pd.PeriodIndex(age.month, freq="M"), stale=age.age_months > EM.STALE_MONTHS)
+    stl = ag.groupby(["m", "currency"]).stale.any().unstack().reindex(index=months, columns=FX) \
+        .fillna(False).astype(bool)
+    idx_stale = ag.set_index(["m", "currency", "index"]).stale
+    comp = comp.assign(index=np.where(comp.component == "CPI", "infl", "econ"))
+    comp["index_stale"] = [bool(idx_stale.get((m, c, i), False)) for m, c, i in zip(comp.m, comp.currency, comp["index"])]
+    av = comp[comp.available]
     fb = []
     for pname, (a, b) in PERIODS.items():
-        f, s = fl.loc[a:b], sc_all.loc[a:b]
-        have = s.notna()
-        cr = comp[(pd.PeriodIndex(comp.month, freq="M") >= (a or months[0]))
-                  & (pd.PeriodIndex(comp.month, freq="M") <= b) & comp.available]
-        fb.append({"period": pname, "score_obs": int(have.sum().sum()),
-                   "score_obs_with_any_fallback": int((f.astype(bool) & have).sum().sum()),
-                   "share_score_obs_with_fallback_%": 100 * float((f.astype(bool) & have).sum().sum() / have.sum().sum()),
-                   "component_months_available": len(cr), "component_months_fallback": int(cr.flagged.sum()),
-                   "share_component_months_fallback_%": 100 * float(cr.flagged.mean())})
+        have = sc_all.loc[a:b].notna()
+        r, s = rev.loc[a:b] & have, stl.loc[a:b] & have
+        cr = av[(av.m >= (a or months[0])) & (av.m <= b)]
+        n = int(have.sum().sum())
+        fb.append({"period": pname, "score_obs": n,
+                   "score_obs_revised": int(r.sum().sum()), "share_revised_%": 100 * r.sum().sum() / n,
+                   "score_obs_stale": int(s.sum().sum()), "share_stale_%": 100 * s.sum().sum() / n,
+                   "score_obs_revised_or_stale": int((r | s).sum().sum()),
+                   "share_revised_or_stale_%": 100 * (r | s).sum().sum() / n,
+                   "component_months_available": len(cr),
+                   "share_component_months_revised_%": 100 * float(cr.flagged.mean()),
+                   "share_component_months_stale_%": 100 * float(cr.stale.mean()),
+                   "share_component_months_revised_or_stale_%": 100 * float((cr.flagged | cr.stale).mean())})
     pd.DataFrame(fb).to_csv(OUT / "fallback_share.csv", index=False, float_format="%.4f")
+    # every gap and fallback case in the test window, per currency and component (contiguous month runs)
+    cases = []
+    tw = comp[(comp.m >= TEST[0]) & (comp.m <= TEST[1])].sort_values(["currency", "component", "m"])
+    for (ccy, c), g in tw.groupby(["currency", "component"], sort=False):
+        stale_txt = np.where(g.index_stale, "stale, index not updated (last value kept)",
+                             "ended, index continues on other components")
+        kind = np.where(~g.available, "omitted (no source)",
+                        np.where(g.flagged & g.stale, "revised fallback (lag 3), " + stale_txt,
+                                 np.where(g.flagged, "revised fallback (lag 3)",
+                                          np.where(g.stale, "first-release, " + stale_txt, "first-release"))))
+        g = g.assign(kind=kind, src=g.source.str.replace(r"edition \d{4}-\d{2}", "editions", regex=True))
+        run_id = ((g.kind != g.kind.shift()) | (g.src != g.src.shift())).cumsum()
+        for _, h in g.groupby(run_id):
+            if h.kind.iloc[0] == "first-release":
+                continue
+            cases.append({"currency": ccy, "component": c, "from": str(h.m.min()), "to": str(h.m.max()),
+                          "months": len(h), "case": h.kind.iloc[0], "source": h.src.iloc[0],
+                          "last_obs_range": f"{h.last_obs.min()}..{h.last_obs.max()}" if h.available.any() else "",
+                          "max_age_months": float(h.age_months.max()) if h.available.any() else np.nan})
+    pd.DataFrame(cases).to_csv(OUT / "gap_and_fallback_cases_2020_2026.csv", index=False)
     fbc = []
     for ccy in FX:
-        f, s = fl.loc[TEST[0]:TEST[1], ccy].astype(bool), sc_all.loc[TEST[0]:TEST[1], ccy].notna()
-        cr = comp[(comp.currency == ccy) & (pd.PeriodIndex(comp.month, freq="M") >= TEST[0]) & comp.flagged]
-        fbc.append({"currency": ccy, "score_months": int(s.sum()), "months_with_fallback": int((f & s).sum()),
-                    "fallback_components": "; ".join(f"{c} {g.month.min()}..{g.month.max()} ({g.source.iloc[0]})"
-                                                     for c, g in cr.groupby("component"))})
+        s = sc_all.loc[TEST[0]:TEST[1], ccy].notna()
+        r, st = rev.loc[TEST[0]:TEST[1], ccy] & s, stl.loc[TEST[0]:TEST[1], ccy] & s
+        fbc.append({"currency": ccy, "score_months": int(s.sum()), "months_revised": int(r.sum()),
+                    "months_stale": int(st.sum()), "months_revised_or_stale": int((r | st).sum())})
     pd.DataFrame(fbc).to_csv(OUT / "fallback_by_currency_2020_2026.csv", index=False)
 
     # ---- first-release vs latest-data signal (diagnostic, spec §13)

@@ -376,9 +376,11 @@ def build(months: pd.PeriodIndex, currencies, delay: int = 0) -> dict:
             fl[ccy] = any(v.sources[(ccy, c)].flagged for c in used)
             for c in COMPONENTS:
                 cd = v.sources[(ccy, c)]
+                age = (t - cd.series.index.max()).n if len(cd.series) else np.nan
                 comp_rows.append({"month": str(t), "currency": ccy, "component": c, "source": cd.source,
                                   "flagged": cd.flagged and len(cd.series) > 0, "available": len(cd.series) > 0,
-                                  "last_obs": str(cd.series.index.max()) if len(cd.series) else ""})
+                                  "last_obs": str(cd.series.index.max()) if len(cd.series) else "",
+                                  "age_months": age, "stale": bool(len(cd.series) and age > STALE_MONTHS)})
             for i in INDICES:
                 T = v.last_month[(ccy, i)]
                 stale_rows.append({"month": str(t), "currency": ccy, "index": i,
