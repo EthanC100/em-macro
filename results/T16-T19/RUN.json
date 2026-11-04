@@ -1,0 +1,52 @@
+{
+ "run_started_utc": "2026-11-04T13:59:58+00:00",
+ "run_finished_utc": "2026-11-04T14:01:24+00:00",
+ "git_head_at_run": "898bc217b6d249940abc35799962510ed60c6386",
+ "pandas": "3.0.5",
+ "numpy": "2.5.3",
+ "last_month": "2026-09",
+ "v1_reproduction": {
+  "test": {
+   "file": "results/systematic/test/performance_2020_on.csv",
+   "rows": 14,
+   "max_abs_diff_at_4dp": 0.0,
+   "exact": true
+  },
+  "fit": {
+   "file": "results/systematic/fit/performance_2005_2019.csv",
+   "rows": 14,
+   "max_abs_diff_at_4dp": 0.0,
+   "exact": true
+  }
+ },
+ "decision_costs": "1x",
+ "input_snapshots": {
+  "commit": "7886867094958f96e13cf77eff1099f9f837de60",
+  "sha256": {
+   "data/processed/daily_panel.csv": "64921b287f799ca15c4d4232fbcab64ef24d97c4fd112ea1bac6195fa2179217",
+   "data/processed/country_month_panel.csv": "b4e83024ed9f5790ee3ca80557bb350d4ca57c51b6033478a4397d80a8ce1c99",
+   "data/processed/risk_model_input.csv": "bef27012ebfa6d089cbab64ed823ecc4c0a667e8f6abeee5faa44294d05c5062"
+  },
+  "note": "data/processed snapshots at the freeze commit (verify_v1.extract_snapshots); the working-tree copies, rebuilt by the November 2026 monthly workflow, were not used"
+ },
+ "overall_pass_1x": {
+  "T16": false,
+  "T17": false,
+  "T18": true,
+  "T19": false
+ },
+ "sha256": {
+  "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "results/systematic/fit/frozen_design.json": "f0cce4c9a819379c7bce4310ad58e8765b8149ef0d045ab25dd84c1b13983858",
+  "em_macro/t16_crash.py": "98e4c9a76806a56b09f130aed5b96bf8d627942fd61fec6902643022f9cf32f5",
+  "em_macro/t17_factorcap.py": "907becabe81bc6211c5608c1923876e669d88f9ebbd62d6c9d71e53411612af3",
+  "em_macro/t18_rebal.py": "dda6456d676281b48080d3c0a6c304d51c928cea39e0f70c696a364a10f96c43",
+  "em_macro/t19_vol.py": "9908045f019ba2fbd82f89929c7c9b4c88d5eeb70a20e03d56324e75035ba1e3",
+  "em_macro/t1619.py": "f6b6de1bc85668d342b04f94fbddd1e6cf9beef58991265e8a0c015ad338ec4b",
+  "em_macro/t01.py": "bc52b3e01869efd0bf8c18bc891bcd17df376e96bbc8e68e40fe2f8412432b2b",
+  "em_macro/tstrend.py": "f02acd6e05232273b6a531674fe00be0cf63cf4704edbce012af5048f29c2344",
+  "em_macro/holdout.py": "a8c1800ed38eb4a7c08a6062d43b0b5ff42f497984fa8983d87ea29263c26236",
+  "docs/prereg/T16-T19_risk_batch.md": "1e24549bbb1d6092548e38ecc6d79e4170f957cbc16a7a6ac2859422e32ad838",
+  "data/events/elections.csv": "adfe5524d79ae07eeae714f4e2fa89444406862d2dc96841d4e32622a8b06056"
+ }
+}
