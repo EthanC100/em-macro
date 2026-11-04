@@ -1,41 +1,43 @@
 # Raw data archive
 
 **Rule (from 2026-11-04):** raw data used by any trial is kept, not only hashed. Each trial's raw files are packaged
-as compressed archives and attached to the GitHub release **`raw-data-archive`** of this repository; their SHA-256
-hashes are recorded below. `data/raw/` is gitignored, and sources revise their history, so a hash alone cannot
-bring back the data a trial used.
+as a compressed archive whose SHA-256 is recorded below. An archive of **50 MB or less is committed to the
+repository under `data/kept/<trial>/`** (the default); a larger one is attached to the GitHub release
+**`raw-data-archive`** of this repository instead. `data/raw/` is gitignored, and sources revise their history, so
+a hash alone cannot bring back the data a trial used.
 
 **For a new trial:** before the trial's run is reported, run
 
 ```
-python -m em_macro.archive_raw pack <trial id> data/raw/<trial's raw folder>   # archive + manifest -> dist/raw_archive/, row below
-python -m em_macro.archive_raw upload dist/raw_archive/<asset> ...             # creates the release if needed (needs `gh`)
+python -m em_macro.archive_raw pack <trial id> data/raw/<trial's raw folder>   # archive + manifest; <= 50 MB -> data/kept/<trial>/, row below
+git add data/kept/<trial id> docs/raw_data_archive.md                          # and commit
+python -m em_macro.archive_raw upload dist/raw_archive/<asset> ...             # only for an archive over 50 MB (needs `gh`)
 ```
 
-and commit the updated table. `pack` writes a deterministic `.tar.gz` (sorted members, fixed owner, modes and
-timestamps) and a per-file manifest (path, bytes, SHA-256). An archive over 1.9 GB is split into `.part001`,
-`.part002`, ... (GitHub's limit is 2 GiB per release asset); join with `cat <asset>.part* > <asset>`. `upload`
-refuses a file whose SHA-256 differs from this record and never replaces an asset already on the release.
-`python -m em_macro.archive_raw check <files>` checks downloaded assets against the record.
+`pack` writes a deterministic `.tar.gz` (sorted members, fixed owner, modes and timestamps) and a per-file manifest
+(path, bytes, SHA-256). When the archive is 50 MB or less, `pack` moves both into `data/kept/<trial>/` and records
+them with status `kept in repository`; commit that folder with the updated table. A larger archive stays in
+`dist/raw_archive/` with status `pending upload` until `upload` attaches it to the release (`pack --release` forces
+this for any size). An archive over 1.9 GB is split into `.part001`, `.part002`, ... (GitHub's limit is 2 GiB per
+release asset); join with `cat <asset>.part* > <asset>`. `upload` refuses a file whose SHA-256 differs from this
+record and never replaces an asset already on the release. `python -m em_macro.archive_raw check <files>` checks
+any archive, kept or downloaded, against the record.
 
-**Restore:** download the asset from the release, check it, and extract it into `data/raw/`:
-`python -m em_macro.archive_raw check <asset> && tar -xzf <asset> -C data/raw`.
+**Restore:** take the archive from `data/kept/<trial>/` (or download it from the release), check it, and extract it
+into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <asset> -C data/raw`.
 
 ## Assets
 
 | trial | asset | bytes | SHA-256 | contents | recorded | status |
 |---|---|---|---|---|---|---|
-| T02 | `econ_momentum_raw_2026-11-04.tar.gz` | 16533509 | `9be8876bba5596594a21e7ea7bd76b0dcb7a878018728c9b96a69e8081558f3c` | `data/raw/econ_momentum/` as used in the T02 run: 336 files (OECD revisions, ECB RTD, OECD KEI, ALFRED); `data/kept/T02/` (commit `0ba5ce4`), unchanged | 2026-11-04 | pending upload |
+| T02 | `econ_momentum_raw_2026-11-04.tar.gz` | 16533509 | `9be8876bba5596594a21e7ea7bd76b0dcb7a878018728c9b96a69e8081558f3c` | `data/raw/econ_momentum/` as used in the T02 run: 336 files (OECD revisions, ECB RTD, OECD KEI, ALFRED); `data/kept/T02/` (commit `0ba5ce4`), unchanged | 2026-11-04 | kept in repository (`data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz`) |
 
 ## Notes on what is and is not archived (2026-11-04)
 
-- **Status `pending upload`.** The release `raw-data-archive` has not been created yet: the session that set this
-  up could not create GitHub releases or upload assets (its GitHub access has no release-creation call, and tag
-  pushes are refused by its git proxy, as for `v1.0-frozen`). To publish, from a normal clone with `gh` logged in:
-  `python -m em_macro.archive_raw upload data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz`, then commit this
-  file (the status column changes to `on release`). Until then the archive is safe in git on `main`
-  (`data/kept/T02/`). For future trials the release, not git, is the place for raw archives.
-
+- **Status `kept in repository`.** The T02 archive is committed on `main` as
+  `data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz` (16.5 MB, under the 50 MB limit), which satisfies the
+  retention rule; no GitHub release is needed for it. The release `raw-data-archive` does not exist yet and is
+  created by `upload` only when a trial's archive is over 50 MB.
 - **T02 (economic momentum, ledger T13).** The raw set as used in the T02 run (`data/raw/econ_momentum/`, 336
   files: OECD revisions, ECB real-time database, OECD KEI, ALFRED vintages) was packaged by the T02 session as
   `econ_momentum_raw_2026-11-04.tar.gz` and committed on branch `trial/T02-econ-momentum` (commit `0ba5ce4`), now

@@ -19,6 +19,7 @@ def doc(tmp_path, monkeypatch):
     p = tmp_path / "raw_data_archive.md"
     p.write_text(DOC)
     monkeypatch.setattr(A, "DOC", p)
+    monkeypatch.setattr(A, "KEPT_DIR", tmp_path / "data" / "kept")
     return p
 
 
@@ -53,7 +54,33 @@ def test_split_parts_join_back(tmp_path):
     assert A.split(g, part_bytes=4096) == [g] and g.exists()
 
 
-def test_pack_records_hashes_and_refuses_to_change_them(tmp_path, doc):
+def test_pack_keeps_small_archives_in_the_repository(tmp_path, doc):
+    assets = A.pack("T99", _raw(tmp_path), tmp_path / "out")
+    rec = A.recorded()
+    assert sorted(rec) == sorted(a.name for a in assets)
+    kept = tmp_path / "data" / "kept" / "T99"
+    assert [a.parent for a in assets] == [kept, kept] and not any((tmp_path / "out").iterdir())
+    for a in assets:
+        assert rec[a.name]["sha256"] == A.sha256_file(a)
+        assert rec[a.name]["status"].startswith("kept in repository (`") and a.name in rec[a.name]["status"]
+    assert A.check(assets)
+
+
+def test_pack_leaves_large_archives_for_the_release(tmp_path, doc, monkeypatch):
+    monkeypatch.setattr(A, "KEEP_BYTES", 10)                      # everything is "large"
+    assets = A.pack("T98", _raw(tmp_path), tmp_path / "out")
+    assert all(a.parent == tmp_path / "out" for a in assets) and not (tmp_path / "data" / "kept").exists()
+    assert all(A.recorded()[a.name]["status"] == "pending upload" for a in assets)
+    # --release keeps a small archive out of the repository too
+    (tmp_path / "out2").mkdir()
+    monkeypatch.setattr(A, "KEEP_BYTES", 50 * 1024 ** 2)
+    assets = A.pack("T97", _raw(tmp_path / "second"), tmp_path / "out2", release=True)
+    assert all(a.parent == tmp_path / "out2" for a in assets)
+    assert all(A.recorded()[a.name]["status"] == "pending upload" for a in assets)
+
+
+def test_pack_records_hashes_and_refuses_to_change_them(tmp_path, doc, monkeypatch):
+    monkeypatch.setattr(A, "KEEP_BYTES", 10)
     assets = A.pack("T99", _raw(tmp_path), tmp_path / "out")
     rec = A.recorded()
     assert sorted(rec) == sorted(a.name for a in assets)
@@ -74,4 +101,7 @@ def test_the_repository_record_parses():
     rec = A.recorded()
     t02 = rec["econ_momentum_raw_2026-11-04.tar.gz"]
     assert t02["sha256"] == "9be8876bba5596594a21e7ea7bd76b0dcb7a878018728c9b96a69e8081558f3c"
-    assert t02["bytes"] == 16533509 and t02["bytes"] < A.GITHUB_ASSET_LIMIT
+    assert t02["bytes"] == 16533509 and t02["bytes"] <= A.KEEP_BYTES
+    assert t02["status"] == "kept in repository (`data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz`)"
+    kept = A.ROOT / "data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz"
+    assert kept.exists() and A.sha256_file(kept) == t02["sha256"]

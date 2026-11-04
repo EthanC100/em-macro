@@ -19,12 +19,18 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
   model. `results/systematic/positions.csv` sizes positions in per cent of capital and `results/systematic/paper_pnl.csv`
   records returns in decimal fractions; neither file depends on the capital level.
 - **Reporting convention:** all performance, in every period (design 2005–2019, test 2020-01..2026-09, live paper
-  trading from October 2026), is reported in percentages of capital. A change in the capital level therefore
+  trading from November 2026 (October 2026 is pre-live)), is reported in percentages of capital. A change in the capital level therefore
   changes no reported figure.
 - **Classification:** configuration change, not a trial. It is not counted in N (the multiple-testing trial count in
   `trials.csv`) and does not open a new trial group.
 - **Live paper record:** the October and November 2026 paper months are on the US$100,000 basis; December 2026
   onward on the US$10,000,000 basis. Because both are reported in percentages, the series is continuous.
+
+**2026-11-04 correction to C01:** the reporting-convention line above originally read "live paper trading from
+October 2026". It now reads "from November 2026 (October 2026 is pre-live)" because the live record starts with
+the first rebalance after the 3 Nov 2026 freeze (positions effective November 2026; the live-record start rule
+recorded below on 2026-11-04 and `LIVE_START_MONTH` in `ledger/build.py`); October 2026, after the 2020-01..2026-09
+test and before the freeze, is a pre-live gap month, not a live month. Nothing else in C01 changed.
 
 ## 2026-11-04: November 2026 rebalance ran late
 

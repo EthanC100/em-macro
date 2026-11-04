@@ -1,23 +1,26 @@
-"""Keep the raw data a trial used: compressed archives attached to the GitHub release "raw-data-archive".
+"""Keep the raw data a trial used: a compressed archive committed under data/kept/<trial>/ when it is
+50 MB or less (the default), or attached to the GitHub release "raw-data-archive" when larger.
 
 Rule (README, docs/raw_data_archive.md): raw data used by any trial is kept, not only hashed.
 
-    # 1. package a trial's raw folder (deterministic .tar.gz; split if over GitHub's asset limit)
-    python -m em_macro.archive_raw pack T03 data/raw/<folder> [--out dist/raw_archive]
+    # 1. package a trial's raw folder (deterministic .tar.gz); <= 50 MB -> data/kept/<trial>/ (commit it)
+    python -m em_macro.archive_raw pack T03 data/raw/<folder> [--out dist/raw_archive] [--release]
     # 2. or register an archive that already exists (e.g. one kept in git on a trial branch)
     python -m em_macro.archive_raw add T02 path/to/archive.tar.gz --contents "..."
-    # 3. upload every pending asset to the release (needs the GitHub CLI `gh`, logged in with write access)
+    # 3. upload a pending asset (over 50 MB, or packed with --release) to the release (needs `gh`)
     python -m em_macro.archive_raw upload dist/raw_archive/<asset> [...]
-    # 4. check downloaded assets against the recorded hashes
-    python -m em_macro.archive_raw check dist/raw_archive/<asset> [...]
+    # 4. check kept or downloaded archives against the recorded hashes
+    python -m em_macro.archive_raw check data/kept/<trial>/<asset> [...]
 
 ``pack`` writes ``<trial>_<folder>_raw_<date>.tar.gz`` (sorted members, fixed owner and modes, gzip header
-without a timestamp, so the same files give the same bytes), a per-file manifest
+without a timestamp, so the same files give the same bytes) and a per-file manifest
 ``<trial>_<folder>_raw_<date>_manifest.csv`` (path, bytes, SHA-256) next to it, and records each asset with
-its size and SHA-256 in docs/raw_data_archive.md.  An archive over ``PART_BYTES`` is split into
-``.part001``, ``.part002``, ... (GitHub's limit is 2 GiB per release asset); restore with
-``cat <asset>.part* > <asset>``.  ``upload`` creates the release if it does not exist, refuses a file whose
-SHA-256 differs from the record, and never replaces an asset already on the release.
+its size and SHA-256 in docs/raw_data_archive.md.  An archive of ``KEEP_BYTES`` (50 MB) or less is moved,
+with its manifest, into ``data/kept/<trial>/`` with status ``kept in repository``; a larger one (or any
+with ``--release``) stays in the output folder with status ``pending upload``.  An archive over
+``PART_BYTES`` is split into ``.part001``, ``.part002``, ... (GitHub's limit is 2 GiB per release asset);
+restore with ``cat <asset>.part* > <asset>``.  ``upload`` creates the release if it does not exist, refuses
+a file whose SHA-256 differs from the record, and never replaces an asset already on the release.
 """
 from __future__ import annotations
 
@@ -38,6 +41,8 @@ from .config import ROOT
 
 RELEASE_TAG = "raw-data-archive"
 DOC = ROOT / "docs" / "raw_data_archive.md"
+KEPT_DIR = ROOT / "data" / "kept"               # archives committed to the repository, one folder per trial
+KEEP_BYTES = 50 * 1024 ** 2                      # an archive this size or smaller is committed, not released
 GITHUB_ASSET_LIMIT = 2 * 1024 ** 3          # 2 GiB per release asset
 PART_BYTES = 1900 * 1024 ** 2               # split below the limit, with headroom
 TABLE_HEADER = "| trial | asset | bytes | SHA-256 | contents | recorded | status |"
@@ -139,6 +144,31 @@ def record(trial: str, asset: Path, contents: str, status: str = "pending upload
     return row
 
 
+def kept_status(path: Path) -> str:
+    """Status text for an archive committed under data/kept/."""
+    try:
+        rel = Path(path).resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        rel = Path(path).as_posix()
+    return f"kept in repository (`{rel}`)"
+
+
+def keep(trial: str, files: list[Path]) -> list[Path]:
+    """Move archive files into data/kept/<trial>/ (the committed place for archives of KEEP_BYTES or less)."""
+    dest = KEPT_DIR / trial
+    dest.mkdir(parents=True, exist_ok=True)
+    out = []
+    for f in files:
+        f = Path(f)
+        target = dest / f.name
+        if f.resolve() != target.resolve():
+            if target.exists() and sha256_file(target) != sha256_file(f):
+                raise SystemExit(f"{target} exists with different contents; archives are immutable")
+            shutil.move(str(f), str(target))
+        out.append(target)
+    return out
+
+
 def set_status(name: str, status: str) -> None:
     lines = _doc_text().splitlines()
     for i, l in enumerate(lines):
@@ -150,7 +180,9 @@ def set_status(name: str, status: str) -> None:
 
 
 # ------------------------------------------------------------------ commands
-def pack(trial: str, src: Path, out_dir: Path, contents: str | None = None) -> list[Path]:
+def pack(trial: str, src: Path, out_dir: Path, contents: str | None = None, release: bool = False) -> list[Path]:
+    """Archive ``src``; an archive of KEEP_BYTES or less goes to data/kept/<trial>/ (status "kept in
+    repository") unless ``release`` is set; larger ones stay in ``out_dir`` as "pending upload"."""
     src = Path(src)
     if not src.is_dir() or not any(src.rglob("*")):
         raise SystemExit(f"{src} is not a non-empty folder")
@@ -159,10 +191,15 @@ def pack(trial: str, src: Path, out_dir: Path, contents: str | None = None) -> l
     manifest = write_manifest(src, Path(out_dir) / f"{stem}_manifest.csv")
     n = sum(1 for p in src.rglob("*") if p.is_file())
     desc = contents or f"`{src.as_posix()}`, {n} files"
-    assets = split(archive) + [manifest]
+    kept = not release and archive.stat().st_size <= KEEP_BYTES
+    assets = ([archive] if kept else split(archive)) + [manifest]
+    if kept:
+        assets = keep(trial, assets)
     for a in assets:
-        record(trial, a, desc if a != manifest else f"per-file SHA-256 of {stem}.tar.gz")
-        print(f"{a}  {a.stat().st_size} bytes  sha256 {sha256_file(a)}")
+        record(trial, a, desc if a.name != manifest.name else f"per-file SHA-256 of {stem}.tar.gz",
+               status=kept_status(a) if kept else "pending upload")
+        print(f"{a}  {a.stat().st_size} bytes  sha256 {sha256_file(a)}"
+              + ("  (kept in repository: commit it)" if kept else "  (pending upload to the release)"))
     return assets
 
 
@@ -213,6 +250,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("pack", help="archive a trial's raw folder and record it")
     p.add_argument("trial"), p.add_argument("src", type=Path)
     p.add_argument("--out", type=Path, default=ROOT / "dist" / "raw_archive"), p.add_argument("--contents")
+    p.add_argument("--release", action="store_true", help="attach to the release even if 50 MB or less")
     a = sub.add_parser("add", help="record an existing archive")
     a.add_argument("trial"), a.add_argument("file", type=Path), a.add_argument("--contents", required=True)
     u = sub.add_parser("upload", help="upload recorded assets to the release")
@@ -221,11 +259,14 @@ def main(argv=None) -> int:
     c.add_argument("files", nargs="+", type=Path)
     args = ap.parse_args(argv)
     if args.cmd == "pack":
-        pack(args.trial, args.src, args.out, args.contents)
+        pack(args.trial, args.src, args.out, args.contents, args.release)
     elif args.cmd == "add":
-        parts = split(args.file, remove=False)
-        for f in parts:
-            print(record(args.trial, f, args.contents))
+        if args.file.stat().st_size <= KEEP_BYTES:
+            for f in keep(args.trial, [args.file]):
+                print(record(args.trial, f, args.contents, status=kept_status(f)))
+        else:
+            for f in split(args.file, remove=False):
+                print(record(args.trial, f, args.contents))
     elif args.cmd == "upload":
         upload(args.files)
     elif args.cmd == "check":
