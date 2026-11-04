@@ -1,0 +1,13 @@
+period,months,with,corr
+2020-01..2026-09 (test),81,carry,0.6055
+2020-01..2026-09 (test),81,trend,0.3190
+2020-01..2026-09 (test),81,value,-0.3018
+2020-01..2026-09 (test),81,v1.0,0.3159
+"2005-2019 (in-sample, context)",166,carry,0.5898
+"2005-2019 (in-sample, context)",166,trend,-0.0087
+"2005-2019 (in-sample, context)",166,value,0.1470
+"2005-2019 (in-sample, context)",166,v1.0,0.4793
+2006-2026 (all months),247,carry,0.5931
+2006-2026 (all months),247,trend,0.0949
+2006-2026 (all months),247,value,0.0164
+2006-2026 (all months),247,v1.0,0.4295
