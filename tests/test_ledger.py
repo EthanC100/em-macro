@@ -406,7 +406,7 @@ def test_evidence_groups_and_status(tmp_path):
                                     f"{'s' if n_live != 1 else ''}")
     assert "15 rejected" in ev["overall"]                 # 11, T13 (trial T02), and T16, T17, T19
     assert "v1.1 (v1.0 + T18, passed) live for" in ev["overall"]
-    assert "1 idea under prospective test" in ev["overall"]   # T15, the election continuation rule
+    assert "4 ideas under prospective test" in ev["overall"]   # T15, the election continuation rule, and the pending T20-T22
     assert "T13" in failed and "T14" not in failed and "T15" not in failed and "T18" not in failed
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
