@@ -150,7 +150,22 @@ def test_build_writes_site_and_json(tmp_path):
     assert next(t for t in tr["items"] if t["trial_id"] == "T12")["status"] == "fail"
     status = {t["trial_id"]: t["status"] for t in tr["items"]}
     assert status["T14"] == "inconclusive" and status["T15"] == "pending"      # election study and its live test
-    assert tr["summary"]["n"] == 15 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 1
+    # T01-T15, then the T16-T19 risk batch (T18 passed; T16, T17, T19 failed)
+    assert tr["summary"]["n"] == 19 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 1
+    assert status["T18"] == "pass" and {status[t] for t in ("T16", "T17", "T19")} == {"fail"}
+    # v1.1 (v1.0 + T18) next to v1.0 on the Algorithm page
+    v11, sbs = alg["v11"], alg["side_by_side"]
+    assert [v["id"] for v in sbs["versions"]] == ["v1.0", "v1.1"]
+    assert v11["live_start_month"] == "2026-12" and sbs["common_window"]["start"] == "2026-12"
+    assert all(m["live"] == (m["month"] >= "2026-12") for m in v11["months"])
+    for v in sbs["versions"]:
+        assert set(v["live"]) >= {"months_live", "live_pnl_pct", "sharpe", "max_drawdown_pct", "turnover_x_pa"}
+    assert sbs["versions"][0]["live"]["months_live"] == n_live
+    assert sbs["versions"][1]["live"]["months_live"] == sum(m["live"] for m in v11["months"])
+    assert sbs["versions"][0]["backtest"]["sharpe"] == pytest.approx(0.6536, abs=1e-4)
+    assert sbs["versions"][1]["backtest"]["sharpe"] == pytest.approx(0.9163, abs=1e-4)
+    assert sbs["versions"][1]["backtest"]["turnover_x_pa"] == pytest.approx(11.5997, abs=1e-4)
+    assert len(v11["positions"]) == sum(1 for _ in open(ROOT / "results/systematic_v1.1/positions.csv")) - 1
     el = json.loads((out / "data/elections.json").read_text())
     if (ROOT / "data/elections/calendar.csv").exists():
         # the election tracker's calendar takes precedence over the historical event files (README section 14)
@@ -371,20 +386,26 @@ def test_evidence_groups_and_status(tmp_path):
     groups = {g["key"]: g["items"] for g in ev["groups"]}
     live = groups["live"][0]
     _, n_live = _live_results()
+    assert [i["id"] for i in groups["live"]] == ["v1.0", "v1.1"]          # "Live and under test"
+    v11 = groups["live"][1]
+    assert v11["trial_id"] == "T18" and v11["under_test"] and v11["live_since"] == "2026-12-03"
+    assert v11["backtest_sharpe"] == pytest.approx(0.9163, abs=1e-4) and "frozen control v1.0" in v11["reason"]
     assert live["trial_id"] == "T01" and live["months_needed"] == 55 and live["live_months"] == n_live
     assert live["backtest_sharpe"] == pytest.approx(0.654, abs=1e-3)
     rule = groups["prospective"][0]
     assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
     assert rule["trial_id"] == "T15" and len(groups["prospective"]) == 1     # T15 is the election rule, listed once
-    assert groups["passed"] == []                      # T01 is the live entry, not a passed trial
+    # T01 is the live entry, not a passed trial; T18 passed and runs live as v1.1
+    assert [t["id"] for t in groups["passed"]] == ["T18"] and groups["passed"][0]["live_as"] == "v1.1"
     failed = {t["id"]: t for t in groups["failed"]}
     assert "T12" in failed and failed["T12"]["reason"].startswith("rejected (failed pre-registered pass rule)")
     assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
     assert ev["overall"].startswith(f"No validated discretionary edge yet; v1.0 live for {n_live} month"
                                     f"{'s' if n_live != 1 else ''}")
-    assert "12 rejected" in ev["overall"]                 # 11 on main plus T13 (trial T02, rejected)
+    assert "15 rejected" in ev["overall"]                 # 11, T13 (trial T02), and T16, T17, T19
+    assert "v1.1 (v1.0 + T18, passed) live for" in ev["overall"]
     assert "1 idea under prospective test" in ev["overall"]   # T15, the election continuation rule
-    assert "T13" in failed and "T14" not in failed and "T15" not in failed
+    assert "T13" in failed and "T14" not in failed and "T15" not in failed and "T18" not in failed
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
 

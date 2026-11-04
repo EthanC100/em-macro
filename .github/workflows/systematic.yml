@@ -1,6 +1,11 @@
 # Monthly update of the systematic macro strategy (positions + paper P&L).
 # Refreshes the input data and applies the FROZEN design (results/systematic/fit/frozen_design.json);
 # no frozen result (event study, risk model, strategy test) is re-estimated or re-tested.
+# Two versions run live in parallel on the same refreshed inputs (docs/v1.1_freeze.md):
+#   v1.0 (frozen control)   -> results/systematic/       (steps and outputs as before v1.1 existed)
+#   v1.1 (v1.0 + T18 rule)  -> results/systematic_v1.1/  and results/live_compare/turnover.csv
+# The v1.1 steps run after v1.0's and are continue-on-error: a v1.1 failure never stops v1.0's rebalance
+# from being committed, but it still opens (or comments on) the alert issue.
 # If any step fails, the last step opens (or comments on) a GitHub issue
 # "[ALERT] systematic-monthly failed <date>" with the failing step and the end of its log.
 name: systematic-monthly
@@ -92,6 +97,20 @@ jobs:
         continue-on-error: true
         run: python -m ledger.screener 2>&1 | tee "$RUNNER_TEMP/screener.log"
 
+      # v1.1 = frozen v1.0 + the T18 rebalancing rule (em_macro/systematic_v11.py). Same inputs as v1.0's
+      # update; writes only results/systematic_v1.1/ and results/live_compare/. Live record from the
+      # 3 December 2026 rebalance (positions effective 2026-12).
+      - name: v1.1 positions and paper P&L (v1.0 + T18 rule)
+        id: update_v11
+        continue-on-error: true
+        run: python -m em_macro.systematic_v11 update 2>&1 | tee "$RUNNER_TEMP/update_v11.log"
+
+      - name: v1.1 rebalance log (scheduled date vs actual run date)
+        id: rebalance_v11
+        if: steps.update_v11.outcome == 'success'
+        continue-on-error: true
+        run: python -m em_macro.systematic_v11 rebalance 2>&1 | tee "$RUNNER_TEMP/rebalance_v11.log"
+
       - name: Tests
         id: tests
         run: python -m pytest -q tests 2>&1 | tee "$RUNNER_TEMP/tests.log"
@@ -108,6 +127,8 @@ jobs:
                     data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
                     results/coverage_report.md results/panel_coverage.md \
                     results/screener data/ledger/reports
+            # v1.1 (its own folder) and the v1.0/v1.1 turnover comparison; absent only if v1.1 never ran
+            git add results/systematic_v1.1 results/live_compare 2>/dev/null || true
             if git diff --cached --quiet; then
               echo "nothing to commit"
             else
@@ -117,7 +138,7 @@ jobs:
           } 2>&1 | tee "$RUNNER_TEMP/commit.log"
 
       - name: Close open alert issues after a successful run
-        if: success()
+        if: success() && steps.update_v11.outcome == 'success' && steps.rebalance_v11.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -130,22 +151,26 @@ jobs:
           done
 
       - name: Open or update the alert issue
-        if: failure()
+        if: failure() || steps.update_v11.outcome == 'failure' || steps.rebalance_v11.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
           OUTCOMES: >-
             install=${{ steps.install.outcome }}
             refresh=${{ steps.refresh.outcome }}
             update=${{ steps.update.outcome }}
             rebalance=${{ steps.rebalance.outcome }}
             overlay=${{ steps.overlay.outcome }}
+            update_v11=${{ steps.update_v11.outcome }}
+            rebalance_v11=${{ steps.rebalance_v11.outcome }}
             tests=${{ steps.tests.outcome }}
             commit=${{ steps.commit.outcome }}
         run: |
           declare -A names=([install]="Install" [refresh]="Refresh data" [update]="Positions and paper P&L"
                             [rebalance]="Rebalance log" [overlay]="Political-risk overlay and overrides"
+                            [update_v11]="v1.1 positions and paper P&L" [rebalance_v11]="v1.1 rebalance log"
                             [tests]="Tests" [commit]="Commit and push")
           step=""
           for kv in $OUTCOMES; do
@@ -168,8 +193,15 @@ jobs:
               echo "**Failing step:** a setup step before the pipeline (checkout, Python or the cache); see the run log."
             fi
             echo
-            echo "This month's rebalance has not been committed. Fix the cause, then re-run the workflow"
-            echo "(Actions > systematic-monthly > Run workflow); the rebalance log will record the actual run date."
+            if { [ "$step" = "update_v11" ] || [ "$step" = "rebalance_v11" ]; } && [ "$COMMIT_OUTCOME" = "success" ]; then
+              echo "Only the v1.1 step failed: v1.0's rebalance (results/systematic/) was committed as usual;"
+              echo "v1.1's positions and P&L for this month were not updated. Fix the cause, then re-run the"
+              echo "workflow (Actions > systematic-monthly > Run workflow); both rebalance logs record the actual"
+              echo "run date (v1.0's re-run reproduces the same positions)."
+            else
+              echo "This month's rebalance has not been committed. Fix the cause, then re-run the workflow"
+              echo "(Actions > systematic-monthly > Run workflow); the rebalance log will record the actual run date."
+            fi
           } > "$body"
           gh label create alert --repo "$GITHUB_REPOSITORY" --color d73a4a \
             --description "Automated failure alert from a workflow" --force >/dev/null 2>&1 || true

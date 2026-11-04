@@ -379,7 +379,7 @@
     const alg = await load('algorithm');
     const months = alg.months;
     const live = alg.live, bt = alg.frozen.test_2020_on || {}, design = alg.frozen.design_2005_2019 || {};
-    setHead('Algorithm', `v1.0 systematic macro · paper P&L to ${fmtMonth(months.length ? months[months.length - 1].month : null)} · frozen ${fmtMonth(alg.frozen.freeze_month)}`);
+    setHead('Algorithm', `v1.0 and v1.1 systematic macro · paper P&L to ${fmtMonth(months.length ? months[months.length - 1].month : null)} · frozen ${fmtMonth(alg.frozen.freeze_month)}`);
     const cmp = (label, l, b, d, f = (x) => fmtNum(x, 2)) => `<tr><td>${esc(label)}</td><td class="num">${f(l)}</td><td class="num">${f(b)}</td><td class="num">${f(d)}</td></tr>`;
     const pctS = (x) => fmtPct(x, 1, true), pct = (x) => fmtPct(x, 1);
     const liveMonths = months.filter((m) => m.live);
@@ -393,6 +393,55 @@
     const maxRisk = Math.max(...alg.by_country.map((c) => c.risk_share_pct), 1);
     const countryRows = alg.by_country.map((c) => `<tr><td>${esc(c.country)}</td><td class="wrap small muted">${esc(c.positions.join(', '))}</td><td class="num">${fmtPct(c.risk_share_pct, 1)}</td><td><div class="bar"><i style="width:${(100 * c.risk_share_pct / maxRisk).toFixed(1)}%"></i></div></td><td class="num">${fmtPct(c.gross_pct, 0)}</td></tr>`).join('');
     const sleeveRows = alg.by_sleeve.map((s) => `<tr><td>${esc(s.sleeve)}</td><td class="num">${s.n}</td><td class="num">${fmtPct(s.risk_share_pct, 1)}</td><td class="num">${fmtPct(s.gross_pct, 0)}</td></tr>`).join('');
+    // v1.0 and v1.1 side by side (v1.1 = v1.0 + the T18 rule; v1.0 stays the frozen control)
+    const sbs = alg.side_by_side, v11 = alg.v11;
+    const [s10, s11] = sbs ? sbs.versions : [null, null];
+    const cw = sbs ? sbs.common_window : null;
+    const two = (label, a, b, f) => `<tr><td>${esc(label)}</td><td class="num">${f(a)}</td><td class="num">${f(b)}</td></tr>`;
+    const nOr = (x) => (x == null ? '—' : x);
+    const xTurn = (x) => (isNum(x) ? `${fmtNum(x, 1)}×` : '—');
+    const liveSince = (v) => fmtDate(v.live_since);
+    const sbsSection = sbs ? `
+      <section class="section">
+        <h2>v1.0 and v1.1 side by side</h2>
+        <div class="card rule">
+          <p class="small muted">${esc(s10.label)} and ${esc(s11.label)}. v1.0 is the frozen control. v1.1 is v1.0 plus exactly the T18 rule (risk-unit no-trade band and partial rebalancing, replacing v1.0's 25% band); it passed its pre-registered test. Both run live in parallel on the same inputs every month. Live figures are net of costs over each version's own live record; v1.0's are its model P&L, before manual overrides. The backtest rows are the T16–T19 batch, evaluated once. No live month has closed until the monthly run books it.</p>
+          <div class="table-wrap"><table><thead><tr><th>Measure</th><th class="num">${esc(s10.id)}</th><th class="num">${esc(s11.id)}</th></tr></thead><tbody>
+            ${two('Live from rebalance', s10, s11, liveSince)}
+            ${two('Months live', s10.live.months_live, s11.live.months_live, nOr)}
+            ${two('Live P&L, cumulative', s10.live.live_pnl_pct, s11.live.live_pnl_pct, (x) => fmtPct(x, 2, true))}
+            ${two('Last live month', s10.live, s11.live, (l) => (l.last_month ? `${fmtPct(l.last_month_pct, 2, true)} (${fmtMonth(l.last_month)})` : '—'))}
+            ${two('Live Sharpe', s10.live.sharpe, s11.live.sharpe, (x) => fmtNum(x, 2))}
+            ${two('Live max drawdown', s10.live.max_drawdown_pct, s11.live.max_drawdown_pct, (x) => fmtPct(x, 1))}
+            ${two('Live turnover, ×/yr', s10.live.turnover_x_pa, s11.live.turnover_x_pa, xTurn)}
+            <tr><td colspan="3" class="small muted wrap">Common window, from ${fmtMonth(cw.start)}</td></tr>
+            ${two('Months', cw['v1.0'].months_live, cw['v1.1'].months_live, nOr)}
+            ${two('P&L, cumulative', cw['v1.0'].live_pnl_pct, cw['v1.1'].live_pnl_pct, (x) => fmtPct(x, 2, true))}
+            ${two('Sharpe', cw['v1.0'].sharpe, cw['v1.1'].sharpe, (x) => fmtNum(x, 2))}
+            ${two('Max drawdown', cw['v1.0'].max_drawdown_pct, cw['v1.1'].max_drawdown_pct, (x) => fmtPct(x, 1))}
+            ${two('Turnover, ×/yr', cw['v1.0'].turnover_x_pa, cw['v1.1'].turnover_x_pa, xTurn)}
+            <tr><td colspan="3" class="small muted wrap">Backtest ${esc(sbs.backtest_period)}, 1× costs</td></tr>
+            ${two('Sharpe', s10.backtest.sharpe, s11.backtest.sharpe, (x) => fmtNum(x, 2))}
+            ${two('Return, % a year', s10.backtest.ann_return_pct, s11.backtest.ann_return_pct, (x) => fmtPct(x, 1, true))}
+            ${two('Max drawdown', s10.backtest.max_drawdown_pct, s11.backtest.max_drawdown_pct, (x) => fmtPct(x, 1))}
+            ${two('Turnover, ×/yr', s10.backtest.turnover_x_pa, s11.backtest.turnover_x_pa, xTurn)}
+          </tbody></table></div>
+          <p class="small muted">Sources: results/systematic/paper_pnl.csv, ${esc(v11.source)}/paper_pnl.csv, ${esc(sbs.turnover_source)}, ${esc(sbs.backtest_source)}. <a href="${esc(s10.freeze_doc_url)}" target="_blank" rel="noopener">v1.0 freeze record</a> · <a href="${esc(s11.freeze_doc_url)}" target="_blank" rel="noopener">v1.1 freeze record</a></p>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="k">v1.1 last rebalance</span><span class="v sm">${fmtDate(v11.rebalance_date)}</span><span class="s">positions as of ${fmtMonth(v11.as_of)}, held through ${fmtMonth(v11.effective_from)}${v11.effective_from && v11.effective_from < v11.live_start_month ? ' (pre-live)' : ''}</span></div>
+          <div class="stat"><span class="k">v1.1 gross</span><span class="v">${fmtPct(v11.positions.reduce((a, p) => a + Math.abs(p.size_pct_of_capital || 0), 0), 0)}</span><span class="s">of capital, ${v11.positions.length} positions</span></div>
+        </div>
+      </section>` : '';
+    const v11PosRows = v11 ? v11.positions.map((p) => `
+      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${badge(p.side)}</td>
+      <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.target_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.trade_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td></tr>`).join('') : '';
+    const v11PosSection = v11 ? `
+      <section class="section">
+        <h2>v1.1 positions</h2>
+        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">v1.0 target</th><th class="num">Trade</th><th class="num">Risk</th></tr></thead><tbody>${v11PosRows}</tbody></table></div>
+        <p class="small muted">Size is v1.1's held position in % of capital; v1.0 target is the pre-band target both versions share; trade is this rebalance's change. A position with a zero target is a residual being closed by partial rebalancing. Source: ${esc(v11.source)}/positions.csv.</p>
+      </section>` : '';
     const liveRows = liveMonths.length ? liveMonths.map((m) => `<tr><td>${fmtMonth(m.month)}</td><td class="num ${signClass(m.net)}">${fmtPct(m.net * 100, 2, true)}</td><td class="num">${fmtPct(m.model_net * 100, 2, true)}</td><td class="num">${fmtPct((m.override_pnl || 0) * 100, 2, true)}</td><td class="num">${fmtPct(m.carry_basket * 100, 2, true)}</td><td class="num">${fmtPct(m.sp500_tr * 100, 2, true)}</td><td class="num">${fmtNum(m.account_index, 1)}</td></tr>`).join('') : '';
     view.innerHTML = `
       <section class="section">
@@ -417,6 +466,7 @@
           <div class="stat"><span class="k">Overrides</span><span class="v">${alg.overrides.length}</span><span class="s">manual overrides logged</span></div>
         </div>
       </section>
+      ${sbsSection}
       ${liveMonths.length ? `<section class="section"><h2>Live months</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Net</th><th class="num">Model</th><th class="num">Override</th><th class="num">Carry basket</th><th class="num">S&P 500</th><th class="num">${esc(ACCOUNT_LABEL)}</th></tr></thead><tbody>${liveRows}</tbody></table></div></section>` : ''}
       <section class="section">
         <h2>Equity: ${esc(ACCOUNT_LABEL)}</h2>
@@ -443,7 +493,8 @@
         <h2>All positions</h2>
         <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">Risk</th><th class="num">Vol</th><th class="num">Carry z</th><th class="num">Trend z</th><th class="num">Value z</th></tr></thead><tbody>${posRows}</tbody></table></div>
         <p class="small muted">Size is signed notional in % of capital; risk share is the position's share of portfolio risk. Source: results/systematic/positions.csv.</p>
-      </section>`;
+      </section>
+      ${v11PosSection}`;
     equityChart('c-alg-equity', months, { historyBase: alg.frozen.freeze_month });
     monthlyBarChart('c-alg-monthly', months);
     drawdownChart('c-alg-dd', months);
@@ -742,6 +793,15 @@
     const G_COLOR = { live: 'var(--c-algorithm)', prospective: 'var(--warn)', passed: 'var(--good)', failed: 'var(--bad)' };
     const progress = (pct, left, right) => `<div class="progress"><div class="bar ${pct >= 100 ? 'good' : 'warn'}"><i style="width:${Math.max(0, Math.min(100, pct || 0)).toFixed(1)}%"></i></div><div class="lbl"><span>${esc(left)}</span><span>${esc(right)}</span></div></div>`;
     const item = (g, it) => {
+      if (g === 'live' && it.under_test) return `
+        <div class="card ev-item"><div class="row-top"><span class="row-title"><span class="mono" style="color:var(--g)">${esc(it.id)}</span> <a href="${esc(it.link)}">${esc(it.name)}</a></span><span>${badge('live')} ${badge('under test')}</span></div>
+        <div class="stats">
+          <div class="stat"><span class="k">Live months</span><span class="v">${it.live_months}</span><span class="s">${it.live_months ? 'since' : 'from'} ${fmtDate(it.live_since)}</span></div>
+          <div class="stat"><span class="k">Live Sharpe</span><span class="v">${fmtNum(it.live_sharpe, 2)}</span><span class="s">backtest ${fmtNum(it.backtest_sharpe, 2)}</span></div>
+          <div class="stat"><span class="k">Live drawdown</span><span class="v ${signClass(it.live_max_drawdown_pct)}">${fmtPct(it.live_max_drawdown_pct, 1)}</span><span class="s">backtest ${fmtPct(it.backtest_max_drawdown_pct, 1)}</span></div>
+          <div class="stat"><span class="k">Live return</span><span class="v ${signClass(it.live_return_pct)}">${fmtPct(it.live_return_pct, 1, true)}</span><span class="s">v1.0 same months ${fmtPct(it.v1_0_same_window_return_pct, 1, true)}</span></div>
+        </div>
+        <div class="reason">${esc(it.reason)}</div></div>`;
       if (g === 'live') return `
         <div class="card ev-item"><div class="row-top"><span class="row-title"><a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge('live')}</div>
         <div class="stats">
@@ -758,7 +818,7 @@
         <div class="reason">${esc(it.reason)}</div><div class="row-meta">source ${esc(it.source)}</div></div>`;
       return `
         <div class="card ev-item"><div class="row-top"><span class="row-title"><span class="mono" style="color:var(--g)">${esc(it.id)}</span> <a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge(it.status)}</div>
-        <div class="reason">${esc(it.reason)}</div><div class="row-meta">${it.date ? `tested ${fmtDate(it.date)}` : ''}${it.group ? ` · ${esc(it.group)}` : ''}</div></div>`;
+        <div class="reason">${esc(it.reason)}</div><div class="row-meta">${it.date ? `tested ${fmtDate(it.date)}` : ''}${it.group ? ` · ${esc(it.group)}` : ''}${it.live_as ? ` · live as <a href="#/algorithm">${esc(it.live_as)}</a>` : ''}</div></div>`;
     };
     const EMPTY = { live: 'Nothing live.', prospective: 'Nothing under prospective test.', passed: 'None yet: no discretionary idea has passed a pre-registered test.', failed: 'None.' };
     view.innerHTML = `

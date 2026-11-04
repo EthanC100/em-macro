@@ -1,0 +1,15 @@
+as_of,effective_from,version,book,instrument,description,side,size_pct_of_capital,risk_share_pct,instrument_vol_pct,carry_z,trend_z,value_z,cost_pct_per_trade,target_pct_of_capital,trade_pct_of_capital
+2026-10,2026-11,v1.1,bond,MX10Y,Mexico 10y local-currency bond (excess over local policy rate),long,80.710,14.200,5.590,1.117,-0.098,-0.274,0.100,125.850,45.140
+2026-10,2026-11,v1.1,bond,GB-DE,"United Kingdom 10y bond spread over the Bund (long United Kingdom, short Bund)",long,37.950,3.100,2.570,,,,0.200,0.000,-37.950
+2026-10,2026-11,v1.1,bond,PL-DE,"Poland 10y bond spread over the Bund (long Poland, short Bund)",long,25.450,3.500,4.320,,,,0.200,0.000,-25.450
+2026-10,2026-11,v1.1,bond,ZA10Y,South Africa 10y local-currency bond (excess over local policy rate),long,13.370,2.800,6.760,0.504,0.348,-0.600,0.100,0.000,-13.370
+2026-10,2026-11,v1.1,bond,BR10Y,Brazil 10y local-currency bond (excess over local policy rate),short,-14.860,3.400,7.380,-0.506,0.918,-0.608,0.100,0.000,14.860
+2026-10,2026-11,v1.1,bond,DE10Y,German 10y Bund (excess over the ECB rate),short,-22.210,3.400,4.860,,,,0.100,0.000,22.210
+2026-10,2026-11,v1.1,bond,TR10Y,Turkey 10y local-currency bond (excess over local policy rate),short,-29.240,14.300,15.510,-1.115,-1.168,1.482,0.300,-45.320,-16.070
+2026-10,2026-11,v1.1,fx,TRY,TRY vs USD (Turkey),long,74.140,9.000,3.850,2.657,1.338,-1.079,0.300,95.780,21.640
+2026-10,2026-11,v1.1,fx,IDR,IDR vs USD (Indonesia),long,42.850,8.800,6.550,-0.385,-0.180,1.532,0.300,56.310,13.460
+2026-10,2026-11,v1.1,fx,BRL,BRL vs USD (Brazil),long,28.720,9.600,10.600,0.395,-0.009,0.371,0.100,34.810,6.090
+2026-10,2026-11,v1.1,fx,GBP,GBP vs USD (United Kingdom),short,-17.630,3.800,6.840,-0.580,0.158,-0.039,0.100,0.000,17.630
+2026-10,2026-11,v1.1,fx,MXN,MXN vs USD (Mexico),short,-18.890,5.800,9.760,-0.311,-0.815,0.328,0.100,-37.780,-18.890
+2026-10,2026-11,v1.1,fx,PLN,PLN vs USD (Poland),short,-34.650,9.100,8.310,-0.580,-0.798,-0.056,0.100,-44.380,-9.730
+2026-10,2026-11,v1.1,fx,EUR,EUR vs USD (euro area),short,-42.240,9.300,7.040,-0.702,-0.543,0.265,0.100,-52.410,-10.170

@@ -57,6 +57,16 @@ USD_SWITCH_CAPITAL = 10_000_000.0
 USD_SWITCH_EFFECTIVE_MONTH = "2026-12"
 USD_SWITCH_REBALANCE = "2026-12-03"
 USD_SWITCH_NOTE = "Paper capital raised to US$10,000,000 (configuration change, not performance)"
+# v1.1 = frozen v1.0 + the T18 rebalancing rule (docs/v1.1_freeze.md), run live in parallel with v1.0, which
+# remains the frozen control. Its live record starts with the 3 December 2026 rebalance (positions effective
+# 2026-12); earlier months after the T18 test period (2026-10, 2026-11) are its pre-live gap.
+V11_DIR = "results/systematic_v1.1"
+V11_LIVE_START_MONTH = "2026-12"
+V11_LIVE_SINCE = "2026-12-03"
+V11_TRIAL_ID = "T18"
+V11_NAME = "v1.1 systematic macro strategy (v1.0 + T18 turnover rule: risk-unit band and partial rebalancing)"
+LIVE_TURNOVER_FILE = "results/live_compare/turnover.csv"
+T18_PERFORMANCE_FILE = "results/T16-T19/performance.csv"
 
 
 def _prev_month(m: str) -> str:
@@ -366,6 +376,99 @@ def perf_stats(nets: list[float]) -> dict:
     }
 
 
+def _mean_x12(xs: list[float]) -> float | None:
+    return round(12 * sum(xs) / len(xs), 3) if xs else None
+
+
+def _backtest_row(rows: list[dict], strategy: str) -> dict:
+    """The T16-T19 batch's 2020-01..2026-09 row (all instruments, 1x costs) for v1.0 or T18 (= v1.1)."""
+    r = next((r for r in rows if r.get("universe") == "all" and r.get("costs") == "1x"
+              and r.get("strategy") == strategy and (r.get("period") or "").startswith("2020-01..2026-09")), None)
+    if not r:
+        return {}
+    return {"months": int(r["months"]), "sharpe": fnum(r.get("sharpe"), 4),
+            "ann_return_pct": fnum(r.get("ann_return_%"), 4), "max_drawdown_pct": fnum(r.get("max_drawdown_%"), 4),
+            "turnover_x_pa": fnum(r.get("turnover_x_pa"), 4), "cost_drag_pct_pa": fnum(r.get("cost_drag_%_pa"), 4)}
+
+
+def build_v11() -> dict:
+    """v1.1's paper P&L and positions (results/systematic_v1.1/), labelled by its own live start."""
+    pnl = read_csv(ROOT / V11_DIR / "paper_pnl.csv")
+    positions = read_csv(ROOT / V11_DIR / "positions.csv")
+    months = []
+    for r in pnl:
+        m = r.get("month")
+        if not m or m < "2020-01":
+            continue
+        live = m >= V11_LIVE_START_MONTH
+        phase = "live" if live else ("pre_live" if m > "2026-09" else "backtest")
+        months.append({"month": m, "net": fnum(r.get("net"), 6), "turnover": fnum(r.get("turnover"), 6),
+                       "cost": fnum(r.get("cost"), 6), "gross_leverage": fnum(r.get("gross_leverage"), 3),
+                       "sample": r.get("sample", ""), "live": live, "pre_live": phase == "pre_live", "phase": phase})
+    pos = [{**{k: p.get(k) for k in ("as_of", "effective_from", "book", "instrument", "description", "side")},
+            "country": COUNTRY_OF.get(p.get("instrument", ""), p.get("instrument", "")),
+            "sleeve": "Currencies" if p.get("book") == "fx" else "Bonds",
+            **{k: fnum(p.get(k), 3) for k in ("size_pct_of_capital", "target_pct_of_capital", "trade_pct_of_capital",
+                                               "risk_share_pct", "instrument_vol_pct", "carry_z", "trend_z",
+                                               "value_z")}}
+           for p in positions]
+    return {
+        "months": months, "positions": pos,
+        "as_of": positions[0].get("as_of") if positions else None,
+        "effective_from": positions[0].get("effective_from") if positions else None,
+        "rebalance_date": git_last_date(f"{V11_DIR}/positions.csv"),
+        "live_start_month": V11_LIVE_START_MONTH, "live_since": V11_LIVE_SINCE,
+        "pre_live_months": [m["month"] for m in months if m["pre_live"]],
+        "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.1_freeze.md", "source": V11_DIR,
+    }
+
+
+def side_by_side(v10_months: list[dict], v11: dict) -> dict:
+    """v1.0 and v1.1 live: P&L, Sharpe, drawdown, turnover and months live, each over its own live record and over
+    the common window (from v1.1's live start), plus the 2020-01..2026-09 backtest of each (T16-T19 batch, 1x).
+    v1.0 is shown on its model P&L (before manual overrides) so both columns are pure strategy figures."""
+    to = {r["month"]: r for r in read_csv(ROOT / LIVE_TURNOVER_FILE)}
+    bt = read_csv(ROOT / T18_PERFORMANCE_FILE)
+
+    def v10_net(m):
+        return m["model_net"] if m.get("model_net") is not None else m["net"]
+
+    def block(rows, net, turn):
+        nets = [net(m) for m in rows if net(m) is not None]
+        st = perf_stats(nets)
+        turns = [x for x in (turn(m) for m in rows) if x is not None]
+        return {"months_live": st["months"], "live_pnl_pct": st.get("total_return_pct"),
+                "last_month_pct": round(100 * nets[-1], 3) if nets else None, "last_month": rows[-1]["month"] if rows else None,
+                "sharpe": st.get("sharpe"), "max_drawdown_pct": st.get("max_drawdown_pct"),
+                "ann_vol_pct": st.get("ann_vol_pct"), "turnover_x_pa": _mean_x12(turns)}
+
+    v10_turn = lambda m: fnum(to.get(m["month"], {}).get("v1.0_turnover"), 6)
+    v11_turn = lambda m: m["turnover"]
+    v10_live = [m for m in v10_months if m["live"]]
+    v11_live = [m for m in v11["months"] if m["live"]]
+    common_start = V11_LIVE_START_MONTH
+    return {
+        "versions": [
+            {"id": "v1.0", "label": "v1.0 (frozen control)", "live_since": LIVE_SINCE, "live_start_month": LIVE_START_MONTH,
+             "live": block(v10_live, v10_net, v10_turn), "backtest": _backtest_row(bt, "v1.0"),
+             "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.0_freeze.md"},
+            {"id": "v1.1", "label": "v1.1 (v1.0 + T18 rule)", "live_since": V11_LIVE_SINCE,
+             "live_start_month": V11_LIVE_START_MONTH, "live": block(v11_live, lambda m: m["net"], v11_turn),
+             "backtest": _backtest_row(bt, V11_TRIAL_ID), "freeze_doc_url": v11["freeze_doc_url"]},
+        ],
+        "common_window": {
+            "start": common_start,
+            "v1.0": block([m for m in v10_live if m["month"] >= common_start], v10_net, v10_turn),
+            "v1.1": block(v11_live, lambda m: m["net"], v11_turn),
+        },
+        "backtest_period": "2020-01..2026-09", "backtest_source": T18_PERFORMANCE_FILE,
+        "turnover_source": LIVE_TURNOVER_FILE,
+        "note": "v1.0 is the frozen control; v1.1 adds only the T18 rule. Both are paper strategies run on the same "
+                "inputs each month. Live P&L is cumulative net of costs over each version's own live record; "
+                "turnover is one-way notional traded, annualised, in multiples of capital.",
+    }
+
+
 def build_algorithm() -> dict:
     pnl = read_csv(ROOT / "results/systematic/paper_pnl.csv")
     positions = read_csv(ROOT / "results/systematic/positions.csv")
@@ -472,8 +575,10 @@ def build_algorithm() -> dict:
     rebalance_date = git_last_date("results/systematic/positions.csv")
     as_of = positions[0].get("as_of") if positions else None
     effective_from = positions[0].get("effective_from") if positions else None
+    v11 = build_v11()
     return {
         "months": months, "live": live_stats, "backtest": backtest_stats, "frozen": frozen,
+        "v11": v11, "side_by_side": side_by_side(months, v11),
         "account_index_label": ACCOUNT_INDEX_LABEL,
         "positions": pos,
         "by_country": sorted(by_country.values(), key=lambda c: -c["risk_share_pct"]),
@@ -736,6 +841,11 @@ def one_line_reason(t: dict, limit: int = 160) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "\u2026"
 
 
+def _day_month(d: str) -> str:
+    x = date.fromisoformat(d)
+    return f"{x.day} {x.strftime('%b %Y')}"
+
+
 def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
     live = algorithm["live"]
     live_months = live.get("months", 0)
@@ -752,6 +862,28 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
         "live_since": algorithm["rebalance"]["live_since"], "last_month": algorithm["months"][-1]["month"] if algorithm["months"] else None,
         "reason": one_line_reason(v1) if v1 else "", "link": "#/algorithm",
     }
+    v11_live = algorithm["side_by_side"]["versions"][1]["live"]
+    v11_bt = algorithm["side_by_side"]["versions"][1]["backtest"]
+    v10_bt = algorithm["side_by_side"]["versions"][0]["backtest"]
+    v10_common = algorithm["side_by_side"]["common_window"]["v1.0"]
+    n11 = v11_live["months_live"]
+    v11_entry = {
+        "id": "v1.1", "trial_id": V11_TRIAL_ID, "name": V11_NAME, "status": "live", "under_test": True,
+        "live_months": n11, "live_sharpe": v11_live["sharpe"], "live_return_pct": v11_live["live_pnl_pct"],
+        "live_max_drawdown_pct": v11_live["max_drawdown_pct"], "live_turnover_x_pa": v11_live["turnover_x_pa"],
+        "backtest_sharpe": v11_bt.get("sharpe"), "backtest_max_drawdown_pct": v11_bt.get("max_drawdown_pct"),
+        "months_needed": None, "progress_pct": None,
+        "live_since": V11_LIVE_SINCE, "live_start_month": V11_LIVE_START_MONTH,
+        "last_month": v11_live["last_month"],
+        "v1_0_same_window_return_pct": v10_common["live_pnl_pct"],
+        "reason": (f"Under test against the frozen control v1.0, both run live in parallel on the same inputs; "
+                   f"live record from the {_day_month(V11_LIVE_SINCE)} rebalance. "
+                   + (f"{V11_TRIAL_ID} passed its pre-registered rule on 2020-01..2026-09 (Sharpe "
+                      f"{v11_bt['sharpe']:.2f} vs {v10_bt['sharpe']:.2f}, max drawdown {v11_bt['max_drawdown_pct']:.1f}% "
+                      f"vs {v10_bt['max_drawdown_pct']:.1f}%, turnover {v11_bt['turnover_x_pa']:.1f}x vs "
+                      f"{v10_bt['turnover_x_pa']:.1f}x a year)." if v11_bt and v10_bt else "")),
+        "link": "#/algorithm",
+    }
     elections = count_scored_elections(ROOT / "data/elections/signals.csv", today)
     rule_trial = next((t for t in trials["items"] if t.get("trial_group") == ELECTION_RULE_GROUP), None)
     prospective = [{
@@ -767,31 +899,37 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
                                 "threshold": None, "progress_pct": None, "reason": one_line_reason(t) or "not yet run",
                                 "link": "#/trials", "source": "trials.csv"})
     passed = [{"id": t["trial_id"], "name": t["name"], "status": "passed", "date": t.get("date_tested"),
-               "reason": one_line_reason(t), "link": "#/trials"}
+               "reason": one_line_reason(t), "link": "#/trials",
+               "live_as": "v1.1" if t["trial_id"] == V11_TRIAL_ID else None}
               for t in trials["items"] if t["status"] == "pass" and t.get("trial_id") != "T01"]
     failed = [{"id": t["trial_id"], "name": t["name"], "status": "failed", "date": t.get("date_tested"),
                "group": t.get("trial_group"), "reason": one_line_reason(t), "link": "#/trials"}
               for t in trials["items"] if t["status"] == "fail"]
     n_live = live_months
-    if passed:
-        overall = (f"{len(passed)} validated discretionary idea{'s' if len(passed) != 1 else ''}; "
+    # a passed trial that is now a live version (T18 -> v1.1) is a systematic rule change, not a discretionary idea
+    discretionary = [t for t in passed if t["id"] != V11_TRIAL_ID]
+    v11_text = (f"v1.1 (v1.0 + {V11_TRIAL_ID}, passed) live for {n11} month{'s' if n11 != 1 else ''} "
+                f"from the {_day_month(V11_LIVE_SINCE)} rebalance, in parallel with v1.0")
+    if discretionary:
+        overall = (f"{len(discretionary)} validated discretionary idea{'s' if len(discretionary) != 1 else ''}; "
                    f"v1.0 live for {n_live} month{'s' if n_live != 1 else ''} of the {months_needed} needed; "
-                   f"{len(failed)} rejected.")
+                   f"{v11_text}; {len(failed)} rejected.")
     else:
         overall = (f"No validated discretionary edge yet; v1.0 live for {n_live} month{'s' if n_live != 1 else ''} "
-                   f"({months_needed} needed for a 90%-confidence track record); "
+                   f"({months_needed} needed for a 90%-confidence track record); {v11_text}; "
                    f"{len(prospective)} idea{'s' if len(prospective) != 1 else ''} under prospective test; "
                    f"{len(failed)} rejected.")
     return {
         "overall": overall, "as_of": today.isoformat(),
         "groups": [
-            {"key": "live", "title": "Live and under test", "items": [live_entry]},
+            {"key": "live", "title": "Live and under test", "items": [live_entry, v11_entry]},
             {"key": "prospective", "title": "Under prospective test", "items": prospective},
             {"key": "passed", "title": "Passed trials", "items": passed},
             {"key": "failed", "title": "Failed or rejected ideas", "items": failed},
         ],
-        "counts": {"live": 1, "prospective": len(prospective), "passed": len(passed), "failed": len(failed)},
-        "sources": ["trials.csv", "results/systematic/paper_pnl.csv", "data/elections/signals.csv"],
+        "counts": {"live": 2, "prospective": len(prospective), "passed": len(passed), "failed": len(failed)},
+        "sources": ["trials.csv", "results/systematic/paper_pnl.csv", f"{V11_DIR}/paper_pnl.csv",
+                    "data/elections/signals.csv"],
         "min_track_record": {"years": MIN_TRACK_RECORD_YEARS, "months": months_needed, "confidence": "90%"},
     }
 
@@ -816,7 +954,7 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
     nxt = date(today.year + (today.month == 12), (today.month % 12) + 1, 3) if today.day >= 3 else date(today.year, today.month, 3)
     if nxt <= horizon:
         cat.append({"date": nxt.isoformat(), "kind": "algorithm rebalance", "country": "",
-                    "label": "v1.0 monthly run (positions and paper P&L)", "link": "#/algorithm"})
+                    "label": "v1.0 and v1.1 monthly run (positions and paper P&L)", "link": "#/algorithm"})
     cat.sort(key=lambda c: (c["date"], c["kind"]))
     months = algorithm["months"]
     last = months[-1] if months else None

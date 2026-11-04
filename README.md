@@ -46,6 +46,9 @@ python -m em_macro.systematic fit       # systematic strategy: design on 2005-20
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
 python -m em_macro.verify_v1             # re-confirm v1.0: rebuild its 2005-2019 and 2020-2026 tables, compare exactly
+python -m em_macro.systematic_v11 update   # v1.1 = v1.0 + T18 rule: positions + paper P&L (monthly, after v1.0; docs/v1.1_freeze.md)
+python -m em_macro.systematic_v11 verify   # re-confirm v1.1 reproduces T18's committed results exactly
+python -m em_macro.systematic_v11 costs    # diagnostic: v1.0 vs v1.1 at 0.5x / central / 1x / 2x costs
 python -m em_macro.archive_raw pack <trial> data/raw/<folder>   # keep a trial's raw data (data/kept/<trial>/ up to 50 MB, else the release)
 python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
