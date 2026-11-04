@@ -1,0 +1,38 @@
+{
+ "run_started_utc": "2026-11-04T08:58:09+00:00",
+ "run_finished_utc": "2026-11-04T09:02:09+00:00",
+ "git_head_at_run": "6b43beb3b11c17190dbd8adaa9b905e90d049ce9",
+ "pandas": "3.0.5",
+ "numpy": "2.5.3",
+ "last_month": "2026-09",
+ "v1_reproduction": {
+  "test": {
+   "file": "results/systematic/test/performance_2020_on.csv",
+   "rows": 14,
+   "max_abs_diff_at_4dp": 0.0,
+   "exact": true
+  },
+  "fit": {
+   "file": "results/systematic/fit/performance_2005_2019.csv",
+   "rows": 14,
+   "max_abs_diff_at_4dp": 0.0,
+   "exact": true
+  }
+ },
+ "decision_costs": "1x",
+ "overall_pass_1x": false,
+ "sha256": {
+  "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "results/systematic/fit/frozen_design.json": "f0cce4c9a819379c7bce4310ad58e8765b8149ef0d045ab25dd84c1b13983858",
+  "em_macro/econmom.py": "718059d9a2e2c5241d3ea1896b795363bf93ff3d5af0ed99db1c206d5d5abd5f",
+  "em_macro/t02.py": "40ed0a797a09d35a75f5e0cad5f2a2e7838dad4d31bb37ecb166b9217f939282",
+  "em_macro/t01.py": "bc52b3e01869efd0bf8c18bc891bcd17df376e96bbc8e68e40fe2f8412432b2b",
+  "em_macro/tstrend.py": "f02acd6e05232273b6a531674fe00be0cf63cf4704edbce012af5048f29c2344",
+  "em_macro/holdout.py": "a8c1800ed38eb4a7c08a6062d43b0b5ff42f497984fa8983d87ea29263c26236",
+  "docs/prereg/T02_econ_momentum.md": "f9050a0fe6c9a979e4d7879304ede28b2593917f1ce11765852c3fcd4036b1ef",
+  "data/processed/daily_panel.csv": "64921b287f799ca15c4d4232fbcab64ef24d97c4fd112ea1bac6195fa2179217",
+  "data/processed/country_month_panel.csv": "b4e83024ed9f5790ee3ca80557bb350d4ca57c51b6033478a4397d80a8ce1c99",
+  "data/processed/risk_model_input.csv": "bef27012ebfa6d089cbab64ed823ecc4c0a667e8f6abeee5faa44294d05c5062",
+  "results/T02/raw_data_manifest.csv": "a0f85acc517b8fcfa8543058af0fe2955b40b9342ded5e2ca4e4419b29438dd7"
+ }
+}

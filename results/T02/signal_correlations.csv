@@ -1,0 +1,7 @@
+period,with,pooled_corr,mean_monthly_xs_corr,n
+2020-01..2026-09 (test),carry,0.6470,0.6470,810
+2020-01..2026-09 (test),trend,0.0825,0.0871,810
+2020-01..2026-09 (test),value,-0.0030,-0.0030,800
+"2005-2019 (in-sample, context)",carry,0.6839,0.6846,1794
+"2005-2019 (in-sample, context)",trend,0.1266,0.1335,1664
+"2005-2019 (in-sample, context)",value,-0.0393,-0.0393,1440

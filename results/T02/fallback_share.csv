@@ -1,0 +1,3 @@
+period,score_obs,score_obs_revised,share_revised_%,score_obs_stale,share_stale_%,score_obs_revised_or_stale,share_revised_or_stale_%,component_months_available,share_component_months_revised_%,share_component_months_stale_%,share_component_months_revised_or_stale_%
+2020-01..2026-09 (test),810,148,18.2716,66,8.1481,161,19.8765,2997,5.0384,8.6420,11.9119
+"2005-2019 (in-sample, context)",1800,489,27.1667,0,0.0000,489,27.1667,6595,15.7847,1.3798,17.1645

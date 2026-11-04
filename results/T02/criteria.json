@@ -1,0 +1,606 @@
+{
+ "1x": {
+  "criteria": [
+   {
+    "#": 1,
+    "criterion": "2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10",
+    "T02": "SR 0.774",
+    "v1.0": "SR 0.654",
+    "statistic": "dSR +0.121, p = 0.2759",
+    "pass": false
+   },
+   {
+    "#": 2,
+    "criterion": "holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse",
+    "T02": "SR 0.716, MaxDD -23.53%",
+    "v1.0": "SR 0.721, MaxDD -22.53%",
+    "statistic": "dSR -0.005; |DD| ratio 1.045",
+    "pass": false
+   },
+   {
+    "#": 3,
+    "criterion": "2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0",
+    "T02": "MaxDD -16.96%, ES 5.87%",
+    "v1.0": "MaxDD -18.48%, ES 5.57%",
+    "statistic": "DD ratio 0.918; ES ratio 1.054",
+    "pass": true
+   },
+   {
+    "#": 4,
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",
+    "T02": "DSR 0.681 (N 9)",
+    "v1.0": "DSR 0.619 (N 7; recomputed 0.619)",
+    "statistic": "difference +0.062",
+    "pass": true
+   },
+   {
+    "#": 5,
+    "criterion": "econ-momentum sleeve alpha vs v1.0 carry/trend/value sleeves, 2020-01..2026-09: alpha > 0 and NW(3) t > 1.5",
+    "T02": "alpha -6.30%/yr, t -1.66 (n 81)",
+    "v1.0": "n/a",
+    "statistic": "betas carry +0.73, trend +0.02, value -0.49; R2 0.53",
+    "pass": false
+   }
+  ],
+  "overall_pass": false,
+  "bootstrap": {
+   "delta_sr": 0.12089452107226639,
+   "p_one_sided": 0.27587241275872415,
+   "boot_mean": 0.13605583004063543,
+   "boot_sd": 0.18456449556584884,
+   "boot_q05": -0.16594648003672433,
+   "boot_q95": 0.4439918111332074,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103
+  },
+  "dsr": {
+   "v1.0": {
+    "spec N7": {
+     "N": 7,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.5370954393767139,
+     "DSR_noise": 0.619253609663615,
+     "SR0_dispersed_ann": 0.2773548922706625,
+     "DSR_dispersed": 0.8365252722860093
+    },
+    "spec N8": {
+     "N": 8,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.5650737223811132,
+     "DSR_noise": 0.5911963352102211,
+     "SR0_dispersed_ann": 0.29180281548819803,
+     "DSR_dispersed": 0.8270656043425721
+    },
+    "ledger N11": {
+     "N": 11,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.6282754937609631,
+     "DSR_noise": 0.526291508654378,
+     "SR0_dispersed_ann": 0.3244400698888603,
+     "DSR_dispersed": 0.8044422457927698
+    }
+   },
+   "T02": {
+    "spec N9": {
+     "N": 9,
+     "T": 81,
+     "SR_ann": 0.7744821007266933,
+     "skew": -0.035343681662902054,
+     "kurtosis_raw": 3.670626393661004,
+     "PSR(SR*=0)": 0.974982843945818,
+     "SR0_noise_ann": 0.5889948605864308,
+     "DSR_noise": 0.6805859701348445,
+     "SR0_dispersed_ann": 0.3041556381404008,
+     "DSR_dispersed": 0.8829897969902567
+    },
+    "ledger N12": {
+     "N": 12,
+     "T": 81,
+     "SR_ann": 0.7744821007266933,
+     "skew": -0.035343681662902054,
+     "kurtosis_raw": 3.670626393661004,
+     "PSR(SR*=0)": 0.974982843945818,
+     "SR0_noise_ann": 0.6447786780200484,
+     "DSR_noise": 0.6286153584379949,
+     "SR0_dispersed_ann": 0.3329622775948376,
+     "DSR_dispersed": 0.8680406170391182
+    }
+   },
+   "v1.0 N7 recorded (T01 report)": 0.619
+  },
+  "alpha": {
+   "2020-01..2026-09 (test)": {
+    "n": 81,
+    "alpha_monthly_%": -0.5254155819968213,
+    "alpha_ann_%": -6.304986983961855,
+    "t_alpha": -1.6614617124044322,
+    "r2": 0.5263537059285537,
+    "beta_carry": 0.7305000276548065,
+    "t_carry": 6.813325800973038,
+    "beta_trend": 0.01785664011830945,
+    "t_trend": 0.12253465883573811,
+    "beta_value": -0.48796844861571953,
+    "t_value": -3.663776674830724
+   },
+   "2005-2019 (in-sample, context)": {
+    "n": 166,
+    "alpha_monthly_%": -0.0941924065369533,
+    "alpha_ann_%": -1.1303088784434396,
+    "t_alpha": -0.40537047939153276,
+    "r2": 0.35055952501645393,
+    "beta_carry": 0.7229471974798726,
+    "t_carry": 6.921320706637772,
+    "beta_trend": -0.015647914957762757,
+    "t_trend": -0.11551730314754007,
+    "beta_value": -0.06880022561612677,
+    "t_value": -0.7302542182080435
+   }
+  }
+ },
+ "robustness delayed 3m 1x": {
+  "criteria": [
+   {
+    "#": 1,
+    "criterion": "2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10",
+    "T02": "SR 0.728",
+    "v1.0": "SR 0.654",
+    "statistic": "dSR +0.075, p = 0.3761",
+    "pass": false
+   },
+   {
+    "#": 2,
+    "criterion": "holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse",
+    "T02": "SR 0.670, MaxDD -23.81%",
+    "v1.0": "SR 0.721, MaxDD -22.53%",
+    "statistic": "dSR -0.051; |DD| ratio 1.057",
+    "pass": false
+   },
+   {
+    "#": 3,
+    "criterion": "2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0",
+    "T02": "MaxDD -17.44%, ES 5.96%",
+    "v1.0": "MaxDD -18.48%, ES 5.57%",
+    "statistic": "DD ratio 0.944; ES ratio 1.069",
+    "pass": true
+   },
+   {
+    "#": 4,
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",
+    "T02": "DSR 0.637 (N 9)",
+    "v1.0": "DSR 0.619 (N 7; recomputed 0.619)",
+    "statistic": "difference +0.018",
+    "pass": true
+   },
+   {
+    "#": 5,
+    "criterion": "econ-momentum sleeve alpha vs v1.0 carry/trend/value sleeves, 2020-01..2026-09: alpha > 0 and NW(3) t > 1.5",
+    "T02": "alpha -4.38%/yr, t -1.06 (n 81)",
+    "v1.0": "n/a",
+    "statistic": "betas carry +0.58, trend +0.06, value -0.30; R2 0.36",
+    "pass": false
+   }
+  ],
+  "overall_pass": false,
+  "bootstrap": {
+   "delta_sr": 0.07471284142115342,
+   "p_one_sided": 0.37606239376062395,
+   "boot_mean": 0.09255775321595107,
+   "boot_sd": 0.1894683029532425,
+   "boot_q05": -0.21056504831105963,
+   "boot_q95": 0.41083678861344597,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103
+  },
+  "dsr": {
+   "v1.0": {
+    "spec N7": {
+     "N": 7,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.5370954393767139,
+     "DSR_noise": 0.619253609663615,
+     "SR0_dispersed_ann": 0.2773548922706625,
+     "DSR_dispersed": 0.8365252722860093
+    },
+    "spec N8": {
+     "N": 8,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.5650737223811132,
+     "DSR_noise": 0.5911963352102211,
+     "SR0_dispersed_ann": 0.29180281548819803,
+     "DSR_dispersed": 0.8270656043425721
+    },
+    "ledger N11": {
+     "N": 11,
+     "T": 81,
+     "SR_ann": 0.6535875796544269,
+     "skew": 0.18500883583195998,
+     "kurtosis_raw": 2.9029481602438523,
+     "PSR(SR*=0)": 0.9557091355133684,
+     "SR0_noise_ann": 0.6282754937609631,
+     "DSR_noise": 0.526291508654378,
+     "SR0_dispersed_ann": 0.3244400698888603,
+     "DSR_dispersed": 0.8044422457927698
+    }
+   },
+   "T02": {
+    "spec N9": {
+     "N": 9,
+     "T": 81,
+     "SR_ann": 0.7283004210755804,
+     "skew": -0.1541420101933923,
+     "kurtosis_raw": 3.283392696117932,
+     "PSR(SR*=0)": 0.9662630745854691,
+     "SR0_noise_ann": 0.5889948605864308,
+     "DSR_noise": 0.6367356985598553,
+     "SR0_dispersed_ann": 0.3041556381404008,
+     "DSR_dispersed": 0.8565343064393236
+    },
+    "ledger N12": {
+     "N": 12,
+     "T": 81,
+     "SR_ann": 0.7283004210755804,
+     "skew": -0.1541420101933923,
+     "kurtosis_raw": 3.283392696117932,
+     "PSR(SR*=0)": 0.9662630745854691,
+     "SR0_noise_ann": 0.6447786780200484,
+     "DSR_noise": 0.583046566508654,
+     "SR0_dispersed_ann": 0.3329622775948376,
+     "DSR_dispersed": 0.8395363682619572
+    }
+   },
+   "v1.0 N7 recorded (T01 report)": 0.619
+  },
+  "alpha": {
+   "2020-01..2026-09 (test)": {
+    "n": 81,
+    "alpha_monthly_%": -0.36501769887238417,
+    "alpha_ann_%": -4.38021238646861,
+    "t_alpha": -1.059530895870281,
+    "r2": 0.3629815220569196,
+    "beta_carry": 0.5773822450209624,
+    "t_carry": 4.293512062728958,
+    "beta_trend": 0.06145734104092473,
+    "t_trend": 0.3376008125559956,
+    "beta_value": -0.3028462345964353,
+    "t_value": -1.7858981978607187
+   },
+   "2005-2019 (in-sample, context)": {
+    "n": 166,
+    "alpha_monthly_%": -0.2859729299067283,
+    "alpha_ann_%": -3.4316751588807395,
+    "t_alpha": -1.1699885791594902,
+    "r2": 0.26561563262601073,
+    "beta_carry": 0.6224443955147989,
+    "t_carry": 5.666570762334024,
+    "beta_trend": -0.05350549359231474,
+    "t_trend": -0.32758026846196964,
+    "beta_value": -0.11932519619253126,
+    "t_value": -1.16874263506612
+   }
+  }
+ },
+ "2x": {
+  "criteria": [
+   {
+    "#": 1,
+    "criterion": "2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10",
+    "T02": "SR 0.377",
+    "v1.0": "SR 0.262",
+    "statistic": "dSR +0.115, p = 0.2942",
+    "pass": false
+   },
+   {
+    "#": 2,
+    "criterion": "holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse",
+    "T02": "SR 0.476, MaxDD -28.03%",
+    "v1.0": "SR 0.456, MaxDD -26.29%",
+    "statistic": "dSR +0.020; |DD| ratio 1.066",
+    "pass": false
+   },
+   {
+    "#": 3,
+    "criterion": "2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0",
+    "T02": "MaxDD -19.05%, ES 6.06%",
+    "v1.0": "MaxDD -22.14%, ES 5.78%",
+    "statistic": "DD ratio 0.860; ES ratio 1.049",
+    "pass": true
+   },
+   {
+    "#": 4,
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (v1.0 at the same costs)",
+    "T02": "DSR 0.293 (N 9)",
+    "v1.0": "DSR 0.237 (N 7; recomputed 0.237)",
+    "statistic": "difference +0.055",
+    "pass": true
+   },
+   {
+    "#": 5,
+    "criterion": "econ-momentum sleeve alpha vs v1.0 carry/trend/value sleeves, 2020-01..2026-09: alpha > 0 and NW(3) t > 1.5",
+    "T02": "alpha -8.47%/yr, t -1.83 (n 81)",
+    "v1.0": "n/a",
+    "statistic": "betas carry +0.73, trend +0.03, value -0.47; R2 0.52",
+    "pass": false
+   }
+  ],
+  "overall_pass": false,
+  "bootstrap": {
+   "delta_sr": 0.1147298118967201,
+   "p_one_sided": 0.29417058294170584,
+   "boot_mean": 0.12877758059458905,
+   "boot_sd": 0.19105448691384538,
+   "boot_q05": -0.18200251420375746,
+   "boot_q95": 0.44967651523668173,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103
+  },
+  "dsr": {
+   "v1.0": {
+    "spec N7": {
+     "N": 7,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.5370954393767139,
+     "DSR_noise": 0.23735975733517156,
+     "SR0_dispersed_ann": 0.2773548922706625,
+     "DSR_dispersed": 0.4844533460674438
+    },
+    "spec N8": {
+     "N": 8,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.5650737223811132,
+     "DSR_noise": 0.21545939632945266,
+     "SR0_dispersed_ann": 0.29180281548819803,
+     "DSR_dispersed": 0.4694816719169252
+    },
+    "ledger N11": {
+     "N": 11,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.6282754937609631,
+     "DSR_noise": 0.17053058895693274,
+     "SR0_dispersed_ann": 0.3244400698888603,
+     "DSR_dispersed": 0.435851932544111
+    }
+   },
+   "T02": {
+    "spec N9": {
+     "N": 9,
+     "T": 81,
+     "SR_ann": 0.37710402124083947,
+     "skew": 0.014065160222651009,
+     "kurtosis_raw": 3.6246711539907723,
+     "PSR(SR*=0)": 0.834139279167764,
+     "SR0_noise_ann": 0.5889948605864308,
+     "DSR_noise": 0.29273940071706916,
+     "SR0_dispersed_ann": 0.3041556381404008,
+     "DSR_dispersed": 0.5744701669540477
+    },
+    "ledger N12": {
+     "N": 12,
+     "T": 81,
+     "SR_ann": 0.37710402124083947,
+     "skew": 0.014065160222651009,
+     "kurtosis_raw": 3.6246711539907723,
+     "PSR(SR*=0)": 0.834139279167764,
+     "SR0_noise_ann": 0.6447786780200484,
+     "DSR_noise": 0.24541634264277196,
+     "SR0_dispersed_ann": 0.3329622775948376,
+     "DSR_dispersed": 0.545230196966654
+    }
+   },
+   "v1.0 N7 recorded (T01 report)": 0.23735975733517156
+  },
+  "alpha": {
+   "2020-01..2026-09 (test)": {
+    "n": 81,
+    "alpha_monthly_%": -0.7061425337646335,
+    "alpha_ann_%": -8.473710405175604,
+    "t_alpha": -1.825512638526397,
+    "r2": 0.5226497827393861,
+    "beta_carry": 0.7255313533376819,
+    "t_carry": 6.828200383490833,
+    "beta_trend": 0.03311244086940574,
+    "t_trend": 0.24312533632516534,
+    "beta_value": -0.47063447319800844,
+    "t_value": -3.5202411588185645
+   },
+   "2005-2019 (in-sample, context)": {
+    "n": 166,
+    "alpha_monthly_%": -0.13169685745198093,
+    "alpha_ann_%": -1.5803622894237712,
+    "t_alpha": -0.4780916619225735,
+    "r2": 0.3321352752527358,
+    "beta_carry": 0.6861885637569624,
+    "t_carry": 6.896875338608303,
+    "beta_trend": -0.027278874037631858,
+    "t_trend": -0.20435079139229162,
+    "beta_value": -0.06621774041607789,
+    "t_value": -0.7425807697296453
+   }
+  }
+ },
+ "robustness delayed 3m 2x": {
+  "criteria": [
+   {
+    "#": 1,
+    "criterion": "2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10",
+    "T02": "SR 0.320",
+    "v1.0": "SR 0.262",
+    "statistic": "dSR +0.057, p = 0.4126",
+    "pass": false
+   },
+   {
+    "#": 2,
+    "criterion": "holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse",
+    "T02": "SR 0.432, MaxDD -28.16%",
+    "v1.0": "SR 0.456, MaxDD -26.29%",
+    "statistic": "dSR -0.024; |DD| ratio 1.071",
+    "pass": false
+   },
+   {
+    "#": 3,
+    "criterion": "2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0",
+    "T02": "MaxDD -19.28%, ES 6.14%",
+    "v1.0": "MaxDD -22.14%, ES 5.78%",
+    "statistic": "DD ratio 0.871; ES ratio 1.063",
+    "pass": true
+   },
+   {
+    "#": 4,
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (v1.0 at the same costs)",
+    "T02": "DSR 0.245 (N 9)",
+    "v1.0": "DSR 0.237 (N 7; recomputed 0.237)",
+    "statistic": "difference +0.008",
+    "pass": true
+   },
+   {
+    "#": 5,
+    "criterion": "econ-momentum sleeve alpha vs v1.0 carry/trend/value sleeves, 2020-01..2026-09: alpha > 0 and NW(3) t > 1.5",
+    "T02": "alpha -5.82%/yr, t -1.14 (n 81)",
+    "v1.0": "n/a",
+    "statistic": "betas carry +0.56, trend +0.10, value -0.27; R2 0.34",
+    "pass": false
+   }
+  ],
+  "overall_pass": false,
+  "bootstrap": {
+   "delta_sr": 0.05739091410458802,
+   "p_one_sided": 0.41255874412558746,
+   "boot_mean": 0.07540363314851234,
+   "boot_sd": 0.19897853635334692,
+   "boot_q05": -0.24002661192556368,
+   "boot_q95": 0.4123941942375902,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103
+  },
+  "dsr": {
+   "v1.0": {
+    "spec N7": {
+     "N": 7,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.5370954393767139,
+     "DSR_noise": 0.23735975733517156,
+     "SR0_dispersed_ann": 0.2773548922706625,
+     "DSR_dispersed": 0.4844533460674438
+    },
+    "spec N8": {
+     "N": 8,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.5650737223811132,
+     "DSR_noise": 0.21545939632945266,
+     "SR0_dispersed_ann": 0.29180281548819803,
+     "DSR_dispersed": 0.4694816719169252
+    },
+    "ledger N11": {
+     "N": 11,
+     "T": 81,
+     "SR_ann": 0.26237420934411937,
+     "skew": 0.23795807535170055,
+     "kurtosis_raw": 2.8898563966569855,
+     "PSR(SR*=0)": 0.7526000268617511,
+     "SR0_noise_ann": 0.6282754937609631,
+     "DSR_noise": 0.17053058895693274,
+     "SR0_dispersed_ann": 0.3244400698888603,
+     "DSR_dispersed": 0.435851932544111
+    }
+   },
+   "T02": {
+    "spec N9": {
+     "N": 9,
+     "T": 81,
+     "SR_ann": 0.3197651234487074,
+     "skew": -0.11948076811587567,
+     "kurtosis_raw": 3.1795574997130918,
+     "PSR(SR*=0)": 0.7936739515226514,
+     "SR0_noise_ann": 0.5889948605864308,
+     "DSR_noise": 0.24517123445915517,
+     "SR0_dispersed_ann": 0.3041556381404008,
+     "DSR_dispersed": 0.5159499945448814
+    },
+    "ledger N12": {
+     "N": 12,
+     "T": 81,
+     "SR_ann": 0.3197651234487074,
+     "skew": -0.11948076811587567,
+     "kurtosis_raw": 3.1795574997130918,
+     "PSR(SR*=0)": 0.7936739515226514,
+     "SR0_noise_ann": 0.6447786780200484,
+     "DSR_noise": 0.2025120839816597,
+     "SR0_dispersed_ann": 0.3329622775948376,
+     "DSR_dispersed": 0.48651393481798755
+    }
+   },
+   "v1.0 N7 recorded (T01 report)": 0.23735975733517156
+  },
+  "alpha": {
+   "2020-01..2026-09 (test)": {
+    "n": 81,
+    "alpha_monthly_%": -0.48497672239614487,
+    "alpha_ann_%": -5.819720668753739,
+    "t_alpha": -1.1439868168660339,
+    "r2": 0.34233841641374607,
+    "beta_carry": 0.5618367393192785,
+    "t_carry": 4.194253728841028,
+    "beta_trend": 0.10211725244219713,
+    "t_trend": 0.5941744018582444,
+    "beta_value": -0.27334144154278467,
+    "t_value": -1.5790074926287443
+   },
+   "2005-2019 (in-sample, context)": {
+    "n": 166,
+    "alpha_monthly_%": -0.3957527244428728,
+    "alpha_ann_%": -4.749032693314473,
+    "t_alpha": -1.310180991161416,
+    "r2": 0.24976671727231536,
+    "beta_carry": 0.5925992080092833,
+    "t_carry": 5.602248394739038,
+    "beta_trend": -0.07270633696562753,
+    "t_trend": -0.44525118156450794,
+    "beta_value": -0.12268828224654227,
+    "t_value": -1.240131709848396
+   }
+  }
+ }
+}
