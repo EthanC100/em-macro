@@ -84,6 +84,9 @@ body[data-page="elections"] { --page: var(--c-elections); }
 body[data-page="reports"] { --page: var(--c-reports); }
 body[data-page="evidence"] { --page: var(--c-evidence); }
 body[data-page="more"] { --page: var(--c-more); }
+body[data-page="marks"] { --page: var(--c-decisions); }
+body[data-page="screener"] { --page: var(--c-algorithm); }
+body[data-page="todo"] { --page: var(--c-more); }
 
 * { box-sizing: border-box; }
 html { height: 100%; -webkit-text-size-adjust: 100%; }

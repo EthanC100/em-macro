@@ -27,6 +27,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from .marks import latest_marks, live_mark, load_registry, read_marks
 from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct,
                      parse_date, parse_number, parse_probability)
 from .scoring import (calibration_bins, cumulative, score_decision, score_forecast)
@@ -145,15 +146,52 @@ def guess_country(text: str) -> str:
 
 
 # ----------------------------------------------------------------------------- decisions
+def build_marks(today: date) -> dict:
+    """Latest mark of every registry instrument, with its source, frequency and staleness."""
+    registry = load_registry() if (ROOT / "data/ledger/instruments.csv").exists() else []
+    rows = read_marks()
+    latest = latest_marks(rows=rows)
+    items = []
+    for r in registry:
+        m = latest.get(r["instrument"], {})
+        d = parse_date(m.get("date"))
+        age = (today - d).days if d else None
+        freq = m.get("frequency") or r.get("frequency") or ""
+        items.append({
+            "instrument": r["instrument"], "country": r.get("country"), "book": r.get("book"), "kind": r.get("kind"),
+            "unit": r.get("unit"), "frequency": freq, "registry_frequency": r.get("frequency"),
+            "source": m.get("source") or f"{r.get('source', '')} {r.get('source_id', '')}".strip(),
+            "source_url": m.get("source_url") or r.get("source_url"), "notes": r.get("notes"),
+            "value": fnum(m.get("value"), 6), "date": iso(d), "age_days": age,
+            "stale": bool(age is not None and ((freq == "daily" and age > 7) or (freq == "monthly" and age > 62))),
+            "note": m.get("note") or "", "fetched_at": m.get("fetched_at"),
+        })
+    marked = [i for i in items if i["value"] is not None]
+    summary = {"n": len(items), "marked": len(marked),
+               "daily": sum(i["frequency"] == "daily" for i in marked),
+               "monthly": sum(i["frequency"] == "monthly" for i in marked),
+               "stale": sum(i["stale"] for i in marked),
+               "last_fetch": max((i["fetched_at"] or "" for i in marked), default=None),
+               "last_date": max((i["date"] or "" for i in marked), default=None)}
+    return {"items": items, "summary": summary, "registry": "data/ledger/instruments.csv",
+            "marks_file": "data/ledger/marks.csv", "n_rows": len(rows)}
+
+
 def build_decisions(today: date) -> dict:
     rows = read_csv(ROOT / "data/ledger/decisions.csv")
+    registry = load_registry() if (ROOT / "data/ledger/instruments.csv").exists() else []
+    latest = latest_marks()
     out = []
     for r in rows:
         sc = score_decision(r)
         prob = parse_probability(r.get("probability"))
         horizon = parse_date(r.get("horizon"))
         d = {**r}
+        lm = live_mark(r, registry, latest) if (r.get("status") or "open").strip().lower() == "open" else {}
+        d.update(lm)
         d.update({
+            "position_type": (r.get("position_type") or ("continuous" if r.get("action") in ("Buy", "Sell") else "")).strip().lower(),
+            "auto_resolved": (r.get("resolution_note") or "").startswith("Auto-resolved"),
             "size_pct": fnum(r.get("size_pct"), 3),
             "probability": prob,
             "claude_probability": parse_probability(r.get("claude_probability")),
@@ -178,8 +216,12 @@ def build_decisions(today: date) -> dict:
     resolved = [d for d in out if d["status"] == "resolved"]
     briers = [d["brier"] for d in resolved]
     pnls = [d["pnl_pct"] for d in resolved if d["pnl_pct"] is not None]
+    live = [d.get("live_pnl_pct") for d in out if d["status"] == "open" and d.get("live_pnl_pct") is not None]
     summary = {
         "n": len(out), "open": sum(d["status"] == "open" for d in out), "resolved": len(resolved),
+        "live_pnl_pct_total": round(sum(live), 3) if live else None, "live_pnl_n": len(live),
+        "open_unmarked": sum(d["status"] == "open" and d["kind"] == "position" and d.get("live_pnl_pct") is None for d in out),
+        "auto_resolved": sum(d.get("auto_resolved", False) for d in resolved),
         "right": sum(d["outcome"] == "right" for d in resolved),
         "wrong": sum(d["outcome"] == "wrong" for d in resolved),
         "brier": cumulative(briers)["mean"], "brier_n": cumulative(briers)["n"],
@@ -724,6 +766,8 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
         "equity": [[m["month"], m["account_value"], m["account_index"], m["live"], m["pre_live"]] for m in months],
         "positions": algorithm["positions"],
         "open_decisions": [d for d in decisions["items"] if d["status"] == "open"],
+        "live_pnl_pct_total": decisions["summary"].get("live_pnl_pct_total"),
+        "live_pnl_n": decisions["summary"].get("live_pnl_n"),
         "catalysts": cat,
         "latest_report": reports["items"][0] if reports["items"] else None,
         "rebalance": algorithm["rebalance"],
@@ -747,6 +791,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     shutil.copytree(SITE_SRC, out_dir, ignore=shutil.ignore_patterns("sw.template.js"))
     decisions = build_decisions(today)
     forecasts = build_forecasts(today)
+    marks = build_marks(today)
     algorithm = build_algorithm()
     trials = build_trials()
     elections = build_elections(today)
@@ -763,6 +808,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
             "trials_updated": trials["updated"],
             "decisions_updated": git_last_date("data/ledger/decisions.csv"),
             "forecasts_updated": git_last_date("data/ledger/forecasts.csv"),
+            "marks_updated": git_last_date("data/ledger/marks.csv"),
+            "marks_last_fetch": marks["summary"]["last_fetch"],
             "elections": elections["sources"],
         },
         "issue_forms": {
@@ -775,7 +822,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     data = out_dir / "data"
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
-                      ("reports", reports), ("evidence", evidence)):
+                      ("reports", reports), ("evidence", evidence), ("marks", marks)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

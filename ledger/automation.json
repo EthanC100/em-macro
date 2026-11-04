@@ -1,0 +1,16 @@
+{
+  "_comment": "Settings for the Ledger automation (ledger/marks.py, ledger/resolve.py, ledger/risk.py, ledger/screener.py). The Anthropic model is set here and nowhere else; only the event-forecast resolver uses the API.",
+  "anthropic_model": "claude-sonnet-5-5",
+  "api_calls_per_day": 10,
+  "api_web_search_max_uses": 8,
+  "api_effort": "medium",
+  "api_max_tokens": 6000,
+  "api_timeout_seconds": 300,
+  "forecast_independent_sources_required": 2,
+  "mechanical_wait_days": 10,
+  "stale_mark_days": 7,
+  "event_bet_size_tolerance_pct_points": 0.05,
+  "screener_sigma": 2.0,
+  "screener_vol_months": 36,
+  "resolve_issue_title_prefix": "[RESOLVE?]"
+}
