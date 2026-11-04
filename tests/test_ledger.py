@@ -11,7 +11,8 @@ from ledger import build, intake, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
 TODAY = date(2026, 11, 3)
-FREEZE_MONTH = "2026-09"      # last month of the frozen v1.0 test; later months are live paper trading
+FREEZE_MONTH = "2026-09"      # last month of the frozen v1.0 test
+LIVE_START_MONTH = "2026-11"  # first live month (positions from the 3 Nov 2026 rebalance); 2026-10 is pre-live
 
 
 def _live_results():
@@ -20,8 +21,7 @@ def _live_results():
     with open(ROOT / "results/systematic/positions.csv", newline="") as f:
         n_pos = sum(1 for _ in csv.DictReader(f))
     with open(ROOT / "results/systematic/paper_pnl.csv", newline="") as f:
-        n_live = sum(1 for r in csv.DictReader(f)
-                     if "live" in (r.get("sample") or "").lower() or (r.get("month") or "") > FREEZE_MONTH)
+        n_live = sum(1 for r in csv.DictReader(f) if (r.get("month") or "") >= LIVE_START_MONTH)
     return n_pos, n_live
 
 
@@ -111,6 +111,15 @@ def test_build_writes_site_and_json(tmp_path):
     assert alg["backtest"]["months"] == 81
     assert abs(alg["backtest"]["ann_return_pct"] - 5.959) < 0.01
     assert alg["frozen"]["test_2020_on"]["sharpe"] == pytest.approx(0.6536, abs=1e-3)
+    _, n_live = _live_results()
+    assert build.LIVE_START_MONTH == LIVE_START_MONTH
+    by_month = {m["month"]: m for m in alg["months"]}
+    oct26 = by_month["2026-10"]
+    assert oct26["phase"] == "pre_live" and oct26["pre_live"] and not oct26["live"]
+    assert by_month[FREEZE_MONTH]["phase"] == "backtest"
+    assert all(m["live"] == (m["month"] >= LIVE_START_MONTH) for m in alg["months"])
+    assert alg["live"]["months"] == alg["rebalance"]["n_live_months"] == n_live
+    assert alg["rebalance"]["pre_live_months"] == ["2026-10"] and alg["rebalance"]["live_start_month"] == "2026-11"
     n_pos, _ = _live_results()
     assert len(alg["positions"]) == n_pos and {s["sleeve"] for s in alg["by_sleeve"]} == {"Bonds", "Currencies"}
     tr = json.loads((out / "data/trials.json").read_text())

@@ -120,38 +120,45 @@
   }
   const monthTick = (labels) => (v, i) => { const l = labels[i]; return (l && l.endsWith('-01')) || i === 0 ? l.slice(0, 4) : ''; };
 
+  const PRE_LIVE_LABEL = 'Pre-live (not counted)';
+  const phaseSuffix = (m) => (!m ? '' : m.live ? ' (live)' : m.pre_live ? ' (pre-live, not counted)' : '');
+
   function equityChart(id, months, opts = {}) {
     const labels = months.map((m) => m.month);
-    const bt = months.map((m) => (m.live ? null : m.account_value));
-    // join the live series to the last backtest point
-    const lastBt = months.map((m) => m.live).lastIndexOf(false);
-    const live = months.map((m, i) => (m.live || i === lastBt ? m.account_value : null));
-    const cBt = cssVar('--series-backtest'), cLive = cssVar('--series-live');
+    const isBt = (m) => !m.live && !m.pre_live;
+    const bt = months.map((m) => (isBt(m) ? m.account_value : null));
+    // join the pre-live series to the last backtest point, and the live series to the last earlier point
+    const lastBt = months.map(isBt).lastIndexOf(true);
+    const lastPre = months.map((m) => !m.live).lastIndexOf(true);
+    const pre = months.map((m, i) => (m.pre_live || (i === lastBt && months.some((x) => x.pre_live)) ? m.account_value : null));
+    const live = months.map((m, i) => (m.live || i === lastPre ? m.account_value : null));
+    const cBt = cssVar('--series-backtest'), cLive = cssVar('--series-live'), cPre = cssVar('--series-prelive');
     return mkChart(id, {
       type: 'line',
       data: { labels, datasets: [
         { label: 'Backtest (test, evaluated once)', data: bt, borderColor: cBt, backgroundColor: withAlpha(cBt, 0.12), fill: true, borderWidth: 1.6, pointRadius: 0, tension: 0.1, spanGaps: false },
+        { label: PRE_LIVE_LABEL, data: pre, borderColor: cPre, backgroundColor: withAlpha(cPre, 0.12), fill: true, borderWidth: 1.6, borderDash: [4, 3], pointRadius: (ctx) => (months[ctx.dataIndex] && months[ctx.dataIndex].pre_live ? 3 : 0), pointBackgroundColor: cPre, tension: 0.1, spanGaps: false },
         { label: 'Live paper trading', data: live, borderColor: cLive, backgroundColor: withAlpha(cLive, 0.18), fill: true, borderWidth: 2.2, pointRadius: (ctx) => (ctx.dataIndex === labels.length - 1 ? 3.5 : 0), pointBackgroundColor: cLive, tension: 0.1, spanGaps: false },
       ] },
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
         scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, callback: monthTick(labels) } },
                   y: { grid: { color: cssVar('--grid') }, ticks: { callback: (v) => fmtNum(v, 0) }, title: { display: !!opts.yTitle, text: opts.yTitle } } },
-        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label), label: (it) => `${it.dataset.label}: ${fmtNum(it.parsed.y, 1)}` } } } },
+        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label) + phaseSuffix(months[it[0].dataIndex]), label: (it) => `${it.dataset.label}: ${fmtNum(it.parsed.y, 1)}` } } } },
     });
   }
 
   function monthlyBarChart(id, months) {
     const labels = months.map((m) => m.month);
-    const good = cssVar('--series-up'), bad = cssVar('--series-down'), live = cssVar('--series-live');
+    const good = cssVar('--series-up'), bad = cssVar('--series-down'), live = cssVar('--series-live'), pre = cssVar('--series-prelive');
     return mkChart(id, {
       type: 'bar',
       data: { labels, datasets: [{ label: 'Net monthly return', data: months.map((m) => (isNum(m.net) ? m.net * 100 : null)),
-        backgroundColor: months.map((m) => (m.live ? live : withAlpha(m.net >= 0 ? good : bad, 0.75))),
+        backgroundColor: months.map((m) => (m.live ? live : m.pre_live ? pre : withAlpha(m.net >= 0 ? good : bad, 0.75))),
         borderRadius: 2, maxBarThickness: 14 }] },
       options: { maintainAspectRatio: false,
         scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, callback: monthTick(labels) } },
                   y: { grid: { color: cssVar('--grid') }, ticks: { callback: (v) => `${v}%` } } },
-        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label) + (months[it[0].dataIndex].live ? ' (live)' : ''), label: (it) => fmtPct(it.parsed.y, 2, true) } } } },
+        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label) + phaseSuffix(months[it[0].dataIndex]), label: (it) => fmtPct(it.parsed.y, 2, true) } } } },
     });
   }
 
@@ -164,7 +171,7 @@
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
         scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, callback: monthTick(labels) } },
                   y: { max: 0, grid: { color: cssVar('--grid') }, ticks: { callback: (v) => `${v}%` } } },
-        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label), label: (it) => fmtPct(it.parsed.y, 1) } } } },
+        plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label) + phaseSuffix(months[it[0].dataIndex]), label: (it) => fmtPct(it.parsed.y, 1) } } } },
     });
   }
 
@@ -244,7 +251,7 @@
       <section class="section">
         <div class="section-head"><h2>Equity curve</h2><a class="more" href="#/algorithm">Algorithm detail</a></div>
         <div class="card"><div class="chart"><canvas id="c-equity"></canvas></div>
-        ${legend([['Backtest 2020 to freeze', '--series-backtest'], ['Live paper trading', '--series-live']])}</div>
+        ${legend([['Backtest 2020 to freeze', '--series-backtest'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live paper trading', '--series-live']])}</div>
       </section>
       <section class="section">
         <div class="section-head"><h2>Open positions</h2><span class="muted small">held through ${fmtMonth(home.rebalance.effective_from)}</span></div>
@@ -353,7 +360,9 @@
     const cmp = (label, l, b, d, f = (x) => fmtNum(x, 2)) => `<tr><td>${esc(label)}</td><td class="num">${f(l)}</td><td class="num">${f(b)}</td><td class="num">${f(d)}</td></tr>`;
     const pctS = (x) => fmtPct(x, 1, true), pct = (x) => fmtPct(x, 1);
     const liveMonths = months.filter((m) => m.live);
-    const liveNote = live.months ? `${live.months} live month${live.months === 1 ? '' : 's'} since the ${fmtDate(alg.rebalance.live_since)} rebalance` : `No live month has closed yet. The first live month is ${fmtMonth(nextMonth(alg.frozen.freeze_month))}, booked by the monthly run on the 3rd of the following month.`;
+    const liveNote = live.months ? `${live.months} live month${live.months === 1 ? '' : 's'} since the ${fmtDate(alg.rebalance.live_since)} rebalance` : `No live month has closed yet. The first live month is ${fmtMonth(alg.rebalance.live_start_month || nextMonth(alg.frozen.freeze_month))}, booked by the monthly run on the 3rd of the following month.`;
+    const preLive = alg.rebalance.pre_live_months || [];
+    const preNote = preLive.length ? ` ${preLive.map(fmtMonth).join(', ')}: pre-live (not counted), after the test period and before the first live rebalance.` : '';
     const posRows = alg.positions.map((p) => `
       <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${badge(p.side)}</td>
       <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td><td class="num">${fmtPct(p.instrument_vol_pct, 1)}</td>
@@ -366,7 +375,7 @@
       <section class="section">
         <div class="card rule">
           <h2>Live vs the frozen backtest</h2>
-          <p class="small muted">${esc(liveNote)} Backtest: 2020-01 to ${fmtMonth(alg.frozen.freeze_month)}, evaluated once at the freeze. Design: 2005 to 2019, in sample.</p>
+          <p class="small muted">${esc(liveNote)}${esc(preNote)} Backtest: 2020-01 to ${fmtMonth(alg.frozen.freeze_month)}, evaluated once at the freeze. Design: 2005 to 2019, in sample.</p>
           <div class="table-wrap"><table><thead><tr><th>Measure</th><th class="num">Live</th><th class="num">Backtest</th><th class="num">Design</th></tr></thead><tbody>
             ${cmp('Months', live.months, bt.months, design.months, (x) => (x == null ? '—' : x))}
             ${cmp('Return, % a year', live.ann_return_pct, bt['ann_return_%'], design['ann_return_%'], pctS)}
@@ -388,11 +397,11 @@
       ${liveMonths.length ? `<section class="section"><h2>Live months</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Net</th><th class="num">Model</th><th class="num">Override</th><th class="num">Carry basket</th><th class="num">S&P 500</th><th class="num">Account</th></tr></thead><tbody>${liveRows}</tbody></table></div></section>` : ''}
       <section class="section">
         <h2>Equity, indexed to 100 at the freeze</h2>
-        <div class="card"><div class="chart tall"><canvas id="c-alg-equity"></canvas></div>${legend([['Backtest', '--series-backtest'], ['Live', '--series-live']])}</div>
+        <div class="card"><div class="chart tall"><canvas id="c-alg-equity"></canvas></div>${legend([['Backtest', '--series-backtest'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live', '--series-live']])}</div>
       </section>
       <section class="section">
         <h2>Monthly net P&L</h2>
-        <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div>${legend([['Up month', '--series-up'], ['Down month', '--series-down'], ['Live month', '--series-live']])}</div>
+        <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div>${legend([['Up month', '--series-up'], ['Down month', '--series-down'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live month', '--series-live']])}</div>
       </section>
       <section class="section">
         <h2>Drawdown</h2>

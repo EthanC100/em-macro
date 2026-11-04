@@ -29,3 +29,5 @@ changes are not made here; the frozen design is recorded in `v1.0_freeze.md`.
   the refresh step so every loader re-downloads first; `pyyaml` added; the hash test no longer pins files the
   workflow rewrites; the failure alert issue; the rebalance log. Details in `v1.0_freeze.md`, "Logged
   infrastructure fixes".
+
+**2026-11-04, live-record start rule:** the v1.0 live record starts with the November 2026 rebalance (first rebalance after the 3 Nov 2026 freeze, positions effective 2026-11), so the Ledger counts live months, live Sharpe, live drawdown and track-record progress from 2026-11 only; October 2026 (after the 2020-01 to 2026-09 test, before the freeze) is a pre-live gap month, shown on charts as "pre-live (not counted)" and excluded from the live and backtest statistics (`LIVE_START_MONTH` in `ledger/build.py`).

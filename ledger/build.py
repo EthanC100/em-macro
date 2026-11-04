@@ -36,6 +36,12 @@ SITE_SRC = ROOT / "ledger" / "site"
 REPO_URL = "https://github.com/ethanc100/em-macro"
 RELEASE_URL = f"{REPO_URL}/releases/tag/v1.0-frozen"
 FREEZE_COMMIT = "7886867"
+# The v1.0 live record starts with the first rebalance after the freeze (3 Nov 2026), whose positions are
+# effective for November 2026. Months after the test period (2020-01 to the freeze month) and before
+# LIVE_START_MONTH are a pre-live gap: shown on charts as "pre-live (not counted)", excluded from the live
+# and backtest statistics. See docs/config_changes.md.
+LIVE_START_MONTH = "2026-11"
+LIVE_SINCE = "2026-11-03"
 
 COUNTRY_OF = {
     "BRL": "Brazil", "BR10Y": "Brazil", "MXN": "Mexico", "MX10Y": "Mexico",
@@ -244,13 +250,16 @@ def build_algorithm() -> dict:
             continue
         net = fnum(r.get("final_net") or r.get("net"), 6)
         sample = r.get("sample", "")
-        live = ("live" in sample.lower()) or (m > freeze_month)
+        live = m >= LIVE_START_MONTH
+        pre_live = freeze_month < m < LIVE_START_MONTH
+        phase = "live" if live else ("pre_live" if pre_live else "backtest")
         months.append({
             "month": m, "net": net, "model_net": fnum(r.get("model_net"), 6),
             "override_pnl": fnum(r.get("override_pnl"), 6), "fx_gross": fnum(r.get("fx_gross"), 6),
             "bond_gross": fnum(r.get("bond_gross"), 6), "cost": fnum(r.get("cost"), 6),
             "carry_basket": fnum(r.get("carry_basket"), 6), "sp500_tr": fnum(r.get("sp500_tr"), 6),
             "gross_leverage": fnum(r.get("gross_leverage"), 3), "sample": sample, "live": live,
+            "pre_live": pre_live, "phase": phase,
         })
     # cumulative and drawdown from 2020-01, index 100 at the end of the freeze month
     cum, peak = 1.0, 1.0
@@ -267,7 +276,8 @@ def build_algorithm() -> dict:
     for row in months:
         row["account_value"] = round(100 * row["cumulative"] / cum_at_freeze, 3) if cum_at_freeze else None
     live_rows = [r for r in months if r["live"]]
-    backtest_rows = [r for r in months if not r["live"]]
+    backtest_rows = [r for r in months if r["phase"] == "backtest"]
+    pre_live_rows = [r for r in months if r["phase"] == "pre_live"]
     live_stats = perf_stats([r["net"] for r in live_rows if r["net"] is not None])
     backtest_stats = perf_stats([r["net"] for r in backtest_rows if r["net"] is not None])
 
@@ -321,7 +331,9 @@ def build_algorithm() -> dict:
         "by_country": sorted(by_country.values(), key=lambda c: -c["risk_share_pct"]),
         "by_sleeve": sorted(by_sleeve.values(), key=lambda s: s["sleeve"]),
         "rebalance": {"date": rebalance_date, "as_of": as_of, "effective_from": effective_from,
-                      "live_since": "2026-11-03", "n_live_months": len(live_rows)},
+                      "live_since": LIVE_SINCE, "live_start_month": LIVE_START_MONTH,
+                      "n_live_months": len(live_rows),
+                      "pre_live_months": [r["month"] for r in pre_live_rows]},
         "overrides": overrides, "adjustments": adjustments,
         "release_url": RELEASE_URL, "freeze_commit": FREEZE_COMMIT,
         "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.0_freeze.md",
@@ -646,7 +658,7 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
         "last_month": last["month"] if last else None,
         "last_month_net_pct": round(last["net"] * 100, 3) if last and last["net"] is not None else None,
         "live": algorithm["live"],
-        "equity": [[m["month"], m["account_value"], m["live"]] for m in months],
+        "equity": [[m["month"], m["account_value"], m["live"], m["pre_live"]] for m in months],
         "positions": algorithm["positions"],
         "open_decisions": [d for d in decisions["items"] if d["status"] == "open"],
         "catalysts": cat,
