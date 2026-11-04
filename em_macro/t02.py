@@ -120,7 +120,9 @@ def criteria(runs: dict, cm: float, tag_strat: str = "T02") -> dict:
     X = pd.DataFrame({k: T1._net(runs[("all", cm, f"{k} sleeve (v1.0 {k} only)")]) for k in V1})
     reg = {p: nw_alpha(sl.loc[x:y], X.loc[x:y]) for p, (x, y) in PERIODS.items()}
     rt = reg["2020-01..2026-09 (test)"]
-    dsr_ref = V1_DSR_N7_RECORDED
+    # 1x: the pre-registered recorded value; 2x (sensitivity): v1.0's own DSR at N = 7 at the same costs,
+    # as in T01's 2x table
+    dsr_ref = V1_DSR_N7_RECORDED if cm == 1.0 else d_v1["spec N7"]["DSR_noise"]
     c = [
         {"#": 1, "criterion": "2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10",
          "T02": f"SR {T1.sharpe(t2):.3f}", "v1.0": f"SR {T1.sharpe(v1):.3f}",
@@ -137,7 +139,8 @@ def criteria(runs: dict, cm: float, tag_strat: str = "T02") -> dict:
          "v1.0": f"MaxDD {100 * dd_v:.2f}%, ES {100 * es_v:.2f}%",
          "statistic": f"DD ratio {dd_t / dd_v:.3f}; ES ratio {es_t / es_v:.3f}",
          "pass": bool(abs(dd_t) <= 1.10 * abs(dd_v) and es_t <= 1.10 * es_v)},
-        {"#": 4, "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",
+        {"#": 4, "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7"
+                              + (" (0.619, T01 report)" if cm == 1.0 else " (v1.0 at the same costs)"),
          "T02": f"DSR {d_t2['spec N9']['DSR_noise']:.3f} (N 9)",
          "v1.0": f"DSR {dsr_ref:.3f} (N 7; recomputed {d_v1['spec N7']['DSR_noise']:.3f})",
          "statistic": f"difference {d_t2['spec N9']['DSR_noise'] - dsr_ref:+.3f}",
