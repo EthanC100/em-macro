@@ -51,6 +51,14 @@ body:
     validations:
       required: true
   - type: input
+    id: resolution_source
+    attributes:
+      label: Resolution source
+      description: What settles the question. Prices, rates and central-bank decisions are resolved from official data; events are checked against this source with web search (two independent sources must agree).
+      placeholder: "AP race call, BCB official statement, ECB press release, BCB PTAX close"
+    validations:
+      required: true
+  - type: input
     id: country
     attributes:
       label: Country (optional)

@@ -39,6 +39,10 @@
   function fmtProb(x) { return isNum(x) ? `${fmtNum(x, 0)}%` : '—'; }
   const signClass = (x) => (!isNum(x) || x === 0) ? '' : (x > 0 ? 'good' : 'bad');
   function pill(text, cls = '') { return `<span class="pill ${esc(cls)}">${esc(text)}</span>`; }
+  // escape, then turn bare URLs into links (used for resolution notes that carry source links)
+  function linkify(s) {
+    return esc(s).replace(/https?:\/\/[^\s;,)"'&lt;&gt;]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, '').slice(0, 40)}${u.length > 48 ? '…' : ''}</a>`);
+  }
   // status badges: open, won, lost, passed, failed, under test, and the rest
   const BADGE = {
     open: ['open', 'open'], right: ['won', 'good'], wrong: ['lost', 'bad'], scratched: ['scratched', ''],
@@ -364,7 +368,7 @@
         ${field('Entry level (for P&L)', isNum(d.entry_level) ? fmtNum(d.entry_level, 4) : '<span class="muted">not recorded; P&L needs entry, stop and exit levels or a P&L entered at resolution</span>')}
         ${d.status === 'open' ? field('Live mark', markNote || '<span class="muted">—</span>') : ''}
         ${field('Exit price / result', isNum(d.exit_price) ? fmtNum(d.exit_price, 4) : esc(d.exit_price || ''))}
-        ${field('Resolution note', esc(d.resolution_note))}
+        ${field('Resolution note', linkify(d.resolution_note || '') + (d.auto_resolved ? ` ${pill('auto-resolved', 'purple')}` : ''))}
         ${field('Logged', `${fmtDate(d.logged_at)}${d.issue_url ? ` · <a href="${esc(d.issue_url)}" target="_blank" rel="noopener">issue #${esc(d.issue)}</a>` : ' · seed entry'}`)}
       </section>
       ${d.status === 'open' ? `<div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve ${esc(d.id)}</a></div>` : ''}`;
@@ -460,7 +464,7 @@
         <div class="row-meta"><b>${esc(f.country)}</b> · ${fmtDate(f.date)} · resolves ${fmtDate(f.resolution_date)} ${f.status === 'resolved' ? badge(f.outcome) : badge('open')}</div>
         ${probTrack(f)}
         <div class="probs"><span><i style="background:var(--series-me)"></i>Me <b>${fmtProb(f.my_prob)}</b></span><span><i style="background:var(--series-claude)"></i>Claude <b>${fmtProb(f.claude_prob)}</b></span><span><i style="background:var(--series-market)"></i>Market <b>${fmtProb(f.market_prob)}</b></span></div>
-        <div class="row-meta">${esc(f.market_source)}${f.status === 'resolved' ? ` · Brier me ${fmtNum(f.brier_me, 3)} · Claude ${fmtNum(f.brier_claude, 3)} · market ${fmtNum(f.brier_market, 3)}` : ''}${f.result ? ` · ${esc(f.result)}` : ''}</div>
+        <div class="row-meta">${esc(f.market_source)}${f.resolution_source ? ` · resolves by <b>${esc(f.resolution_source)}</b>` : ''}${f.status === 'resolved' ? ` · Brier me ${fmtNum(f.brier_me, 3)} · Claude ${fmtNum(f.brier_claude, 3)} · market ${fmtNum(f.brier_market, 3)}${f.auto_resolved ? ` ${pill('auto-resolved', 'purple')}` : ''}` : ''}${f.result ? ` · ${linkify(f.result)}` : ''}</div>
       </div>`).join('');
     const hasResolved = fc.summary.resolved > 0;
     view.innerHTML = `

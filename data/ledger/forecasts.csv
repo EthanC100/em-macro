@@ -1,6 +1,6 @@
-id,date,question,country,my_prob,market_prob,market_source,claude_prob,resolution_date,status,outcome,result,resolved_date,issue,logged_at
-F001,2026-11-03,Republicans keep control of the US Senate after the 3 Nov 2026 midterms,United States,45,30,"Prediction market, 3 Nov 2026 (Republican side)",41,2026-11-10,open,,,,,2026-11-03
-F002,2026-11-03,"Mike Rogers (R) wins the Michigan US Senate race, 3 Nov 2026",United States,55,28,"Prediction market, 3 Nov 2026 (Republican side)",38,2026-11-10,open,,,,,2026-11-03
-F003,2026-11-03,"Ken Paxton (R) wins the Texas US Senate race, 3 Nov 2026",United States,45,30,"Prediction market, 3 Nov 2026 (Republican side)",40,2026-11-10,open,,,,,2026-11-03
-F004,2026-11-03,"Dan Sullivan (R) wins the Alaska US Senate race, 3 Nov 2026",United States,60,31,"Prediction market, 3 Nov 2026 (Republican side)",43,2026-11-10,open,,,,,2026-11-03
-F005,2026-11-03,"Susan Collins (R) wins the Maine US Senate race, 3 Nov 2026",United States,50,37,"Prediction market, 3 Nov 2026 (Republican side)",42,2026-11-10,open,,,,,2026-11-03
+id,date,question,country,my_prob,market_prob,market_source,claude_prob,resolution_date,resolution_source,status,outcome,result,resolved_date,issue,logged_at
+F001,2026-11-03,Republicans keep control of the US Senate after the 3 Nov 2026 midterms,United States,45,30,"Prediction market, 3 Nov 2026 (Republican side)",41,2026-11-10,AP race call,open,,,,,2026-11-03
+F002,2026-11-03,"Mike Rogers (R) wins the Michigan US Senate race, 3 Nov 2026",United States,55,28,"Prediction market, 3 Nov 2026 (Republican side)",38,2026-11-10,AP race call,open,,,,,2026-11-03
+F003,2026-11-03,"Ken Paxton (R) wins the Texas US Senate race, 3 Nov 2026",United States,45,30,"Prediction market, 3 Nov 2026 (Republican side)",40,2026-11-10,AP race call,open,,,,,2026-11-03
+F004,2026-11-03,"Dan Sullivan (R) wins the Alaska US Senate race, 3 Nov 2026",United States,60,31,"Prediction market, 3 Nov 2026 (Republican side)",43,2026-11-10,AP race call,open,,,,,2026-11-03
+F005,2026-11-03,"Susan Collins (R) wins the Maine US Senate race, 3 Nov 2026",United States,50,37,"Prediction market, 3 Nov 2026 (Republican side)",42,2026-11-10,AP race call,open,,,,,2026-11-03

@@ -21,9 +21,10 @@ DECISION_COLUMNS = [
 ]
 FORECAST_COLUMNS = [
     "id", "date", "question", "country", "my_prob", "market_prob", "market_source",
-    "claude_prob", "resolution_date", "status", "outcome", "result", "resolved_date",
+    "claude_prob", "resolution_date", "resolution_source", "status", "outcome", "result", "resolved_date",
     "issue", "logged_at",
 ]
+AUTO_PREFIX = "Auto-resolved"      # resolution_note / result of an automatic resolution starts with this
 ACTIONS = ("Buy", "Sell", "No trade")
 REPORT_TYPES = ("daily briefing", "weekly review", "monthly notebook", "research", "other")
 DECISION_OUTCOMES = ("right", "wrong", "no trade", "scratched")
@@ -137,6 +138,9 @@ def validate_forecast(f: dict) -> tuple[list[str], list[str]]:
         errors.append("Market probability must be a percentage between 0 and 100.")
     if not str(f.get("market_source") or "").strip():
         errors.append("Market source is required (where the market probability comes from).")
+    if not str(f.get("resolution_source") or "").strip():
+        errors.append("Resolution source is required: what settles the question, for example 'AP race call', "
+                      "'BCB official statement' or 'ECB press release'.")
     c = f.get("claude_prob")
     if c and parse_probability(c) is None:
         errors.append("Claude probability must be a percentage between 0 and 100 if given.")
