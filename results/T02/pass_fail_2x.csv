@@ -2,5 +2,5 @@
 1,2020-01..2026-09: dSR > 0 and block-bootstrap one-sided p < 0.10,SR 0.377,SR 0.262,"dSR +0.115, p = 0.2942",False
 2,"holdout half B, 2020-01..2026-09: dSR > 0 and |MaxDD| not worse","SR 0.476, MaxDD -28.03%","SR 0.456, MaxDD -26.29%",dSR +0.020; |DD| ratio 1.066,False
 3,2020-01..2026-09: |MaxDD| and ES97.5 each <= 1.10 x v1.0,"MaxDD -19.05%, ES 6.06%","MaxDD -22.14%, ES 5.78%",DD ratio 0.860; ES ratio 1.049,True
-4,"DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",DSR 0.293 (N 9),DSR 0.619 (N 7; recomputed 0.237),difference -0.326,False
+4,DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (v1.0 at the same costs),DSR 0.293 (N 9),DSR 0.237 (N 7; recomputed 0.237),difference +0.055,True
 5,"econ-momentum sleeve alpha vs v1.0 carry/trend/value sleeves, 2020-01..2026-09: alpha > 0 and NW(3) t > 1.5","alpha -8.47%/yr, t -1.83 (n 81)",n/a,"betas carry +0.73, trend +0.03, value -0.47; R2 0.52",False

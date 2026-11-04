@@ -329,11 +329,11 @@
    },
    {
     "#": 4,
-    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (v1.0 at the same costs)",
     "T02": "DSR 0.293 (N 9)",
-    "v1.0": "DSR 0.619 (N 7; recomputed 0.237)",
-    "statistic": "difference -0.326",
-    "pass": false
+    "v1.0": "DSR 0.237 (N 7; recomputed 0.237)",
+    "statistic": "difference +0.055",
+    "pass": true
    },
    {
     "#": 5,
@@ -421,7 +421,7 @@
      "DSR_dispersed": 0.545230196966654
     }
    },
-   "v1.0 N7 recorded (T01 report)": 0.619
+   "v1.0 N7 recorded (T01 report)": 0.23735975733517156
   },
   "alpha": {
    "2020-01..2026-09 (test)": {
@@ -480,11 +480,11 @@
    },
    {
     "#": 4,
-    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (0.619, T01 report)",
+    "criterion": "DSR (noise-only null) of T02 at N = 9 >= DSR of v1.0 at N = 7 (v1.0 at the same costs)",
     "T02": "DSR 0.245 (N 9)",
-    "v1.0": "DSR 0.619 (N 7; recomputed 0.237)",
-    "statistic": "difference -0.374",
-    "pass": false
+    "v1.0": "DSR 0.237 (N 7; recomputed 0.237)",
+    "statistic": "difference +0.008",
+    "pass": true
    },
    {
     "#": 5,
@@ -572,7 +572,7 @@
      "DSR_dispersed": 0.48651393481798755
     }
    },
-   "v1.0 N7 recorded (T01 report)": 0.619
+   "v1.0 N7 recorded (T01 report)": 0.23735975733517156
   },
   "alpha": {
    "2020-01..2026-09 (test)": {
