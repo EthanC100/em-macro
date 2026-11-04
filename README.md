@@ -43,12 +43,17 @@ python -m em_macro.systematic fit       # systematic strategy: design on 2005-20
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
 python -m em_macro.verify_v1             # re-confirm v1.0: rebuild its 2005-2019 and 2020-2026 tables, compare exactly
+python -m em_macro.archive_raw pack <trial> data/raw/<folder>   # keep a trial's raw data (release raw-data-archive)
 python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
 python -m em_macro.overlay test         # 2020+ once, overlay vs v1
 python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
 pytest -q
 ```
+
+**Raw data rule:** raw data used by any trial is kept, not only hashed: it is archived with
+`python -m em_macro.archive_raw` as compressed assets of the GitHub release `raw-data-archive`, with their SHA-256 in
+`docs/raw_data_archive.md`.
 
 ---
 
@@ -1181,6 +1186,7 @@ em_macro/
   risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
   systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
   verify_v1.py     re-confirms v1.0: rebuilds its design and test tables with the frozen functions, exact compare
+  archive_raw.py   keeps trials' raw data: deterministic archives on the raw-data-archive release, hashes recorded
   overlay.py       political-risk overlay (frozen rule) and manual overrides (overrides.yaml), logged and scored
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
