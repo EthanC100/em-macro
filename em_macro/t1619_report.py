@@ -65,6 +65,7 @@ def build() -> str:
     L.append("| ledger | `trials.csv` ids **T16, T17, T18, T19**, groups " + ", ".join(f"`{LEDGER[t]}`" for t in TRIALS) + " |")
     L.append(f"| code at run | `{run['git_head_at_run'][:7]}` (branch `trial/T16-T19-risk-batch`); `em_macro/t16_crash.py`, `t17_factorcap.py`, `t18_rebal.py`, `t19_vol.py`, `t1619.py`; re-uses `em_macro/t01.py` (statistics), `em_macro/tstrend.py` (v1.0 machinery helpers), `em_macro/holdout.py` |")
     L.append(f"| run | {run['run_started_utc']} to {run['run_finished_utc']} UTC; pandas {run['pandas']}, numpy {run['numpy']}; data through {run['last_month']}; one run per trial, universe and cost setting |")
+    L.append(f"| inputs | v1.0's `data/processed` snapshots at the freeze commit `{run['input_snapshots']['commit'][:7]}` (SHA-256 as in `docs/v1.0_freeze.md`), plus the cached raw downloads of 2026-11-04 (`data/kept/T16-T19/`); see decision 15 in §7 |")
     rp = run["v1_reproduction"]
     L.append(f"| v1.0 reproduction | `python -m em_macro.verify_v1`: both committed tables byte-identical (run before the batch); frozen `systematic.evaluate` on this run's inputs vs the committed tables: test 2020-01..2026-09 max abs diff {rp['test']['max_abs_diff_at_4dp']:.4f} ({rp['test']['rows']} rows), design 2005-2019 max abs diff {rp['fit']['max_abs_diff_at_4dp']:.4f} ({rp['fit']['rows']} rows), at the files' 4 decimals |")
     L.append("| v1.0 baseline | tag `v1.0-frozen` = `7886867`; `em_macro/systematic.py` SHA-256 `1eb4cf6b1c537c17…` (unchanged) |")
@@ -254,6 +255,7 @@ def build() -> str:
         "12. **2x costs:** the trial rules applied identically with every cost doubled; reported only.",
         "13. **Raw data:** one archive of the raw downloads used (FRED, Yahoo, BIS, BanRep, BCCh/mindicador) under `data/kept/T16-T19/`, recorded in `docs/raw_data_archive.md` for the four trials.",
         "14. **Merge conflicts with `main`:** none arose (the branch was cut from `main` at `360f816`); the rule was to keep both sides.",
+        "15. **Input snapshots (taken at run time, before any result was computed):** the working tree's three `data/processed` snapshots had been rebuilt by the November 2026 monthly workflow (`bd236f9`) after v1.0's freeze, and on them frozen v1.0's test table differs from the committed one at the 4th decimal (max 0.0001, the runner's guard). The batch therefore read the snapshots at the freeze commit `7886867` (`verify_v1.extract_snapshots`, SHA-256 as in `docs/v1.0_freeze.md`; recorded in `RUN.json`), on which v1.0 reproduces exactly; the pre-registration's wording \"working-tree versions\" was written before the refreshed snapshots were found. The crash filter's panel features (current account, reserves) and the dollar index come from the same snapshots; the election calendar and the raw caches are the working tree's.",
     ]))
     L.append("")
 

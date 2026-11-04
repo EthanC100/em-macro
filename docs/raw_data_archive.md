@@ -31,6 +31,8 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
 | trial | asset | bytes | SHA-256 | contents | recorded | status |
 |---|---|---|---|---|---|---|
 | T02 | `econ_momentum_raw_2026-11-04.tar.gz` | 16533509 | `9be8876bba5596594a21e7ea7bd76b0dcb7a878018728c9b96a69e8081558f3c` | `data/raw/econ_momentum/` as used in the T02 run: 336 files (OECD revisions, ECB RTD, OECD KEI, ALFRED); `data/kept/T02/` (commit `0ba5ce4`), unchanged | 2026-11-04 | kept in repository (`data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz`) |
+| T16-T19 | `T16-T19_raw_raw_2026-11-04.tar.gz` | 1036968 | `7a1f4ae84b72d2d0715ae2d22ac100d8087537a277f20faa41dd6ede4d6c4079` | the cached raw downloads v1.0's build_inputs and the T16-T19 batch read on 2026-11-04 (members under raw/: bis, chile, colombia, fred, yahoo; extract into data/); the git-kept folders bist, bondspot and imf_weo are not duplicated | 2026-11-04 | kept in repository (`data/kept/T16-T19/T16-T19_raw_raw_2026-11-04.tar.gz`) |
+| T16-T19 | `T16-T19_raw_raw_2026-11-04_manifest.csv` | 4913 | `879ba1ae0e634503a4c786c7a7eec17880186bede0b919acabbad5038c9a65d7` | per-file SHA-256 of T16-T19_raw_raw_2026-11-04.tar.gz | 2026-11-04 | kept in repository (`data/kept/T16-T19/T16-T19_raw_raw_2026-11-04_manifest.csv`) |
 
 ## Notes on what is and is not archived (2026-11-04)
 
@@ -46,6 +48,12 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
   2026-11-04 against T02's manifests (`results/T02/raw_data_manifest.csv` with the 2026-11-04 addendum): all 329
   data files identical; the 7 ALFRED download pages differ and the 2 download logs are absent, as T02's
   verification already records ("no action": they hold no data). No split was needed (16.5 MB).
+- **T16–T19 (risk batch, ledger T16–T19).** The cached raw downloads that v1.0's `build_inputs` and the batch read on
+  2026-11-04 (FRED, Yahoo, BIS policy rates and CPI, BanRep TRM, BCCh dollar via mindicador.cl; 51 files) were packed
+  from a staging copy named `raw/` as `T16-T19_raw_raw_2026-11-04.tar.gz` (1.0 MB, kept in
+  `data/kept/T16-T19/`). Members sit under `raw/`, so restore with `tar -xzf <asset> -C data/` (not `data/raw/`).
+  The git-kept folders `bist`, `bondspot` and `imf_weo` are not duplicated. The processed input snapshots the batch
+  used are those of commit `7886867` (`results/T16-T19/RUN.json`).
 - **Other trials of this repository** (`trials.csv`: T01/v1.0, T05, T06, T07, T09, T10, T11, T12/T01 trend
   sleeve). Their raw downloads were cached in `data/raw/` of session containers and GitHub Actions caches that no
   longer exist, so there is nothing left to archive. The raw files that are in git (`data/raw/bondspot/`,

@@ -1,0 +1,896 @@
+{
+ "1x": {
+  "per_trial": {
+   "T16": {
+    "sr": 0.6590609918135545,
+    "sr_v1": 0.6535875796544269,
+    "dsr_point": 0.005473412159127555,
+    "bootstrap": {
+     "delta_sr": 0.005473412159127555,
+     "margin": 0.05,
+     "p_one_sided": 0.1136886311368863,
+     "p_one_sided_margin0": 0.40275972402759724,
+     "boot_mean": -0.0010011022705649034,
+     "boot_sd": 0.04935289110122193,
+     "boot_q05": -0.07673339491608529,
+     "boot_q95": 0.08234170255369373,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.16821081119470882,
+    "dd_v1": -0.18479380704550885,
+    "es": 0.04920566745749601,
+    "es_v1": 0.05572695215406039,
+    "dd_ratio": 0.9102621667039081,
+    "es_ratio": 0.8829779048648504,
+    "risk_pass": true,
+    "risk_metrics_passed": [
+     "ES97.5"
+    ],
+    "srB": 0.6435048043208738,
+    "srB_v1": 0.7205698280398029,
+    "ddB": -0.23214416430596518,
+    "ddB_v1": -0.2252593757301028,
+    "esB": 0.08048009233441178,
+    "esB_v1": 0.08048051060566565,
+    "dd_ratioB": 1.0305638269374922,
+    "es_ratioB": 0.9999948028255448,
+    "riskB_pass": false,
+    "srB_pass": false,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.6590609918135545,
+      "skew": 0.36242735208125176,
+      "kurtosis_raw": 2.9990574342484337,
+      "PSR(SR*=0)": 0.9596543759804037,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.49932622842361796,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.8006179856986293
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.6590609918135545,
+      "skew": 0.36242735208125176,
+      "kurtosis_raw": 2.9990574342484337,
+      "PSR(SR*=0)": 0.9596543759804037,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.4379339160797414,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.7775772679889343
+     }
+    },
+    "turnover": 19.209702486606794,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.0065236003201399
+   },
+   "T17": {
+    "sr": 0.6450619598397574,
+    "sr_v1": 0.6535875796544269,
+    "dsr_point": -0.008525619814669483,
+    "bootstrap": {
+     "delta_sr": -0.008525619814669483,
+     "margin": 0.05,
+     "p_one_sided": 9.999000099990002e-05,
+     "p_one_sided_margin0": 0.8295170482951705,
+     "boot_mean": -0.007657607130573095,
+     "boot_sd": 0.009746317122603683,
+     "boot_q05": -0.02471702651131166,
+     "boot_q95": 0.007294114231831421,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.1855477660258148,
+    "dd_v1": -0.18479380704550885,
+    "es": 0.05569426975958661,
+    "es_v1": 0.05572695215406039,
+    "dd_ratio": 1.0040800013396567,
+    "es_ratio": 0.9994135262523702,
+    "risk_pass": false,
+    "risk_metrics_passed": [],
+    "srB": 0.7205698280398029,
+    "srB_v1": 0.7205698280398029,
+    "ddB": -0.2252593757301028,
+    "ddB_v1": -0.2252593757301028,
+    "esB": 0.08048051060566565,
+    "esB_v1": 0.08048051060566565,
+    "dd_ratioB": 1.0,
+    "es_ratioB": 1.0,
+    "riskB_pass": false,
+    "srB_pass": true,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.6450619598397574,
+      "skew": 0.15762154316198337,
+      "kurtosis_raw": 2.8665988876173114,
+      "PSR(SR*=0)": 0.953191585819572,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.48482707153345667,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.7855782673938718
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.6450619598397574,
+      "skew": 0.15762154316198337,
+      "kurtosis_raw": 2.8665988876173114,
+      "PSR(SR*=0)": 0.953191585819572,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.42481798526476566,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.7620514150387973
+     }
+    },
+    "turnover": 19.086336810384154,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.0000596550990146
+   },
+   "T18": {
+    "sr": 0.9162839185067334,
+    "sr_v1": 0.6535875796544269,
+    "dsr_point": 0.2626963388523065,
+    "bootstrap": {
+     "delta_sr": 0.2626963388523065,
+     "margin": 0.05,
+     "p_one_sided": 0.0030996900309969004,
+     "p_one_sided_margin0": 0.008599140085991401,
+     "boot_mean": 0.2791554571522892,
+     "boot_sd": 0.09105878023204962,
+     "boot_q05": 0.14160766599502336,
+     "boot_q95": 0.43884126004524354,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.1542214968772062,
+    "dd_v1": -0.18479380704550885,
+    "es": 0.059274222197254665,
+    "es_v1": 0.05572695215406039,
+    "dd_ratio": 0.8345598769942888,
+    "es_ratio": 1.0636544778797097,
+    "risk_pass": true,
+    "risk_metrics_passed": [
+     "MaxDD"
+    ],
+    "srB": 0.7689606745204947,
+    "srB_v1": 0.7205698280398029,
+    "ddB": -0.20079753796635902,
+    "ddB_v1": -0.2252593757301028,
+    "esB": 0.07900221786672135,
+    "esB_v1": 0.08048051060566565,
+    "dd_ratioB": 0.8914059062604657,
+    "es_ratioB": 0.9816316679924216,
+    "riskB_pass": true,
+    "srB_pass": true,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.9162839185067334,
+      "skew": -0.09576336320630456,
+      "kurtosis_raw": 3.4384750783501734,
+      "PSR(SR*=0)": 0.9889689995072288,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.7392610873683221,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.9248051846510758
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.9162839185067334,
+      "skew": -0.09576336320630456,
+      "kurtosis_raw": 3.4384750783501734,
+      "PSR(SR*=0)": 0.9889689995072288,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.6898409035941528,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.9135482055547794
+     }
+    },
+    "turnover": 11.599669772319102,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 0.6077835609322679
+   },
+   "T19": {
+    "sr": 0.574187831252253,
+    "sr_v1": 0.6535875796544269,
+    "dsr_point": -0.0793997484021739,
+    "bootstrap": {
+     "delta_sr": -0.0793997484021739,
+     "margin": 0.05,
+     "p_one_sided": 0.6239376062393761,
+     "p_one_sided_margin0": 0.7375262473752625,
+     "boot_mean": -0.05555124603184447,
+     "boot_sd": 0.1551272483711812,
+     "boot_q05": -0.30789220580812393,
+     "boot_q95": 0.20118680645927656,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.22776208519835817,
+    "dd_v1": -0.18479380704550885,
+    "es": 0.07336009795660711,
+    "es_v1": 0.05572695215406039,
+    "dd_ratio": 1.2325201198017832,
+    "es_ratio": 1.316420423528616,
+    "risk_pass": false,
+    "risk_metrics_passed": [],
+    "srB": 0.6840029997558952,
+    "srB_v1": 0.7205698280398029,
+    "ddB": -0.22329548958913825,
+    "ddB_v1": -0.2252593757301028,
+    "esB": 0.06781031021655987,
+    "esB_v1": 0.08048051060566565,
+    "dd_ratioB": 0.9912816674795477,
+    "es_ratioB": 0.8425680914080356,
+    "riskB_pass": false,
+    "srB_pass": true,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.574187831252253,
+      "skew": -0.12481440526945296,
+      "kurtosis_raw": 4.104947209817646,
+      "PSR(SR*=0)": 0.9267978794189832,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.4143808608034655,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.722628601605706
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.574187831252253,
+      "skew": -0.12481440526945296,
+      "kurtosis_raw": 4.104947209817646,
+      "PSR(SR*=0)": 0.9267978794189832,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.3580173265531243,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.6965533710673979
+     }
+    },
+    "turnover": 21.230061515869398,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.1123835971363585
+   }
+  },
+  "p_raw": {
+   "T16": 0.1136886311368863,
+   "T17": 9.999000099990002e-05,
+   "T18": 0.0030996900309969004,
+   "T19": 0.6239376062393761
+  },
+  "p_holm": {
+   "T17": 0.00039996000399960006,
+   "T18": 0.009299070092990702,
+   "T16": 0.2273772622737726,
+   "T19": 0.6239376062393761
+  },
+  "tables": {
+   "T16": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.659, MaxDD -16.82%, ES 4.92%",
+      "v1.0": "SR 0.654, MaxDD -18.48%, ES 5.57%",
+      "statistic": "DD ratio 0.910; ES ratio 0.883; dSR +0.005; p raw 0.1137, Holm 0.2274",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.644, MaxDD -23.21%, ES 8.05%",
+      "v1.0": "SR 0.721, MaxDD -22.53%, ES 8.05%",
+      "statistic": "DD ratio 1.031; ES ratio 1.000; dSR -0.077; metric(s) from (1): ES97.5",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.499 (N 13)",
+      "v1.0": "DSR 0.619 (N 7)",
+      "statistic": "difference -0.120",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   },
+   "T17": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.645, MaxDD -18.55%, ES 5.57%",
+      "v1.0": "SR 0.654, MaxDD -18.48%, ES 5.57%",
+      "statistic": "DD ratio 1.004; ES ratio 0.999; dSR -0.009; p raw 0.0001, Holm 0.0004",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.721, MaxDD -22.53%, ES 8.05%",
+      "v1.0": "SR 0.721, MaxDD -22.53%, ES 8.05%",
+      "statistic": "DD ratio 1.000; ES ratio 1.000; dSR +0.000; metric(s) from (1): none",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.485 (N 13)",
+      "v1.0": "DSR 0.619 (N 7)",
+      "statistic": "difference -0.134",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   },
+   "T18": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.916, MaxDD -15.42%, ES 5.93%",
+      "v1.0": "SR 0.654, MaxDD -18.48%, ES 5.57%",
+      "statistic": "DD ratio 0.835; ES ratio 1.064; dSR +0.263; p raw 0.0031, Holm 0.0093",
+      "pass": true
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.769, MaxDD -20.08%, ES 7.90%",
+      "v1.0": "SR 0.721, MaxDD -22.53%, ES 8.05%",
+      "statistic": "DD ratio 0.891; ES ratio 0.982; dSR +0.048; metric(s) from (1): MaxDD",
+      "pass": true
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.739 (N 13)",
+      "v1.0": "DSR 0.619 (N 7)",
+      "statistic": "difference +0.120",
+      "pass": true
+     },
+     {
+      "#": 4,
+      "criterion": "T18 only: turnover <= 0.75 x v1.0's (2020-01..2026-09, all instruments)",
+      "trial": "11.60x/yr",
+      "v1.0": "19.09x/yr",
+      "statistic": "ratio 0.608",
+      "pass": true
+     }
+    ],
+    "overall_pass": true,
+    "n_pass": 4,
+    "n": 4
+   },
+   "T19": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.574, MaxDD -22.78%, ES 7.34%",
+      "v1.0": "SR 0.654, MaxDD -18.48%, ES 5.57%",
+      "statistic": "DD ratio 1.233; ES ratio 1.316; dSR -0.079; p raw 0.6239, Holm 0.6239",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.684, MaxDD -22.33%, ES 6.78%",
+      "v1.0": "SR 0.721, MaxDD -22.53%, ES 8.05%",
+      "statistic": "DD ratio 0.991; ES ratio 0.843; dSR -0.037; metric(s) from (1): none",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.414 (N 13)",
+      "v1.0": "DSR 0.619 (N 7)",
+      "statistic": "difference -0.205",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   }
+  },
+  "dsr_v1": {
+   "spec": {
+    "N": 7,
+    "T": 81,
+    "SR_ann": 0.6535875796544269,
+    "skew": 0.18500883583195998,
+    "kurtosis_raw": 2.9029481602438523,
+    "PSR(SR*=0)": 0.9557091355133684,
+    "SR0_noise_ann": 0.5370954393767139,
+    "DSR_noise": 0.619253609663615,
+    "SR0_dispersed_ann": 0.2773548922706625,
+    "DSR_dispersed": 0.8365252722860093
+   },
+   "ledger": {
+    "N": 14,
+    "T": 81,
+    "SR_ann": 0.6535875796544269,
+    "skew": 0.18500883583195998,
+    "kurtosis_raw": 2.9029481602438523,
+    "PSR(SR*=0)": 0.9557091355133684,
+    "SR0_noise_ann": 0.6732982331073674,
+    "DSR_noise": 0.4795208249340647,
+    "SR0_dispersed_ann": 0.34768971251409514,
+    "DSR_dispersed": 0.7872800107698064
+   }
+  },
+  "worst_months_v1": [
+   "2020-03",
+   "2020-07",
+   "2020-06",
+   "2022-10",
+   "2025-04"
+  ]
+ },
+ "2x": {
+  "per_trial": {
+   "T16": {
+    "sr": 0.2735021141194583,
+    "sr_v1": 0.26237420934411937,
+    "dsr_point": 0.011127904775338926,
+    "bootstrap": {
+     "delta_sr": 0.011127904775338926,
+     "margin": 0.05,
+     "p_one_sided": 0.0755924407559244,
+     "p_one_sided_margin0": 0.34196580341965804,
+     "boot_mean": 0.004507387426013688,
+     "boot_sd": 0.04541424111220515,
+     "boot_q05": -0.06510145596190317,
+     "boot_q95": 0.08177359074504566,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.20568863972727813,
+    "dd_v1": -0.22144235966163672,
+    "es": 0.05117991286152848,
+    "es_v1": 0.057797551840620076,
+    "dd_ratio": 0.9288585979736207,
+    "es_ratio": 0.8855031265452195,
+    "risk_pass": true,
+    "risk_metrics_passed": [
+     "ES97.5"
+    ],
+    "srB": 0.377826458799057,
+    "srB_v1": 0.4560056171808588,
+    "ddB": -0.27040459963262375,
+    "ddB_v1": -0.26288062615019536,
+    "esB": 0.08121281852201168,
+    "esB_v1": 0.0812136550645194,
+    "dd_ratioB": 1.0286212551781189,
+    "es_ratioB": 0.9999896994845625,
+    "riskB_pass": false,
+    "srB_pass": false,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.2735021141194583,
+      "skew": 0.41559916787234186,
+      "kurtosis_raw": 3.0178770474936427,
+      "PSR(SR*=0)": 0.7632802424118179,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.15570125581655692,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.43012755045242623
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.2735021141194583,
+      "skew": 0.41559916787234186,
+      "kurtosis_raw": 3.0178770474936427,
+      "PSR(SR*=0)": 0.7632802424118179,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.12198779101653001,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.3993741871888472
+     }
+    },
+    "turnover": 19.209702486606794,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.0065236003201399
+   },
+   "T17": {
+    "sr": 0.25019635689021735,
+    "sr_v1": 0.26237420934411937,
+    "dsr_point": -0.012177852453902016,
+    "bootstrap": {
+     "delta_sr": -0.012177852453902016,
+     "margin": 0.05,
+     "p_one_sided": 9.999000099990002e-05,
+     "p_one_sided_margin0": 0.8636136386361364,
+     "boot_mean": -0.011231519855457693,
+     "boot_sd": 0.011648083755705467,
+     "boot_q05": -0.0313060272781933,
+     "boot_q95": 0.0069415835701526415,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.22224641694286806,
+    "dd_v1": -0.22144235966163672,
+    "es": 0.057766737552611074,
+    "es_v1": 0.057797551840620076,
+    "dd_ratio": 1.0036310003310114,
+    "es_ratio": 0.9994668582487027,
+    "risk_pass": false,
+    "risk_metrics_passed": [],
+    "srB": 0.456005617180859,
+    "srB_v1": 0.4560056171808588,
+    "ddB": -0.26288062615019536,
+    "ddB_v1": -0.26288062615019536,
+    "esB": 0.0812136550645194,
+    "esB_v1": 0.0812136550645194,
+    "dd_ratioB": 1.0,
+    "es_ratioB": 1.0,
+    "riskB_pass": false,
+    "srB_pass": true,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.25019635689021735,
+      "skew": 0.21352552346621256,
+      "kurtosis_raw": 2.857831965851403,
+      "PSR(SR*=0)": 0.7422327995110207,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.14360337327805306,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.40705521137333384
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.25019635689021735,
+      "skew": 0.21352552346621256,
+      "kurtosis_raw": 2.857831965851403,
+      "PSR(SR*=0)": 0.7422327995110207,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.11203113369090723,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.3769977909821316
+     }
+    },
+    "turnover": 19.086336810384154,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.0000596550990146
+   },
+   "T18": {
+    "sr": 0.6563758635264546,
+    "sr_v1": 0.26237420934411937,
+    "dsr_point": 0.39400165418233524,
+    "bootstrap": {
+     "delta_sr": 0.39400165418233524,
+     "margin": 0.05,
+     "p_one_sided": 0.0011998800119988001,
+     "p_one_sided_margin0": 0.0022997700229977,
+     "boot_mean": 0.41294282282112,
+     "boot_sd": 0.10395386185721968,
+     "boot_q05": 0.25798974882053305,
+     "boot_q95": 0.5967473295439064,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.16436263251102845,
+    "dd_v1": -0.22144235966163672,
+    "es": 0.06090759035457066,
+    "es_v1": 0.057797551840620076,
+    "dd_ratio": 0.7422366378418929,
+    "es_ratio": 1.053809173830177,
+    "risk_pass": true,
+    "risk_metrics_passed": [
+     "MaxDD"
+    ],
+    "srB": 0.5870894788544869,
+    "srB_v1": 0.4560056171808588,
+    "ddB": -0.2233558323415299,
+    "ddB_v1": -0.26288062615019536,
+    "esB": 0.07986545264968747,
+    "esB_v1": 0.0812136550645194,
+    "dd_ratioB": 0.849647368893274,
+    "es_ratioB": 0.9833993136528474,
+    "riskB_pass": true,
+    "srB_pass": true,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.6563758635264546,
+      "skew": -0.06644353833049435,
+      "kurtosis_raw": 3.4335791983984123,
+      "PSR(SR*=0)": 0.9521741898218524,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.49663521094521756,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.788571899733167
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.6563758635264546,
+      "skew": -0.06644353833049435,
+      "kurtosis_raw": 3.4335791983984123,
+      "PSR(SR*=0)": 0.9521741898218524,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.4378402022436251,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.7657869607649779
+     }
+    },
+    "turnover": 11.599669772319102,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 0.6077835609322679
+   },
+   "T19": {
+    "sr": 0.12700930480380165,
+    "sr_v1": 0.26237420934411937,
+    "dsr_point": -0.13536490454031772,
+    "bootstrap": {
+     "delta_sr": -0.13536490454031772,
+     "margin": 0.05,
+     "p_one_sided": 0.7550244975502449,
+     "p_one_sided_margin0": 0.8434156584341566,
+     "boot_mean": -0.11442720164975069,
+     "boot_sd": 0.1506078875056676,
+     "boot_q05": -0.35953504176575846,
+     "boot_q95": 0.13540909729047587,
+     "B": 10000,
+     "block": 6,
+     "seed": 20261103
+    },
+    "dd": -0.24386522868551497,
+    "dd_v1": -0.22144235966163672,
+    "es": 0.07473458268317383,
+    "es_v1": 0.057797551840620076,
+    "dd_ratio": 1.101258264489867,
+    "es_ratio": 1.293040627209584,
+    "risk_pass": false,
+    "risk_metrics_passed": [],
+    "srB": 0.3652059228015486,
+    "srB_v1": 0.4560056171808588,
+    "ddB": -0.26583437854624614,
+    "ddB_v1": -0.26288062615019536,
+    "esB": 0.06934727552686464,
+    "esB_v1": 0.0812136550645194,
+    "dd_ratioB": 1.0112360976893107,
+    "es_ratioB": 0.8538868921953133,
+    "riskB_pass": false,
+    "srB_pass": false,
+    "dsr": {
+     "spec": {
+      "N": 13,
+      "T": 81,
+      "SR_ann": 0.12700930480380165,
+      "skew": -0.10567443737818008,
+      "kurtosis_raw": 3.8804434926736535,
+      "PSR(SR*=0)": 0.6282210676810235,
+      "SR0_noise_ann": 0.659698246114428,
+      "DSR_noise": 0.08501945689405188,
+      "SR0_dispersed_ann": 0.34066670942978955,
+      "DSR_dispersed": 0.29104646988652827
+     },
+     "ledger": {
+      "N": 18,
+      "T": 81,
+      "SR_ann": 0.12700930480380165,
+      "skew": -0.10567443737818008,
+      "kurtosis_raw": 3.8804434926736535,
+      "PSR(SR*=0)": 0.6282210676810235,
+      "SR0_noise_ann": 0.7180020041171915,
+      "DSR_noise": 0.06397256672146459,
+      "SR0_dispersed_ann": 0.370774640598591,
+      "DSR_dispersed": 0.26504096158306467
+     }
+    },
+    "turnover": 21.230061515869398,
+    "turnover_v1": 19.085198280990987,
+    "turnover_ratio": 1.1123835971363585
+   }
+  },
+  "p_raw": {
+   "T16": 0.0755924407559244,
+   "T17": 9.999000099990002e-05,
+   "T18": 0.0011998800119988001,
+   "T19": 0.7550244975502449
+  },
+  "p_holm": {
+   "T17": 0.00039996000399960006,
+   "T18": 0.0035996400359964006,
+   "T16": 0.1511848815118488,
+   "T19": 0.7550244975502449
+  },
+  "tables": {
+   "T16": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.274, MaxDD -20.57%, ES 5.12%",
+      "v1.0": "SR 0.262, MaxDD -22.14%, ES 5.78%",
+      "statistic": "DD ratio 0.929; ES ratio 0.886; dSR +0.011; p raw 0.0756, Holm 0.1512",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.378, MaxDD -27.04%, ES 8.12%",
+      "v1.0": "SR 0.456, MaxDD -26.29%, ES 8.12%",
+      "statistic": "DD ratio 1.029; ES ratio 1.000; dSR -0.078; metric(s) from (1): ES97.5",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.156 (N 13)",
+      "v1.0": "DSR 0.237 (N 7)",
+      "statistic": "difference -0.082",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   },
+   "T17": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.250, MaxDD -22.22%, ES 5.78%",
+      "v1.0": "SR 0.262, MaxDD -22.14%, ES 5.78%",
+      "statistic": "DD ratio 1.004; ES ratio 0.999; dSR -0.012; p raw 0.0001, Holm 0.0004",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.456, MaxDD -26.29%, ES 8.12%",
+      "v1.0": "SR 0.456, MaxDD -26.29%, ES 8.12%",
+      "statistic": "DD ratio 1.000; ES ratio 1.000; dSR +0.000; metric(s) from (1): none",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.144 (N 13)",
+      "v1.0": "DSR 0.237 (N 7)",
+      "statistic": "difference -0.094",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   },
+   "T18": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.656, MaxDD -16.44%, ES 6.09%",
+      "v1.0": "SR 0.262, MaxDD -22.14%, ES 5.78%",
+      "statistic": "DD ratio 0.742; ES ratio 1.054; dSR +0.394; p raw 0.0012, Holm 0.0036",
+      "pass": true
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.587, MaxDD -22.34%, ES 7.99%",
+      "v1.0": "SR 0.456, MaxDD -26.29%, ES 8.12%",
+      "statistic": "DD ratio 0.850; ES ratio 0.983; dSR +0.131; metric(s) from (1): MaxDD",
+      "pass": true
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.497 (N 13)",
+      "v1.0": "DSR 0.237 (N 7)",
+      "statistic": "difference +0.259",
+      "pass": true
+     },
+     {
+      "#": 4,
+      "criterion": "T18 only: turnover <= 0.75 x v1.0's (2020-01..2026-09, all instruments)",
+      "trial": "11.60x/yr",
+      "v1.0": "19.09x/yr",
+      "statistic": "ratio 0.608",
+      "pass": true
+     }
+    ],
+    "overall_pass": true,
+    "n_pass": 4,
+    "n": 4
+   },
+   "T19": {
+    "criteria": [
+     {
+      "#": 1,
+      "criterion": "2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10",
+      "trial": "SR 0.127, MaxDD -24.39%, ES 7.47%",
+      "v1.0": "SR 0.262, MaxDD -22.14%, ES 5.78%",
+      "statistic": "DD ratio 1.101; ES ratio 1.293; dSR -0.135; p raw 0.7550, Holm 0.7550",
+      "pass": false
+     },
+     {
+      "#": 2,
+      "criterion": "holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05",
+      "trial": "SR 0.365, MaxDD -26.58%, ES 6.93%",
+      "v1.0": "SR 0.456, MaxDD -26.29%, ES 8.12%",
+      "statistic": "DD ratio 1.011; ES ratio 0.854; dSR -0.091; metric(s) from (1): none",
+      "pass": false
+     },
+     {
+      "#": 3,
+      "criterion": "DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7",
+      "trial": "DSR 0.085 (N 13)",
+      "v1.0": "DSR 0.237 (N 7)",
+      "statistic": "difference -0.152",
+      "pass": false
+     }
+    ],
+    "overall_pass": false,
+    "n_pass": 0,
+    "n": 3
+   }
+  },
+  "dsr_v1": {
+   "spec": {
+    "N": 7,
+    "T": 81,
+    "SR_ann": 0.26237420934411937,
+    "skew": 0.23795807535170055,
+    "kurtosis_raw": 2.8898563966569855,
+    "PSR(SR*=0)": 0.7526000268617511,
+    "SR0_noise_ann": 0.5370954393767139,
+    "DSR_noise": 0.23735975733517156,
+    "SR0_dispersed_ann": 0.2773548922706625,
+    "DSR_dispersed": 0.4844533460674438
+   },
+   "ledger": {
+    "N": 14,
+    "T": 81,
+    "SR_ann": 0.26237420934411937,
+    "skew": 0.23795807535170055,
+    "kurtosis_raw": 2.8898563966569855,
+    "PSR(SR*=0)": 0.7526000268617511,
+    "SR0_noise_ann": 0.6732982331073674,
+    "DSR_noise": 0.14248545245944444,
+    "SR0_dispersed_ann": 0.34768971251409514,
+    "DSR_dispersed": 0.4121608805819474
+   }
+  },
+  "worst_months_v1": [
+   "2020-03",
+   "2020-07",
+   "2020-06",
+   "2022-10",
+   "2025-04"
+  ]
+ }
+}

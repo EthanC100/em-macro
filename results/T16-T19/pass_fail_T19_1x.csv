@@ -1,0 +1,4 @@
+#,criterion,trial,v1.0,statistic,pass
+1,"2020-01..2026-09: |MaxDD| or ES97.5 <= 0.90 x v1.0, dSR >= -0.05, Holm-adjusted bootstrap p < 0.10","SR 0.574, MaxDD -22.78%, ES 7.34%","SR 0.654, MaxDD -18.48%, ES 5.57%","DD ratio 1.233; ES ratio 1.316; dSR -0.079; p raw 0.6239, Holm 0.6239",False
+2,holdout half B: the same risk metric <= 0.90 x v1.0 and SR >= v1.0 - 0.05,"SR 0.684, MaxDD -22.33%, ES 6.78%","SR 0.721, MaxDD -22.53%, ES 8.05%",DD ratio 0.991; ES ratio 0.843; dSR -0.037; metric(s) from (1): none,False
+3,DSR (noise-only null) at N = 13 >= DSR of v1.0 at N = 7,DSR 0.414 (N 13),DSR 0.619 (N 7),difference -0.205,False
