@@ -9,6 +9,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | # | date recorded | effective from | change | reason | effect on frozen results |
 |---|---|---|---|---|---|
 | C01 | 2026-11-03 | the 3 December 2026 rebalance | Paper capital raised from US$100,000 to US$10,000,000. | Contract-size granularity for the planned commodity futures: at US$100,000 the smallest tradeable position in a standard futures contract is a large fraction of capital, so positions could not be sized to the model's weights. | None. v1.0 sizes positions by weights (per cent of capital), and all of its performance is reported in percentages, so its frozen results (`results/systematic/test/`, `docs/v1.0_freeze.md`) are unaffected. |
+| C02 | 2026-11-04 | the 3 December 2026 rebalance (positions effective 2026-12) | **v1.1 added**, run live in parallel with v1.0: v1.1 = frozen v1.0 + exactly the T18 rule (risk-unit no-trade band 0.1 × the position's risk budget and partial rebalancing w + 0.5 (w* − w), replacing v1.0's 25% relative band). v1.0 remains the frozen control. | T18 passed its pre-registered rule (4 of 4 criteria at 1x costs; `results/T16-T19_risk_batch.md`). | None. No v1.0 file, parameter, input snapshot or result changed; `python -m em_macro.verify_v1` reproduces v1.0 exactly. v1.1 has its own code, outputs and freeze record (`docs/v1.1_freeze.md`). |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -31,6 +32,48 @@ October 2026". It now reads "from November 2026 (October 2026 is pre-live)" beca
 the first rebalance after the 3 Nov 2026 freeze (positions effective November 2026; the live-record start rule
 recorded below on 2026-11-04 and `LIVE_START_MONTH` in `ledger/build.py`); October 2026, after the 2020-01..2026-09
 test and before the freeze, is a pre-live gap month, not a live month. Nothing else in C01 changed.
+
+## C02 — v1.1 (v1.0 + T18) added, live in parallel with v1.0
+
+- **What is added:** a second live paper strategy, v1.1 (`em_macro/systematic_v11.py`, freeze record
+  `docs/v1.1_freeze.md`, branch `release/v1.1`). v1.1 is v1.0's frozen code, imported unchanged, with exactly the
+  T18 rule as pre-registered (`docs/prereg/T16-T19_risk_batch.md` §3.3) and applied by T18's own code
+  (`em_macro/t18_rebal.py`): the 25% relative no-trade band is replaced by a no-trade band in risk units
+  (0.1 × the position's risk budget, on the proposed trade) and partial rebalancing (w + 0.5 (w* − w)). Nothing else
+  differs.
+- **Why:** T18 passed its pre-registered pass rule, 4 of 4 criteria at 1x costs. On 2020-01..2026-09 it had Sharpe
+  0.92 against 0.65, max drawdown −15.4% against −18.5%, and turnover 11.6× against 19.1× a year; on the half-B
+  holdout, Sharpe 0.77 against 0.72; DSR 0.739 at N = 13 against 0.619 at N = 7. v1.1 reproduces T18's committed
+  results exactly (`results/systematic_v1.1/freeze/reproduction.json`).
+- **What does not change:**
+  - v1.0 is untouched: its design (`results/systematic/fit/frozen_design.json`), code (`em_macro/systematic.py`),
+    results (`results/systematic/test/`), monthly outputs (`results/systematic/positions.csv`, `paper_pnl.csv`,
+    `rebalance_log.csv`), overlay and overrides, and the workflow steps that write them.
+  - v1.0 remains the frozen control, and its live record, `LIVE_START_MONTH = "2026-11"`, is unchanged.
+  - `python -m em_macro.verify_v1` still reproduces v1.0 byte for byte.
+- **Live record:** v1.1's starts with the 3 December 2026 rebalance (positions effective 2026-12). Its October and
+  November 2026 months are pre-live, not counted (`V11_LIVE_START_MONTH` in `ledger/build.py`,
+  `LIVE_START_MONTH` in `em_macro/systematic_v11.py`). The two records are kept separate and never merged.
+- **Workflow:** `systematic-monthly` gained two steps after v1.0's update, rebalance log and overlay:
+  - `python -m em_macro.systematic_v11 update`, which writes `results/systematic_v1.1/positions.csv`,
+    `paper_pnl.csv` and `results/live_compare/turnover.csv`;
+  - `python -m em_macro.systematic_v11 rebalance`, which writes `results/systematic_v1.1/rebalance_log.csv`.
+
+  Both steps are `continue-on-error`, so a v1.1 failure cannot stop v1.0's rebalance from being committed. They
+  still open or comment on the alert issue, and the success step does not close an alert while a v1.1 step failed.
+- **Ledger:**
+  - The Algorithm page has a "v1.0 and v1.1 side by side" section: live P&L, Sharpe, drawdown, turnover and months
+    live, over each version's own record and over the common window, plus the 2020-01..2026-09 backtest of each.
+    It also has a "v1.1 positions" table.
+  - The Evidence page lists T18 under passed trials (marked "live as v1.1"), and v1.1 under "Live and under test"
+    next to v1.0.
+- **Classification:**
+  - This adds a version and is not a new trial. It has no new row in `trials.csv` and does not change N: T18 is
+    already counted in its family, with DSR at N = 13.
+  - Paper capital (C01) applies to both versions from the same rebalance. Both report in percentages of capital.
+- **Diagnostic recorded with it (not a decision):** v1.0 and v1.1 at 0.5x, 1x and 2x v1.0's costs and at the cost
+  audit's central estimates (`docs/v1.1_freeze.md`, last section). v1.1's Sharpe advantage is +0.17 at the central
+  estimates, +0.26 at 1x and +0.39 at 2x; it is +0.14 before costs.
 
 ## 2026-11-04: November 2026 rebalance ran late
 

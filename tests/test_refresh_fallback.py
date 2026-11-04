@@ -145,7 +145,7 @@ def test_refresh_without_cache_fails_cleanly_and_opens_an_alert(tmp_path):
 
     # the workflow's alert step, run as on the runner with a stub gh
     step = _workflow_step("Open or update the alert issue")
-    assert step["if"] == "failure()"
+    assert step["if"].startswith("failure()")          # or a v1.1 step failed (continue-on-error; tests/test_v11.py)
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     calls = tmp_path / "gh_calls.txt"

@@ -1,0 +1,73 @@
+{
+ "run_utc": "2026-11-04T15:17:29+00:00",
+ "inputs": "v1.0's data/processed snapshots at 7886867 (verify_v1.extract_snapshots) and the raw downloads kept in data/kept/T16-T19/",
+ "pandas": "3.0.5",
+ "numpy": "2.5.3",
+ "v1.0_reproduced_exactly": true,
+ "t18_reproduced_exactly": true,
+ "checks": {
+  "performance.csv (T18 rows)": {
+   "rows": 12,
+   "identical": true
+  },
+  "monthly_net.csv (T18 columns)": {
+   "columns": 6,
+   "months": 248,
+   "identical": true
+  },
+  "by_year_2020_2026.csv (T18 rows)": {
+   "rows": 14,
+   "identical": true
+  },
+  "t18_tradelog_all_1x.csv": {
+   "rows": 4455,
+   "identical": true
+  },
+  "t18_tradelog_halfB_1x.csv": {
+   "rows": 1966,
+   "identical": true
+  },
+  "t18_tradelog_halfA_1x.csv": {
+   "rows": 1788,
+   "identical": true
+  },
+  "t18_tradelog_all_2x.csv": {
+   "rows": 4455,
+   "identical": true
+  },
+  "t18_tradelog_halfB_2x.csv": {
+   "rows": 1966,
+   "identical": true
+  },
+  "t18_tradelog_halfA_2x.csv": {
+   "rows": 1788,
+   "identical": true
+  },
+  "criteria.json (1x, T18 statistics)": {
+   "values": {
+    "sr": 0.9162839185067334,
+    "sr_v1": 0.6535875796544269,
+    "dd": -0.1542214968772062,
+    "es": 0.059274222197254665,
+    "srB": 0.7689606745204947,
+    "srB_v1": 0.7205698280398029,
+    "ddB": -0.20079753796635902,
+    "turnover": 11.599669772319102,
+    "p_one_sided": 0.0030996900309969004,
+    "delta_sr": 0.2626963388523065
+   },
+   "max_abs_diff": 0.0,
+   "identical": true
+  },
+  "turnover() == t01.turnover": {
+   "identical": true
+  }
+ },
+ "sha256": {
+  "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "results/systematic/fit/frozen_design.json": "f0cce4c9a819379c7bce4310ad58e8765b8149ef0d045ab25dd84c1b13983858",
+  "em_macro/t18_rebal.py": "dda6456d676281b48080d3c0a6c304d51c928cea39e0f70c696a364a10f96c43",
+  "em_macro/tstrend.py": "f02acd6e05232273b6a531674fe00be0cf63cf4704edbce012af5048f29c2344",
+  "em_macro/systematic_v11.py": "b3c4404ed80209efd1b3fa0e993f30bbac2650b2a9af042f07f8e21175885952"
+ }
+}

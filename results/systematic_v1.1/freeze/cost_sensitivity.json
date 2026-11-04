@@ -1,0 +1,6 @@
+{
+ "run_utc": "2026-11-04T15:17:53+00:00",
+ "max_abs_diff_v1.0_vs_cost_audit_step3_at_4dp": 0.0,
+ "max_abs_diff_v1.1_vs_T18_performance_at_4dp": 0.0,
+ "note": "diagnostic only, not a decision; positions identical across scenarios (asserted)"
+}
