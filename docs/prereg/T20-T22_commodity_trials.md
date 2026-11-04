@@ -597,3 +597,80 @@ framework; where a choice depends on unseen data, a mechanical rule.
 
 Nothing in this document depends on commodity data; no trial was found to require a choice that only data could
 make, so none is deferred.
+
+## Amendment 1 — 2026-11-04, before any commodity data exists
+
+Recorded after the pre-registration commit `ae8dfcb` and the ledger-row commit `bc07b65`, and **before any commodity
+price was downloaded, opened or computed** in this repository (Build 0 has not been run). The text above is left as
+written; where this section and the text above differ, this section governs. Nothing else changes.
+
+### A1.1 Pass rule: criterion C1 becomes non-inferiority; the sleeve-level gates are the primary evidence
+
+**Reason.** §1 of this document already shows that, at the spec's own priors (a haircut sleeve Sharpe of 0.30,
+correlation 0.1 with v1.1 at 0.92), the fund-level gain is about +0.03 Sharpe, which an 81-month block bootstrap
+cannot resolve (T01's ΔSR of +0.15 had p = 0.26). A superiority test at the fund level would therefore mostly
+measure noise, and its outcome would say little about whether the published commodity effects reproduce. The
+amendment follows the T16–T19 batch: the fund-level test asks that the sleeve **not hurt** v1.1, and the evidence
+that the effect exists comes from each trial's sleeve-level gates (commodities spec §11), which were already listed
+in §4.2 and are now the primary evidence. This decision was made before any data was seen.
+
+**C1, replaced.** 2020-01..2026-09, full universe, decisive costs. ΔSR = SR(v1.1 + sleeve) − SR(v1.1). The
+hypothesis tested is **H1: ΔSR > −0.05** against H0: ΔSR ≤ −0.05 (Sharpe non-inferiority, margin 0.05, as in
+`docs/prereg/T16-T19_risk_batch.md` §2.1). Paired circular block bootstrap of the 81 monthly return pairs, block
+length 6 months, B = 10,000, `numpy.random.default_rng(20261103)`, one-sided p from the bootstrap distribution
+centred on the null boundary:
+
+```
+p_raw = (1 + #{b : ΔSR*_b − ΔSR_hat ≥ ΔSR_hat + 0.05}) / (B + 1)
+```
+
+C1 passes if **ΔSR_hat ≥ −0.05 and the Holm-adjusted p (§5, across T20–T22) < 0.10**. The bootstrap mean, SD and
+5%–95% range of ΔSR* are reported, and the superiority p (margin 0, the original C1) is reported as context, not
+decisive.
+
+**C2, C3, C4: unchanged.** C2 stays as written in §4.1: on half B, ΔSR(v1.1 + half-B sleeve, versus v1.1) > 0 and
+|MaxDD| not worse than v1.1's (the task's "holdout not worse" is read as that existing criterion, which is kept
+unchanged as instructed; it remains a point-estimate requirement with no bootstrap). C3 (MaxDD and ES97.5 at most
+1.10 × v1.1's) and C4 (DSR at N = 16 at least v1.1's at N = 13) are unchanged.
+
+**Decision rule (§4.3, restated).** A trial passes only if **all of its sleeve-level gates (§4.2) and all of
+C1–C4 hold**, C1 after the Holm correction. The sleeve-level gates are the primary evidence that the published
+effect reproduces in this build (T20: Sharpe > 0.20 in both windows, Clark–West p < 0.05, break-even ≥ 2×; T21:
+Newey–West t > 2, alpha versus carry t > 1.5, break-even ≥ 2×; T22: Sharpe > 0.20 in both windows, carry-crisis
+correlation < 0, break-even ≥ 2×); C1–C4 establish that adding the sleeve at the 25% budget does not damage v1.1.
+Everything else in §4 (decisive costs, 2× reported, no change after results, variants are new trials, the live
+stage) stands. §5 applies the Holm correction to the three non-inferiority p-values.
+
+### A1.2 Universe: platinum and palladium leave T20 and T21; all four precious metals stay in T22
+
+**Reason.** Commodities spec §3.2 excludes precious metals from the carry ranking because their curves price
+financing and lease rates and carry almost no cross-sectional scarcity information; the same reasoning applies to
+basis-momentum, a curve-shape signal (§3.4), and §5 item 1 excludes gold and silver from both rankings. §2.1 and
+decision 3 of this document kept platinum and palladium in on the task's wording; this amendment follows the spec.
+
+**Change.**
+- **T20 and T21 cross-sectional universe: 20 markets** = the 24 of §2.1 minus gold, silver, platinum and palladium
+  (CL B RB HO NG G HG ZC ZS ZW KE ZM ZL SB KC CC CT LE GF HE). Decision 3 in §8 is superseded.
+- **T22 is unchanged:** all 24 commodities, gold, silver, platinum and palladium included, plus the 10 financial
+  futures.
+- **Build 0 test A2** applies to the 20-market universe with the spec's absolute threshold kept: **at least 18 markets**
+  with F1/F2 coverage ≥ 95% since 2000 (a stricter share than before, 18 of 20). A7 (Option A/B availability) is
+  computed for the 20 markets only. The minimum of 6 active markets (§2.1 rule 3) is unchanged.
+- **Holdout split.** The split in §2.7 is defined on the 24 commodity markets by the seeded procedure (seed
+  20261103), and T22 still uses all 24, so the procedure's input and output are unchanged by this amendment; the
+  T20 and T21 halves are derived from it by removing the four precious metals, as §2.7 derived them by removing two.
+  The removal therefore does not change the split. The derived halves are now:
+
+| half | T20 and T21 universe (10 markets each) |
+|---|---|
+| A | B NG G ZC ZS ZW KC CT LE GF |
+| **B (holdout)** | CL RB HO HG KE ZM ZL SB CC HE |
+
+  Each half keeps three energy, three grain-and-oilseed, two soft and at least one livestock market; copper (the one
+  industrial metal) is in half B. The remark in §2.1 rule 3 that "the half-universe holdouts have 11 markets" now
+  reads 10.
+
+**Not changed by this amendment:** the roll rule, the data sources, the costs, the combination with v1.1, the
+periods, the statistics, the T20 and T21 signal definitions, every T22 item, the Build 0 tests other than A2's
+universe, and the reporting. The ledger rows T20–T22 are updated to reference this amendment's commit, changing no
+other row.
