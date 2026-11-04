@@ -291,6 +291,10 @@ _No response_
 
 2026-12-18
 
+### Resolution source
+
+ECB press release
+
 ### Country (optional)
 
 Euro area
@@ -302,6 +306,10 @@ def test_forecast_intake_and_resolution(ledger_root):
     assert res["ok"] and res["id"] == "F006"
     row = _rows(ledger_root / "data/ledger/forecasts.csv")[-1]
     assert row["my_prob"] == "70" and row["claude_prob"] == "" and row["country"] == "Euro area"
+    assert row["resolution_source"] == "ECB press release"
+    # the resolution source is required
+    res = intake.process("forecast", FORECAST_BODY.replace("ECB press release", "_No response_"), 51, TODAY, ledger_root)
+    assert not res["ok"] and "Resolution source is required" in res["comment"]
     # bad date
     res = intake.process("forecast", FORECAST_BODY.replace("2026-12-18", "December"), 51, TODAY, ledger_root)
     assert not res["ok"] and "Resolution date" in res["comment"]

@@ -39,6 +39,10 @@
   function fmtProb(x) { return isNum(x) ? `${fmtNum(x, 0)}%` : '—'; }
   const signClass = (x) => (!isNum(x) || x === 0) ? '' : (x > 0 ? 'good' : 'bad');
   function pill(text, cls = '') { return `<span class="pill ${esc(cls)}">${esc(text)}</span>`; }
+  // escape, then turn bare URLs into links (used for resolution notes that carry source links)
+  function linkify(s) {
+    return esc(s).replace(/https?:\/\/[^\s;,)"'&lt;&gt;]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, '').slice(0, 40)}${u.length > 48 ? '…' : ''}</a>`);
+  }
   // status badges: open, won, lost, passed, failed, under test, and the rest
   const BADGE = {
     open: ['open', 'open'], right: ['won', 'good'], wrong: ['lost', 'bad'], scratched: ['scratched', ''],
@@ -248,7 +252,7 @@
         <div class="stats">
           <div class="stat"><span class="k">Live months</span><span class="v">${live.months || 0}</span><span class="s">since the ${fmtDate(home.rebalance.live_since)} rebalance</span></div>
           <div class="stat"><span class="k">Live return</span><span class="v ${signClass(live.total_return_pct)}">${fmtPct(live.total_return_pct, 1, true)}</span><span class="s">net of costs</span></div>
-          <div class="stat"><span class="k">Open decisions</span><span class="v">${home.open_decisions.length}</span><span class="s">${home.open_forecasts} open forecasts</span></div>
+          <div class="stat"><span class="k">Open decisions</span><span class="v">${home.open_decisions.length}</span><span class="s">${home.open_forecasts} open forecasts${isNum(home.live_pnl_pct_total) ? ` · live P&L <b class="${signClass(home.live_pnl_pct_total)}">${fmtPct(home.live_pnl_pct_total, 2, true)}</b>` : ''}</span></div>
           <div class="stat"><span class="k">Last rebalance</span><span class="v sm">${fmtDate(home.rebalance.date)}</span><span class="s">positions as of ${fmtMonth(home.rebalance.as_of)}</span></div>
         </div>
       </section>
@@ -281,8 +285,16 @@
     equityChart('c-equity', months, { historyBase: home.history_index_base_month });
   }
 
+  const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, 0)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
+  function liveLabel(d) {
+    if (d.status !== 'open' || !d.mark_instrument) return '';
+    if (!isNum(d.mark)) return ' · no mark yet';
+    const when = `${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ', monthly' : ''}`;
+    return isNum(d.live_pnl_pct) ? ` · <b class="${signClass(d.live_pnl_pct)}">live P&L ${fmtPct(d.live_pnl_pct, 2, true)}</b> at ${fmtLevel(d.mark, d.mark_unit)} (${when})`
+      : ` · mark ${fmtLevel(d.mark, d.mark_unit)} (${when})`;
+  }
   function decisionRow(d) {
-    const score = d.status === 'resolved' ? ` · Brier ${fmtNum(d.brier, 3)}${isNum(d.pnl_pct) ? ` · P&L ${fmtPct(d.pnl_pct, 2, true)}` : ''}` : (isNum(d.days_to_horizon) ? ` · horizon ${daysLabel(d.days_to_horizon)}` : '');
+    const score = d.status === 'resolved' ? ` · Brier ${fmtNum(d.brier, 3)}${isNum(d.pnl_pct) ? ` · P&L ${fmtPct(d.pnl_pct, 2, true)}` : ''}${d.auto_resolved ? ' · auto' : ''}` : (isNum(d.days_to_horizon) ? ` · horizon ${daysLabel(d.days_to_horizon)}` : '') + liveLabel(d);
     return `<a class="row-link c-decisions" href="#/decisions/${esc(d.id)}">
       <div class="row-top"><span class="row-title">${esc(d.instrument)} ${badge(d.action)}</span><span class="mono muted small">${esc(d.id)}</span></div>
       <div class="row-meta"><b>${esc(d.country)}</b> · ${fmtDate(d.date)} · ${fmtPct(d.size_pct, 1)} at risk · p ${fmtProb(d.probability)} ${d.status === 'resolved' ? badge(d.outcome) : badge('open')}${score}</div></a>`;
@@ -330,9 +342,10 @@
       <div class="stats">
         <div class="stat"><span class="k">Status</span><span class="v sm">${badge('open')}</span><span class="s">horizon ${fmtDate(d.horizon)} (${daysLabel(d.days_to_horizon)})</span></div>
         <div class="stat"><span class="k">My probability</span><span class="v">${fmtProb(d.probability)}</span><span class="s">${isNum(d.claude_probability) ? `Claude ${fmtProb(d.claude_probability)}` : 'that the view is right'}</span></div>
-        <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%)</span></div>
-        <div class="stat"><span class="k">Event-bet size</span><span class="v">${isNum(d.kelly_cap_pct) ? fmtPct(d.kelly_cap_pct, 2) : '—'}</span><span class="s">half of quarter-Kelly</span></div>
+        <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%) · ${d.position_type === 'event' ? 'event bet' : 'continuous'}</span></div>
+        <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
       </div>`;
+    const markNote = d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
     view.innerHTML = `
       <a class="back" href="#/decisions">← Decisions</a>
       ${scoreBlock}
@@ -354,8 +367,9 @@
         <h2>Sizing and resolution</h2>
         ${field('Event-bet sizing rule', esc(kelly))}
         ${field('Entry level (for P&L)', isNum(d.entry_level) ? fmtNum(d.entry_level, 4) : '<span class="muted">not recorded; P&L needs entry, stop and exit levels or a P&L entered at resolution</span>')}
+        ${d.status === 'open' ? field('Live mark', markNote || '<span class="muted">—</span>') : ''}
         ${field('Exit price / result', isNum(d.exit_price) ? fmtNum(d.exit_price, 4) : esc(d.exit_price || ''))}
-        ${field('Resolution note', esc(d.resolution_note))}
+        ${field('Resolution note', linkify(d.resolution_note || '') + (d.auto_resolved ? ` ${pill('auto-resolved', 'purple')}` : ''))}
         ${field('Logged', `${fmtDate(d.logged_at)}${d.issue_url ? ` · <a href="${esc(d.issue_url)}" target="_blank" rel="noopener">issue #${esc(d.issue)}</a>` : ' · seed entry'}`)}
       </section>
       ${d.status === 'open' ? `<div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve ${esc(d.id)}</a></div>` : ''}`;
@@ -451,7 +465,7 @@
         <div class="row-meta"><b>${esc(f.country)}</b> · ${fmtDate(f.date)} · resolves ${fmtDate(f.resolution_date)} ${f.status === 'resolved' ? badge(f.outcome) : badge('open')}</div>
         ${probTrack(f)}
         <div class="probs"><span><i style="background:var(--series-me)"></i>Me <b>${fmtProb(f.my_prob)}</b></span><span><i style="background:var(--series-claude)"></i>Claude <b>${fmtProb(f.claude_prob)}</b></span><span><i style="background:var(--series-market)"></i>Market <b>${fmtProb(f.market_prob)}</b></span></div>
-        <div class="row-meta">${esc(f.market_source)}${f.status === 'resolved' ? ` · Brier me ${fmtNum(f.brier_me, 3)} · Claude ${fmtNum(f.brier_claude, 3)} · market ${fmtNum(f.brier_market, 3)}` : ''}${f.result ? ` · ${esc(f.result)}` : ''}</div>
+        <div class="row-meta">${esc(f.market_source)}${f.resolution_source ? ` · resolves by <b>${esc(f.resolution_source)}</b>` : ''}${f.status === 'resolved' ? ` · Brier me ${fmtNum(f.brier_me, 3)} · Claude ${fmtNum(f.brier_claude, 3)} · market ${fmtNum(f.brier_market, 3)}${f.auto_resolved ? ` ${pill('auto-resolved', 'purple')}` : ''}` : ''}${f.result ? ` · ${linkify(f.result)}` : ''}</div>
       </div>`).join('');
     const hasResolved = fc.summary.resolved > 0;
     view.innerHTML = `
@@ -593,8 +607,86 @@
     }
   }
 
+  async function pageMarks() {
+    const mk = await load('marks');
+    const s = mk.summary;
+    setHead('Marks', `${s.marked} of ${s.n} instruments marked · ${s.daily} daily · ${s.monthly} monthly · last fetch ${fmtDateTime(s.last_fetch)}`);
+    const freqPill = (i) => (i.frequency === 'monthly' ? pill('monthly', 'warn') : i.frequency === 'daily' ? pill('daily', 'good') : pill(i.frequency || 'none', ''));
+    const rows = mk.items.map((i) => `<tr><td><span class="mono">${esc(i.instrument)}</span>${i.book === 'leg' ? ' <span class="muted small">leg</span>' : ''}</td><td class="wrap">${esc(i.country)}</td>
+      <td class="num">${isNum(i.value) ? fmtLevel(i.value, i.unit) : '—'}</td><td>${fmtDate(i.date)}${i.stale ? ` ${pill('stale', 'bad')}` : ''}</td><td>${freqPill(i)}</td>
+      <td class="wrap small">${esc(i.source)}${i.source_url && /^https?:/.test(i.source_url) ? ` · <a href="${esc(i.source_url.split(' ;')[0])}" target="_blank" rel="noopener">link</a>` : ''}${i.note ? `<br><span class="muted">${esc(i.note)}</span>` : ''}</td></tr>`).join('');
+    const monthly = mk.items.filter((i) => i.registry_frequency === 'monthly');
+    view.innerHTML = `
+      <section class="section">
+        <div class="stats">
+          <div class="stat"><span class="k">Marked</span><span class="v">${s.marked}</span><span class="s">of ${s.n} registry rows</span></div>
+          <div class="stat"><span class="k">Daily</span><span class="v good">${s.daily}</span><span class="s">free official daily source</span></div>
+          <div class="stat"><span class="k">Monthly</span><span class="v warn">${s.monthly}</span><span class="s">no free daily source</span></div>
+          <div class="stat"><span class="k">Stale</span><span class="v ${s.stale ? 'bad' : ''}">${s.stale}</span><span class="s">daily mark older than 7 days</span></div>
+        </div>
+        <p class="small muted">Every open decision is marked to market each morning by the <span class="mono">ledger-daily</span> workflow from <span class="mono">${esc(mk.registry)}</span>; marks are kept in <span class="mono">${esc(mk.marks_file)}</span> (${mk.n_rows} rows). A mark carries the source's own observation date. ${monthly.length ? `<b>Marked monthly, not daily:</b> ${monthly.map((i) => i.instrument).join(', ')} (no reachable free daily source; the table says why).` : ''}</p>
+      </section>
+      <section class="section">
+        <h2>Latest marks</h2>
+        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Country</th><th class="num">Mark</th><th>Date</th><th>Freq.</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </section>`;
+  }
+
+  async function pageScreener() {
+    const sc = await load('screener');
+    if (!sc.available) { setHead('Screener', 'Built after each monthly rebalance'); view.innerHTML = '<p class="empty">The screener appears after the next monthly rebalance.</p>'; return; }
+    setHead('Screener', `After the ${fmtMonth(sc.as_of)} rebalance · generated ${fmtDate(sc.generated)} · ${sc.rows.length} instruments`);
+    const rk = (r) => (isNum(r) ? r : '—');
+    const table = (book) => {
+      const rows = sc.rows.filter((r) => r.book === book).sort((a, b) => (a.rank_composite == null) - (b.rank_composite == null) || (a.rank_composite || 0) - (b.rank_composite || 0));
+      return `<div class="table-wrap"><table><thead><tr><th>Country</th><th>Instr.</th><th class="num">Carry</th><th class="num">Real</th><th class="num">Value</th><th class="num">Trend</th><th class="num">Rk C</th><th class="num">Rk V</th><th class="num">Rk T</th><th class="num">Rk comp.</th><th>Position</th><th class="num">Month</th><th>Election</th><th>Rating</th></tr></thead><tbody>${rows.map((r) => `
+        <tr><td class="wrap">${esc(r.country)}</td><td><span class="mono">${esc(r.instrument)}</span>${r.stale || !r.data_month ? ` <span class="muted small" title="latest data ${esc(r.data_month || 'none')}">*${esc(r.data_month ? fmtMonth(r.data_month) : 'no data')}</span>` : ''}</td>
+        <td class="num">${fmtNum(r.carry, 2)}</td><td class="num">${fmtNum(r.real_carry, 2)}</td><td class="num">${fmtNum(r.value, book === 'fx' ? 3 : 0)}</td><td class="num">${fmtNum(r.trend, 2)}</td>
+        <td class="num">${rk(r.rank_carry)}</td><td class="num">${rk(r.rank_value)}</td><td class="num">${rk(r.rank_trend)}</td><td class="num"><b>${rk(r.rank_composite)}</b></td>
+        <td>${r.position !== 'none' ? `${badge(r.position)} ${fmtPct(r.size_pct_of_capital, 1, true)}` : '—'}</td>
+        <td class="num ${signClass(r.month_return_pct)}">${fmtPct(r.month_return_pct, 2, true)}${r.move_2sd ? ` ${pill(`>${sc.sigma}σ`, 'bad')}` : ''}</td>
+        <td class="wrap small">${esc(r.next_election || '—')}</td><td class="wrap small">${esc(r.rating_reviews || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+    };
+    const held = sc.rows.filter((r) => r.position !== 'none');
+    view.innerHTML = `
+      <section class="section">
+        <div class="stats">
+          <div class="stat"><span class="k">Positions</span><span class="v">${held.length}</span><span class="s">of ${sc.rows.length} instruments held</span></div>
+          <div class="stat"><span class="k">Big moves</span><span class="v ${sc.moves.length ? 'bad' : ''}">${sc.moves.length}</span><span class="s">beyond ${sc.sigma}σ in the month${sc.moves.length ? `: ${sc.moves.join(', ')}` : ''}</span></div>
+          <div class="stat"><span class="k">Without data</span><span class="v ${sc.stale.length ? 'warn' : ''}">${sc.stale.length}</span><span class="s">stale or missing for ${fmtMonth(sc.as_of)}</span></div>
+          <div class="stat"><span class="k">Report</span><span class="v sm">${sc.report ? `<a href="#/reports/${esc(sc.report)}">open</a>` : '—'}</span><span class="s">filed under Reports (type screener)</span></div>
+        </div>
+        <p class="small muted">Carry, value and trend are the algorithm's own signals for ${fmtMonth(sc.as_of)}; ranks are within each book (1 = highest) among instruments with data. Real carry: FX, the real policy-rate differential against the US; EM bonds, the real 10-year yield; spreads, the spread. * marks an instrument whose latest data are older than ${fmtMonth(sc.as_of)} (shown at that month, unranked). Elections and rating reviews: next 12 months from the Ledger calendars.</p>
+      </section>
+      <section class="section"><h2>Currencies (vs USD)</h2>${table('fx')}</section>
+      <section class="section"><h2>Bonds (10y; spreads over the Bund)</h2>${table('bond')}</section>
+      <section class="section"><h2>By country</h2><div class="list">${sc.countries.map((c) => `<div class="card"><div class="row-top"><span class="row-title">${esc(c.country)}</span><span class="muted small">${esc(c.instruments.join(', '))}</span></div><div class="row-meta">${c.positions.length ? `<b>${esc(c.positions.join(', '))}</b>` : 'no position'}${c.moves.length ? ` · ${pill(`${c.moves.join(', ')} > ${sc.sigma}σ`, 'bad')}` : ''}${c.next_election ? ` · election ${esc(c.next_election)}` : ''}${c.rating_reviews ? ` · rating ${esc(c.rating_reviews)}` : ''}</div></div>`).join('')}</div></section>`;
+  }
+
+  async function pageTodo() {
+    const td = await load('todo');
+    setHead('To do', `${td.done} of ${td.n} done · docs/todo.md updated ${fmtDate(td.updated)}`);
+    if (!td.sections.length) { view.innerHTML = '<p class="empty">No to-do list yet (docs/todo.md is missing).</p>'; return; }
+    const SEC_COLOR = { Technical: 'var(--c-trials)', Automation: 'var(--c-algorithm)', Algorithm: 'var(--c-evidence)' };
+    const item = (i) => `<li class="todo-item ${i.done ? 'done' : ''}"><span class="box" aria-hidden="true">${i.done ? '✓' : ''}</span><span class="txt">${esc(i.text)}${i.note ? `<br><span class="muted small">${esc(i.note)}</span>` : ''}</span></li>`;
+    view.innerHTML = `
+      <style>
+        .todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+        .todo-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+        .todo-item .box { flex: 0 0 22px; height: 22px; border-radius: 6px; border: 2px solid var(--g, var(--page)); display: grid; place-items: center; font-weight: 700; color: var(--on-accent); margin-top: 1px; }
+        .todo-item.done .box { background: var(--good); border-color: var(--good); }
+        .todo-item.done .txt { color: var(--muted); text-decoration: line-through; }
+        .todo-item.done .txt .muted { text-decoration: none; }
+      </style>
+      <section class="section">
+        <div class="stats">${td.sections.map((s) => `<div class="stat" style="--page:${SEC_COLOR[s.title] || 'var(--page)'}"><span class="k">${esc(s.title)}</span><span class="v">${s.done}<span class="muted" style="font-size:1rem">/${s.n}</span></span><span class="s">done</span></div>`).join('')}</div>
+        ${td.intro ? `<p class="small muted">${esc(td.intro)} <a href="${esc(td.source_url)}" target="_blank" rel="noopener">Edit on GitHub</a>.</p>` : ''}
+      </section>
+      ${td.sections.map((s) => `<section class="section ev-group" style="--g:${SEC_COLOR[s.title] || 'var(--page)'}"><div class="section-head"><h2>${esc(s.title)}</h2><span class="muted small">${s.done} of ${s.n}</span></div><ul class="todo-list">${s.items.map(item).join('')}</ul></section>`).join('')}`;
+  }
+
   async function pageMore() {
-    setHead('More', 'Trials, elections, reports and logging');
+    setHead('More', 'Trials, elections, reports, marks, screener, to do and logging');
     const m = meta;
     const src = m.sources;
     view.innerHTML = `
@@ -604,6 +696,9 @@
           <a href="#/trials" style="--item:var(--c-trials)"><span><span class="t">Trials</span><br><span class="d">The trial ledger with pass/fail</span></span><span class="chev">›</span></a>
           <a href="#/elections" style="--item:var(--c-elections)"><span><span class="t">Elections</span><br><span class="d">Calendar and live signals</span></span><span class="chev">›</span></a>
           <a href="#/reports" style="--item:var(--c-reports)"><span><span class="t">Reports</span><br><span class="d">Archive by date, type and country</span></span><span class="chev">›</span></a>
+          <a href="#/screener" style="--item:var(--c-algorithm)"><span><span class="t">Screener</span><br><span class="d">Every country after the monthly rebalance: signals, ranks, positions, catalysts</span></span><span class="chev">›</span></a>
+          <a href="#/marks" style="--item:var(--c-decisions)"><span><span class="t">Marks</span><br><span class="d">Daily marks of every instrument and their sources</span></span><span class="chev">›</span></a>
+          <a href="#/todo" style="--item:var(--c-more)"><span><span class="t">To do</span><br><span class="d">Technical, automation and algorithm items from docs/todo.md</span></span><span class="chev">›</span></a>
         </div>
       </section>
       <section class="section">
@@ -625,6 +720,7 @@
           <dt>Positions</dt><dd>as of ${fmtMonth(src.positions_as_of)}</dd>
           <dt>Decisions file</dt><dd>${fmtDate(src.decisions_updated)}</dd>
           <dt>Forecasts file</dt><dd>${fmtDate(src.forecasts_updated)}</dd>
+          <dt>Marks</dt><dd>${src.marks_last_fetch ? `fetched ${fmtDateTime(src.marks_last_fetch)}` : 'none yet'}</dd>
           <dt>Trials file</dt><dd>${fmtDate(src.trials_updated)}</dd>
           <dt>Elections</dt><dd>${esc((src.elections || []).join(', '))}</dd>
           <dt>Repository</dt><dd><a href="${esc(m.repo_url)}" target="_blank" rel="noopener">${esc(m.repo_url.replace('https://', ''))}</a></dd>
@@ -680,8 +776,9 @@
   const routes = {
     home: pageHome, decisions: pageDecisions, algorithm: pageAlgorithm, forecasts: pageForecasts,
     trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore, evidence: pageEvidence,
+    marks: pageMarks, screener: pageScreener, todo: pageTodo,
   };
-  const TAB_OF = { trials: 'more', elections: 'more', reports: 'more', evidence: 'more' };
+  const TAB_OF = { trials: 'more', elections: 'more', reports: 'more', evidence: 'more', marks: 'more', screener: 'more', todo: 'more' };
 
   async function render() {
     const hash = location.hash.replace(/^#\/?/, '');

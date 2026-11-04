@@ -45,12 +45,19 @@ python -m em_macro.risk_model outputs   # fair value, factor contributions, simi
 python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
+python -m em_macro.verify_v1             # re-confirm v1.0: rebuild its 2005-2019 and 2020-2026 tables, compare exactly
+python -m em_macro.archive_raw pack <trial> data/raw/<folder>   # keep a trial's raw data (data/kept/<trial>/ up to 50 MB, else the release)
 python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
 python -m em_macro.overlay test         # 2020+ once, overlay vs v1
 python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
 pytest -q
 ```
+
+**Raw data rule:** raw data used by any trial is kept, not only hashed: it is archived with
+`python -m em_macro.archive_raw` as a compressed archive committed under `data/kept/<trial>/` when it is 50 MB or
+less (T02's is), or attached to the GitHub release `raw-data-archive` when larger, with its SHA-256 in
+`docs/raw_data_archive.md`.
 
 ---
 
@@ -826,6 +833,17 @@ from 0.37 to 0.40 and cut costs from 5.9% to 5.3% a year, so it was kept. Nothin
 frozen in `results/systematic/fit/frozen_design.json`, including a fingerprint of the code. The test refuses to run
 twice or after a code change.
 
+**Re-confirming v1.0 (`python -m em_macro.verify_v1`).** `systematic test --force` cannot be used for this: the
+fingerprint in `frozen_design.json` is that of `systematic.py` at the design-freeze commit `2dbfeb1`, one cosmetic
+label line before v1.0 (`docs/v1.0_freeze.md`), and frozen files are not edited. Use `verify_v1` instead whenever
+v1.0's results need re-confirming (after a change to a data loader or a dependency, or before relying on the frozen
+numbers in a trial). It checks the frozen files' hashes, takes the input snapshots as committed in `7886867`, runs
+the frozen `build_inputs()` and `evaluate()` for 2005-01..2019-12 and 2020-01..2026-09, and confirms both tables are
+byte-identical to the committed `performance_2005_2019.csv` and `performance_2020_on.csv`; it writes nothing under
+`results/` and exits with status 1 on any difference. It needs the full git history (not a shallow clone) and
+downloads the uncached series into `data/raw/`. The same check runs as a test with
+`EM_MACRO_VERIFY_V1=1 python -m pytest -q tests/test_verify_v1.py`.
+
 ### Results
 
 Net of costs; annual return, Sharpe ratio, worst drawdown, and correlation with the S&P 500 (monthly returns).
@@ -1170,7 +1188,7 @@ earlier Horizons app. It displays and archives only: no chat, no AI features.
 - **Build:** `python -m ledger.build` writes JSON and the static site to `app/` (gitignored; the
   `ledger-pages` workflow builds and deploys it). `python -m pytest -q tests/test_ledger.py` tests the build and
   the intake. Nothing in `ledger/` touches the v1.0 code or its result files.
-- **Pages** (bottom tabs Home, Decisions, Algorithm, Forecasts, More; Evidence, Trials, Elections and Reports sit under More):
+- **Pages** (bottom tabs Home, Decisions, Algorithm, Forecasts, More; Evidence, Trials, Elections, Reports, Screener, Marks and To do sit under More):
   - *Home:* paper account value (indexed to 100 at the Sep 2026 freeze) and equity curve, open positions,
     catalysts in the next 30 days, latest report, latest rebalance date.
   - *Decisions:* list with country, status and outcome filters; the full record, its event-bet sizing
@@ -1220,9 +1238,9 @@ Logging goes through GitHub issue forms, which the GitHub mobile app renders as 
 
 | Form | Fields | What happens |
 |---|---|---|
-| **Decision record** | Date; Country; Instrument; Action (Buy / Sell / No trade); Size (% of account at risk); Probability my view is right; Horizon (date); Entry trigger; Stop / exit if wrong; Thesis; Key factors; What would change my mind; How this differs from market consensus | Appended to `data/ledger/decisions.csv` as the next `Dnnn` |
-| **Forecast** | Question; My probability; Market probability; Market source; Claude probability (optional); Resolution date; Country (optional) | Appended to `data/ledger/forecasts.csv` as the next `Fnnn` |
-| **Resolve** | Decision or forecast id; Outcome (right / wrong / scratched for a decision, yes / no / void for a forecast); Exit price or result; P&L % of account (optional); Note (optional) | Marks the row resolved and scores it |
+| **Decision record** | Date; Country; Instrument; Action (Buy / Sell / No trade); Size (% of account at risk); Position type (continuous position / event bet); Probability my view is right; Horizon (date); Entry trigger (state the entry level, e.g. "at 5.40"); Stop / exit if wrong; Thesis; Key factors; What would change my mind; How this differs from market consensus | Checked by the Risk Manager (section 14), then appended to `data/ledger/decisions.csv` as the next `Dnnn` |
+| **Forecast** | Question; My probability; Market probability; Market source; Claude probability (optional); Resolution date; Resolution source (what settles it: "AP race call", "BCB official statement", "ECB press release"); Country (optional) | Appended to `data/ledger/forecasts.csv` as the next `Fnnn`; resolved automatically after the resolution date (section 14) |
+| **Resolve** | Decision or forecast id; Outcome (right / wrong / scratched for a decision, yes / no / void for a forecast); Exit price or result; P&L % of account (optional); Note (optional) | Marks the row resolved and scores it; always overrides an automatic resolution |
 | **Report** | Title; Type (daily briefing, weekly review, monthly notebook, research, other); Country; Date (optional); Content (pasted text, or a `.md`, `.txt` or `.pdf` attached in the content box) | Written to `data/ledger/reports/YYYY-MM-DD_slug.md` (or `.pdf` with a `.meta.yml` sidecar) with a front-matter header |
 
 Within a minute the `ledger-intake` workflow checks the issue. If it passes, the workflow commits the entry,
@@ -1253,6 +1271,34 @@ used, else none.
    `ledger:report` on its first run; nothing to do by hand.
 4. Run the `ledger-pages` workflow once (Actions → ledger-pages → Run workflow) or push to `main` to publish
    the first build.
+5. **Secret (optional):** Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY`,
+   for the event-forecast resolver (section 14). Without it everything runs; event forecasts get a `[RESOLVE?]` issue.
+
+## 14. Automation
+
+Four daily and monthly jobs keep the Ledger current without a hand. Nothing here touches the v1.0 code or any file
+hashed in `docs/v1.0_freeze.md`; the screener imports the frozen signal code read-only. Settings live in
+`ledger/automation.json` (the Anthropic model, `claude-sonnet-5-5`, the daily API cap of 10 calls, the thresholds).
+
+| Job | Workflow and schedule | What it does |
+|---|---|---|
+| Marks | `ledger-daily`, 05:52 UTC daily | `python -m ledger.marks` fetches every instrument in `data/ledger/instruments.csv` from its free official source (fallback, then the previous mark; one bad source never stops the run) and appends to `data/ledger/marks.csv`. The app shows each open decision's live P&L and a Marks page. |
+| Auto-resolver | same run | `python -m ledger.resolve` closes a decision when a mark crosses its stop (as wrong, at that mark) or its horizon passes (right / wrong / scratched by the P&L; a no-trade whose stop was never hit is right), and settles forecasts past their resolution date: central-bank questions from BIS daily policy rates, price / yield / spread questions from the marks, event questions through the Anthropic API with web search, accepted only when two sources from different organisations agree. Anything else gets a `[RESOLVE?] <id>` issue saying what was found and is retried the next day. Every automatic resolution is written in the Resolve form's format with its source links, prefixed `Auto-resolved`, and scored like a manual one; a Resolve form always overrides it. |
+| Risk Manager | `ledger-intake`, on every Decision form | `ledger/risk.py` rejects a stop without a numeric level, a continuous position risking more than 2%, or an event bet not sized at half of quarter-Kelly on its probability; flags overlap with the algorithm's positions in the same country or currency and any Ledger-calendar catalyst inside the holding period. The check is posted as a comment on the issue. |
+| Screener | `systematic-monthly`, after each rebalance (and `ledger-screener` by hand) | `python -m ledger.screener` writes `results/screener/latest.json`, a CSV and a report (type screener) with every country's carry, real carry, value, trend, signal ranks, the algorithm's position, upcoming elections and rating reviews (`data/events/rating_calendar.csv`) and any instrument that moved more than 2σ in the month. Shown on the Screener page. |
+
+**Instrument registry.** `data/ledger/instruments.csv` maps the 23 instruments of the v1.0 universe and the five
+spread legs to a source, an id, a fallback and aliases (the free text of a decision's instrument is matched against
+them). Sources: BCB PTAX, Banxico FIX, SARB, ECB euro reference rates (TRY, IDR, EUR), NBP, Bank of England
+(GBP, gilts), BanRep TRM via datos.gov.co, BCCh via mindicador.cl, Tesouro Direto, Banxico Bono M, SARB bond
+yields, Borsa Istanbul, BondSpot, Banco de España, Bundesbank. Five rows are marked **monthly** from the project's
+panel because no reachable free daily source exists: FR-DE and IT-DE (ECB IRS averages), ID10Y, CO10Y, CL10Y
+(OECD). The Marks page says which, and a decision on one of them shows "marked monthly". A mark dated before a
+decision never prices or closes it.
+
+**Logs.** `data/ledger/automation_log.csv` (every close, resolution and issue), `data/ledger/api_log.csv` (every
+API call with tokens and web searches; the daily cap counts its rows). `docs/todo.md` is the to-do list the app
+renders under More, To do.
 
 ## Repository layout
 
@@ -1274,6 +1320,8 @@ em_macro/
   calendar.py      13-country event calendar + results/calendar_coverage.md
   risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
   systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
+  verify_v1.py     re-confirms v1.0: rebuilds its design and test tables with the frozen functions, exact compare
+  archive_raw.py   keeps trials' raw data: deterministic archives under data/kept/<trial>/ (<= 50 MB) or on the release, hashes recorded
   overlay.py       political-risk overlay (frozen rule) and manual overrides (overrides.yaml), logged and scored
   figures.py       README charts
   election_tracker/ election tracker, paper and observation only (section 13): calendar, poll snapshots, pre-registration,
@@ -1286,8 +1334,10 @@ data/processed/    daily_panel.csv, carry_monthly_returns.csv, event_table.csv, 
 results/           coverage_report.md, carry_benchmark.csv, fit/, test/, test_run1_superseded/, figures
 tests/             unit tests (bond maths, windows, carry formula, spike filter); test_ledger.py (Ledger build + intake)
 ledger/            Ledger app: build.py (files -> JSON + static site in app/), intake.py (issue forms -> ledger files),
+                   marks.py (instrument registry -> marks.csv), resolve.py (auto-resolver), resolver_api.py (Anthropic API),
+                   risk.py (Risk Manager), screener.py (monthly screener), automation.json (settings),
                    schema.py (validation), scoring.py (Brier, P&L), site/ (HTML, CSS, JS, icons, vendored Chart.js and marked)
 data/ledger/       decisions.csv, forecasts.csv, reports/ (the ledger's source of truth)
 .github/           ISSUE_TEMPLATE/ (Decision record, Forecast, Resolve, Report forms);
-                   workflows/ledger-intake.yml, ledger-pages.yml, systematic.yml
+                   workflows/ledger-intake.yml, ledger-pages.yml, ledger-daily.yml, ledger-screener.yml, systematic.yml
 ```

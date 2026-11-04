@@ -58,6 +58,20 @@ def decision_pnl_pct(d: dict) -> float | None:
     return round(size * (exit_ - entry) * direction / abs(entry - stop), 3)
 
 
+def pnl_at_level(d: dict, level: float) -> float | None:
+    """P&L in % of account if the position were closed at ``level`` (a live mark or an exit),
+    from the entry level, stop and size; None when any of them is missing."""
+    if d.get("action") not in ("Buy", "Sell") or level is None:
+        return None
+    entry = parse_number(d.get("entry_level"))
+    stop = parse_number(d.get("stop"))
+    size = parse_number(d.get("size_pct"))
+    if None in (entry, stop, size) or entry == stop:
+        return None
+    direction = 1.0 if entry > stop else -1.0
+    return round(size * (float(level) - entry) * direction / abs(entry - stop), 3)
+
+
 def score_decision(d: dict) -> dict:
     o = decision_outcome01(d)
     return {

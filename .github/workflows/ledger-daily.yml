@@ -1,0 +1,200 @@
+# Daily Ledger automation: mark every registry instrument to market (data/ledger/marks.csv), close
+# decisions whose stop was hit or whose horizon passed, resolve forecasts past their resolution date
+# (official data for mechanical questions; the Anthropic API with web search for event questions,
+# only when the ANTHROPIC_API_KEY secret exists), open "[RESOLVE?] <id>" issues for anything that
+# could not be settled, commit the ledger files and rebuild the app.
+#
+# Repository settings needed once: Settings > Actions > General > Workflow permissions = "Read and
+# write permissions"; optionally Settings > Secrets and variables > Actions > New repository secret
+# ANTHROPIC_API_KEY (without it event forecasts get a [RESOLVE?] issue instead; nothing fails).
+name: ledger-daily
+
+on:
+  schedule:
+    - cron: "52 5 * * *"      # 05:52 UTC daily, before the 06:41 app build
+  workflow_dispatch:
+    inputs:
+      skip_api:
+        description: "Skip the Anthropic API even if the secret exists"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: ledger-intake          # shares the intake workflow's group: the ledger files are edited by one job at a time
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        id: install
+        run: pip install -r requirements.txt anthropic pytest 2>&1 | tee "$RUNNER_TEMP/install.log"
+
+      - name: Mark every instrument to market
+        id: marks
+        run: python -m ledger.marks 2>&1 | tee "$RUNNER_TEMP/marks.log"
+
+      - name: Close decisions and resolve forecasts
+        id: resolve
+        env:
+          ANTHROPIC_API_KEY: ${{ github.event.inputs.skip_api == 'true' && '' || secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python -m ledger.resolve --out "$RUNNER_TEMP/resolve.json" 2>&1 | tee "$RUNNER_TEMP/resolve.log"
+
+      - name: Ledger tests still pass
+        id: tests
+        run: python -m pytest -q tests/test_ledger.py tests/test_automation.py 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Commit and push
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv \
+                  data/ledger/automation_log.csv data/ledger/api_log.csv data/raw/bist data/raw/bondspot 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "Ledger daily $(date -u +%Y-%m-%d): marks, closes and resolutions"
+            for i in 1 2 3 4; do
+              if git push origin HEAD:main; then break; fi
+              sleep $((i * 3)); git pull --rebase origin main
+            done
+          fi
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          python -c "import json;print(json.load(open('$RUNNER_TEMP/resolve.json')).get('summary',''))" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update [RESOLVE?] issues
+        id: issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create ledger --repo "$GITHUB_REPOSITORY" --color 1d4ed8 --force >/dev/null 2>&1 || true
+          gh label create "ledger:resolve?" --repo "$GITHUB_REPOSITORY" --color e99695 \
+            --description "The daily resolver could not settle this entry" --force >/dev/null 2>&1 || true
+          n=$(python -c "import json;print(len(json.load(open('$RUNNER_TEMP/resolve.json')).get('issues',[])))")
+          for i in $(seq 0 $((n - 1))); do
+            python -c "import json;print(json.load(open('$RUNNER_TEMP/resolve.json'))['issues'][$i]['title'])" > "$RUNNER_TEMP/title.txt"
+            python -c "import json;print(json.load(open('$RUNNER_TEMP/resolve.json'))['issues'][$i]['body'])" > "$RUNNER_TEMP/body.md"
+            title=$(cat "$RUNNER_TEMP/title.txt")
+            existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "ledger:resolve?" --limit 100 \
+                         --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+            if [ -n "$existing" ]; then
+              last=$(gh issue view "$existing" --repo "$GITHUB_REPOSITORY" --json body,comments \
+                       --jq '(.comments | last | .body) // .body')
+              if [ "$last" != "$(cat "$RUNNER_TEMP/body.md")" ]; then
+                gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+                echo "updated #$existing: $title"
+              else
+                echo "unchanged #$existing: $title"
+              fi
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label ledger --label "ledger:resolve?" \
+                --body-file "$RUNNER_TEMP/body.md"
+              echo "opened: $title"
+            fi
+          done
+          # close [RESOLVE?] issues whose entry is now resolved (by the resolver or by a Resolve form)
+          python - <<'EOF' > "$RUNNER_TEMP/resolved_ids.txt"
+          import csv
+          ids = []
+          for p in ("data/ledger/decisions.csv", "data/ledger/forecasts.csv"):
+              with open(p, newline="", encoding="utf-8") as f:
+                  ids += [r["id"] for r in csv.DictReader(f) if (r.get("status") or "").lower() == "resolved"]
+          print("\n".join(ids))
+          EOF
+          for id in $(cat "$RUNNER_TEMP/resolved_ids.txt"); do
+            for num in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "ledger:resolve?" --limit 100 \
+                           --json number,title --jq ".[] | select(.title == \"[RESOLVE?] $id\") | .number"); do
+              gh issue close "$num" --repo "$GITHUB_REPOSITORY" --reason completed --comment "$id is now resolved in the ledger."
+              echo "closed #$num ($id resolved)"
+            done
+          done
+
+      - name: Rebuild the app
+        if: steps.commit.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || true
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Ledger daily $(date -u +%Y-%m-%d)"
+            echo
+            echo '```'
+            tail -n 40 "$RUNNER_TEMP/marks.log" 2>/dev/null
+            echo '```'
+            echo
+            cat "$RUNNER_TEMP/resolve.log" 2>/dev/null | tail -n 60
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the alert issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOMES: >-
+            install=${{ steps.install.outcome }}
+            marks=${{ steps.marks.outcome }}
+            resolve=${{ steps.resolve.outcome }}
+            tests=${{ steps.tests.outcome }}
+            commit=${{ steps.commit.outcome }}
+            issues=${{ steps.issues.outcome }}
+        run: |
+          step=""
+          for kv in $OUTCOMES; do
+            if [ "${kv#*=}" = "failure" ]; then step="${kv%%=*}"; break; fi
+          done
+          title="[ALERT] ledger-daily failed $(date -u +%Y-%m-%d)"
+          body="$RUNNER_TEMP/alert.md"
+          {
+            echo "The daily Ledger automation failed: $RUN_URL."
+            echo
+            echo "**Failing step:** ${step:-setup}"
+            echo
+            echo '```'
+            sed -e 's/\x1b\[[0-9;]*[mK]//g' "$RUNNER_TEMP/$step.log" 2>/dev/null | tail -n 60
+            echo '```'
+            echo
+            echo "Marks, closes and resolutions were not committed today. Fix the cause and re-run (Actions > ledger-daily > Run workflow)."
+          } > "$body"
+          gh label create alert --repo "$GITHUB_REPOSITORY" --color d73a4a --force >/dev/null 2>&1 || true
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert \
+                       --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body-file "$body"
+          fi
+
+      - name: Close alert issues after a successful run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert \
+                       --json number,title --jq '.[] | select(.title | startswith("[ALERT] ledger-daily")) | .number'); do
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Resolved: ledger-daily succeeded on $(date -u +%Y-%m-%d)."
+          done

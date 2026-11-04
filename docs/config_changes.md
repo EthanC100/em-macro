@@ -19,12 +19,18 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
   model. `results/systematic/positions.csv` sizes positions in per cent of capital and `results/systematic/paper_pnl.csv`
   records returns in decimal fractions; neither file depends on the capital level.
 - **Reporting convention:** all performance, in every period (design 2005–2019, test 2020-01..2026-09, live paper
-  trading from October 2026), is reported in percentages of capital. A change in the capital level therefore
+  trading from November 2026 (October 2026 is pre-live)), is reported in percentages of capital. A change in the capital level therefore
   changes no reported figure.
 - **Classification:** configuration change, not a trial. It is not counted in N (the multiple-testing trial count in
   `trials.csv`) and does not open a new trial group.
 - **Live paper record:** the October and November 2026 paper months are on the US$100,000 basis; December 2026
   onward on the US$10,000,000 basis. Because both are reported in percentages, the series is continuous.
+
+**2026-11-04 correction to C01:** the reporting-convention line above originally read "live paper trading from
+October 2026". It now reads "from November 2026 (October 2026 is pre-live)" because the live record starts with
+the first rebalance after the 3 Nov 2026 freeze (positions effective November 2026; the live-record start rule
+recorded below on 2026-11-04 and `LIVE_START_MONTH` in `ledger/build.py`); October 2026, after the 2020-01..2026-09
+test and before the freeze, is a pre-live gap month, not a live month. Nothing else in C01 changed.
 
 ## 2026-11-04: November 2026 rebalance ran late
 
@@ -54,3 +60,25 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
   infrastructure fixes".
 
 **2026-11-04, live-record start rule:** the v1.0 live record starts with the November 2026 rebalance (first rebalance after the 3 Nov 2026 freeze, positions effective 2026-11), so the Ledger counts live months, live Sharpe, live drawdown and track-record progress from 2026-11 only; October 2026 (after the 2020-01 to 2026-09 test, before the freeze) is a pre-live gap month, shown on charts as "pre-live (not counted)" and excluded from the live and backtest statistics (`LIVE_START_MONTH` in `ledger/build.py`).
+
+## 2026-11-04: Ledger automation (branch `build/automation`)
+
+- **New workflows:** `ledger-daily` (05:52 UTC daily: marks, auto-resolver, `[RESOLVE?]` issues; shares the
+  `ledger-intake` concurrency group so the ledger files are edited by one job at a time) and `ledger-screener`
+  (by hand). `systematic-monthly` gained a "Ledger screener" step after the overlay (continue-on-error) and
+  commits `results/screener/` and `data/ledger/reports/`. `ledger-intake` posts the Risk Manager check as a
+  comment and runs `tests/test_automation.py`.
+- **Forms:** the Decision form has a required Position type (continuous position / event bet); the Forecast
+  form a required Resolution source. `decisions.csv` gained `position_type`, `forecasts.csv`
+  `resolution_source` (F001-F005: "AP race call").
+- **New files:** `data/ledger/instruments.csv`, `marks.csv`, `automation_log.csv`, `api_log.csv`,
+  `data/events/rating_calendar.csv`, `results/screener/`, `ledger/automation.json`, `docs/todo.md`.
+- **API:** only the event-forecast resolver calls the Anthropic API (model `claude-sonnet-5-5` in
+  `ledger/automation.json`, 10 calls a day, key from the `ANTHROPIC_API_KEY` secret; without it event forecasts
+  get a `[RESOLVE?]` issue and nothing fails). The `anthropic` package is installed by `ledger-daily` only.
+- **Data-source decisions (made under the brief's rules):** France and Italy 10y marked monthly (Banque de
+  France's portal refused the build session's connections; the ECB publishes country yields monthly only; Banca
+  d'Italia needs a session); Indonesia, Colombia and Chile 10y monthly from the panel (no keyless daily source;
+  the BCCh API needs a login); Turkey and Indonesia FX from the ECB reference rates (the CBRT API needs a key,
+  Bank Indonesia has no open API); Yahoo and Stooq not used (rate-limited or blocked). No strategy code,
+  parameter or hashed file changed.
