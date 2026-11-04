@@ -359,7 +359,8 @@ def test_evidence_groups_and_status(tmp_path):
     assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
     assert ev["overall"].startswith(f"No validated discretionary edge yet; v1.0 live for {n_live} month"
                                     f"{'s' if n_live != 1 else ''}")
-    assert "11 rejected" in ev["overall"]
+    assert "12 rejected" in ev["overall"]                 # 11 on main plus T13 (trial T02, rejected)
+    assert "T13" in failed
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
 

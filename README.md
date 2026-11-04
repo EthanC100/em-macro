@@ -42,12 +42,18 @@ python -m em_macro.risk_model outputs   # fair value, factor contributions, simi
 python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
+python -m em_macro.verify_v1             # re-confirm v1.0: rebuild its 2005-2019 and 2020-2026 tables, compare exactly
+python -m em_macro.archive_raw pack <trial> data/raw/<folder>   # keep a trial's raw data (release raw-data-archive)
 python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
 python -m em_macro.overlay test         # 2020+ once, overlay vs v1
 python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
 pytest -q
 ```
+
+**Raw data rule:** raw data used by any trial is kept, not only hashed: it is archived with
+`python -m em_macro.archive_raw` as compressed assets of the GitHub release `raw-data-archive`, with their SHA-256 in
+`docs/raw_data_archive.md`.
 
 ---
 
@@ -823,6 +829,17 @@ from 0.37 to 0.40 and cut costs from 5.9% to 5.3% a year, so it was kept. Nothin
 frozen in `results/systematic/fit/frozen_design.json`, including a fingerprint of the code. The test refuses to run
 twice or after a code change.
 
+**Re-confirming v1.0 (`python -m em_macro.verify_v1`).** `systematic test --force` cannot be used for this: the
+fingerprint in `frozen_design.json` is that of `systematic.py` at the design-freeze commit `2dbfeb1`, one cosmetic
+label line before v1.0 (`docs/v1.0_freeze.md`), and frozen files are not edited. Use `verify_v1` instead whenever
+v1.0's results need re-confirming (after a change to a data loader or a dependency, or before relying on the frozen
+numbers in a trial). It checks the frozen files' hashes, takes the input snapshots as committed in `7886867`, runs
+the frozen `build_inputs()` and `evaluate()` for 2005-01..2019-12 and 2020-01..2026-09, and confirms both tables are
+byte-identical to the committed `performance_2005_2019.csv` and `performance_2020_on.csv`; it writes nothing under
+`results/` and exits with status 1 on any difference. It needs the full git history (not a shallow clone) and
+downloads the uncached series into `data/raw/`. The same check runs as a test with
+`EM_MACRO_VERIFY_V1=1 python -m pytest -q tests/test_verify_v1.py`.
+
 ### Results
 
 Net of costs; annual return, Sharpe ratio, worst drawdown, and correlation with the S&P 500 (monthly returns).
@@ -1196,6 +1213,8 @@ em_macro/
   calendar.py      13-country event calendar + results/calendar_coverage.md
   risk_model.py    sovereign risk model: lags, ridge + Driscoll-Kraay, fair value, tests, past cases, what-if
   systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
+  verify_v1.py     re-confirms v1.0: rebuilds its design and test tables with the frozen functions, exact compare
+  archive_raw.py   keeps trials' raw data: deterministic archives on the raw-data-archive release, hashes recorded
   overlay.py       political-risk overlay (frozen rule) and manual overrides (overrides.yaml), logged and scored
   figures.py       README charts
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
