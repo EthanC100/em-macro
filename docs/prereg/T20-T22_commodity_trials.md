@@ -674,3 +674,34 @@ decision 3 of this document kept platinum and palladium in on the task's wording
 periods, the statistics, the T20 and T21 signal definitions, every T22 item, the Build 0 tests other than A2's
 universe, and the reporting. The ledger rows T20–T22 are updated to reference this amendment's commit, changing no
 other row.
+
+## Amendment 2 — 2026-11-04, before any commodity data exists
+
+Recorded after Amendment 1 (`023c829`) and its ledger-row commit (`1611f90`), and **before any commodity price was
+downloaded, opened or computed** in this repository (Build 0 has not been run). The text above is left as written;
+where this section and the text above differ, this section governs. Only criterion C2 changes.
+
+### A2.1 Pass rule: criterion C2 becomes non-inferiority on the holdout
+
+**Reason.** With an expected fund-level gain near +0.03 Sharpe (§1), requiring ΔSR > 0 on half the markets, as
+C2 did, would be decided mostly by noise: the half-B sleeve has 10 (T20, T21) or 18 (T22) markets and the
+comparison runs over 81 months, so the sign of a point estimate that small is close to a coin flip. Amendment 1 made
+the full-universe test non-inferiority for the same reason and left C2 as a superiority requirement; this amendment
+aligns C2 with it and with C2 of `docs/prereg/T16-T19_risk_batch.md` (holdout Sharpe not worse than the baseline's
+by more than 0.05). This decision was made before any data was seen.
+
+**C2, replaced.** Holdout, half B, 2020-01..2026-09, decisive costs. The half-B sleeve is run stand-alone on the
+half-B universe (§2.7) and combined with the full v1.1 (§2.6); the comparison is against the full v1.1. C2 passes if
+
+```
+ΔSR(half B) = SR(v1.1 + half-B sleeve) − SR(v1.1)  ≥  −0.05
+and  |MaxDD(v1.1 + half-B sleeve)|  ≤  |MaxDD(v1.1)|
+```
+
+both as **point estimates, with no bootstrap**, matching C2 of the T16–T19 batch. The half-B ΔSR, both Sharpe
+ratios and both drawdowns are reported; half A and 2000–2019 remain context.
+
+**C1, C3, C4 and the sleeve-level gates: unchanged** (C1 as amended in Amendment 1). The decision rule stands: a
+trial passes only if all of its sleeve-level gates (§4.2) and all of C1–C4 hold, C1 after the Holm correction.
+Nothing else in this document changes. The ledger rows T20–T22 are updated to reference this amendment's commit,
+changing no other row.
