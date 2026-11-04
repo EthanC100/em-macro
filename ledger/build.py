@@ -428,6 +428,19 @@ def build_trials() -> dict:
 
 
 # ----------------------------------------------------------------------------- elections
+def tracker_event_label(r: dict, d: date | None) -> str:
+    """Label for a row of the election tracker's calendar.csv (id, country, type, date, status, ...),
+    e.g. "Mexico legislative, 6 Jun 2027". A run-off row (id ending -r2) says so, and a `due_by` row,
+    whose date is only the legal deadline, reads "by 11 Nov 2027"."""
+    kind = (r.get("type") or "election").strip()
+    if (r.get("id") or "").endswith("-r2"):
+        kind += " run-off"
+    when = f"{d.day} {d:%b %Y}" if d else ""
+    if when and (r.get("status") or "").strip() == "due_by":
+        when = f"by {when}"
+    return ", ".join(x for x in (f"{(r.get('country') or '').strip()} {kind}".strip(), when) if x)
+
+
 def build_elections(today: date) -> dict:
     cal_path = ROOT / "data/elections/calendar.csv"
     sig_path = ROOT / "data/elections/signals.csv"
@@ -438,7 +451,8 @@ def build_elections(today: date) -> dict:
         for r in read_csv(cal_path):
             d = parse_date(r.get("date") or r.get("vote_date"))
             calendar.append({**r, "country": r.get("country") or ISO3.get(r.get("iso3", ""), ""),
-                             "date": iso(d), "event": r.get("election") or r.get("description", "")})
+                             "date": iso(d),
+                             "event": r.get("election") or r.get("description") or tracker_event_label(r, d)})
     else:
         sources += ["data/events/elections.csv", "data/events/upcoming_events.csv"]
         for r in read_csv(ROOT / "data/events/elections.csv"):

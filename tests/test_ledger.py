@@ -155,13 +155,27 @@ def test_build_writes_site_and_json(tmp_path):
     if (ROOT / "data/elections/calendar.csv").exists():
         # the election tracker's calendar takes precedence over the historical event files (README section 14)
         assert el["sources"][0] == "data/elections/calendar.csv"
-        assert any(c.get("id") == "mx-2027-legislative" for c in el["upcoming"])
+        mx = next(c for c in el["upcoming"] if c.get("id") == "mx-2027-legislative")
+        assert mx["event"] == "Mexico legislative, 6 Jun 2027"
+        assert all(c["event"] for c in el["upcoming"])                 # no blank labels
+        pl = next(c for c in el["upcoming"] if c.get("id") == "pl-2027-parliamentary")
+        assert pl["event"] == "Poland legislative, by 11 Nov 2027"     # due_by: the date is a legal deadline
     else:
         assert el["n_past"] > 100 and any(s["kind"] == "odds" for s in el["signals"])
     rp = json.loads((out / "data/reports.json").read_text())
     assert any(r["source"] == "results/T01_ts_trend.md" for r in rp["items"])
     for r in rp["items"]:
         assert (out / r["file"]).exists()
+
+
+def test_tracker_event_label():
+    row = {"id": "mx-2027-legislative", "country": "Mexico", "type": "legislative", "status": "scheduled"}
+    assert build.tracker_event_label(row, date(2027, 6, 6)) == "Mexico legislative, 6 Jun 2027"
+    r2 = {"id": "cz-2028-presidential-r2", "country": "Czech Republic", "type": "presidential", "status": "scheduled"}
+    assert build.tracker_event_label(r2, date(2028, 2, 14)) == "Czech Republic presidential run-off, 14 Feb 2028"
+    due = {"id": "my-2028-general", "country": "Malaysia", "type": "legislative", "status": "due_by"}
+    assert build.tracker_event_label(due, date(2028, 2, 17)) == "Malaysia legislative, by 17 Feb 2028"
+    assert build.tracker_event_label({"country": "Peru"}, None) == "Peru election"
 
 
 # ----------------------------------------------------------------------------- intake
