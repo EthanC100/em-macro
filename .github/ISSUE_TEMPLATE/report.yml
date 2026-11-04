@@ -1,0 +1,46 @@
+name: Report
+description: Add a report to the archive. Paste the text, or attach a Markdown, text or PDF file by dragging it into the content box.
+title: "[Report] "
+labels: ["ledger", "ledger:report"]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      placeholder: "Weekly review, week 45"
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - daily briefing
+        - weekly review
+        - monthly notebook
+        - research
+        - other
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      description: A country, or "Global".
+      placeholder: "Global"
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date (optional)
+      description: YYYY-MM-DD; today if blank.
+    validations:
+      required: false
+  - type: textarea
+    id: content
+    attributes:
+      label: Content
+      description: Paste the report as text (Markdown is fine), or attach a .md, .txt or .pdf file here. On the GitHub app, use the attachment button in this box.
+    validations:
+      required: true

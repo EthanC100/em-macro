@@ -1,0 +1,102 @@
+name: Decision record
+description: Log a trade or no-trade decision in the Ledger. A workflow checks it, writes it to data/ledger/decisions.csv and closes this issue with its id.
+title: "[Decision] "
+labels: ["ledger", "ledger:decision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rules checked automatically: the stop must contain a numeric price or yield level; a Buy or Sell may risk at most 2% of the account; the probability must be stated (event-bet sizing is half of quarter-Kelly on it); dates must parse (YYYY-MM-DD is safest).
+  - type: input
+    id: date
+    attributes:
+      label: Date
+      description: Decision date, YYYY-MM-DD
+      placeholder: "2026-11-03"
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      placeholder: "Brazil"
+    validations:
+      required: true
+  - type: input
+    id: instrument
+    attributes:
+      label: Instrument
+      placeholder: "USD/BRL, FR-DE 10y OAT-Bund spread, MX10Y ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: action
+    attributes:
+      label: Action
+      options:
+        - Buy
+        - Sell
+        - No trade
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Size (% of account at risk)
+      description: The % of the account lost if the stop is hit. 0 for no trade; at most 2 for a position.
+      placeholder: "1.0"
+    validations:
+      required: true
+  - type: input
+    id: probability
+    attributes:
+      label: Probability my view is right
+      description: Percent, 0-100
+      placeholder: "65"
+    validations:
+      required: true
+  - type: input
+    id: horizon
+    attributes:
+      label: Horizon (date)
+      placeholder: "2027-04-18"
+    validations:
+      required: true
+  - type: textarea
+    id: entry_trigger
+    attributes:
+      label: Entry trigger
+      description: What gets you in. Include the entry level if known (it is used for P&L at resolution).
+    validations:
+      required: true
+  - type: textarea
+    id: stop
+    attributes:
+      label: Stop / exit if wrong
+      description: Must contain a numeric price or yield level, e.g. "exit if USD/BRL closes above 5.70" or "spread tightens to 115bp".
+    validations:
+      required: true
+  - type: textarea
+    id: thesis
+    attributes:
+      label: Thesis
+    validations:
+      required: true
+  - type: textarea
+    id: key_factors
+    attributes:
+      label: Key factors
+    validations:
+      required: true
+  - type: textarea
+    id: change_mind
+    attributes:
+      label: What would change my mind
+    validations:
+      required: true
+  - type: textarea
+    id: vs_consensus
+    attributes:
+      label: How this differs from market consensus
+    validations:
+      required: true
