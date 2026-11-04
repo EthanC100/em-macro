@@ -148,8 +148,16 @@ def test_build_writes_site_and_json(tmp_path):
     tr = json.loads((out / "data/trials.json").read_text())
     assert tr["summary"]["n"] >= 12 and next(t for t in tr["items"] if t["trial_id"] == "T01")["status"] == "pass"
     assert next(t for t in tr["items"] if t["trial_id"] == "T12")["status"] == "fail"
+    status = {t["trial_id"]: t["status"] for t in tr["items"]}
+    assert status["T14"] == "inconclusive" and status["T15"] == "pending"      # election study and its live test
+    assert tr["summary"]["n"] == 15 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 1
     el = json.loads((out / "data/elections.json").read_text())
-    assert el["n_past"] > 100 and any(s["kind"] == "odds" for s in el["signals"])
+    if (ROOT / "data/elections/calendar.csv").exists():
+        # the election tracker's calendar takes precedence over the historical event files (README section 14)
+        assert el["sources"][0] == "data/elections/calendar.csv"
+        assert any(c.get("id") == "mx-2027-legislative" for c in el["upcoming"])
+    else:
+        assert el["n_past"] > 100 and any(s["kind"] == "odds" for s in el["signals"])
     rp = json.loads((out / "data/reports.json").read_text())
     assert any(r["source"] == "results/T01_ts_trend.md" for r in rp["items"])
     for r in rp["items"]:
@@ -345,6 +353,7 @@ def test_evidence_groups_and_status(tmp_path):
     assert live["backtest_sharpe"] == pytest.approx(0.654, abs=1e-3)
     rule = groups["prospective"][0]
     assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
+    assert rule["trial_id"] == "T15" and len(groups["prospective"]) == 1     # T15 is the election rule, listed once
     assert groups["passed"] == []                      # T01 is the live entry, not a passed trial
     failed = {t["id"]: t for t in groups["failed"]}
     assert "T12" in failed and failed["T12"]["reason"].startswith("rejected (failed pre-registered pass rule)")
@@ -352,7 +361,8 @@ def test_evidence_groups_and_status(tmp_path):
     assert ev["overall"].startswith(f"No validated discretionary edge yet; v1.0 live for {n_live} month"
                                     f"{'s' if n_live != 1 else ''}")
     assert "12 rejected" in ev["overall"]                 # 11 on main plus T13 (trial T02, rejected)
-    assert "T13" in failed
+    assert "1 idea under prospective test" in ev["overall"]   # T15, the election continuation rule
+    assert "T13" in failed and "T14" not in failed and "T15" not in failed
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
 

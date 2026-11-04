@@ -1,4 +1,4 @@
-# Election tracker (alerts only): weekly calendar refresh and point-in-time poll snapshots.
+# Election tracker (paper, observation only; size 0): weekly calendar refresh and point-in-time poll snapshots.
 # Free public sources only: Wikipedia (MediaWiki API / REST) and IFES ElectionGuide.
 # Scheduled workflows run only on the repository's default branch.
 name: elections-weekly

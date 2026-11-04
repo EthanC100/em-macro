@@ -3,10 +3,15 @@
 For an election whose results are out:
 1. final poll average from the last polling-page revision before the vote day (snapshots.final);
 2. market sign from the pre-registration as committed before the vote day (prereg.committed_block);
-3. surprise, expected day-1 move (frozen study fit) and the position implied by the pre-registered rule;
+3. surprise, expected day-1 move (frozen study fit) and the position the pre-registered rule would take;
 4. a GitHub issue "[ELECTION] <country> <date>: surprise <value>" and a row in data/elections/signals.csv.
 
-`score()` later fills the actual day-1 and day-5 moves (study definitions) and the rule's trade return.
+Paper, observation only: every implied position is logged with size 0 (`position_size`) and labelled
+"paper, observation only" (`position_label`). The rule's own direction, risk, stop and notional are kept
+(`direction`, `rule_risk_frac`, `stop_pct`, `rule_notional_frac`) so the paper trade can be scored for trial T15.
+
+`score()` later fills the actual day-1 and day-5 moves (study definitions), the post-day-1 move in the
+surprise's direction (entry close to exit close, no stop) and the rule's paper trade return (with the stop).
 """
 from __future__ import annotations
 
@@ -21,7 +26,8 @@ from bs4 import BeautifulSoup
 
 from . import fx, prereg, snapshots, wiki
 from .common import DATA, SIGNALS, load_calendar, load_config, post_issue, today
-from .rule import (expected_day1_move, implied_position, load_frozen_fit, surprise)
+from .rule import (POSITION_LABEL, POSITION_SIZE, TRIAL_ID, expected_day1_move, implied_position,
+                   load_frozen_fit, surprise)
 
 ALERT_LABEL = "election-alert"
 RESULTS_WINDOW_DAYS = 3
@@ -29,11 +35,12 @@ SIGNAL_COLS = [
     "id", "country", "currency", "vote_date", "results_known", "alert_utc", "status", "prereg_commit",
     "market_preferred", "cand_a", "cand_b", "poll_share_a", "poll_share_b", "poll_margin", "poll_window_days",
     "poll_n_pollsters", "poll_revid", "actual_share_a", "actual_share_b", "actual_margin", "result_source",
-    "provisional", "market_sign", "surprise_pp", "expected_day1_pct", "direction", "p", "b", "kelly", "risk_frac",
-    "sigma_daily_pct", "stop_pct", "notional_frac", "entry_date", "exit_date", "fx_source", "issue_url",
+    "provisional", "market_sign", "surprise_pp", "expected_day1_pct", "position_label", "position_size",
+    "direction", "p", "b", "kelly", "rule_risk_frac", "sigma_daily_pct", "stop_pct", "rule_notional_frac",
+    "entry_date", "exit_date", "fx_source", "issue_url",
     "actual_day1_raw_pct", "actual_day1_abn_pct", "actual_day5_raw_pct", "actual_day5_abn_pct",
-    "actual_day1_raw_ecb_pct", "actual_day5_raw_ecb_pct", "trade_return_pct", "trade_stopped", "fx_file",
-    "scored_utc"]
+    "actual_day1_raw_ecb_pct", "actual_day5_raw_ecb_pct", "post_day1_move_pct", "trade_return_pct",
+    "trade_stopped", "scored", "fx_file", "scored_utc"]
 
 
 # ------------------------------------------------------------------ results
@@ -121,10 +128,12 @@ def build_signal(eid: str, shares: dict[str, float], source: str, results_known:
         "poll_n_pollsters": fin.get("n_pollsters"), "poll_revid": fin.get("revid"),
         "actual_share_a": shares.get(a), "actual_share_b": shares.get(b), "actual_margin": actual_margin,
         "result_shares": json.dumps(shares), "result_source": source, "provisional": provisional, "market_sign": sign, "surprise_pp": s,
-        "expected_day1_pct": expected, "direction": pos.direction if pos else None, "p": pos.p if pos else None,
-        "b": pos.b if pos else None, "kelly": pos.kelly if pos else None, "risk_frac": pos.risk_frac if pos else None,
+        "expected_day1_pct": expected, "position_label": POSITION_LABEL, "position_size": POSITION_SIZE,
+        "direction": pos.direction if pos else None, "p": pos.p if pos else None,
+        "b": pos.b if pos else None, "kelly": pos.kelly if pos else None,
+        "rule_risk_frac": pos.risk_frac if pos else None,
         "sigma_daily_pct": sigma, "stop_pct": pos.stop_pct if pos else None,
-        "notional_frac": pos.notional_frac if pos else None, "entry_date": entry.date().isoformat(),
+        "rule_notional_frac": pos.notional_frac if pos else None, "entry_date": entry.date().isoformat(),
         "exit_date": fx.exit_date(entry).date().isoformat(), "fx_source": src}
 
 
@@ -136,7 +145,8 @@ def issue_text(sig: dict) -> tuple[str, str]:
     s = sig["surprise_pp"]
     title = f"[ELECTION] {sig['country']} {sig['vote_date']}: surprise {_f(s, '{:+.1f}pp', 'n/a')}"
     direction = {1: f"LONG {sig['currency']} vs USD", -1: f"SHORT {sig['currency']} vs USD", 0: "no position"}.get(sig["direction"], "n/a")
-    body = f"""**Alert only: no position is taken by this repository.** Status: **{sig['status']}**.
+    body = f"""**Paper, observation only: the implied position is logged with size 0. No position is taken.**
+Status: **{sig['status']}**.
 
 | | |
 |---|---|
@@ -145,13 +155,14 @@ def issue_text(sig: dict) -> tuple[str, str]:
 | Market-preferred (pre-registered, commit {str(sig['prereg_commit'])[:7]}) | {sig['market_preferred'] or 'not classified'} → sign {_f(sig['market_sign'], '{:+.0f}')} |
 | **Surprise** | **{_f(s, '{:+.2f}')} pp** (+ = market-preferred side beat its polls) |
 | **Expected day-1 move** | **{_f(sig['expected_day1_pct'], '{:+.2f}')}%** {sig['currency']} vs USD, abnormal (0.0368 + 0.0596 × surprise) |
-| **Implied position** | **{direction}**; risk {_f(sig['risk_frac'], '{:.2%}')} of NAV; stop {_f(sig['stop_pct'], '{:.2f}')}% (1.5 × σ {_f(sig['sigma_daily_pct'], '{:.2f}')}% × √5); notional {_f(sig['notional_frac'], '{:.2f}')}× NAV |
+| **Implied position ({sig['position_label']})** | **size {_f(sig['position_size'], '{:g}')}** (logged, not traded). For scoring only, the spec 4.10 rule would take: {direction}; risk {_f(sig['rule_risk_frac'], '{:.2%}')} of NAV; stop {_f(sig['stop_pct'], '{:.2f}')}% (1.5 × σ {_f(sig['sigma_daily_pct'], '{:.2f}')}% × √5); notional {_f(sig['rule_notional_frac'], '{:.2f}')}× NAV |
 | Entry / exit | close {sig['entry_date']} / close {sig['exit_date']} (5 trading days) |
 | FX data | {sig['fx_source']} |
 
-Caveats: the day-1 slope was not significant in-sample (p 0.20); the 0.72 correlation is on 9 hold-out events, and
-continuation after day 1 is untested. Actual day-1 and day-5 moves will be added to `data/elections/signals.csv`.
-Pre-registration: `docs/elections/{sig['id']}.md`."""
+Caveats: the day-1 slope was not significant in-sample (p 0.20); the 0.72 correlation is on 9 hold-out events.
+**Continuation after day 1 is not established**: this tracker exists to test it (trial {TRIAL_ID} in `trials.csv`).
+The actual day-1 and day-5 moves, the post-day-1 move and the paper trade return will be added to
+`data/elections/signals.csv`. Pre-registration: `docs/elections/{sig['id']}.md`."""
     return title, body
 
 
@@ -206,7 +217,7 @@ def score() -> list[str]:
     if not SIGNALS.exists():
         return []
     df = pd.read_csv(SIGNALS, dtype={"trade_stopped": "object", "scored_utc": "object", "fx_source": "object",
-                                     "fx_file": "object"})
+                                     "fx_file": "object", "scored": "object", "position_label": "object"})
     cfg, done = load_config(), []
     for i, r in df.iterrows():
         if pd.notna(r.get("scored_utc")) or today() <= dt.date.fromisoformat(r["exit_date"]):
@@ -227,8 +238,13 @@ def score() -> list[str]:
         df.loc[i, ["actual_day1_raw_pct", "actual_day5_raw_pct", "actual_day1_abn_pct", "actual_day5_abn_pct"]] = \
             [raw[1], raw[5], ab[1], ab[5]]
         if pd.notna(r.get("direction")) and int(r["direction"]) != 0 and pd.notna(r.get("stop_pct")):
-            t = fx.trade_return(x, pd.Timestamp(r["entry_date"]), int(r["direction"]), float(r["stop_pct"]))
-            df.loc[i, ["trade_return_pct", "trade_stopped"]] = [t["trade_return_pct"], t["stopped"]]
+            entry, d = pd.Timestamp(r["entry_date"]), int(r["direction"])
+            # paper trade only (size 0): what the rule would have earned, with its close-based stop
+            t = fx.trade_return(x, entry, d, float(r["stop_pct"]))
+            # post-day-1 move in the surprise's direction, entry close to exit close, no stop (T15 hit rate)
+            move = fx.trade_return(x, entry, d, float("inf"))["trade_return_pct"]
+            df.loc[i, ["trade_return_pct", "trade_stopped", "post_day1_move_pct"]] = \
+                [t["trade_return_pct"], t["stopped"], move]
         if pd.isna(raw[5]):
             continue                            # data not in yet: try again tomorrow
         # Save the exact series used (reproducible scoring) and cross-check against the ECB reference
@@ -246,6 +262,9 @@ def score() -> list[str]:
         pd.DataFrame(frames).loc[str(pd.Timestamp(r["vote_date"]) - pd.Timedelta(days=120)):].to_csv(out, index_label="date")
         df.loc[i, "fx_file"] = str(out.relative_to(DATA.parents[1]))
         df.loc[i, "scored_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        # counts towards T15 (and the ledger's election-rule count) only for a signal with a complete paper trade
+        if r["status"] == "signal" and pd.notna(df.loc[i, "post_day1_move_pct"]) and pd.notna(df.loc[i, "trade_return_pct"]):
+            df.loc[i, "scored"] = "yes"
         df.loc[i, "fx_source"] = f"{r['fx_source']}; scored with {src}"
         done.append(r["id"])
     df.reindex(columns=SIGNAL_COLS).to_csv(SIGNALS, index=False)

@@ -16,6 +16,10 @@ Rule (docs/research/algorithm_spec_2026-11.md section 4.10):
 * hold H = 5 trading days
 * risk = min(0.5 * 0.25 * Kelly(p, b), 2%) of NAV, p = mean of Beta(9, 2)
 * stop = 1.5 * sigma_daily * sqrt(H)
+
+Observation only: `implied_position` returns what the rule WOULD do, so the paper trade can be scored
+(trial T15 in trials.csv). Every logged position has size POSITION_SIZE = 0 and is labelled POSITION_LABEL;
+nothing is traded. Continuation after day 1 is not established (docs/elections/ORIGINAL_STUDY.md section 7).
 """
 from __future__ import annotations
 
@@ -36,6 +40,14 @@ STOP_K = 1.5
 PRIOR_WINS, PRIOR_LOSSES = 8, 1  # 8 of 9 out-of-sample day-1 signs right
 PAYOFF_B = 1.0                  # [A] Kelly odds b: not given in the spec; see docs/elections/README_RULE.md
 EWMA_HALFLIFE = 60              # spec section 7: 60-day EWMA volatility
+
+# Observation only: the rule's position is computed for scoring, but the size actually taken is zero.
+POSITION_SIZE = 0.0
+POSITION_LABEL = "paper, observation only"
+TRIAL_ID = "T15"                # trials.csv row for the prospective test of the continuation rule
+PASS_MIN_EVENTS = 15            # pass rule: at least 15 new scored elections, then
+PASS_MIN_HIT = 0.65             #   post-day-1 move in the surprise's direction in >= 65% of events, and
+PASS_MAX_P = 0.10               #   mean trade return > 0 with one-sided p < 0.10
 
 
 @dataclass(frozen=True)
@@ -134,7 +146,9 @@ class Position:
 
 def implied_position(s: float | None, sigma_daily_pct: float, p: float | None = None,
                      b: float = PAYOFF_B) -> Position:
-    """Position implied by the pre-registered rule for surprise `s` (pp)."""
+    """Position the pre-registered rule WOULD take for surprise `s` (pp).
+
+    Used for scoring only: the tracker logs it with size POSITION_SIZE (0) and POSITION_LABEL."""
     p = beta_posterior_mean() if p is None else p
     stop = stop_distance(sigma_daily_pct)
     if s is None or s == 0:

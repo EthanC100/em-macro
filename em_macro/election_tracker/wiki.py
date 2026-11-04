@@ -9,7 +9,7 @@ import time
 
 import requests
 
-UA = {"User-Agent": "em-macro-election-tracker/0.1 (https://github.com/ethanc100/em-macro; alerts-only research tool)"}
+UA = {"User-Agent": "em-macro-election-tracker/0.1 (https://github.com/ethanc100/em-macro; observation-only research tool)"}
 API = "https://{lang}.wikipedia.org/w/api.php"
 
 

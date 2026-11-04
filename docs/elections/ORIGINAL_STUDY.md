@@ -3,6 +3,11 @@
 Written 2026-11-03 for the election tracker (`em_macro/election_tracker/`). Everything below is read from this
 repository. Nothing is re-estimated, and no v1.0 or frozen file is changed.
 
+> **Continuation is not established.** This study supports, weakly, one claim: the signed poll surprise predicts
+> the **day-1** currency move. It does not show that the move continues after day 1, which is what the spec 4.10
+> rule trades (§7). The election tracker exists to test continuation. It runs as pre-registered trial T15, paper and
+> observation only: every implied position is logged with size 0.
+
 ## Where it is
 
 | What | File |
@@ -16,7 +21,7 @@ repository. Nothing is re-estimated, and no v1.0 or frozen file is changed.
 | Frozen coefficients (fit 2005–2021, committed before the test, commit `08c4f07`) | `results/fit/frozen_params.json`, `results/fit/election_surprise_regressions.csv`, `results/fit/factor_betas.csv` |
 | Out-of-sample result (0.72, 8 of 9) | `results/test/oos_surprise_predictions.csv`, `results/test/event_moves.csv` |
 | Chart | `results/fig_election_surprise.png` |
-| Trial ledger | `trials.csv`: the study itself has **no row**. T09 is the drift rule built on the same events (rejected). T07 is the pre-election repricing study (null). |
+| Trial ledger | `trials.csv`: **T14** is this study (fit and hold-out results as in §6; "inconclusive", not a trading rule). **T15** is the spec 4.10 continuation rule as a pre-registered prospective trial (observation, zero size). T09 is the drift rule built on the same events (rejected). T07 is the pre-election repricing study (null). |
 
 ## 1. Market-relevant quantity
 
@@ -108,7 +113,8 @@ rounds, Turkey 2023 both rounds, Brazil 2022 both rounds, Brazil 2026 round 1, I
 1. **The fitted slope is not significant in-sample** (t = 1.3, p = 0.20, in-sample correlation 0.27). The 0.72 is on
    9 hold-out events. The README calls it "consistent evidence, not proof". Clopper–Pearson 95% interval for 8/9 is
    52–99%.
-2. **"The move continues" is not established.** In the fit sample, election FX moves **reversed** after day 1 (raw
+2. **"The move continues" is not established.** The spec 4.10 facts list states it as a finding; this study does
+   not support that. In the fit sample, election FX moves **reversed** after day 1 (raw
    drift slope −0.55, t = −2.0); the pre-registered rule built on that (fade the day-1 move, T09) **lost money** in
    the hold-out because hold-out moves continued (slope +0.46, t = 1.7, n = 14, not significant).
 3. **The spec 4.10 trade (enter at the day-1 close in the direction of the surprise, hold 5 days) was never tested
@@ -120,7 +126,18 @@ rounds, Turkey 2023 both rounds, Brazil 2022 both rounds, Brazil 2026 round 1, I
 4. The spec's sizing input "p from Beta(9,2) ≈ 0.82" is the day-1 sign hit rate. It is not the hit rate of the
    trade the rule actually places (day 1 → day 6).
 
+**So continuation is an open question, and the tracker exists to answer it.** It is trial T15 in `trials.csv`,
+pre-registered with this pass rule: after at least 15 new scored elections,
+- the post-day-1 move (day-1 close to exit close, no stop) goes the surprise's way in at least 65% of events; and
+- the mean trade return (5-day hold, close-based stop) is positive with one-sided p < 0.10 (one-sample t-test).
+
+While T15 runs, the tracker is paper and observation only: positions are logged with size 0.
+
 ## 8. How the tracker uses this
+
+- **Paper, observation only.** Every implied position is logged with size 0 and labelled "paper, observation
+  only" in the results-night issue and in `data/elections/signals.csv`. What the spec 4.10 rule would have done
+  (direction, risk, stop, notional, and the 5-day paper trade return) is still computed, so T15 can be scored.
 
 - Quantity, orientation, poll window and FX return are coded exactly as above (`em_macro/election_tracker/rule.py`).
 - The aggregator option is dropped because it cannot be reproduced point-in-time; the tracker uses the mechanical

@@ -13,8 +13,9 @@ import yaml
 
 from . import snapshots
 from .common import DOCS, days_to, load_calendar, load_config, post_issue, today
-from .rule import (HOLD_DAYS, KELLY_MULT, PAYOFF_B, RISK_CAP, STOP_K, beta_posterior_mean, kelly_fraction,
-                   load_frozen_fit, risk_fraction)
+from .rule import (HOLD_DAYS, KELLY_MULT, PASS_MAX_P, PASS_MIN_EVENTS, PASS_MIN_HIT, PAYOFF_B, POSITION_LABEL,
+                   POSITION_SIZE, RISK_CAP, STOP_K, TRIAL_ID, beta_posterior_mean, kelly_fraction, load_frozen_fit,
+                   risk_fraction)
 from .rule import ROOT
 
 PREREG_DAYS = 14
@@ -45,7 +46,7 @@ def render(row: dict, c: dict, snap: dict | None, written: dt.datetime) -> str:
         + "".join(f"- {s}\n" for s in (c.get("market_sign_sources") or []))
         if mp else
         "**NOT CLASSIFIED.** No market-preferred side has been recorded from pre-vote analyst coverage. Under the "
-        "rule the event is **excluded** (no position; the alert is informational) unless the sign is classified "
+        "rule the event is **excluded** (no paper position, not scored; the alert is informational) unless the sign is classified "
         "and this file is re-committed before the vote day starts. To classify: set `market_preferred`, "
         "`market_sign_justification` and `market_sign_sources` in `data/elections/tracker.yaml` and run "
         f"`python -m em_macro.election_tracker prereg --id {row['id']} --force`.\n")
@@ -61,7 +62,8 @@ def render(row: dict, c: dict, snap: dict | None, written: dt.datetime) -> str:
                                  if snap and snap.get("a") else None),
         "fit": {"const": fit.const, "slope": fit.slope},
         "rule": {"hold_days": HOLD_DAYS, "kelly_mult": KELLY_MULT, "risk_cap": RISK_CAP, "p": round(p, 6),
-                 "payoff_b": PAYOFF_B, "stop_k": STOP_K}}}
+                 "payoff_b": PAYOFF_B, "stop_k": STOP_K},
+        "position": {"size": POSITION_SIZE, "label": POSITION_LABEL, "trial": TRIAL_ID}}}
     return f"""# Pre-registration: {row['country']} {row['type']} election, {row['date']}
 
 | | |
@@ -72,8 +74,9 @@ def render(row: dict, c: dict, snap: dict | None, written: dt.datetime) -> str:
 | written | {written:%Y-%m-%d %H:%M} UTC, {days_to(row['date'], written.date())} days before the vote |
 | source | {row['source_url']} |
 
-Alerts only. This file fixes, before the vote, everything the results-night alert will use. It must be committed
-before the vote day starts; the alert reads the last pre-vote commit of this file.
+Paper, observation only: the position the rule implies is logged with size {POSITION_SIZE:g} and scored, never traded.
+This file fixes, before the vote, everything the results-night alert will use. It must be committed before the vote
+day starts; the alert reads the last pre-vote commit of this file.
 
 ## 1. Market-relevant quantity
 
@@ -94,7 +97,10 @@ fewer than 2 pollsters qualify; party-commissioned polls excluded; normalisation
 {lead}{f" (pp margin {_fmt(snap['margin'])}; window {int(snap['window_days'])} days; {int(snap['n_pollsters'])} pollsters; Wikipedia revision {int(snap['revid'])}, {snap['rev_timestamp']})" if snap and snap.get('a') else ''}.
 This is informational; the surprise uses the final pre-vote snapshot.
 
-## 4. Pre-registered rule (spec section 4.10)
+## 4. Pre-registered rule (spec section 4.10), observation only
+
+**Size taken: {POSITION_SIZE:g}.** The rule below is computed for scoring only and logged as "{POSITION_LABEL}". Continuation
+after day 1 is not established; this event is one observation in trial {TRIAL_ID} (`trials.csv`), which tests it.
 
 - **Evidence, not a trade:** the day-1 move. Expected day-1 abnormal move = {fit.const:.4f} + {fit.slope:.4f} × surprise
   (% of the {row['currency']} value in USD; frozen 2005–2021 fit, n = {fit.n}, p = {fit.p:.2f}).
@@ -106,13 +112,16 @@ This is informational; the surprise uses the final pre-vote snapshot.
   (risk = {risk_fraction(p):.2%}); it binds for any b above about 0.28.
 - **Stop:** {STOP_K} × σ_daily × √{HOLD_DAYS}, σ_daily = 60-day half-life EWMA of daily {row['currency']} changes up to
   the entry date. Notional = risk / stop distance.
+- **Trial {TRIAL_ID} pass rule** (judged across events, not per event): after at least {PASS_MIN_EVENTS} new scored
+  elections, the post-day-1 move (entry close to exit close, no stop) goes the surprise's way in at least
+  {PASS_MIN_HIT:.0%} of events, and the mean paper trade return is positive with one-sided p < {PASS_MAX_P:.2f}.
 
 ## 5. Caveats
 
 - The day-1 slope was not significant in-sample (t 1.3, p 0.20); the 0.72 correlation is on 9 hold-out events.
 - Continuation after day 1 (the trade actually placed here) was never tested by the study; in the fit sample the
   day-1 → day-5 move went with the surprise in 12 of 26 elections.
-- This tracker produces alerts only. No position is taken.
+- Paper, observation only: no position is taken; the implied position is logged with size {POSITION_SIZE:g}.
 
 ```yaml
 {yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()}

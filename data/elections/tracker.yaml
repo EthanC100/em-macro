@@ -1,4 +1,4 @@
-# Per-election configuration for the election tracker (alerts only; no positions are taken).
+# Per-election configuration for the election tracker (paper, observation only: positions are logged with size 0).
 #
 # page               Wikipedia election page (date refresh; results)
 # poll_page          Wikipedia opinion-polling page (weekly snapshots within 90 days of the vote)

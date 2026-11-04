@@ -118,6 +118,8 @@ def test_prereg_render_and_parse_block():
     assert blk["market_preferred"] == "B" and blk["days_before_vote"] == 14
     assert blk["current_poll_average"]["margin"] == 10.0
     assert blk["rule"]["risk_cap"] == 0.02 and blk["rule"]["hold_days"] == 5
+    assert blk["position"] == {"size": 0.0, "label": "paper, observation only", "trial": "T15"}
+    assert "**Size taken: 0.**" in text and "at least 15 new scored" in text
 
 
 def test_prereg_render_unclassified():
@@ -146,18 +148,24 @@ def test_build_signal_market_preferred_runner_up(stubbed):
     assert sig["surprise_pp"] == pytest.approx(4.0)
     fit = R.load_frozen_fit()
     assert sig["expected_day1_pct"] == pytest.approx(fit.const + 4.0 * fit.slope)
-    assert sig["direction"] == 1 and sig["risk_frac"] == pytest.approx(0.02)
+    assert sig["direction"] == 1 and sig["rule_risk_frac"] == pytest.approx(0.02)
+    # observation only: the rule's size is kept for scoring, the logged size is zero
+    assert sig["position_size"] == 0 and sig["position_label"] == "paper, observation only"
+    assert sig["rule_notional_frac"] > 0
     assert sig["stop_pct"] == pytest.approx(1.5 * sig["sigma_daily_pct"] * np.sqrt(5))
     assert sig["entry_date"] == "2027-06-07" and sig["exit_date"] == "2027-06-14"
     title, body = alert.issue_text(sig)
     assert title == "[ELECTION] Testland 2027-06-06: surprise +4.0pp"
     assert "LONG MXN vs USD" in body
+    assert "Implied position (paper, observation only)** | **size 0**" in body
+    assert "Continuation after day 1 is not established" in body and "T15" in body
 
 
 def test_build_signal_excluded_without_prereg(stubbed, monkeypatch):
     monkeypatch.setattr(alert.prereg, "committed_block", lambda eid, cutoff: None)
     sig = alert.build_signal(ROW["id"], {"A": 44.0, "B": 38.0}, "test")
     assert sig["status"].startswith("excluded") and sig["surprise_pp"] is None and sig["direction"] == 0
+    assert sig["position_size"] == 0 and sig["position_label"] == "paper, observation only"
     assert alert.issue_text(sig)[0].endswith("surprise n/a")
 
 
@@ -185,3 +193,25 @@ def test_committed_block_uses_last_commit_before_vote(tmp_path):
     cutoff = "2027-06-06T06:00:00Z"                                      # vote day 00:00 in Mexico City
     assert prereg.committed_block(ROW["id"], cutoff, root=tmp_path)["market_preferred"] == "B"
     assert prereg.committed_block(ROW["id"], "2027-05-01T00:00:00Z", root=tmp_path) is None
+
+
+def test_signals_csv_logs_size_zero_and_scores_paper_trade(stubbed, monkeypatch, tmp_path):
+    monkeypatch.setattr(alert, "SIGNALS", tmp_path / "signals.csv")
+    monkeypatch.setattr(alert, "DATA", tmp_path / "data" / "elections")
+    sig = alert.build_signal(ROW["id"], {"A": 44.0, "B": 38.0}, "test")        # surprise +4: rule is long MXN
+    alert.append_signal(sig)
+    row = pd.read_csv(tmp_path / "signals.csv").iloc[0]
+    assert row["position_size"] == 0 and row["position_label"] == "paper, observation only"
+    assert row["direction"] == 1 and row["rule_risk_frac"] == pytest.approx(0.02)
+    # MXN per USD falls 1% after the entry close: the post-day-1 move and the paper trade go the surprise's way
+    idx = pd.bdate_range("2026-01-01", "2027-07-15")
+    spot = pd.Series(20.0, index=idx)
+    spot.loc["2027-06-08":] = 20.0 / np.exp(0.01)
+    monkeypatch.setattr(alert.fx, "spot", lambda *a, **k: (spot, "test series"))
+    monkeypatch.setattr(alert.fx, "_frankfurter", lambda *a, **k: spot)
+    monkeypatch.setattr(alert.fx, "factor_levels", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(alert, "today", lambda: dt.date(2027, 7, 1))
+    assert alert.score() == [ROW["id"]]
+    row = pd.read_csv(tmp_path / "signals.csv").iloc[0]
+    assert row["post_day1_move_pct"] == pytest.approx(1.0) and row["trade_return_pct"] == pytest.approx(1.0)
+    assert row["scored"] == "yes" and row["position_size"] == 0

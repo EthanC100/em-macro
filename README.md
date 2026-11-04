@@ -21,8 +21,9 @@ estimated on 2005–2021, and the 2022+ hold-out was evaluated once against froz
   - **Test, 2020 to Sep 2026:** +6.0% a year, Sharpe 0.65, worst drawdown −18%.
   - **Comparison:** simply holding the EM carry basket made −0.5% a year over the same period.
   - **What drove it:** almost all the gain came from carry. Trend and value did not help.
-- **Election tracker (§13):** an alerts-only tracker for upcoming EM elections that posts the poll surprise and
-  expected day-1 currency move as a GitHub issue on results night.
+- **Election tracker (§13):** a paper, observation-only tracker for upcoming EM elections. On results night it
+  posts the poll surprise and expected day-1 currency move as a GitHub issue, and logs with size 0 the position the
+  spec 4.10 rule would take. Continuation after day 1 is not established; the tracker exists to test it (trial T15).
 - **Political-risk overlay (§11):** cutting or halving positions around elections, budget votes and scheduled rating
   reviews lowered the Sharpe ratio in 2005–2019, so the frozen rule is "no change". Cutting would also have hurt in
   2020+. A manual override file lets you trade on your own judgement, and every override is logged and scored
@@ -1053,14 +1054,26 @@ How overrides are checked and scored:
 - **One re-run.** The hold-out was evaluated a second time after a data-alignment bug fix, as disclosed in §4. Neither
   the frozen rule nor the conclusions changed.
 
-## 13. Election tracker (alerts only)
+## 13. Election tracker (paper, observation only)
 
-> **Alerts only.** The tracker computes and posts numbers. It holds no positions, places no trades and changes
-> no v1.0 file. Code: `em_macro/election_tracker/`. Data: `data/elections/`. Documents: `docs/elections/`.
+> **Paper, observation only.** Every position the rule implies is logged with **size 0** and labelled
+> "paper, observation only", in the GitHub issue and in `data/elections/signals.csv`. The tracker holds no
+> positions, places no trades and changes no v1.0 file. It still computes what the spec 4.10 rule would have done
+> (direction, risk, stop, notional), so the paper trade can be scored. Code: `em_macro/election_tracker/`. Data:
+> `data/elections/`. Documents: `docs/elections/`.
 
-**What it does.** It follows the one result from §6 that held up out of sample: in EM national elections, the
-signed poll surprise predicted the day-1 currency move (correlation 0.72, right sign in 8 of 9 hold-out
-elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY.md`](docs/elections/ORIGINAL_STUDY.md).
+**Continuation is not established.** The study (§6, trial T14 in `trials.csv`) found that in EM national
+elections the signed poll surprise predicted the **day-1** currency move: correlation 0.72 and the right sign in 8
+of 9 hold-out elections, from a fit-sample slope that was not significant (p = 0.20). It did **not** show that the
+move continues after day 1, which is what the spec 4.10 rule trades. In the fit sample, election moves reversed
+after day 1. In the hold-out they continued, but not significantly (§6). The day-1 → day-5 move went the surprise's
+way in only 12 of 26 fit-sample elections. **The tracker exists to test continuation.** It is pre-registered as
+trial **T15** in `trials.csv` (status "observation, zero size"). Pass rule: after at least 15 new scored elections,
+- the post-day-1 move goes the surprise's way in at least 65% of events; and
+- the mean trade return is positive with one-sided p < 0.10.
+
+The size stays 0 while T15 runs. The study's exact definitions are in
+[`docs/elections/ORIGINAL_STUDY.md`](docs/elections/ORIGINAL_STUDY.md).
 
 | Step | When | Output |
 |---|---|---|
@@ -1068,8 +1081,8 @@ elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY
 | Poll snapshots | weekly, within 90 days of a vote | Raw HTML of the exact Wikipedia polling-page revision, parsed polls and the current average under `data/elections/polls/<id>/`, indexed in `polls/index.csv` (retrieval time, revision id, SHA-256) |
 | Pre-registration | 14 days before a scheduled vote | `docs/elections/<id>.md`: market-relevant quantity, market sign with justification, current poll average, and the spec 4.10 rule. Committed by the workflow before the vote |
 | Final poll average | vote day | Taken from the last polling-page revision saved before the vote day starts, so it is point-in-time by construction |
-| Results-night alert | daily, from vote day to vote day + 3 | Surprise, expected day-1 move, implied position. Posted as a GitHub issue titled `[ELECTION] <country> <date>: surprise <value>` (label `election-alert`, @-mentions the repository owner) and appended to `data/elections/signals.csv` |
-| Scoring | daily, after the holding period | Actual day-1 and day-5 moves (raw, and abnormal for the study's six countries; ECB-rate cross-check) and the rule's 5-day trade return with a close-based stop, added to `signals.csv`. The FX series used is saved to `data/elections/fx/<id>.csv` |
+| Results-night alert | daily, from vote day to vote day + 3 | Surprise, expected day-1 move, and the rule's implied position, logged with size 0 and labelled "paper, observation only". Posted as a GitHub issue titled `[ELECTION] <country> <date>: surprise <value>` (label `election-alert`, @-mentions the repository owner) and appended to `data/elections/signals.csv` |
+| Scoring | daily, after the holding period | Actual day-1 and day-5 moves (raw, and abnormal for the study's six countries; ECB-rate cross-check), the post-day-1 move in the surprise's direction (entry close to exit close, no stop) and the rule's paper 5-day trade return with a close-based stop, added to `signals.csv`. A signal with a complete paper trade gets `scored = yes` and counts towards T15. The FX series used is saved to `data/elections/fx/<id>.csv` |
 
 **Definitions** (as in the study):
 - **surprise** = (actual margin − final poll margin) × market_sign, in pp.
@@ -1088,7 +1101,9 @@ elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY
 - **expected day-1 move** = 0.0368 + 0.0596 × surprise: the frozen fit from `results/fit/frozen_params.json`, as an
   abnormal % move of the local currency against USD.
 
-**Rule** (spec §4.10, pre-registered in each document):
+**Rule** (spec §4.10, pre-registered in each document). It is computed for scoring only; the size taken is 0.
+In `signals.csv` the rule's numbers are `direction`, `rule_risk_frac`, `stop_pct` and `rule_notional_frac`, next to
+`position_size` (0) and `position_label` ("paper, observation only").
 - **Entry:** the close of the first full trading day after the result.
 - **Direction:** the sign of the surprise.
 - **Hold:** 5 trading days.
@@ -1134,7 +1149,8 @@ Missing items are flagged by GitHub issues labelled `election-config` or `electi
 
 **Limitations.**
 - **Weak evidence:** the evidence behind the signal is thin. The day-1 slope has p = 0.20 in-sample and 9 hold-out
-  events. Continuation after day 1, which is what the rule trades, was never tested; see ORIGINAL_STUDY.md §7.
+  events. Continuation after day 1, which is what the rule trades, is not established and was never tested by the
+  study; T15 tests it prospectively at size 0. See ORIGINAL_STUDY.md §7.
 - **Fragile parsing:** Wikipedia poll and result tables change format, so a parse can fail. The alert then asks for
   a manual result. Results read on election night are provisional.
 - **FX timing:** the tracker uses Yahoo daily closes for every currency. The study used FRED noon-New-York rates
@@ -1163,13 +1179,14 @@ earlier Horizons app. It displays and archives only: no chat, no AI features.
     the 2005-19 design sample; monthly P&L; drawdown; positions by country and sleeve; the `v1.0-frozen` release.
   - *Forecasts:* every call with my, Claude's and the market's probabilities, a calibration chart and
     cumulative Brier scores for all three on the same resolved questions.
-  - *Trials:* `trials.csv` with pass/fail. *Elections:* calendar and live signals. *Reports:* archive by date,
+  - *Trials:* `trials.csv` with pass/fail (a row whose `decision` starts with "inconclusive", such as T14, is
+    neither). *Elections:* calendar and live signals. *Reports:* archive by date,
     type and country; Markdown renders in the app, PDFs open in place.
   - *Evidence* (under More): the status of every idea the programme has tested, generated on every build from
     `trials.csv`, the v1.0 live record and `data/elections/signals.csv`, never edited by hand. Groups: *Live and
     under test* (v1.0, with live months, live Sharpe, drawdown and progress towards the minimum track record of
     about 4.6 years, 55 months, for 90% confidence); *Under prospective test* (the EM election continuation rule,
-    with scored elections towards its 15-election threshold, plus any pending trial); *Passed trials*; *Failed or
+    trial T15, with scored elections towards its 15-election threshold, plus any other pending trial); *Passed trials*; *Failed or
     rejected ideas*, each with a one-line reason from its `decision` and `result`. A one-sentence overall status
     sits at the top (for example "No validated discretionary edge yet; v1.0 live for 0 months (55 needed for a
     90%-confidence track record); 1 idea under prospective test; 11 rejected.") and repeats on Home.
@@ -1259,7 +1276,7 @@ em_macro/
   systematic.py    systematic macro strategy: signals, portfolio, frozen test, positions, paper P&L
   overlay.py       political-risk overlay (frozen rule) and manual overrides (overrides.yaml), logged and scored
   figures.py       README charts
-  election_tracker/ election tracker, alerts only (section 13): calendar, poll snapshots, pre-registration,
+  election_tracker/ election tracker, paper and observation only (section 13): calendar, poll snapshots, pre-registration,
                    results-night alert, scoring; CLI `python -m em_macro.election_tracker`
 data/events/       elections.csv, rate_decisions.csv, calendar_13.csv (+ raw/ research files with NOTES)
 data/external/     politics/ (cabinets, party positions) and structural/ (CBI, V-Dem, WGI, debt holders,
