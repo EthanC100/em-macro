@@ -21,8 +21,9 @@ estimated on 2005–2021, and the 2022+ hold-out was evaluated once against froz
   - **Test, 2020 to Sep 2026:** +6.0% a year, Sharpe 0.65, worst drawdown −18%.
   - **Comparison:** simply holding the EM carry basket made −0.5% a year over the same period.
   - **What drove it:** almost all the gain came from carry. Trend and value did not help.
-- **Election tracker (§13):** an alerts-only tracker for upcoming EM elections that posts the poll surprise and
-  expected day-1 currency move as a GitHub issue on results night.
+- **Election tracker (§13):** an observation-only tracker for upcoming EM elections that posts the poll surprise and
+  expected day-1 currency move as a GitHub issue on results night. Every position is logged at size 0. Continuation
+  after day 1 is not established; the tracker exists to test it (trial T15).
 - **Political-risk overlay (§11):** cutting or halving positions around elections, budget votes and scheduled rating
   reviews lowered the Sharpe ratio in 2005–2019, so the frozen rule is "no change". Cutting would also have hurt in
   2020+. A manual override file lets you trade on your own judgement, and every override is logged and scored
@@ -1053,10 +1054,17 @@ How overrides are checked and scored:
 - **One re-run.** The hold-out was evaluated a second time after a data-alignment bug fix, as disclosed in §4. Neither
   the frozen rule nor the conclusions changed.
 
-## 13. Election tracker (alerts only)
+## 13. Election tracker (observation only)
 
-> **Alerts only.** The tracker computes and posts numbers. It holds no positions, places no trades and changes
-> no v1.0 file. Code: `em_macro/election_tracker/`. Data: `data/elections/`. Documents: `docs/elections/`.
+> **Observation only.** Every implied position is logged with **size 0** and labelled **"paper, observation only"**
+> in the GitHub issue and in `signals.csv`. The tracker holds no positions, places no trades and changes no v1.0
+> file. Code: `em_macro/election_tracker/`. Data: `data/elections/`. Documents: `docs/elections/`.
+
+> **Continuation is not established.** The study (trials.csv T14) found that the poll surprise predicts the
+> **day-1** move. It did not show that the move continues after day 1, which is what the spec 4.10 rule trades: in
+> the fit sample election moves reversed after day 1 on average, and the day-1 → day-5 move went the surprise's way
+> in only 12 of 26 elections. **The tracker exists to test continuation**, as the pre-registered prospective trial
+> T15. It keeps computing what the spec 4.10 rule would have done, at the rule's own size, only to score it.
 
 **What it does.** It follows the one result from §6 that held up out of sample: in EM national elections, the
 signed poll surprise predicted the day-1 currency move (correlation 0.72, right sign in 8 of 9 hold-out
@@ -1068,8 +1076,8 @@ elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY
 | Poll snapshots | weekly, within 90 days of a vote | Raw HTML of the exact Wikipedia polling-page revision, parsed polls and the current average under `data/elections/polls/<id>/`, indexed in `polls/index.csv` (retrieval time, revision id, SHA-256) |
 | Pre-registration | 14 days before a scheduled vote | `docs/elections/<id>.md`: market-relevant quantity, market sign with justification, current poll average, and the spec 4.10 rule. Committed by the workflow before the vote |
 | Final poll average | vote day | Taken from the last polling-page revision saved before the vote day starts, so it is point-in-time by construction |
-| Results-night alert | daily, from vote day to vote day + 3 | Surprise, expected day-1 move, implied position. Posted as a GitHub issue titled `[ELECTION] <country> <date>: surprise <value>` (label `election-alert`, @-mentions the repository owner) and appended to `data/elections/signals.csv` |
-| Scoring | daily, after the holding period | Actual day-1 and day-5 moves (raw, and abnormal for the study's six countries; ECB-rate cross-check) and the rule's 5-day trade return with a close-based stop, added to `signals.csv`. The FX series used is saved to `data/elections/fx/<id>.csv` |
+| Results-night alert | daily, from vote day to vote day + 3 | Surprise, expected day-1 move, implied position (size 0, "paper, observation only"; the rule's own size is shown separately for scoring). Posted as a GitHub issue titled `[ELECTION] <country> <date>: surprise <value>` (label `election-alert`, @-mentions the repository owner) and appended to `data/elections/signals.csv` |
+| Scoring | daily, after the holding period | Actual day-1 and day-5 moves (raw, and abnormal for the study's six countries; ECB-rate cross-check), the post-day-1 move (entry close to exit close, signed by the surprise), the rule's paper 5-day trade return with a close-based stop and its would-be P&L in % of NAV, added to `signals.csv`; `scored = yes` marks an election that counts towards T15. The FX series used is saved to `data/elections/fx/<id>.csv` |
 
 **Definitions** (as in the study):
 - **surprise** = (actual margin − final poll margin) × market_sign, in pp.
@@ -1088,7 +1096,7 @@ elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY
 - **expected day-1 move** = 0.0368 + 0.0596 × surprise: the frozen fit from `results/fit/frozen_params.json`, as an
   abnormal % move of the local currency against USD.
 
-**Rule** (spec §4.10, pre-registered in each document):
+**Rule** (spec §4.10, pre-registered in each document; computed for scoring only, never sized):
 - **Entry:** the close of the first full trading day after the result.
 - **Direction:** the sign of the surprise.
 - **Hold:** 5 trading days.
@@ -1096,6 +1104,14 @@ elections). The study's exact definitions are in [`docs/elections/ORIGINAL_STUDY
   leaves b unspecified; the 2% cap binds for any b above 0.28.
 - **Stop:** 1.5 × σ_daily × √5, with σ_daily a 60-day half-life EWMA.
 - **Notional:** risk ÷ stop distance.
+
+**Trial T15: the prospective test of continuation** (`trials.csv`; status "observation, zero size").
+- **Counts:** new elections from 2026-11-04 with status `signal` (market sign committed before the vote) and
+  `scored = yes` in `signals.csv`. None of the study's events count.
+- **Pass rule:** after at least 15 new scored elections, (1) the post-day-1 move goes the surprise's way in at least
+  65% of events, and (2) the mean trade return (`trade_return_pct`, the rule's stop applied) is positive with
+  one-sided p < 0.10 (one-sided t-test on the per-election returns).
+- **Until then:** positions stay at size 0. Passing would only make the rule a candidate for sizing.
 
 **Running it.**
 
@@ -1134,7 +1150,9 @@ Missing items are flagged by GitHub issues labelled `election-config` or `electi
 
 **Limitations.**
 - **Weak evidence:** the evidence behind the signal is thin. The day-1 slope has p = 0.20 in-sample and 9 hold-out
-  events. Continuation after day 1, which is what the rule trades, was never tested; see ORIGINAL_STUDY.md §7.
+  events.
+- **Continuation not established:** continuation after day 1, which is what the rule trades, was never tested and
+  is not established (ORIGINAL_STUDY.md §7). Testing it is what the tracker is for (T15).
 - **Fragile parsing:** Wikipedia poll and result tables change format, so a parse can fail. The alert then asks for
   a manual result. Results read on election night are provisional.
 - **FX timing:** the tracker uses Yahoo daily closes for every currency. The study used FRED noon-New-York rates
@@ -1168,7 +1186,7 @@ earlier Horizons app. It displays and archives only: no chat, no AI features.
   - *Evidence* (under More): the status of every idea the programme has tested, generated on every build from
     `trials.csv`, the v1.0 live record and `data/elections/signals.csv`, never edited by hand. Groups: *Live and
     under test* (v1.0, with live months, live Sharpe, drawdown and progress towards the minimum track record of
-    about 4.6 years, 55 months, for 90% confidence); *Under prospective test* (the EM election continuation rule,
+    about 4.6 years, 55 months, for 90% confidence); *Under prospective test* (the EM election continuation rule, trial T15,
     with scored elections towards its 15-election threshold, plus any pending trial); *Passed trials*; *Failed or
     rejected ideas*, each with a one-line reason from its `decision` and `result`. A one-sentence overall status
     sits at the top (for example "No validated discretionary edge yet; v1.0 live for 0 months (55 needed for a

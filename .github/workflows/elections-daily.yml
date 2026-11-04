@@ -1,4 +1,4 @@
-# Election tracker (alerts only): daily pre-registration check, results check during each
+# Election tracker (observation only; positions logged at size 0): daily pre-registration check, results check during each
 # election window (vote day to vote day + 3) and scoring of past signals. The job does
 # nothing outside those windows. Results-night alerts are posted as GitHub issues
 # "[ELECTION] <country> <date>: surprise <value>" (label election-alert), which reach the

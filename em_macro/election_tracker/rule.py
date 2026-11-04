@@ -16,6 +16,10 @@ Rule (docs/research/algorithm_spec_2026-11.md section 4.10):
 * hold H = 5 trading days
 * risk = min(0.5 * 0.25 * Kelly(p, b), 2%) of NAV, p = mean of Beta(9, 2)
 * stop = 1.5 * sigma_daily * sqrt(H)
+
+Observation only: the tracker never sizes a position. `implied_position` computes what the
+spec 4.10 rule would have done (kept for scoring the prospective trial, trials.csv T15); the
+logged position is always size 0 and labelled POSITION_LABEL.
 """
 from __future__ import annotations
 
@@ -36,6 +40,12 @@ STOP_K = 1.5
 PRIOR_WINS, PRIOR_LOSSES = 8, 1  # 8 of 9 out-of-sample day-1 signs right
 PAYOFF_B = 1.0                  # [A] Kelly odds b: not given in the spec; see docs/elections/README_RULE.md
 EWMA_HALFLIFE = 60              # spec section 7: 60-day EWMA volatility
+
+# Observation-only mode: every implied position is logged with size 0. The rule's own size is
+# still computed (rule_risk_frac, rule_notional_frac) so the trial can be scored.
+OBSERVATION_ONLY = True
+POSITION_LABEL = "paper, observation only"
+LOGGED_SIZE = 0.0
 
 
 @dataclass(frozen=True)
@@ -134,7 +144,7 @@ class Position:
 
 def implied_position(s: float | None, sigma_daily_pct: float, p: float | None = None,
                      b: float = PAYOFF_B) -> Position:
-    """Position implied by the pre-registered rule for surprise `s` (pp)."""
+    """Position the pre-registered rule would take for surprise `s` (pp). Not traded: see OBSERVATION_ONLY."""
     p = beta_posterior_mean() if p is None else p
     stop = stop_distance(sigma_daily_pct)
     if s is None or s == 0:

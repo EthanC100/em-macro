@@ -69,9 +69,11 @@ def test_trade_return_and_close_based_stop():
     x.loc["2027-06-14":] = 1.0
     t = fx.trade_return(x, pd.Timestamp("2027-06-07"), +1, stop_pct=3.0)
     assert t["trade_return_pct"] == pytest.approx(1.0) and t["stopped"] is False
+    assert t["post_move_pct"] == pytest.approx(1.0)
     t = fx.trade_return(x, pd.Timestamp("2027-06-07"), -1, stop_pct=0.4)
     assert t["trade_return_pct"] == pytest.approx(-0.5) and t["stopped"] is True
     assert t["exit"] == dt.date(2027, 6, 8)
+    assert t["post_move_pct"] == pytest.approx(-1.0)          # post-day-1 move ignores the stop
 
 
 def test_sigma_daily_uses_data_up_to_asof():
@@ -146,19 +148,54 @@ def test_build_signal_market_preferred_runner_up(stubbed):
     assert sig["surprise_pp"] == pytest.approx(4.0)
     fit = R.load_frozen_fit()
     assert sig["expected_day1_pct"] == pytest.approx(fit.const + 4.0 * fit.slope)
-    assert sig["direction"] == 1 and sig["risk_frac"] == pytest.approx(0.02)
+    assert sig["direction"] == 1
+    # observation only: logged size 0, the rule's own size kept for scoring
+    assert sig["position_label"] == "paper, observation only"
+    assert sig["risk_frac"] == 0.0 and sig["notional_frac"] == 0.0
+    assert sig["rule_risk_frac"] == pytest.approx(0.02)
+    assert sig["rule_notional_frac"] == pytest.approx(0.02 / (sig["stop_pct"] / 100))
     assert sig["stop_pct"] == pytest.approx(1.5 * sig["sigma_daily_pct"] * np.sqrt(5))
     assert sig["entry_date"] == "2027-06-07" and sig["exit_date"] == "2027-06-14"
     title, body = alert.issue_text(sig)
     assert title == "[ELECTION] Testland 2027-06-06: surprise +4.0pp"
-    assert "LONG MXN vs USD" in body
+    assert "Paper, observation only: size 0" in body
+    assert "**long MXN vs USD, size 0**" in body and "paper, observation only" in body
+    assert "not established" in body
 
 
 def test_build_signal_excluded_without_prereg(stubbed, monkeypatch):
     monkeypatch.setattr(alert.prereg, "committed_block", lambda eid, cutoff: None)
     sig = alert.build_signal(ROW["id"], {"A": 44.0, "B": 38.0}, "test")
     assert sig["status"].startswith("excluded") and sig["surprise_pp"] is None and sig["direction"] == 0
+    assert sig["position_label"] == "paper, observation only" and sig["risk_frac"] == 0.0
     assert alert.issue_text(sig)[0].endswith("surprise n/a")
+
+
+def test_signals_csv_logs_size_zero_and_scores_the_rule(stubbed, monkeypatch, tmp_path):
+    data = tmp_path / "data" / "elections"
+    data.mkdir(parents=True)
+    monkeypatch.setattr(alert, "SIGNALS", data / "signals.csv")
+    monkeypatch.setattr(alert, "DATA", data)
+    sig = alert.build_signal(ROW["id"], {"A": 44.0, "B": 38.0}, "test")
+    alert.append_signal(sig)
+    df = pd.read_csv(data / "signals.csv")
+    assert list(df.columns) == alert.SIGNAL_COLS
+    assert df.loc[0, "position_label"] == "paper, observation only"
+    assert df.loc[0, "risk_frac"] == 0 and df.loc[0, "notional_frac"] == 0
+    assert df.loc[0, "rule_risk_frac"] == pytest.approx(0.02) and pd.isna(df.loc[0, "scored"])
+    # score after the exit date: local currency up 1% from the entry close, no stop
+    idx = pd.bdate_range("2026-01-01", "2027-06-30")
+    spot = pd.Series(20.0, index=idx)
+    spot.loc["2027-06-08":] = 20.0 * np.exp(-0.01)
+    monkeypatch.setattr(alert.fx, "spot", lambda *a, **k: (spot, "test series"))
+    monkeypatch.setattr(alert.fx, "factor_levels", lambda *a: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(alert.fx, "_frankfurter", lambda *a: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(alert, "today", lambda: dt.date(2027, 6, 20))
+    assert alert.score() == [ROW["id"]]
+    r = pd.read_csv(data / "signals.csv").iloc[0]
+    assert r["post_day1_move_pct"] == pytest.approx(1.0) and r["trade_return_pct"] == pytest.approx(1.0)
+    assert r["rule_pnl_nav_pct"] == pytest.approx(r["rule_notional_frac"] * 1.0)
+    assert r["scored"] == "yes" and r["risk_frac"] == 0
 
 
 def test_committed_block_uses_last_commit_before_vote(tmp_path):

@@ -1,4 +1,4 @@
-"""Election tracker CLI (alerts only).
+"""Election tracker CLI (observation only: positions logged at size 0).
 
     python -m em_macro.election_tracker weekly            # calendar refresh + poll snapshots (<= 90 days)
     python -m em_macro.election_tracker daily             # pre-registrations due, results check, scoring

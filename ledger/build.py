@@ -435,7 +435,8 @@ def build_elections(today: date) -> dict:
         for r in read_csv(cal_path):
             d = parse_date(r.get("date") or r.get("vote_date"))
             calendar.append({**r, "country": r.get("country") or ISO3.get(r.get("iso3", ""), ""),
-                             "date": iso(d), "event": r.get("election") or r.get("description", "")})
+                             "date": iso(d), "event": r.get("election") or r.get("description")
+                             or " ".join(x for x in (r.get("country"), r.get("type"), "election") if x)})
     else:
         sources += ["data/events/elections.csv", "data/events/upcoming_events.csv"]
         for r in read_csv(ROOT / "data/events/elections.csv"):
@@ -583,6 +584,7 @@ def build_reports(out_dir: Path, today: date) -> dict:
 # ----------------------------------------------------------------------------- evidence
 MIN_TRACK_RECORD_YEARS = 4.6          # spec MinTRL for 90% confidence in v1.0's Sharpe
 ELECTION_RULE_THRESHOLD = 15          # scored EM elections before the continuation rule is judged
+ELECTION_RULE_GROUP = "G14_election_continuation"   # its trials.csv row (T15); shown once, as the election-rule entry
 SCORED_COLUMNS = ("scored", "outcome", "result", "rule_return", "rule_pnl", "pnl", "realised", "realized")
 
 
@@ -641,15 +643,16 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
         "reason": one_line_reason(v1) if v1 else "", "link": "#/algorithm",
     }
     elections = count_scored_elections(ROOT / "data/elections/signals.csv", today)
+    rule_trial = next((t for t in trials["items"] if t.get("trial_group") == ELECTION_RULE_GROUP), None)
     prospective = [{
-        "id": "election-rule", "name": "EM election continuation rule (trade the post-result surprise, hold 5 days)",
+        "id": "election-rule", "trial_id": rule_trial["trial_id"] if rule_trial else None, "name": "EM election continuation rule (trade the post-result surprise, hold 5 days)",
         "status": "under test", "scored": elections["scored"], "threshold": ELECTION_RULE_THRESHOLD,
         "progress_pct": round(100 * min(elections["scored"], ELECTION_RULE_THRESHOLD) / ELECTION_RULE_THRESHOLD, 1),
         "reason": f"{elections['scored']} of {ELECTION_RULE_THRESHOLD} elections scored. {elections['note']}",
         "link": "#/elections", "source": "data/elections/signals.csv",
     }]
     for t in trials["items"]:
-        if t["status"] == "pending":
+        if t["status"] == "pending" and t is not rule_trial:
             prospective.append({"id": t["trial_id"], "name": t["name"], "status": "under test", "scored": None,
                                 "threshold": None, "progress_pct": None, "reason": one_line_reason(t) or "not yet run",
                                 "link": "#/trials", "source": "trials.csv"})

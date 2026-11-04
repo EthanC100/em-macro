@@ -72,7 +72,7 @@ def render(row: dict, c: dict, snap: dict | None, written: dt.datetime) -> str:
 | written | {written:%Y-%m-%d %H:%M} UTC, {days_to(row['date'], written.date())} days before the vote |
 | source | {row['source_url']} |
 
-Alerts only. This file fixes, before the vote, everything the results-night alert will use. It must be committed
+Observation only (paper, size 0). This file fixes, before the vote, everything the results-night alert will use. It must be committed
 before the vote day starts; the alert reads the last pre-vote commit of this file.
 
 ## 1. Market-relevant quantity
@@ -94,14 +94,17 @@ fewer than 2 pollsters qualify; party-commissioned polls excluded; normalisation
 {lead}{f" (pp margin {_fmt(snap['margin'])}; window {int(snap['window_days'])} days; {int(snap['n_pollsters'])} pollsters; Wikipedia revision {int(snap['revid'])}, {snap['rev_timestamp']})" if snap and snap.get('a') else ''}.
 This is informational; the surprise uses the final pre-vote snapshot.
 
-## 4. Pre-registered rule (spec section 4.10)
+## 4. Pre-registered rule (spec section 4.10), observation only
+
+The tracker logs the position below with **size 0, labelled "paper, observation only"**. The rule's own size is
+computed only to score the prospective trial (trials.csv T15).
 
 - **Evidence, not a trade:** the day-1 move. Expected day-1 abnormal move = {fit.const:.4f} + {fit.slope:.4f} × surprise
   (% of the {row['currency']} value in USD; frozen 2005–2021 fit, n = {fit.n}, p = {fit.p:.2f}).
 - **Entry:** close of the first full trading day after the result.
 - **Direction:** sign(surprise); + = long {row['currency']} against USD. Surprise 0 or no market sign: no position.
 - **Hold:** {HOLD_DAYS} trading days.
-- **Size:** risk = min(0.5 × 0.25 × Kelly(p, b), 2%) of NAV, p = mean of Beta(9, 2) = {p:.3f}, b = {PAYOFF_B:g}
+- **Size the rule would take (not traded; logged size 0):** risk = min(0.5 × 0.25 × Kelly(p, b), 2%) of NAV, p = mean of Beta(9, 2) = {p:.3f}, b = {PAYOFF_B:g}
   (assumed; the spec does not give b). Kelly = {k:.3f}, so 0.125 × Kelly = {KELLY_MULT * k:.2%} and the 2% cap binds
   (risk = {risk_fraction(p):.2%}); it binds for any b above about 0.28.
 - **Stop:** {STOP_K} × σ_daily × √{HOLD_DAYS}, σ_daily = 60-day half-life EWMA of daily {row['currency']} changes up to
@@ -110,9 +113,9 @@ This is informational; the surprise uses the final pre-vote snapshot.
 ## 5. Caveats
 
 - The day-1 slope was not significant in-sample (t 1.3, p 0.20); the 0.72 correlation is on 9 hold-out events.
-- Continuation after day 1 (the trade actually placed here) was never tested by the study; in the fit sample the
-  day-1 → day-5 move went with the surprise in 12 of 26 elections.
-- This tracker produces alerts only. No position is taken.
+- **Continuation after day 1 is not established.** It was never tested by the study; in the fit sample the
+  day-1 → day-5 move went with the surprise in 12 of 26 elections. The tracker exists to test it (trials.csv T15).
+- Observation only: every implied position is logged with size 0. No position is taken.
 
 ```yaml
 {yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()}

@@ -145,16 +145,20 @@ def sigma_daily(x: pd.Series, asof, n: int = 250) -> float:
 
 def trade_return(x: pd.Series, entry: pd.Timestamp, direction: int, stop_pct: float,
                  hold: int = HOLD_DAYS) -> dict:
-    """Signed % return from the entry close to the exit close, with a close-based stop."""
+    """Signed % return from the entry close to the exit close, with a close-based stop.
+
+    `post_move_pct` is the same move without the stop (entry close to exit close, signed by
+    `direction`): the post-day-1 move used by the T15 pass rule."""
     ex = exit_date(entry, hold)
     path = x.loc[entry:ex].dropna()
     if path.empty or path.index[0] != entry or path.index[-1] < ex - pd.Timedelta(days=3):
-        return {"trade_return_pct": float("nan"), "stopped": None, "exit": ex.date()}
+        return {"trade_return_pct": float("nan"), "stopped": None, "exit": ex.date(), "post_move_pct": float("nan")}
     pnl = direction * (path - path.iloc[0])
+    post = float(pnl.iloc[-1])
     hit = pnl[pnl <= -stop_pct]
     if len(hit):
-        return {"trade_return_pct": float(hit.iloc[0]), "stopped": True, "exit": hit.index[0].date()}
-    return {"trade_return_pct": float(pnl.iloc[-1]), "stopped": False, "exit": path.index[-1].date()}
+        return {"trade_return_pct": float(hit.iloc[0]), "stopped": True, "exit": hit.index[0].date(), "post_move_pct": post}
+    return {"trade_return_pct": post, "stopped": False, "exit": path.index[-1].date(), "post_move_pct": post}
 
 
 def is_nan(v) -> bool:
