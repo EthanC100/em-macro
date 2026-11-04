@@ -177,6 +177,19 @@ def build_marks(today: date) -> dict:
             "marks_file": "data/ledger/marks.csv", "n_rows": len(rows)}
 
 
+def build_screener(reports: dict | None = None) -> dict:
+    """The latest screener table (results/screener/latest.json, written after each rebalance)."""
+    path = ROOT / "results/screener/latest.json"
+    if not path.exists():
+        return {"available": False, "rows": [], "countries": [], "as_of": None, "generated": None, "moves": [], "stale": []}
+    res = json.loads(path.read_text(encoding="utf-8"))
+    rep = None
+    if reports:
+        rep = next((r for r in reports["items"] if r["type"] == "screener" and res.get("as_of", "") in r["id"]), None)
+    return {"available": True, **res, "report": rep["id"] if rep else None,
+            "source": "results/screener/latest.json", "updated": git_last_date("results/screener/latest.json")}
+
+
 def build_decisions(today: date) -> dict:
     rows = read_csv(ROOT / "data/ledger/decisions.csv")
     registry = load_registry() if (ROOT / "data/ledger/instruments.csv").exists() else []
@@ -799,6 +812,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     trials = build_trials()
     elections = build_elections(today)
     reports = build_reports(out_dir, today)
+    screener = build_screener(reports)
     evidence = build_evidence(trials, algorithm, today)
     home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
     commit = git("rev-parse", "--short", "HEAD")
@@ -825,7 +839,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     data = out_dir / "data"
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
-                      ("reports", reports), ("evidence", evidence), ("marks", marks)):
+                      ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

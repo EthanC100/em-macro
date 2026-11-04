@@ -632,8 +632,34 @@
   }
 
   async function pageScreener() {
-    setHead('Screener', 'Built after each monthly rebalance');
-    view.innerHTML = '<p class="empty">The screener appears after the next monthly rebalance.</p>';
+    const sc = await load('screener');
+    if (!sc.available) { setHead('Screener', 'Built after each monthly rebalance'); view.innerHTML = '<p class="empty">The screener appears after the next monthly rebalance.</p>'; return; }
+    setHead('Screener', `After the ${fmtMonth(sc.as_of)} rebalance · generated ${fmtDate(sc.generated)} · ${sc.rows.length} instruments`);
+    const rk = (r) => (isNum(r) ? r : '—');
+    const table = (book) => {
+      const rows = sc.rows.filter((r) => r.book === book).sort((a, b) => (a.rank_composite == null) - (b.rank_composite == null) || (a.rank_composite || 0) - (b.rank_composite || 0));
+      return `<div class="table-wrap"><table><thead><tr><th>Country</th><th>Instr.</th><th class="num">Carry</th><th class="num">Real</th><th class="num">Value</th><th class="num">Trend</th><th class="num">Rk C</th><th class="num">Rk V</th><th class="num">Rk T</th><th class="num">Rk comp.</th><th>Position</th><th class="num">Month</th><th>Election</th><th>Rating</th></tr></thead><tbody>${rows.map((r) => `
+        <tr><td class="wrap">${esc(r.country)}</td><td><span class="mono">${esc(r.instrument)}</span>${r.stale || !r.data_month ? ` <span class="muted small" title="latest data ${esc(r.data_month || 'none')}">*${esc(r.data_month ? fmtMonth(r.data_month) : 'no data')}</span>` : ''}</td>
+        <td class="num">${fmtNum(r.carry, 2)}</td><td class="num">${fmtNum(r.real_carry, 2)}</td><td class="num">${fmtNum(r.value, book === 'fx' ? 3 : 0)}</td><td class="num">${fmtNum(r.trend, 2)}</td>
+        <td class="num">${rk(r.rank_carry)}</td><td class="num">${rk(r.rank_value)}</td><td class="num">${rk(r.rank_trend)}</td><td class="num"><b>${rk(r.rank_composite)}</b></td>
+        <td>${r.position !== 'none' ? `${badge(r.position)} ${fmtPct(r.size_pct_of_capital, 1, true)}` : '—'}</td>
+        <td class="num ${signClass(r.month_return_pct)}">${fmtPct(r.month_return_pct, 2, true)}${r.move_2sd ? ` ${pill(`>${sc.sigma}σ`, 'bad')}` : ''}</td>
+        <td class="wrap small">${esc(r.next_election || '—')}</td><td class="wrap small">${esc(r.rating_reviews || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+    };
+    const held = sc.rows.filter((r) => r.position !== 'none');
+    view.innerHTML = `
+      <section class="section">
+        <div class="stats">
+          <div class="stat"><span class="k">Positions</span><span class="v">${held.length}</span><span class="s">of ${sc.rows.length} instruments held</span></div>
+          <div class="stat"><span class="k">Big moves</span><span class="v ${sc.moves.length ? 'bad' : ''}">${sc.moves.length}</span><span class="s">beyond ${sc.sigma}σ in the month${sc.moves.length ? `: ${sc.moves.join(', ')}` : ''}</span></div>
+          <div class="stat"><span class="k">Without data</span><span class="v ${sc.stale.length ? 'warn' : ''}">${sc.stale.length}</span><span class="s">stale or missing for ${fmtMonth(sc.as_of)}</span></div>
+          <div class="stat"><span class="k">Report</span><span class="v sm">${sc.report ? `<a href="#/reports/${esc(sc.report)}">open</a>` : '—'}</span><span class="s">filed under Reports (type screener)</span></div>
+        </div>
+        <p class="small muted">Carry, value and trend are the algorithm's own signals for ${fmtMonth(sc.as_of)}; ranks are within each book (1 = highest) among instruments with data. Real carry: FX, the real policy-rate differential against the US; EM bonds, the real 10-year yield; spreads, the spread. * marks an instrument whose latest data are older than ${fmtMonth(sc.as_of)} (shown at that month, unranked). Elections and rating reviews: next 12 months from the Ledger calendars.</p>
+      </section>
+      <section class="section"><h2>Currencies (vs USD)</h2>${table('fx')}</section>
+      <section class="section"><h2>Bonds (10y; spreads over the Bund)</h2>${table('bond')}</section>
+      <section class="section"><h2>By country</h2><div class="list">${sc.countries.map((c) => `<div class="card"><div class="row-top"><span class="row-title">${esc(c.country)}</span><span class="muted small">${esc(c.instruments.join(', '))}</span></div><div class="row-meta">${c.positions.length ? `<b>${esc(c.positions.join(', '))}</b>` : 'no position'}${c.moves.length ? ` · ${pill(`${c.moves.join(', ')} > ${sc.sigma}σ`, 'bad')}` : ''}${c.next_election ? ` · election ${esc(c.next_election)}` : ''}${c.rating_reviews ? ` · rating ${esc(c.rating_reviews)}` : ''}</div></div>`).join('')}</div></section>`;
   }
 
   async function pageTodo() {

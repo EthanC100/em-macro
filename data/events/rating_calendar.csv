@@ -1,0 +1,2 @@
+iso3,country,date,agency,description,source,notes
+FRA,France,2026-11-27,S&P,scheduled sovereign rating review of France,data/ledger/decisions.csv (D001 key factors),"Date as recorded in decision D001; EU-regulated agencies publish their sovereign review calendars each December (S&P, Moody's, Fitch): add the next year's dates here, one row per review."

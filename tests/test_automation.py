@@ -450,3 +450,65 @@ def test_entry_level_from_trigger():
     assert f("Sell at market; entry level 159bp", {}) == "159"
     assert f("At market on the decision date; add on a dip", {}) == ""
     assert f("Reassess if USD/BRL trades below 5.15", {}) == ""
+
+
+# ----------------------------------------------------------------------------- screener
+from ledger import screener  # noqa: E402
+
+
+def _toy_inputs():
+    import numpy as np
+    import pandas as pd
+    months = pd.period_range("2023-01", "2026-10", freq="M")
+    rng = np.random.default_rng(0)
+    out = {"months": months}
+    for book, names in (("fx", ["BRL", "MXN", "TRY", "EUR"]), ("bond", ["MX10Y", "BR10Y", "FR-DE", "DE10Y"])):
+        ret = pd.DataFrame(rng.normal(0, 0.02, (len(months), len(names))), index=months, columns=names)
+        ret.iloc[-1, 0] = 0.09                                  # the first instrument jumps > 2 sigma
+        carry = pd.DataFrame(rng.normal(2, 1, (len(months), len(names))), index=months, columns=names)
+        value = pd.DataFrame(rng.normal(0, 1, (len(months), len(names))), index=months, columns=names)
+        if book == "bond":
+            ret.iloc[-1, 2] = carry.iloc[-1, 2] = value.iloc[-1, 2] = np.nan     # FR-DE has no October data
+        out[book] = {"ret": ret, "carry": carry, "value": value}
+    return out
+
+
+def test_screener_compute_ranks_positions_moves_and_catalysts():
+    inp = _toy_inputs()
+    positions = [{"instrument": "MX10Y", "side": "long", "size_pct_of_capital": "125.85", "risk_share_pct": "19.4"},
+                 {"instrument": "EUR", "side": "short", "size_pct_of_capital": "-52.41", "risk_share_pct": "10.2"}]
+    panel = [{"iso3": "BRA", "month": "2026-10", "policy_rate": "13.75", "cpi_yoy": "4.5", "y10": "13.5"},
+             {"iso3": "MEX", "month": "2026-09", "policy_rate": "6.5", "cpi_yoy": "3.5", "y10": "9.4"}]
+    cal = [{"date": date(2026, 11, 29), "kind": "election", "iso3": "ESP", "country": "Spain", "label": "Spanish general election"},
+           {"date": date(2026, 11, 27), "kind": "rating review", "iso3": "FRA", "country": "France", "label": "S&P review"},
+           {"date": date(2028, 1, 1), "kind": "election", "iso3": "FRA", "country": "France", "label": "too far away"}]
+    res = screener.compute(inp, positions, panel, REGISTRY, cal, date(2026, 11, 4), us_real_rate=-0.12)
+    rows = {r["instrument"]: r for r in res["rows"]}
+    assert res["as_of"] == "2026-10" and len(res["rows"]) == 8
+    fx = [r for r in res["rows"] if r["book"] == "fx"]
+    assert sorted(r["rank_composite"] for r in fx) == [1, 2, 3, 4] and sorted(r["rank_carry"] for r in fx) == [1, 2, 3, 4]
+    assert max(fx, key=lambda r: r["carry"])["rank_carry"] == 1
+    assert rows["MX10Y"]["position"] == "long" and rows["MX10Y"]["size_pct_of_capital"] == 125.85
+    assert rows["EUR"]["position"] == "short" and rows["BRL"]["position"] == "none"
+    assert rows["BRL"]["move_2sd"] and rows["MX10Y"]["move_2sd"] and set(res["moves"]) == {"BRL", "MX10Y"}
+    assert rows["BRL"]["month_return_pct"] == 9.0 and rows["BRL"]["real_carry"] == round(13.75 - 4.5 + 0.12, 3)
+    assert rows["MX10Y"]["real_carry"] == round(9.4 - 3.5, 3)
+    # FR-DE has no October composite: shown at its latest month, unranked, counted as stale
+    assert rows["FR-DE"]["stale"] and rows["FR-DE"]["data_month"] == "2026-09" and rows["FR-DE"]["rank_composite"] is None
+    assert res["stale"] == ["FR-DE"] and rows["DE10Y"]["n_ranked"] == 3
+    assert rows["FR-DE"]["rating_reviews"] == "2026-11-27 S&P review" and rows["FR-DE"]["next_election"] == ""
+    assert rows["DE10Y"]["real_carry"] == rows["DE10Y"]["carry"] or rows["DE10Y"]["real_carry"] is None
+    md = screener.report_markdown(res)
+    assert "| Mexico | MX10Y |" in md and "FR-DE*" in md and "BRL, MX10Y" in md and "2026-11-27 S&P review" in md
+
+
+def test_screener_outputs_are_filed_as_a_report(tmp_path):
+    inp = _toy_inputs()
+    res = screener.compute(inp, [], [], REGISTRY, [], date(2026, 11, 4))
+    files = screener.write_outputs(res, tmp_path)
+    assert files == ["results/screener/latest.json", "results/screener/screener_2026-10.csv",
+                     "data/ledger/reports/2026-11-04_screener-2026-10.md"]
+    text = (tmp_path / files[2]).read_text()
+    meta, body = __import__("ledger.build", fromlist=["parse_front_matter"]).parse_front_matter(text)
+    assert meta["type"] == "screener" and meta["date"] == "2026-11-04" and body.startswith("# Screener after the 2026-10 rebalance")
+    assert len(_rows(tmp_path / files[1])) == 8 and json.loads((tmp_path / files[0]).read_text())["as_of"] == "2026-10"

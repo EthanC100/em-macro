@@ -1,0 +1,60 @@
+# Rebuild the Ledger screener by hand (the monthly systematic workflow runs it after every
+# rebalance; this is for a re-run, for example after the rating calendar or an event file changed).
+# Restores the monthly workflow's raw-download cache so that no source has to answer.
+name: ledger-screener
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: systematic-monthly       # never alongside the rebalance
+  cancel-in-progress: false
+
+jobs:
+  screener:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Restore the raw downloads of the last monthly run
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            !data/raw/bondspot
+            !data/raw/bist
+            !data/raw/imf_weo
+          key: raw-downloads-screener-${{ github.run_id }}
+          restore-keys: raw-downloads-
+      - name: Screener
+        run: python -m ledger.screener
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/screener data/ledger/reports
+          if git diff --cached --quiet; then echo "nothing to commit"; else
+            git commit -m "Ledger screener $(date -u +%Y-%m-%d)"
+            for i in 1 2 3 4; do
+              if git push origin HEAD:main; then break; fi
+              sleep $((i * 3)); git pull --rebase origin main
+            done
+          fi
+      - name: Rebuild the app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || true

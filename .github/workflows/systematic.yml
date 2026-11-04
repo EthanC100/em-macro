@@ -84,6 +84,14 @@ jobs:
         id: overlay
         run: python -m em_macro.overlay update 2>&1 | tee "$RUNNER_TEMP/overlay.log"
 
+      # Ledger screener (ledger/screener.py): every country's signals, ranks, position and catalysts after the
+      # rebalance, filed as a report and shown in the app. Read-only use of the frozen inputs and signal code;
+      # a failure here never blocks the rebalance (continue-on-error).
+      - name: Ledger screener
+        id: screener
+        continue-on-error: true
+        run: python -m ledger.screener 2>&1 | tee "$RUNNER_TEMP/screener.log"
+
       - name: Tests
         id: tests
         run: python -m pytest -q tests 2>&1 | tee "$RUNNER_TEMP/tests.log"
@@ -98,7 +106,8 @@ jobs:
                     results/systematic/rebalance_log.csv \
                     results/systematic/position_adjustments.csv results/systematic/overrides_log.csv \
                     data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
-                    results/coverage_report.md results/panel_coverage.md
+                    results/coverage_report.md results/panel_coverage.md \
+                    results/screener data/ledger/reports
             if git diff --cached --quiet; then
               echo "nothing to commit"
             else

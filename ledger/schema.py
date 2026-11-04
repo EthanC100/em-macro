@@ -27,7 +27,7 @@ FORECAST_COLUMNS = [
 ]
 AUTO_PREFIX = "Auto-resolved"      # resolution_note / result of an automatic resolution starts with this
 ACTIONS = ("Buy", "Sell", "No trade")
-REPORT_TYPES = ("daily briefing", "weekly review", "monthly notebook", "research", "other")
+REPORT_TYPES = ("daily briefing", "weekly review", "monthly notebook", "research", "screener", "other")
 DECISION_OUTCOMES = ("right", "wrong", "no trade", "scratched")
 FORECAST_OUTCOMES = ("yes", "no", "void")
 MAX_RISK_PCT = 2.0
