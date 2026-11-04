@@ -74,12 +74,20 @@ jobs:
           echo "kind=$(python -c "import json;print(json.load(open('/tmp/intake.json')).get('kind') or '')")" >> "$GITHUB_OUTPUT"
           python -c "import json;print(json.load(open('/tmp/intake.json'))['comment'])" > /tmp/comment.md
           python -c "import json;print(' '.join(json.load(open('/tmp/intake.json'))['files']))" > /tmp/files.txt
+          python -c "import json;print(json.load(open('/tmp/intake.json')).get('risk_comment') or '')" > /tmp/risk.md
+          echo "risk=$([ -s /tmp/risk.md ] && grep -q '[^[:space:]]' /tmp/risk.md && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Post the Risk Manager check
+        if: steps.intake.outputs.risk == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/risk.md
 
       - name: Ledger tests still pass with the new entry
         if: steps.intake.outputs.ok == 'true'
         run: |
           pip install pytest
-          python -m pytest -q tests/test_ledger.py
+          python -m pytest -q tests/test_ledger.py tests/test_automation.py
 
       - name: Commit and push
         if: steps.intake.outputs.ok == 'true'

@@ -56,6 +56,8 @@ def root(tmp_path):
     (tmp_path / "data/ledger/marks.csv").unlink(missing_ok=True)
     for p in ("api_log.csv", "automation_log.csv"):
         (tmp_path / "data/ledger" / p).unlink(missing_ok=True)
+    (tmp_path / "results/systematic").mkdir(parents=True)
+    shutil.copy(ROOT / "results/systematic/positions.csv", tmp_path / "results/systematic/positions.csv")
     return tmp_path
 
 
@@ -362,3 +364,89 @@ def test_unconfirmed_event_opens_issue_with_findings(root):
     assert called == [] and res["resolved"] == ["F002"]
     row = _rows(fc)[0]
     assert row["outcome"] == "yes" and "BIS" in row["result"] and "stats.bis.org" in row["result"]
+
+
+# ----------------------------------------------------------------------------- Risk Manager
+from ledger import risk  # noqa: E402
+
+
+def _body(**over):
+    fields = dict(Date="2026-11-04", Country="Mexico", Instrument="MX10Y", Action="Buy", **{"Size (% of account at risk)": "1.5"},
+                  **{"Position type": "Continuous position", "Probability my view is right": "62", "Horizon (date)": "2027-01-15"},
+                  **{"Entry trigger": "Buy at 9.20% yield", "Stop / exit if wrong": "Exit if the 10y yield rises above 9.80"},
+                  Thesis="Banxico cuts faster than priced.", **{"Key factors": "Inflation; Fed.", "What would change my mind": "A hawkish turn.",
+                  "How this differs from market consensus": "Market prices two cuts; I expect four."})
+    fields.update(over)
+    return "".join(f"### {k}\n\n{v}\n\n" for k, v in fields.items())
+
+
+def test_risk_manager_rejections(root):
+    today = date(2026, 11, 4)
+    ok = intake.process("decision", _body(), 1, today, root)
+    assert ok["ok"] and ok["risk_comment"].startswith("### Risk Manager: passed")
+    assert "✅ Stop has a numeric level: 9.8" in ok["risk_comment"] and "✅ Continuous position risks at most 2%" in ok["risk_comment"]
+    assert _rows(root / "data/ledger/decisions.csv")[-1]["position_type"] == "continuous"
+    assert _rows(root / "data/ledger/decisions.csv")[-1]["entry_level"] == "9.2"
+    # no numeric stop level
+    r = intake.process("decision", _body(**{"Stop / exit if wrong": "exit if it feels wrong"}), 2, today, root)
+    assert not r["ok"] and "numeric price or yield level" in r["comment"] and "Risk Manager: rejected" in r["risk_comment"]
+    # a continuous position above 2%
+    r = intake.process("decision", _body(**{"Size (% of account at risk)": "2.5"}), 3, today, root)
+    assert not r["ok"] and "at most 2%" in r["comment"]
+    # an event bet must be exactly half of quarter-Kelly: 0.125 x (2 x 0.62 - 1) = 3.0%
+    assert schema.kelly_size_pct(62) == 3.0
+    r = intake.process("decision", _body(**{"Position type": "Event bet"}), 4, today, root)
+    assert not r["ok"] and "half of quarter-Kelly" in r["comment"] and "3% of account at 62%" in r["comment"]
+    r = intake.process("decision", _body(**{"Position type": "Event bet", "Size (% of account at risk)": "3.0"}), 5, today, root)
+    assert r["ok"] and _rows(root / "data/ledger/decisions.csv")[-1]["position_type"] == "event"
+    assert "✅ Event bet sized at half of quarter-Kelly" in r["risk_comment"]
+    # an event bet at 50% or less has no edge
+    r = intake.process("decision", _body(**{"Position type": "Event bet", "Probability my view is right": "45",
+                                            "Size (% of account at risk)": "1"}), 6, today, root)
+    assert not r["ok"] and "no edge" in r["comment"]
+    # a no-trade with a numeric stop passes whatever the type
+    r = intake.process("decision", _body(Action="No trade", **{"Size (% of account at risk)": "0", "Position type": "Event bet"}), 7, today, root)
+    assert r["ok"] and _rows(root / "data/ledger/decisions.csv")[-1]["position_type"] == ""
+    assert len(_rows(root / "data/ledger/decisions.csv")) == 5
+
+
+def test_risk_manager_flags_overlap_and_catalysts(root):
+    today = date(2026, 11, 4)
+    # the algorithm is short MXN and long MX10Y (positions.csv as committed): a Mexico decision overlaps
+    rm = risk.risk_check({c: "" for c in schema.DECISION_COLUMNS} | dict(
+        date="2026-11-04", country="Mexico", instrument="MX10Y", action="Buy", size_pct="1.5", probability="62",
+        horizon="2027-01-15", stop="above 9.80", thesis="t"), root, today)
+    assert rm["ok"] and any("long MX10Y" in f and "same instrument" in f for f in rm["flags"])
+    assert any("short MXN" in f and "same currency (MXN)" in f for f in rm["flags"])
+    # France shares the euro with the algorithm's short EUR; no France position otherwise
+    rm = risk.risk_check({c: "" for c in schema.DECISION_COLUMNS} | dict(
+        date="2026-11-04", country="France", instrument="FR-DE 10y OAT-Bund spread", action="Sell", size_pct="1",
+        probability="65", horizon="2027-04-18", stop="tightens to 115bp", thesis="t"), root, today)
+    assert [f for f in rm["flags"] if "Overlap" in f] == [f for f in rm["flags"] if "short EUR" in f and "same currency (EUR)" in f]
+    assert "monthly rebalance" in rm["comment"] and "D001" not in rm["comment"]      # own horizon excluded
+    # a same-country catalyst inside the holding period is flagged; outside it is not
+    (root / "data/events").mkdir()
+    (root / "data/events/upcoming_events.csv").write_text(
+        "iso3,country,date,event_type,subtype,description,outcome,source,notes\n"
+        "ESP,Spain,2026-11-29,election,general,Spanish snap general election,,x,\n")
+    (root / "data/events/rating_calendar.csv").write_text(
+        "iso3,country,date,agency,description,source\nESP,Spain,2026-12-11,Fitch,scheduled sovereign review,x\n")
+    rec = {c: "" for c in schema.DECISION_COLUMNS} | dict(
+        date="2026-11-04", country="Spain", instrument="ES-DE", action="Buy", size_pct="1", probability="60",
+        horizon="2026-12-15", stop="widens above 80bp", thesis="t")
+    rm = risk.risk_check(rec, root, today)
+    assert rm["ok"] and [c["label"] for c in rm["catalysts"]] == ["Spanish snap general election", "Fitch scheduled sovereign review"]
+    assert sum("Catalyst in the holding period" in f for f in rm["flags"]) == 2
+    rm = risk.risk_check(rec | {"horizon": "2026-11-20"}, root, today)
+    assert rm["catalysts"] == [] and "No same-country catalyst" in rm["comment"]
+    # an instrument outside the registry is still checked, by country only
+    rm = risk.risk_check(rec | {"instrument": "Spanish equities (IBEX)", "stop": "below 11000"}, root, today)
+    assert rm["ok"] and rm["scope"]["iso3"] == "ESP" and "not in the registry" in rm["comment"] and len(rm["catalysts"]) == 2
+
+
+def test_entry_level_from_trigger():
+    f = intake._entry_level_from_trigger
+    assert f("Buy at 9.20% yield", {}) == "9.2"
+    assert f("Sell at market; entry level 159bp", {}) == "159"
+    assert f("At market on the decision date; add on a dip", {}) == ""
+    assert f("Reassess if USD/BRL trades below 5.15", {}) == ""

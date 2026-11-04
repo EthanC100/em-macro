@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Rules checked automatically: the stop must contain a numeric price or yield level; a Buy or Sell may risk at most 2% of the account; the probability must be stated (event-bet sizing is half of quarter-Kelly on it); dates must parse (YYYY-MM-DD is safest).
+        The Risk Manager checks every record before it is logged and posts its check as a comment. Rejected: a stop without a numeric price or yield level; a continuous position risking more than 2% of the account; an event bet not sized at half of quarter-Kelly on its probability. Flagged: overlap with the algorithm's positions in the same country or currency; catalysts from the Ledger calendar inside the holding period. Dates must parse (YYYY-MM-DD is safest). Put the entry level in the entry trigger ("at 5.40"): it drives the live P&L and the automatic close.
   - type: input
     id: date
     attributes:
@@ -45,6 +45,16 @@ body:
       label: Size (% of account at risk)
       description: The % of the account lost if the stop is hit. 0 for no trade; at most 2 for a position.
       placeholder: "1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: position_type
+    attributes:
+      label: Position type
+      description: A continuous position may risk at most 2%. An event bet must be sized at half of quarter-Kelly on the probability below (0.125 × (2p − 1) of the account at even odds). Choose either for a no-trade.
+      options:
+        - Continuous position
+        - Event bet
     validations:
       required: true
   - type: input

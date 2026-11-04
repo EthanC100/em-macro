@@ -20,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from .schema import (AUTO_PREFIX, DECISION_COLUMNS, FORECAST_COLUMNS, REPORT_TYPES, kelly_size_pct, next_id,
-                     parse_date, parse_number, parse_probability, validate_decision,
+                     parse_date, parse_number, parse_probability, position_type, validate_decision,
                      validate_forecast)
 from .scoring import score_decision, score_forecast
 
@@ -31,7 +31,8 @@ NO_RESPONSE = "_No response_"
 # issue-form label -> CSV column
 DECISION_FIELDS = {
     "Date": "date", "Country": "country", "Instrument": "instrument", "Action": "action",
-    "Size (% of account at risk)": "size_pct", "Probability my view is right": "probability",
+    "Size (% of account at risk)": "size_pct", "Position type": "position_type",
+    "Probability my view is right": "probability",
     "Horizon (date)": "horizon", "Entry trigger": "entry_trigger", "Stop / exit if wrong": "stop",
     "Thesis": "thesis", "Key factors": "key_factors", "What would change my mind": "change_mind",
     "How this differs from market consensus": "vs_consensus",
@@ -111,29 +112,50 @@ def handle_decision(fields: dict, issue: int, today: date, root: Path) -> dict:
     rec = {c: "" for c in DECISION_COLUMNS}
     rec.update(d)
     rec["date"] = (parse_date(d["date"]) or today).isoformat() if parse_date(d["date"]) else d["date"]
-    errors, notes = validate_decision(rec)
-    if errors:
-        return {"ok": False, "kind": "decision",
-                "comment": "This decision record was **not** logged. Please edit the issue to fix:\n\n"
-                           + _fmt_errors(errors) + "\n\nThe workflow re-runs when the issue is edited."}
+    rec["position_type"] = position_type(rec) if rec.get("action") in ("Buy", "Sell") else ""
+    from .risk import risk_check   # local import: risk reads the registry and the calendars
+    rm = risk_check(rec, root, today)
+    if not rm["ok"]:
+        return {"ok": False, "kind": "decision", "risk_comment": rm["comment"],
+                "comment": "This decision record was **not** logged (Risk Manager). Please edit the issue to fix:\n\n"
+                           + _fmt_errors(rm["errors"]) + "\n\nThe workflow re-runs when the issue is edited."}
     path = root / "data/ledger/decisions.csv"
     rows = read_rows(path)
     rec["id"] = next_id([r.get("id", "") for r in rows], "D")
     rec["horizon"] = parse_date(d["horizon"]).isoformat()
     rec["size_pct"] = f"{parse_number(d['size_pct']):g}"
     rec["probability"] = f"{parse_probability(d['probability']):g}"
-    rec["entry_level"] = ""
+    rec["entry_level"] = _entry_level_from_trigger(d.get("entry_trigger", ""), rec)
     rec["status"] = "open"
     rec["issue"] = str(issue)
     rec["logged_at"] = today.isoformat()
     rows.append(rec)
     write_rows(path, rows, DECISION_COLUMNS)
     comment = (f"Logged as **{rec['id']}**: {rec['action']} {rec['instrument']} ({rec['country']}), "
-               f"{rec['size_pct']}% at risk, p {rec['probability']}%, horizon {rec['horizon']}.\n\n"
-               + "\n".join(f"- {n}" for n in notes)
-               + "\n\nResolve it later with the *Resolve* form using this id. It appears in the app after the next build.")
-    return {"ok": True, "kind": "decision", "id": rec["id"], "comment": comment,
+               f"{rec['size_pct']}% at risk, p {rec['probability']}%, horizon {rec['horizon']}"
+               f"{' (' + rec['position_type'] + ')' if rec['position_type'] else ''}.\n\n"
+               + "\n".join(f"- {n}" for n in rm["notes"])
+               + (f"\n- Entry level {rec['entry_level']} taken from the entry trigger (used for live P&L and the stop check)."
+                  if rec["entry_level"] else
+                  "\n- No numeric entry level found in the entry trigger: live P&L and the automatic horizon close need one "
+                  "(add it to `entry_level` in data/ledger/decisions.csv, or state it in the trigger next time)."
+                  if rec["action"] in ("Buy", "Sell") else "")
+               + (f"\n- Risk Manager flags: {len(rm['flags'])} (see its comment)." if rm["flags"] else "")
+               + "\n\nThe daily resolver closes it when the stop is hit or the horizon passes; resolve it earlier with the "
+                 "*Resolve* form using this id. It appears in the app after the next build.")
+    return {"ok": True, "kind": "decision", "id": rec["id"], "comment": comment, "risk_comment": rm["comment"],
             "files": ["data/ledger/decisions.csv"]}
+
+
+def _entry_level_from_trigger(trigger: str, rec: dict) -> str:
+    """A numeric entry level stated in the trigger ('at 5.40', 'entry 159bp', 'buy at 9.20% yield');
+    blank when the trigger states none (a bare 'at market' entry is not a level)."""
+    t = " ".join((trigger or "").split())
+    m = re.search(r"(?:entry(?: level)?|at|@|from|level)\s*(?:of\s*)?[:=]?\s*(-?\d+(?:[.,]\d+)?)\s*(bp|bps|%|basis points?)?", t, re.I)
+    if not m:
+        return ""
+    v = parse_number(m.group(1))
+    return f"{v:g}" if v is not None else ""
 
 
 def handle_forecast(fields: dict, issue: int, today: date, root: Path) -> dict:
