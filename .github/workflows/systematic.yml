@@ -180,9 +180,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # the path list must be identical to the update job's: actions/cache only matches caches
+      # saved with the same path list (run 4 could not see run 3's cache after the list changed)
       - name: Touch the newest raw-downloads cache
         uses: actions/cache/restore@v4
         with:
-          path: data/raw
+          path: |
+            data/raw
+            !data/raw/bondspot
+            !data/raw/bist
+            !data/raw/imf_weo
           key: raw-downloads-keepalive-${{ github.run_id }}
           restore-keys: raw-downloads-
