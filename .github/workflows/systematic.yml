@@ -8,6 +8,7 @@ name: systematic-monthly
 on:
   schedule:
     - cron: "23 7 3 * *"     # 07:23 UTC on the 3rd of every month, after month-end data are published
+    - cron: "37 6 * * 1,4"   # Monday and Thursday: keep the raw-download cache alive (see keep-cache)
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,7 @@ concurrency:
 
 jobs:
   update:
+    if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
@@ -36,10 +38,12 @@ jobs:
         id: install
         run: pip install -r requirements.txt 2>&1 | tee "$RUNNER_TEMP/install.log"
 
-      # data/raw is gitignored, so every run starts with an empty download cache.  Restoring the
-      # previous run's copy lets a source that is down (mindicador.cl returned 502 for the whole
-      # of the Nov 2026 run) fall back to last month's file with a warning instead of failing.
-      # The committed BondSpot / Borsa Istanbul scrapes are excluded: git has the right version.
+      # data/raw is gitignored (except the BondSpot / Borsa Istanbul scrapes and the IMF WEO files),
+      # so every run starts with an empty download cache.  Restoring the previous run's copy lets a
+      # source that is down (mindicador.cl answered 502, BCB sent an empty body, the IMF gateway
+      # answered 401 during the Nov 2026 runs) fall back to last month's file with a warning instead
+      # of failing.  EM_MACRO_REFRESH=1 makes every loader re-download first and use the cache only
+      # as that fallback.  Files that git has are excluded from the cache: git has the right version.
       - name: Restore last run's raw downloads (fallback when a source is down)
         uses: actions/cache/restore@v4
         with:
@@ -47,11 +51,14 @@ jobs:
             data/raw
             !data/raw/bondspot
             !data/raw/bist
+            !data/raw/imf_weo
           key: raw-downloads-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: raw-downloads-
 
       - name: Refresh data (daily panel, 13-country panel, risk-model inputs)
         id: refresh
+        env:
+          EM_MACRO_REFRESH: "1"
         run: python -m em_macro.systematic refresh 2>&1 | tee "$RUNNER_TEMP/refresh.log"
 
       - name: Save raw downloads for the next run
@@ -62,6 +69,7 @@ jobs:
             data/raw
             !data/raw/bondspot
             !data/raw/bist
+            !data/raw/imf_weo
           key: raw-downloads-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Positions and paper P&L (frozen design)
@@ -89,7 +97,7 @@ jobs:
             git add results/systematic/positions.csv results/systematic/paper_pnl.csv \
                     results/systematic/rebalance_log.csv \
                     results/systematic/position_adjustments.csv results/systematic/overrides_log.csv \
-                    data/processed data/raw/bondspot data/raw/bist \
+                    data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
                     results/coverage_report.md results/panel_coverage.md
             if git diff --cached --quiet; then
               echo "nothing to commit"
@@ -164,3 +172,17 @@ jobs:
           else
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body-file "$body"
           fi
+
+  # GitHub deletes caches that are not accessed for 7 days, so a monthly run would never find the
+  # previous month's copy.  Restoring it twice a week keeps the newest raw-downloads cache alive.
+  keep-cache:
+    if: github.event_name == 'schedule' && github.event.schedule == '37 6 * * 1,4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Touch the newest raw-downloads cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw
+          key: raw-downloads-keepalive-${{ github.run_id }}
+          restore-keys: raw-downloads-

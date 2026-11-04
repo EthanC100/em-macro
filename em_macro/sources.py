@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pandas as pd
 import requests
@@ -21,9 +23,20 @@ from .config import RAW, START, TESOURO_URL
 SESSION = requests.Session()
 
 
-# HTTP statuses worth retrying: rate limits and server-side errors.  Other 4xx
-# (404 for a series that does not exist, 400 for a bad request) fail at once.
-RETRY_STATUS = {408, 425, 429, 500, 502, 503, 504}
+# HTTP statuses worth retrying: rate limits, throttling (these keyless APIs answer
+# 401/403 when throttled; the IMF gateway did so for a few minutes on 4 Nov 2026) and
+# server-side errors.  Other 4xx (404 for a series that does not exist, 400 for a bad
+# request) fail at once.
+RETRY_STATUS = {401, 403, 408, 425, 429, 500, 502, 503, 504}
+# Hosts that exhausted their retries in this process: later requests to them get a
+# single try, so a source that is down costs about a minute, not a minute per file.
+DOWN_HOSTS: set[str] = set()
+
+
+def _refresh(refresh: bool) -> bool:
+    """``refresh`` or the EM_MACRO_REFRESH environment variable (set by the monthly
+    workflow so that every loader re-downloads and only falls back to its cache)."""
+    return refresh or os.environ.get("EM_MACRO_REFRESH", "").lower() not in ("", "0", "false", "no")
 
 
 def _backoff(i: int, response=None) -> float:
@@ -72,10 +85,12 @@ def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: 
     Otherwise a RuntimeError is raised.  Bad bodies are never cached.
     """
     cache.parent.mkdir(parents=True, exist_ok=True)
-    if cache.exists() and not refresh:
+    if cache.exists() and not _refresh(refresh):
         return cache.read_bytes()
+    host = urlsplit(url).netloc
+    n = 1 if host in DOWN_HOSTS else tries
     err, response = None, None
-    for i in range(tries):
+    for i in range(n):
         try:
             r = SESSION.get(url, timeout=timeout)
         except requests.RequestException as e:   # network hiccup / hang: back off and retry
@@ -88,10 +103,14 @@ def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: 
             elif check is not None and not check(r.content):
                 err, response = f"HTTP {r.status_code} with an unexpected body {r.content[:80]!r}", None
             else:
+                DOWN_HOSTS.discard(host)
                 cache.write_bytes(r.content)
                 return r.content
-        if i < tries - 1:
+        if i < n - 1:
             time.sleep(_backoff(i, response))
+    else:
+        if n > 1:
+            DOWN_HOSTS.add(host)
     if cache.exists() and (check is None or check(cache.read_bytes())):
         return _stale(cache, url, err)
     raise RuntimeError(f"download failed: {url}: {err}")
@@ -116,7 +135,7 @@ def yahoo(ticker: str, refresh: bool = False, tries: int = 3) -> pd.Series:
         df = pd.read_csv(cache, index_col=0, parse_dates=True)
         return df.iloc[:, 0].dropna().rename(ticker)
 
-    if cache.exists() and not refresh:
+    if cache.exists() and not _refresh(refresh):
         return from_cache()
     import yfinance as yf
     d, err = None, None
@@ -157,7 +176,7 @@ def bis_policy(area: str, refresh: bool = False) -> pd.Series:
 def bcb_sgs(code: int, refresh: bool = False) -> pd.Series:
     """BCB SGS series; the API limits daily series to 10-year windows."""
     cache = RAW / "bcb" / f"sgs_{code}.json"
-    if cache.exists() and not refresh:
+    if cache.exists() and not _refresh(refresh):
         rows = json.loads(cache.read_text())
     else:
         rows = []
@@ -194,7 +213,7 @@ def sarb(code: str, refresh: bool = False) -> pd.Series:
 def nbp_fx(code: str = "usd", refresh: bool = False) -> pd.Series:
     """NBP table A mid rate (PLN per unit); API allows 367-day windows."""
     cache = RAW / "nbp" / f"fx_{code}.json"
-    if cache.exists() and not refresh:
+    if cache.exists() and not _refresh(refresh):
         rows = json.loads(cache.read_text())
     else:
         rows = []
@@ -350,7 +369,7 @@ def polymarket_daily(event_id: int, market_title: str, refresh: bool = False) ->
     stamped ~00:00 UTC; each is assigned to the previous calendar date, i.e. the
     price at the end of that day (UTC)."""
     cache = RAW / "polymarket" / f"{event_id}_{market_title.replace(' ', '_')}.json"
-    if cache.exists() and not refresh:
+    if cache.exists() and not _refresh(refresh):
         hist = json.loads(cache.read_text())["history"]
     else:
         ev = json.loads(_get(f"https://gamma-api.polymarket.com/events/{event_id}",
