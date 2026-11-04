@@ -99,6 +99,19 @@ jobs:
             fi
           } 2>&1 | tee "$RUNNER_TEMP/commit.log"
 
+      - name: Close open alert issues after a successful run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert \
+                       --json number,title --jq '.[] | select(.title | startswith("[ALERT] systematic-monthly")) | .number'); do
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "Resolved: systematic-monthly succeeded on $(date -u +%Y-%m-%d): $RUN_URL"
+            echo "closed alert issue #$n"
+          done
+
       - name: Open or update the alert issue
         if: failure()
         env:

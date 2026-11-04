@@ -80,3 +80,24 @@ def test_yahoo_retries_empty_then_falls_back_to_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(S.time, "sleep", lambda s: None)
     s = S.yahoo("TRY=X", refresh=True)
     assert len(n) == 3 and list(s) == [1.0, 2.0]
+
+
+def test_get_retries_bad_body_and_never_caches_it(tmp_path, monkeypatch):
+    html = _Resp(200, b"<html>Service Unavailable</html>")
+    calls = _session(monkeypatch, [html, html, _Resp(200, b'{"ok": 1}')])
+    out = S._get("http://x/j", tmp_path / "j", refresh=True, check=S._is_json)
+    assert out == b'{"ok": 1}' and len(calls) == 3
+
+
+def test_get_rejects_stale_copy_that_fails_check(tmp_path, monkeypatch):
+    cache = tmp_path / "c"
+    cache.write_bytes(b"")                                    # an empty body cached by an older version
+    _session(monkeypatch, [_Resp(200, b"not json")])
+    with pytest.raises(RuntimeError, match="unexpected body"):
+        S._get("http://x/j", cache, refresh=True, tries=2, check=S._is_json)
+    assert cache.read_bytes() == b""                          # the bad body was not written over it
+
+
+def test_body_checks():
+    assert S._is_json(b"[1, 2]") and not S._is_json(b"") and not S._is_json(b"<html>")
+    assert S._has("TIME_PERIOD")(b"FREQ,TIME_PERIOD,OBS_VALUE\n") and not S._has("TIME_PERIOD")(b"<html>")

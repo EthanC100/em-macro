@@ -36,6 +36,22 @@ def _backoff(i: int, response=None) -> float:
     return wait
 
 
+def _is_json(body: bytes) -> bool:
+    try:
+        json.loads(body)
+        return True
+    except ValueError:
+        return False
+
+
+def _has(text: str):
+    """Body check: the first 4 KB contain ``text`` (a column or tag the parser needs).
+    Sources sometimes answer 200 with an empty body or an HTML error page."""
+    def check(body: bytes) -> bool:
+        return text in body[:4096].decode("utf-8", "replace")
+    return check
+
+
 def _stale(cache: Path, url: str, err) -> bytes:
     age = datetime.fromtimestamp(cache.stat().st_mtime).strftime("%Y-%m-%d")
     print(f"WARNING: {url}: {err} -- using the cached copy {cache} (from {age}) instead",
@@ -43,15 +59,17 @@ def _stale(cache: Path, url: str, err) -> bytes:
     return cache.read_bytes()
 
 
-def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: int = 60) -> bytes:
+def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: int = 60, check=None) -> bytes:
     """GET ``url`` and cache the body at ``cache``.
 
-    Connection errors, timeouts, 429s and 5xx responses are retried ``tries``
-    times with exponential backoff (about a minute of waiting in all); any
-    other 4xx fails at once.  If every attempt fails and a cached copy exists
-    (i.e. ``refresh=True`` on a cache that is merely being refreshed) the stale
-    copy is used with a warning, so that one source being down does not stop
-    the whole monthly refresh.  Without a cached copy a RuntimeError is raised.
+    Connection errors, timeouts, 429s, 5xx responses and bodies that fail
+    ``check`` (e.g. a 200 with an empty or HTML body where JSON was expected)
+    are retried ``tries`` times with exponential backoff (about a minute of
+    waiting in all); any other 4xx fails at once.  If every attempt fails and a
+    cached copy exists that passes ``check`` (i.e. ``refresh=True`` on a cache
+    that is merely being refreshed) the stale copy is used with a warning, so
+    that one source being down does not stop the whole monthly refresh.
+    Otherwise a RuntimeError is raised.  Bad bodies are never cached.
     """
     cache.parent.mkdir(parents=True, exist_ok=True)
     if cache.exists() and not refresh:
@@ -63,22 +81,25 @@ def _get(url: str, cache: Path, refresh: bool = False, tries: int = 6, timeout: 
         except requests.RequestException as e:   # network hiccup / hang: back off and retry
             err, response = e, None
         else:
-            if r.status_code < 400:
+            if r.status_code >= 400:
+                err, response = f"HTTP {r.status_code} {r.reason}", r
+                if r.status_code not in RETRY_STATUS:
+                    break
+            elif check is not None and not check(r.content):
+                err, response = f"HTTP {r.status_code} with an unexpected body {r.content[:80]!r}", None
+            else:
                 cache.write_bytes(r.content)
                 return r.content
-            err, response = f"HTTP {r.status_code} {r.reason}", r
-            if r.status_code not in RETRY_STATUS:
-                break
         if i < tries - 1:
             time.sleep(_backoff(i, response))
-    if cache.exists():
+    if cache.exists() and (check is None or check(cache.read_bytes())):
         return _stale(cache, url, err)
     raise RuntimeError(f"download failed: {url}: {err}")
 
 
 def fred(series_id: str, refresh: bool = False) -> pd.Series:
     url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-    raw = _get(url, RAW / "fred" / f"{series_id}.csv", refresh)
+    raw = _get(url, RAW / "fred" / f"{series_id}.csv", refresh, check=_has(series_id))
     df = pd.read_csv(io.BytesIO(raw), na_values=["."])
     s = pd.Series(pd.to_numeric(df.iloc[:, 1], errors="coerce").values,
                   index=pd.to_datetime(df.iloc[:, 0]), name=series_id)
@@ -126,7 +147,7 @@ def yahoo(ticker: str, refresh: bool = False, tries: int = 3) -> pd.Series:
 
 def bis_policy(area: str, refresh: bool = False) -> pd.Series:
     url = f"https://stats.bis.org/api/v1/data/WS_CBPOL/D.{area}?format=csv"
-    raw = _get(url, RAW / "bis" / f"CBPOL_{area}.csv", refresh)
+    raw = _get(url, RAW / "bis" / f"CBPOL_{area}.csv", refresh, check=_has("TIME_PERIOD"))
     df = pd.read_csv(io.BytesIO(raw), usecols=["TIME_PERIOD", "OBS_VALUE"])
     s = pd.Series(pd.to_numeric(df["OBS_VALUE"], errors="coerce").values,
                   index=pd.to_datetime(df["TIME_PERIOD"]), name=f"policy_{area}")
@@ -143,7 +164,7 @@ def bcb_sgs(code: int, refresh: bool = False) -> pd.Series:
         for y0 in range(2005, pd.Timestamp.today().year + 1, 10):
             url = (f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json"
                    f"&dataInicial=01/01/{y0}&dataFinal=31/12/{y0 + 9}")
-            rows += json.loads(_get(url, RAW / "bcb" / f"sgs_{code}_{y0}.json", True))
+            rows += json.loads(_get(url, RAW / "bcb" / f"sgs_{code}_{y0}.json", True, check=_is_json))
         cache.write_text(json.dumps(rows))
     df = pd.DataFrame(rows)
     s = pd.Series(pd.to_numeric(df["valor"], errors="coerce").values,
@@ -155,7 +176,7 @@ def banxico(series_id: str, refresh: bool = False) -> pd.Series:
     """Banxico SIE series via the public JSON that backs the SIE web charts."""
     url = (f"https://www.banxico.org.mx/SieInternet/consultaSerieGrafica.do?"
            f"s={series_id},CF300,1&versionSerie=LA-MAS-RECIENTE&l=es")
-    d = json.loads(_get(url, RAW / "banxico" / f"{series_id}.json", refresh))
+    d = json.loads(_get(url, RAW / "banxico" / f"{series_id}.json", refresh, check=_is_json))
     vals = d["valores"]
     s = pd.Series([v[1] for v in vals], index=pd.to_datetime([v[0] for v in vals]), name=series_id)
     return pd.to_numeric(s, errors="coerce").dropna().sort_index()
@@ -165,7 +186,7 @@ def sarb(code: str, refresh: bool = False) -> pd.Series:
     end = pd.Timestamp.today().strftime("%Y-%m-%d")
     url = ("https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/"
            f"GetTimeseriesObservations/{code}/{START}/{end}")
-    d = json.loads(_get(url, RAW / "sarb" / f"{code}.json", refresh))
+    d = json.loads(_get(url, RAW / "sarb" / f"{code}.json", refresh, check=_is_json))
     s = pd.Series([r["Value"] for r in d], index=pd.to_datetime([r["Period"] for r in d]), name=code)
     return pd.to_numeric(s, errors="coerce").dropna().sort_index()
 
@@ -181,7 +202,7 @@ def nbp_fx(code: str = "usd", refresh: bool = False) -> pd.Series:
         for y in range(2005, today.year + 1):
             a, b = f"{y}-01-01", min(pd.Timestamp(f"{y}-12-31"), today).strftime("%Y-%m-%d")
             url = f"https://api.nbp.pl/api/exchangerates/rates/a/{code}/{a}/{b}/?format=json"
-            rows += json.loads(_get(url, RAW / "nbp" / f"fx_{code}_{y}.json", True))["rates"]
+            rows += json.loads(_get(url, RAW / "nbp" / f"fx_{code}_{y}.json", True, check=_is_json))["rates"]
         cache.write_text(json.dumps(rows))
     s = pd.Series([r["mid"] for r in rows], index=pd.to_datetime([r["effectiveDate"] for r in rows]),
                   name=f"nbp_{code}")
@@ -190,7 +211,8 @@ def nbp_fx(code: str = "usd", refresh: bool = False) -> pd.Series:
 
 def tesouro_direto(refresh: bool = False) -> pd.DataFrame:
     """Tesouro Direto daily rates/prices for all retail Treasury bonds (2002+)."""
-    raw = _get(TESOURO_URL, RAW / "tesouro" / "PrecoTaxaTesouroDireto.csv", refresh, timeout=300)
+    raw = _get(TESOURO_URL, RAW / "tesouro" / "PrecoTaxaTesouroDireto.csv", refresh, timeout=300,
+               check=_has("Data Base"))
     df = pd.read_csv(io.BytesIO(raw), sep=";", decimal=",")
     df["Data Base"] = pd.to_datetime(df["Data Base"], dayfirst=True)
     df["Data Vencimento"] = pd.to_datetime(df["Data Vencimento"], dayfirst=True)
@@ -200,7 +222,7 @@ def tesouro_direto(refresh: bool = False) -> pd.DataFrame:
 def bcb_copom(refresh: bool = False) -> pd.DataFrame:
     """Copom meeting history (date, Selic target) from the BCB website API."""
     url = "https://www.bcb.gov.br/api/servico/sitebcb/historicotaxasjuros"
-    d = json.loads(_get(url, RAW / "bcb" / "copom_historico.json", refresh))
+    d = json.loads(_get(url, RAW / "bcb" / "copom_historico.json", refresh, check=_is_json))
     return pd.DataFrame(d["conteudo"])
 
 
@@ -209,7 +231,7 @@ def bcb_focus_selic(refresh: bool = False) -> pd.DataFrame:
     url = ("https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
            "ExpectativasMercadoSelic?$format=json&$select=Data,Reuniao,Mediana,Media,numeroRespondentes,baseCalculo"
            "&$top=1000000")
-    d = json.loads(_get(url, RAW / "bcb" / "focus_selic.json", refresh, timeout=300))
+    d = json.loads(_get(url, RAW / "bcb" / "focus_selic.json", refresh, timeout=300, check=_is_json))
     return pd.DataFrame(d["value"])
 
 
@@ -332,11 +354,11 @@ def polymarket_daily(event_id: int, market_title: str, refresh: bool = False) ->
         hist = json.loads(cache.read_text())["history"]
     else:
         ev = json.loads(_get(f"https://gamma-api.polymarket.com/events/{event_id}",
-                             RAW / "polymarket" / f"event_{event_id}.json", refresh))
+                             RAW / "polymarket" / f"event_{event_id}.json", refresh, check=_is_json))
         m = next(m for m in ev["markets"] if market_title in (m.get("groupItemTitle") or m["question"]))
         token = json.loads(m["clobTokenIds"])[0]
         url = f"https://clob.polymarket.com/prices-history?market={token}&interval=max&fidelity=1440"
-        hist = json.loads(_get(url, cache, True))["history"]
+        hist = json.loads(_get(url, cache, True, check=_is_json))["history"]
     t = pd.to_datetime([h["t"] for h in hist], unit="s")
     s = pd.Series([h["p"] for h in hist], index=t.normalize() - pd.Timedelta(days=1), name=market_title)
     return s[~s.index.duplicated(keep="last")].sort_index()

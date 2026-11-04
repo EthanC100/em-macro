@@ -886,7 +886,7 @@ What the numbers say:
     run is late.
   - **Failure alert:** if any step fails, the workflow opens a GitHub issue `[ALERT] systematic-monthly failed
     <date>` (label `alert`) with the failing step and the end of its log, or comments on that day's issue if it
-    already exists.
+    already exists. The next successful run closes any open alert issue.
   - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings
     (it commits results and opens alert issues).
 
