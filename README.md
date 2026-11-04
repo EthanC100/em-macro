@@ -42,6 +42,7 @@ python -m em_macro.risk_model outputs   # fair value, factor contributions, simi
 python -m em_macro.systematic fit       # systematic strategy: design on 2005-2019, frozen (section 10)
 python -m em_macro.systematic test      # 2020+ once
 python -m em_macro.systematic update    # this month's positions + paper P&L (run monthly by GitHub Actions)
+python -m em_macro.rebalance            # scheduled vs actual rebalance date -> rebalance_log.csv (monthly workflow)
 python -m em_macro.overlay fit          # political-risk overlay: rule chosen on 2005-2019, frozen (section 11)
 python -m em_macro.overlay test         # 2020+ once, overlay vs v1
 python -m em_macro.overlay update       # monthly: model + manual overrides (overrides.yaml), logged and scored
@@ -70,7 +71,8 @@ statistics and cross-checks are in [`results/coverage_report.md`](results/covera
 | US 10y, VIX, fed funds | FRED `DGS10`, `VIXCLS`, `DFF` | |
 | Dollar index | Yahoo `DX-Y.NYB` (ICE DXY); FRED broad dollar as a cross-check | |
 
-Raw downloads are cached in `data/raw/` (gitignored) and recreated by `run data`.
+Raw downloads are cached in `data/raw/` (gitignored, except the BondSpot and Borsa Istanbul scrapes and the IMF WEO
+files) and recreated by `run data`.
 
 ## 2. Carry benchmark — the bar to beat
 
@@ -874,7 +876,24 @@ What the numbers say:
   data. Nothing frozen is re-estimated.
   - **Incremental scrapes:** the parsed BondSpot and Borsa Istanbul scrapes are committed (`data/raw/bondspot/`,
     `data/raw/bist/`, about 10 MB), so each run fetches only new days.
-  - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings.
+  - **Downloads that fail:** every request is retried on connection errors, timeouts, 401/403/429 (throttling)
+    and 5xx responses, and on a 200 whose body is not what the parser expects (about a minute of backoff in all;
+    once a host has exhausted its retries, later requests to it get one try). A 404 fails at once. The refresh
+    step sets `EM_MACRO_REFRESH=1`, so every loader re-downloads and uses its cached copy only as a fallback: the
+    raw downloads are kept in the Actions cache between runs (a twice-weekly `keep-cache` job stops GitHub from
+    deleting it after 7 days), and the IMF WEO files are committed. If a source is still down after the retries,
+    the previous copy is used with a `WARNING:` line in the job log and an older "last" date in
+    `results/coverage_report.md` / `results/panel_coverage.md`. The run only fails when a source is down and no
+    earlier copy exists.
+  - **Rebalance dates:** `python -m em_macro.rebalance` runs after the update. It stamps `scheduled_date` (the
+    3rd of the month after `as_of`) and `run_date` on `positions.csv`, keeps one row per rebalance in
+    `results/systematic/rebalance_log.csv`, and prints `LATE by n days` in the job log and step summary when a
+    run is late.
+  - **Failure alert:** if any step fails, the workflow opens a GitHub issue `[ALERT] systematic-monthly failed
+    <date>` (label `alert`) with the failing step and the end of its log, or comments on that day's issue if it
+    already exists. The next successful run closes any open alert issue.
+  - **Repo setting:** the workflow needs "Read and write permissions" for Actions in the repository settings
+    (it commits results and opens alert issues).
 
 ### Limitations
 
