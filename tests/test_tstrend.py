@@ -195,20 +195,34 @@ def test_circular_block_indices():
 
 
 # ------------------------------------------------------------------ v1.0 untouched
+# Code and frozen results must still match docs/v1.0_freeze.md byte for byte.  The two data
+# panels are rebuilt and committed by the monthly workflow (systematic.yml), so they cannot be
+# pinned whole: for daily_panel.csv the rows of the frozen sample (before 2026-10) are hashed;
+# country_month_panel.csv is not hashed, because its latest-vintage annual series (IMF WEO,
+# World Bank, ratings) are re-assigned to every month of the year and change with each refresh.
+# The panels exactly as they were at the freeze are at commit 7886867 (docs/v1.0_freeze.md).
 V1_HASHES = {
     "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
     "results/systematic/fit/frozen_design.json": "f0cce4c9a819379c7bce4310ad58e8765b8149ef0d045ab25dd84c1b13983858",
     "results/systematic/test/performance_2020_on.csv":
         "1f8828109a6ab741993f2f49947320cc2a87c66abb308d3d37684151175087ed",
     "em_macro/risk_model.py": "2000a49747a2fba4064efe25a7eaf107e14b484ded7e5534f068a81b73738e74",
-    "data/processed/daily_panel.csv": "64921b287f799ca15c4d4232fbcab64ef24d97c4fd112ea1bac6195fa2179217",
-    "data/processed/country_month_panel.csv": "b4e83024ed9f5790ee3ca80557bb350d4ca57c51b6033478a4397d80a8ce1c99",
+}
+V1_FROZEN_ROWS = {   # path: (first date outside the frozen sample, sha256 of header + earlier rows)
+    "data/processed/daily_panel.csv": ("2026-10-01", "9b30b9f62be92efa75414178800abc322aa47fd03393f307b1e8e2ca2d79fc79"),
 }
 
 
 @pytest.mark.parametrize("path,sha", sorted(V1_HASHES.items()))
 def test_v1_frozen_files_unchanged(path, sha):
     assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == sha
+
+
+@pytest.mark.parametrize("path,cutoff,sha", [(k, *v) for k, v in sorted(V1_FROZEN_ROWS.items())])
+def test_v1_frozen_sample_rows_unchanged(path, cutoff, sha):
+    lines = (ROOT / path).read_text().splitlines(keepends=True)
+    kept = lines[:1] + [l for l in lines[1:] if l[:len(cutoff)] < cutoff]
+    assert hashlib.sha256("".join(kept).encode()).hexdigest() == sha
 
 
 def test_turnover_times_uniform_cost_equals_cost():

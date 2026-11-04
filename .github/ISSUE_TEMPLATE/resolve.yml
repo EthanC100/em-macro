@@ -1,0 +1,48 @@
+name: Resolve
+description: Close a decision or forecast with its outcome. A workflow scores it (Brier, and P&L where it can) and closes this issue.
+title: "[Resolve] "
+labels: ["ledger", "ledger:resolve"]
+body:
+  - type: input
+    id: ref
+    attributes:
+      label: Decision or forecast id
+      placeholder: "D001 or F003"
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      description: Decisions resolve right / wrong / scratched; forecasts resolve yes / no / void.
+      options:
+        - Right (decision)
+        - Wrong (decision)
+        - Scratched (decision closed flat, or a no-trade reviewed)
+        - "Yes (forecast)"
+        - "No (forecast)"
+        - Void (forecast cannot be resolved)
+    validations:
+      required: true
+  - type: input
+    id: result
+    attributes:
+      label: Exit price or result
+      description: The exit level for a decision (used for P&L with the entry level and stop), or the result for a forecast.
+      placeholder: "5.62"
+    validations:
+      required: true
+  - type: input
+    id: pnl
+    attributes:
+      label: P&L, % of account (optional)
+      description: Enter it if it cannot be computed from entry, stop and exit levels.
+      placeholder: "-0.8"
+    validations:
+      required: false
+  - type: textarea
+    id: note
+    attributes:
+      label: Note (optional)
+    validations:
+      required: false
