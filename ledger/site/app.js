@@ -344,7 +344,7 @@
         <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%) · ${d.position_type === 'event' ? 'event bet' : 'continuous'}</span></div>
         <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
       </div>`;
-    const markNote = d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${isNum(d.live_pnl_pct) ? '' : d.kind === 'position' && isNum(d.mark) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
+    const markNote = d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
     view.innerHTML = `
       <a class="back" href="#/decisions">← Decisions</a>
       ${scoreBlock}
@@ -663,8 +663,25 @@
   }
 
   async function pageTodo() {
-    setHead('To do', 'docs/todo.md');
-    view.innerHTML = '<p class="empty">No to-do list yet.</p>';
+    const td = await load('todo');
+    setHead('To do', `${td.done} of ${td.n} done · docs/todo.md updated ${fmtDate(td.updated)}`);
+    if (!td.sections.length) { view.innerHTML = '<p class="empty">No to-do list yet (docs/todo.md is missing).</p>'; return; }
+    const SEC_COLOR = { Technical: 'var(--c-trials)', Automation: 'var(--c-algorithm)', Algorithm: 'var(--c-evidence)' };
+    const item = (i) => `<li class="todo-item ${i.done ? 'done' : ''}"><span class="box" aria-hidden="true">${i.done ? '✓' : ''}</span><span class="txt">${esc(i.text)}${i.note ? `<br><span class="muted small">${esc(i.note)}</span>` : ''}</span></li>`;
+    view.innerHTML = `
+      <style>
+        .todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+        .todo-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+        .todo-item .box { flex: 0 0 22px; height: 22px; border-radius: 6px; border: 2px solid var(--g, var(--page)); display: grid; place-items: center; font-weight: 700; color: var(--on-accent); margin-top: 1px; }
+        .todo-item.done .box { background: var(--good); border-color: var(--good); }
+        .todo-item.done .txt { color: var(--muted); text-decoration: line-through; }
+        .todo-item.done .txt .muted { text-decoration: none; }
+      </style>
+      <section class="section">
+        <div class="stats">${td.sections.map((s) => `<div class="stat" style="--page:${SEC_COLOR[s.title] || 'var(--page)'}"><span class="k">${esc(s.title)}</span><span class="v">${s.done}<span class="muted" style="font-size:1rem">/${s.n}</span></span><span class="s">done</span></div>`).join('')}</div>
+        ${td.intro ? `<p class="small muted">${esc(td.intro)} <a href="${esc(td.source_url)}" target="_blank" rel="noopener">Edit on GitHub</a>.</p>` : ''}
+      </section>
+      ${td.sections.map((s) => `<section class="section ev-group" style="--g:${SEC_COLOR[s.title] || 'var(--page)'}"><div class="section-head"><h2>${esc(s.title)}</h2><span class="muted small">${s.done} of ${s.n}</span></div><ul class="todo-list">${s.items.map(item).join('')}</ul></section>`).join('')}`;
   }
 
   async function pageMore() {

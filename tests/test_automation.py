@@ -512,3 +512,29 @@ def test_screener_outputs_are_filed_as_a_report(tmp_path):
     meta, body = __import__("ledger.build", fromlist=["parse_front_matter"]).parse_front_matter(text)
     assert meta["type"] == "screener" and meta["date"] == "2026-11-04" and body.startswith("# Screener after the 2026-10 rebalance")
     assert len(_rows(tmp_path / files[1])) == 8 and json.loads((tmp_path / files[0]).read_text())["as_of"] == "2026-10"
+
+
+# ----------------------------------------------------------------------------- to-do page
+from ledger import build  # noqa: E402
+
+
+def test_todo_parsing_and_build(tmp_path):
+    td = build.parse_todo("# To do\n\nIntro line.\n\n## A\n\n- [x] done thing (with a longer note here)\n- [ ] open thing\n\n## B\n\n- [ ] other\n")
+    assert td["n"] == 3 and td["done"] == 1 and td["intro"] == "Intro line."
+    assert td["sections"][0]["items"][0] == {"done": True, "text": "done thing", "note": "with a longer note here"}
+    assert td["sections"][1] == {"title": "B", "items": [{"done": False, "text": "other", "note": None}], "done": 0, "n": 1}
+    real = build.build_todo()
+    titles = [s["title"] for s in real["sections"]]
+    assert titles == ["Technical", "Automation", "Algorithm"]
+    auto = {i["text"]: i["done"] for i in real["sections"][1]["items"]}
+    assert auto["Resolving decisions and forecasts"] and auto["Marking open positions"] and auto["Risk Manager"] and auto["Screener"]
+    assert not auto["Anthropic API key"]
+    out = tmp_path / "app"
+    build.build(out, today=date(2026, 11, 4))
+    for name in ("todo", "marks", "screener"):
+        assert (out / f"data/{name}.json").exists()
+    dec = json.loads((out / "data/decisions.json").read_text())
+    d1 = next(d for d in dec["items"] if d["id"] == "D001")
+    assert d1["mark_instrument"] == "FR-DE" and d1["mark_frequency"] == "monthly" and d1["position_type"] == "continuous"
+    fc = json.loads((out / "data/forecasts.json").read_text())
+    assert all(f["resolution_source"] == "AP race call" for f in fc["items"][:5])

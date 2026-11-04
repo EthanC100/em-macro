@@ -190,6 +190,42 @@ def build_screener(reports: dict | None = None) -> dict:
             "source": "results/screener/latest.json", "updated": git_last_date("results/screener/latest.json")}
 
 
+def parse_todo(text: str) -> dict:
+    """docs/todo.md: '## Section' headings and '- [ ] item' / '- [x] item' lines."""
+    sections, cur, intro = [], None, []
+    for line in text.splitlines():
+        m = re.match(r"^##\s+(.+?)\s*$", line)
+        if m:
+            cur = {"title": m.group(1), "items": []}
+            sections.append(cur)
+            continue
+        m = re.match(r"^\s*[-*]\s+\[([ xX])\]\s+(.+?)\s*$", line)
+        if m and cur is not None:
+            item = m.group(2)
+            note = None
+            mm = re.match(r"^(.*?)\s*\((.+)\)\s*$", item)
+            if mm and len(mm.group(2)) > 12:
+                item, note = mm.group(1), mm.group(2)
+            cur["items"].append({"done": m.group(1).lower() == "x", "text": item, "note": note})
+        elif cur is None and line.strip() and not line.startswith("#"):
+            intro.append(line.strip())
+    for s in sections:
+        s["done"] = sum(i["done"] for i in s["items"])
+        s["n"] = len(s["items"])
+    return {"sections": sections, "intro": " ".join(intro),
+            "done": sum(s["done"] for s in sections), "n": sum(s["n"] for s in sections)}
+
+
+def build_todo() -> dict:
+    path = ROOT / "docs/todo.md"
+    if not path.exists():
+        return {"sections": [], "intro": "", "done": 0, "n": 0, "source": "docs/todo.md", "updated": None}
+    out = parse_todo(path.read_text(encoding="utf-8"))
+    out.update({"source": "docs/todo.md", "updated": git_last_date("docs/todo.md"),
+                "source_url": f"{REPO_URL}/blob/main/docs/todo.md"})
+    return out
+
+
 def build_decisions(today: date) -> dict:
     rows = read_csv(ROOT / "data/ledger/decisions.csv")
     registry = load_registry() if (ROOT / "data/ledger/instruments.csv").exists() else []
@@ -813,6 +849,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     elections = build_elections(today)
     reports = build_reports(out_dir, today)
     screener = build_screener(reports)
+    todo = build_todo()
     evidence = build_evidence(trials, algorithm, today)
     home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
     commit = git("rev-parse", "--short", "HEAD")
@@ -839,7 +876,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     data = out_dir / "data"
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
-                      ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener)):
+                      ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener),
+                      ("todo", todo)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")
