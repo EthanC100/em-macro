@@ -99,7 +99,26 @@ def test_build_writes_site_and_json(tmp_path):
     for f in man["files"]:
         assert (out / f).exists(), f
     home = json.loads((out / "data/home.json").read_text())
-    assert home["account_value"] is not None and len(home["positions"]) >= 1
+    assert home["account_index"] is not None and len(home["positions"]) >= 1
+    assert home["account_index_label"] == "Account index (start = 100, live from Nov 2026)"
+    assert home["account_base_month"] == "2026-10" and home["history_index_base_month"] == FREEZE_MONTH
+    # the live index is 100 at the end of the last pre-live month and moves only with live months
+    alg_ = json.loads((out / "data/algorithm.json").read_text())
+    prod = 1.0
+    for m in alg_["months"]:
+        if m["live"]:
+            prod *= 1 + m["net"]
+    assert home["account_index"] == pytest.approx(100 * prod, abs=1e-3)
+    assert home["account_change_pct"] == pytest.approx(home["account_index"] - 100, abs=1e-3)
+    exp_base = 10_000_000.0 if (alg_["rebalance"]["effective_from"] or "") >= "2026-12" else 100_000.0
+    assert home["usd_base"] == exp_base
+    assert home["account_usd"] == pytest.approx(exp_base * home["account_index"] / 100, abs=0.01)
+    by_m = {m["month"]: m for m in alg_["months"]}
+    assert by_m["2026-10"]["account_index"] == 100.0 and by_m[FREEZE_MONTH]["account_index"] is None
+    # history index figures unchanged: 100 at the end of the freeze month, October keeps its loss
+    assert by_m[FREEZE_MONTH]["account_value"] == pytest.approx(100.0)
+    assert by_m["2026-10"]["account_value"] == pytest.approx(100 * (1 + by_m["2026-10"]["net"]), abs=1e-3)
+    assert all(m["account_value"] is None for m in alg_["months"] if m["live"])
     dec = json.loads((out / "data/decisions.json").read_text())
     ids = {d["id"] for d in dec["items"]}
     assert {"D001", "D002"} <= ids

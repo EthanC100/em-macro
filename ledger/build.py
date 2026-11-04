@@ -42,6 +42,13 @@ FREEZE_COMMIT = "7886867"
 # and backtest statistics. See docs/config_changes.md.
 LIVE_START_MONTH = "2026-11"
 LIVE_SINCE = "2026-11-03"
+# The live account index is 100 at the end of the month before LIVE_START_MONTH (October 2026) and moves only
+# with live months. Backtest and pre-live months keep their own history index (100 at the end of the freeze month).
+ACCOUNT_INDEX_LABEL = "Account index (start = 100, live from Nov 2026)"
+# US$ equivalent of index 100: US$100,000 before the 3 December 2026 rebalance (the run that sets positions
+# effective from 2026-12) and US$10,000,000 from it. Keyed on the positions' effective month, not the calendar,
+# so a late run switches the base when it actually happens.
+USD_BASES = (("2026-12", 10_000_000.0, "2026-12-03"), ("", 100_000.0, None))
 
 COUNTRY_OF = {
     "BRL": "Brazil", "BR10Y": "Brazil", "MXN": "Mexico", "MX10Y": "Mexico",
@@ -273,8 +280,21 @@ def build_algorithm() -> dict:
             cum_at_freeze = cum
     if cum_at_freeze is None and months:
         cum_at_freeze = months[-1]["cumulative"]
+    # history index (backtest and pre-live only; figures as before): 100 at the end of the freeze month
     for row in months:
-        row["account_value"] = round(100 * row["cumulative"] / cum_at_freeze, 3) if cum_at_freeze else None
+        row["account_value"] = (round(100 * row["cumulative"] / cum_at_freeze, 3)
+                                if cum_at_freeze and not row["live"] else None)
+    # live account index: 100 at the end of the month before LIVE_START_MONTH, then live months only
+    base_rows = [r for r in months if r["month"] < LIVE_START_MONTH]
+    cum_at_live_start = base_rows[-1]["cumulative"] if base_rows else 1.0
+    live_base_month = base_rows[-1]["month"] if base_rows else None
+    for row in months:
+        if row["live"]:
+            row["account_index"] = round(100 * row["cumulative"] / cum_at_live_start, 3)
+        elif row["month"] == live_base_month:
+            row["account_index"] = 100.0
+        else:
+            row["account_index"] = None
     live_rows = [r for r in months if r["live"]]
     backtest_rows = [r for r in months if r["phase"] == "backtest"]
     pre_live_rows = [r for r in months if r["phase"] == "pre_live"]
@@ -327,13 +347,15 @@ def build_algorithm() -> dict:
     effective_from = positions[0].get("effective_from") if positions else None
     return {
         "months": months, "live": live_stats, "backtest": backtest_stats, "frozen": frozen,
+        "account_index_label": ACCOUNT_INDEX_LABEL,
         "positions": pos,
         "by_country": sorted(by_country.values(), key=lambda c: -c["risk_share_pct"]),
         "by_sleeve": sorted(by_sleeve.values(), key=lambda s: s["sleeve"]),
         "rebalance": {"date": rebalance_date, "as_of": as_of, "effective_from": effective_from,
                       "live_since": LIVE_SINCE, "live_start_month": LIVE_START_MONTH,
                       "n_live_months": len(live_rows),
-                      "pre_live_months": [r["month"] for r in pre_live_rows]},
+                      "pre_live_months": [r["month"] for r in pre_live_rows],
+                      "live_base_month": live_base_month},
         "overrides": overrides, "adjustments": adjustments,
         "release_url": RELEASE_URL, "freeze_commit": FREEZE_COMMIT,
         "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.0_freeze.md",
@@ -652,13 +674,24 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
     cat.sort(key=lambda c: (c["date"], c["kind"]))
     months = algorithm["months"]
     last = months[-1] if months else None
+    live_rows = [m for m in months if m["live"]]
+    account_index = live_rows[-1]["account_index"] if live_rows else 100.0
+    effective_from = algorithm["rebalance"].get("effective_from") or ""
+    usd_base, usd_base_since = next((b, d) for m, b, d in USD_BASES if effective_from >= m)
     return {
-        "account_value": last["account_value"] if last else None,
-        "account_base": 100.0, "account_base_month": algorithm["frozen"]["freeze_month"],
+        "account_index": account_index, "account_index_label": ACCOUNT_INDEX_LABEL,
+        "account_base": 100.0, "account_base_month": algorithm["rebalance"]["live_base_month"],
+        "live_start_month": LIVE_START_MONTH,
+        "account_change_pct": round(account_index - 100.0, 3),
+        "account_usd": round(usd_base * account_index / 100.0, 2), "usd_base": usd_base,
+        "usd_base_since": usd_base_since, "usd_bases": [{"from_effective_month": m or None, "base": b,
+                                                         "rebalance": d} for m, b, d in USD_BASES],
+        "history_index_base_month": algorithm["frozen"]["freeze_month"],
+        "history_index_last": next((m["account_value"] for m in reversed(months) if not m["live"]), None),
         "last_month": last["month"] if last else None,
         "last_month_net_pct": round(last["net"] * 100, 3) if last and last["net"] is not None else None,
         "live": algorithm["live"],
-        "equity": [[m["month"], m["account_value"], m["live"], m["pre_live"]] for m in months],
+        "equity": [[m["month"], m["account_value"], m["account_index"], m["live"], m["pre_live"]] for m in months],
         "positions": algorithm["positions"],
         "open_decisions": [d for d in decisions["items"] if d["status"] == "open"],
         "catalysts": cat,

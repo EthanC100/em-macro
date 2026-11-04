@@ -121,28 +121,33 @@
   const monthTick = (labels) => (v, i) => { const l = labels[i]; return (l && l.endsWith('-01')) || i === 0 ? l.slice(0, 4) : ''; };
 
   const PRE_LIVE_LABEL = 'Pre-live (not counted)';
+  const ACCOUNT_LABEL = 'Account index (start = 100, live from Nov 2026)';
+  const historyLabel = (base) => `History index (${fmtMonth(base)} = 100, not counted)`;
+  const fmtUsd = (x) => (isNum(x) ? `US$${Math.round(x).toLocaleString('en-US')}` : '—');
   const phaseSuffix = (m) => (!m ? '' : m.live ? ' (live)' : m.pre_live ? ' (pre-live, not counted)' : '');
 
   function equityChart(id, months, opts = {}) {
+    const histBase = opts.historyBase;
     const labels = months.map((m) => m.month);
     const isBt = (m) => !m.live && !m.pre_live;
     const bt = months.map((m) => (isBt(m) ? m.account_value : null));
     // join the pre-live series to the last backtest point, and the live series to the last earlier point
     const lastBt = months.map(isBt).lastIndexOf(true);
-    const lastPre = months.map((m) => !m.live).lastIndexOf(true);
     const pre = months.map((m, i) => (m.pre_live || (i === lastBt && months.some((x) => x.pre_live)) ? m.account_value : null));
-    const live = months.map((m, i) => (m.live || i === lastPre ? m.account_value : null));
+    // live account index on its own (right) axis: 100 at the end of the last pre-live month
+    const live = months.map((m) => (isNum(m.account_index) ? m.account_index : null));
     const cBt = cssVar('--series-backtest'), cLive = cssVar('--series-live'), cPre = cssVar('--series-prelive');
     return mkChart(id, {
       type: 'line',
       data: { labels, datasets: [
-        { label: 'Backtest (test, evaluated once)', data: bt, borderColor: cBt, backgroundColor: withAlpha(cBt, 0.12), fill: true, borderWidth: 1.6, pointRadius: 0, tension: 0.1, spanGaps: false },
-        { label: PRE_LIVE_LABEL, data: pre, borderColor: cPre, backgroundColor: withAlpha(cPre, 0.12), fill: true, borderWidth: 1.6, borderDash: [4, 3], pointRadius: (ctx) => (months[ctx.dataIndex] && months[ctx.dataIndex].pre_live ? 3 : 0), pointBackgroundColor: cPre, tension: 0.1, spanGaps: false },
-        { label: 'Live paper trading', data: live, borderColor: cLive, backgroundColor: withAlpha(cLive, 0.18), fill: true, borderWidth: 2.2, pointRadius: (ctx) => (ctx.dataIndex === labels.length - 1 ? 3.5 : 0), pointBackgroundColor: cLive, tension: 0.1, spanGaps: false },
+        { label: `Backtest (test, evaluated once), ${historyLabel(histBase)}`, yAxisID: 'yh', data: bt, borderColor: cBt, backgroundColor: withAlpha(cBt, 0.12), fill: true, borderWidth: 1.6, pointRadius: 0, tension: 0.1, spanGaps: false },
+        { label: `${PRE_LIVE_LABEL}, ${historyLabel(histBase)}`, yAxisID: 'yh', data: pre, borderColor: cPre, backgroundColor: withAlpha(cPre, 0.12), fill: true, borderWidth: 1.6, borderDash: [4, 3], pointRadius: (ctx) => (months[ctx.dataIndex] && months[ctx.dataIndex].pre_live ? 3 : 0), pointBackgroundColor: cPre, tension: 0.1, spanGaps: false },
+        { label: ACCOUNT_LABEL, yAxisID: 'y', data: live, borderColor: cLive, backgroundColor: withAlpha(cLive, 0.18), fill: false, borderWidth: 2.2, pointRadius: (ctx) => (isNum(live[ctx.dataIndex]) && (ctx.dataIndex === labels.length - 1 || live.filter(isNum).length < 3) ? 3.5 : 0), pointBackgroundColor: cLive, tension: 0.1, spanGaps: false },
       ] },
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
         scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 0, callback: monthTick(labels) } },
-                  y: { grid: { color: cssVar('--grid') }, ticks: { callback: (v) => fmtNum(v, 0) }, title: { display: !!opts.yTitle, text: opts.yTitle } } },
+                  yh: { position: 'left', grid: { color: cssVar('--grid') }, ticks: { callback: (v) => fmtNum(v, 0) }, title: { display: true, text: historyLabel(histBase) } },
+                  y: { position: 'right', grid: { display: false }, ticks: { color: cLive, callback: (v) => fmtNum(v, 1) }, title: { display: true, text: ACCOUNT_LABEL, color: cLive } } },
         plugins: { tooltip: { callbacks: { title: (it) => fmtMonth(it[0].label) + phaseSuffix(months[it[0].dataIndex]), label: (it) => `${it.dataset.label}: ${fmtNum(it.parsed.y, 1)}` } } } },
     });
   }
@@ -233,9 +238,10 @@
     view.innerHTML = `
       <section class="section">
         <div class="card hero rule">
-          <span class="k">Paper account value</span>
-          <span class="v">${fmtNum(home.account_value, 1)}</span>
-          <span class="s">Indexed to 100 at the end of ${fmtMonth(home.account_base_month)}, when v1.0 was frozen · last month ${fmtPct(home.last_month_net_pct, 2, true)} (${fmtMonth(home.last_month)})</span>
+          <span class="k">${esc(home.account_index_label || ACCOUNT_LABEL)}</span>
+          <span class="v">${fmtNum(home.account_index, 1)}</span>
+          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; base ${fmtUsd(home.usd_base)}${home.usd_base_since ? ` from the ${fmtDate(home.usd_base_since)} rebalance` : ' before the 3 Dec 2026 rebalance, US$10,000,000 from it'})</span>
+          <span class="s">Latest month ${fmtMonth(home.last_month)} ${fmtPct(home.last_month_net_pct, 2, true)}${home.live.months ? '' : ' (pre-live, not counted)'}</span>
         </div>
         <div class="stats">
           <div class="stat"><span class="k">Live months</span><span class="v">${live.months || 0}</span><span class="s">since the ${fmtDate(home.rebalance.live_since)} rebalance</span></div>
@@ -251,7 +257,8 @@
       <section class="section">
         <div class="section-head"><h2>Equity curve</h2><a class="more" href="#/algorithm">Algorithm detail</a></div>
         <div class="card"><div class="chart"><canvas id="c-equity"></canvas></div>
-        ${legend([['Backtest 2020 to freeze', '--series-backtest'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live paper trading', '--series-live']])}</div>
+        ${legend([['Backtest 2020 to freeze (left axis)', '--series-backtest'], [`${PRE_LIVE_LABEL} (left axis)`, '--series-prelive'], [`${ACCOUNT_LABEL} (right axis)`, '--series-live']])}
+        <p class="chart-note">Left axis: ${esc(historyLabel(home.history_index_base_month))}, figures unchanged. Right axis: ${esc(ACCOUNT_LABEL)}, 100 at the end of ${fmtMonth(home.account_base_month)}.</p></div>
       </section>
       <section class="section">
         <div class="section-head"><h2>Open positions</h2><span class="muted small">held through ${fmtMonth(home.rebalance.effective_from)}</span></div>
@@ -269,7 +276,7 @@
         <div class="section-head"><h2>Latest report</h2><a class="more" href="#/reports">Archive</a></div>
         ${rep ? reportRow(rep) : '<p class="empty">No reports yet.</p>'}
       </section>`;
-    equityChart('c-equity', months);
+    equityChart('c-equity', months, { historyBase: home.history_index_base_month });
   }
 
   function decisionRow(d) {
@@ -370,7 +377,7 @@
     const maxRisk = Math.max(...alg.by_country.map((c) => c.risk_share_pct), 1);
     const countryRows = alg.by_country.map((c) => `<tr><td>${esc(c.country)}</td><td class="wrap small muted">${esc(c.positions.join(', '))}</td><td class="num">${fmtPct(c.risk_share_pct, 1)}</td><td><div class="bar"><i style="width:${(100 * c.risk_share_pct / maxRisk).toFixed(1)}%"></i></div></td><td class="num">${fmtPct(c.gross_pct, 0)}</td></tr>`).join('');
     const sleeveRows = alg.by_sleeve.map((s) => `<tr><td>${esc(s.sleeve)}</td><td class="num">${s.n}</td><td class="num">${fmtPct(s.risk_share_pct, 1)}</td><td class="num">${fmtPct(s.gross_pct, 0)}</td></tr>`).join('');
-    const liveRows = liveMonths.length ? liveMonths.map((m) => `<tr><td>${fmtMonth(m.month)}</td><td class="num ${signClass(m.net)}">${fmtPct(m.net * 100, 2, true)}</td><td class="num">${fmtPct(m.model_net * 100, 2, true)}</td><td class="num">${fmtPct((m.override_pnl || 0) * 100, 2, true)}</td><td class="num">${fmtPct(m.carry_basket * 100, 2, true)}</td><td class="num">${fmtPct(m.sp500_tr * 100, 2, true)}</td><td class="num">${fmtNum(m.account_value, 1)}</td></tr>`).join('') : '';
+    const liveRows = liveMonths.length ? liveMonths.map((m) => `<tr><td>${fmtMonth(m.month)}</td><td class="num ${signClass(m.net)}">${fmtPct(m.net * 100, 2, true)}</td><td class="num">${fmtPct(m.model_net * 100, 2, true)}</td><td class="num">${fmtPct((m.override_pnl || 0) * 100, 2, true)}</td><td class="num">${fmtPct(m.carry_basket * 100, 2, true)}</td><td class="num">${fmtPct(m.sp500_tr * 100, 2, true)}</td><td class="num">${fmtNum(m.account_index, 1)}</td></tr>`).join('') : '';
     view.innerHTML = `
       <section class="section">
         <div class="card rule">
@@ -394,10 +401,11 @@
           <div class="stat"><span class="k">Overrides</span><span class="v">${alg.overrides.length}</span><span class="s">manual overrides logged</span></div>
         </div>
       </section>
-      ${liveMonths.length ? `<section class="section"><h2>Live months</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Net</th><th class="num">Model</th><th class="num">Override</th><th class="num">Carry basket</th><th class="num">S&P 500</th><th class="num">Account</th></tr></thead><tbody>${liveRows}</tbody></table></div></section>` : ''}
+      ${liveMonths.length ? `<section class="section"><h2>Live months</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Net</th><th class="num">Model</th><th class="num">Override</th><th class="num">Carry basket</th><th class="num">S&P 500</th><th class="num">${esc(ACCOUNT_LABEL)}</th></tr></thead><tbody>${liveRows}</tbody></table></div></section>` : ''}
       <section class="section">
-        <h2>Equity, indexed to 100 at the freeze</h2>
-        <div class="card"><div class="chart tall"><canvas id="c-alg-equity"></canvas></div>${legend([['Backtest', '--series-backtest'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live', '--series-live']])}</div>
+        <h2>Equity: ${esc(ACCOUNT_LABEL)}</h2>
+        <div class="card"><div class="chart tall"><canvas id="c-alg-equity"></canvas></div>${legend([['Backtest (left axis)', '--series-backtest'], [`${PRE_LIVE_LABEL} (left axis)`, '--series-prelive'], [`${ACCOUNT_LABEL} (right axis)`, '--series-live']])}
+        <p class="chart-note">Left axis: ${esc(historyLabel(alg.frozen.freeze_month))}, figures unchanged. Right axis: ${esc(ACCOUNT_LABEL)}, 100 at the end of ${fmtMonth(alg.rebalance.live_base_month)}; it moves only with live months.</p></div>
       </section>
       <section class="section">
         <h2>Monthly net P&L</h2>
@@ -420,7 +428,7 @@
         <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">Risk</th><th class="num">Vol</th><th class="num">Carry z</th><th class="num">Trend z</th><th class="num">Value z</th></tr></thead><tbody>${posRows}</tbody></table></div>
         <p class="small muted">Size is signed notional in % of capital; risk share is the position's share of portfolio risk. Source: results/systematic/positions.csv.</p>
       </section>`;
-    equityChart('c-alg-equity', months);
+    equityChart('c-alg-equity', months, { historyBase: alg.frozen.freeze_month });
     monthlyBarChart('c-alg-monthly', months);
     drawdownChart('c-alg-dd', months);
   }
