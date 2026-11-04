@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from pathlib import Path
 import sys
 from datetime import datetime, timezone
 
@@ -19,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from . import holdout as HO
+from . import risk_model as RM
 from . import systematic as SY
 from . import t01 as T01
 from . import t16_crash as T16
@@ -26,6 +28,7 @@ from . import t17_factorcap as T17
 from . import t18_rebal as T18
 from . import t19_vol as T19
 from . import tstrend as TS
+from . import verify_v1 as V
 from .config import RESULTS, ROOT
 
 OUT = RESULTS / "T16-T19"
@@ -112,9 +115,24 @@ def _json(o):
 
 
 # ============================================================ run
+def frozen_snapshots(dest):
+    """v1.0's three processed input snapshots at the freeze commit 7886867 (verify_v1.extract_snapshots),
+    pointed at by every module that reads them.  The working-tree copies were rebuilt by the November 2026
+    monthly workflow after the freeze and move frozen v1.0's test table at the 4th decimal."""
+    proc = V.extract_snapshots(dest)
+    for mod in (SY, RM, T16, T17):
+        mod.PROC = proc
+    return proc
+
+
 def stage_run():
+    import tempfile
     OUT.mkdir(parents=True, exist_ok=True)
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    tmp = tempfile.mkdtemp(prefix="t1619_frozen_inputs_")
+    proc = frozen_snapshots(Path(tmp) / "processed")
+    snapshots = {p: V.sha256((proc / Path(p).name).read_bytes()) for p in V.FROZEN_INPUTS}
+    assert snapshots == V.FROZEN_INPUTS
     inp1 = SY.build_inputs()
     repro = T01.reproduce_v1(inp1)
     print("v1.0 reproduction:", repro)
@@ -359,13 +377,14 @@ def stage_run():
 
     files = ["em_macro/systematic.py", "results/systematic/fit/frozen_design.json", "em_macro/t16_crash.py",
              "em_macro/t17_factorcap.py", "em_macro/t18_rebal.py", "em_macro/t19_vol.py", "em_macro/t1619.py",
-             "em_macro/t01.py", "em_macro/tstrend.py", "em_macro/holdout.py", PREREG,
-             "data/processed/daily_panel.csv", "data/processed/country_month_panel.csv",
-             "data/processed/risk_model_input.csv", "data/events/elections.csv"]
+             "em_macro/t01.py", "em_macro/tstrend.py", "em_macro/holdout.py", PREREG, "data/events/elections.csv"]
     (OUT / "RUN.json").write_text(json.dumps({
         "run_started_utc": started, "run_finished_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_head_at_run": _git_head(), "pandas": pd.__version__, "numpy": np.__version__,
         "last_month": str(months[-1]), "v1_reproduction": repro, "decision_costs": "1x",
+        "input_snapshots": {"commit": V.FREEZE_COMMIT, "sha256": snapshots,
+                            "note": "data/processed snapshots at the freeze commit (verify_v1.extract_snapshots); "
+                                    "the working-tree copies, rebuilt by the November 2026 monthly workflow, were not used"},
         "overall_pass_1x": {tr: crit["1x"]["tables"][tr]["overall_pass"] for tr in TRIALS},
         "sha256": {f: _sha(f) for f in files}}, indent=1))
     for tr in TRIALS:
