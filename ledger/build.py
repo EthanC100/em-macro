@@ -45,10 +45,43 @@ LIVE_SINCE = "2026-11-03"
 # The live account index is 100 at the end of the month before LIVE_START_MONTH (October 2026) and moves only
 # with live months. Backtest and pre-live months keep their own history index (100 at the end of the freeze month).
 ACCOUNT_INDEX_LABEL = "Account index (start = 100, live from Nov 2026)"
-# US$ equivalent of index 100: US$100,000 before the 3 December 2026 rebalance (the run that sets positions
-# effective from 2026-12) and US$10,000,000 from it. Keyed on the positions' effective month, not the calendar,
-# so a late run switches the base when it actually happens.
-USD_BASES = (("2026-12", 10_000_000.0, "2026-12-03"), ("", 100_000.0, None))
+# US$ equivalent of the account index. Before the switch: US$100,000 x index / 100. The switch is the
+# 3 December 2026 rebalance, i.e. when the positions effective from 2026-12 are published (keyed on the
+# positions' effective month, not the calendar, so a late run switches when it actually happens). New capital
+# enters at the index level of the switch, so from it: US$10,000,000 x index / index_at_switch, where
+# index_at_switch is the account index at the end of the month before the switch's effective month (the
+# month that rebalance books). The dollar figure starts at exactly US$10,000,000; percentages are unaffected.
+USD_INITIAL_CAPITAL = 100_000.0
+USD_SWITCH_CAPITAL = 10_000_000.0
+USD_SWITCH_EFFECTIVE_MONTH = "2026-12"
+USD_SWITCH_REBALANCE = "2026-12-03"
+USD_SWITCH_NOTE = "Paper capital raised to US$10,000,000 (configuration change, not performance)"
+
+
+def _prev_month(m: str) -> str:
+    y, mm = int(m[:4]), int(m[5:7])
+    return f"{y - 1}-12" if mm == 1 else f"{y}-{mm - 1:02d}"
+
+
+def usd_account(months: list[dict], effective_from: str | None) -> dict:
+    """US$ value of the live account index, with new capital entering at the index level of the switch."""
+    live_rows = [m for m in months if m.get("live")]
+    index = live_rows[-1]["account_index"] if live_rows else 100.0
+    switched = (effective_from or "") >= USD_SWITCH_EFFECTIVE_MONTH
+    if not switched:
+        return {"account_usd": round(USD_INITIAL_CAPITAL * index / 100.0, 2), "usd_capital": USD_INITIAL_CAPITAL,
+                "usd_switched": False, "index_at_switch": None, "usd_switch_month": None,
+                "usd_switch_note": None}
+    switch_month = _prev_month(USD_SWITCH_EFFECTIVE_MONTH)
+    at = next((m["account_index"] for m in months
+               if m["month"] == switch_month and m.get("account_index") is not None), None)
+    index_at_switch = at if at is not None else index
+    return {
+        "account_usd": round(USD_SWITCH_CAPITAL * index / index_at_switch, 2), "usd_capital": USD_SWITCH_CAPITAL,
+        "usd_switched": True, "index_at_switch": index_at_switch, "usd_switch_month": switch_month,
+        # shown on the Home tile while the switch rebalance's positions are the current ones
+        "usd_switch_note": USD_SWITCH_NOTE if (effective_from or "") == USD_SWITCH_EFFECTIVE_MONTH else None,
+    }
 
 COUNTRY_OF = {
     "BRL": "Brazil", "BR10Y": "Brazil", "MXN": "Mexico", "MX10Y": "Mexico",
@@ -676,16 +709,13 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
     last = months[-1] if months else None
     live_rows = [m for m in months if m["live"]]
     account_index = live_rows[-1]["account_index"] if live_rows else 100.0
-    effective_from = algorithm["rebalance"].get("effective_from") or ""
-    usd_base, usd_base_since = next((b, d) for m, b, d in USD_BASES if effective_from >= m)
+    usd = usd_account(months, algorithm["rebalance"].get("effective_from"))
     return {
         "account_index": account_index, "account_index_label": ACCOUNT_INDEX_LABEL,
         "account_base": 100.0, "account_base_month": algorithm["rebalance"]["live_base_month"],
         "live_start_month": LIVE_START_MONTH,
         "account_change_pct": round(account_index - 100.0, 3),
-        "account_usd": round(usd_base * account_index / 100.0, 2), "usd_base": usd_base,
-        "usd_base_since": usd_base_since, "usd_bases": [{"from_effective_month": m or None, "base": b,
-                                                         "rebalance": d} for m, b, d in USD_BASES],
+        **usd, "usd_switch_rebalance": USD_SWITCH_REBALANCE,
         "history_index_base_month": algorithm["frozen"]["freeze_month"],
         "history_index_last": next((m["account_value"] for m in reversed(months) if not m["live"]), None),
         "last_month": last["month"] if last else None,

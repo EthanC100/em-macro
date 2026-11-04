@@ -110,9 +110,13 @@ def test_build_writes_site_and_json(tmp_path):
             prod *= 1 + m["net"]
     assert home["account_index"] == pytest.approx(100 * prod, abs=1e-3)
     assert home["account_change_pct"] == pytest.approx(home["account_index"] - 100, abs=1e-3)
-    exp_base = 10_000_000.0 if (alg_["rebalance"]["effective_from"] or "") >= "2026-12" else 100_000.0
-    assert home["usd_base"] == exp_base
-    assert home["account_usd"] == pytest.approx(exp_base * home["account_index"] / 100, abs=0.01)
+    if (alg_["rebalance"]["effective_from"] or "") >= "2026-12":
+        assert home["usd_switched"] and home["usd_capital"] == 10_000_000.0
+        assert home["account_usd"] == pytest.approx(
+            10_000_000.0 * home["account_index"] / home["index_at_switch"], abs=0.01)
+    else:
+        assert not home["usd_switched"] and home["usd_capital"] == 100_000.0 and home["usd_switch_note"] is None
+        assert home["account_usd"] == pytest.approx(100_000.0 * home["account_index"] / 100, abs=0.01)
     by_m = {m["month"]: m for m in alg_["months"]}
     assert by_m["2026-10"]["account_index"] == 100.0 and by_m[FREEZE_MONTH]["account_index"] is None
     # history index figures unchanged: 100 at the end of the freeze month, October keeps its loss
@@ -350,3 +354,33 @@ def test_evidence_groups_and_status(tmp_path):
     assert "11 rejected" in ev["overall"]
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]
+
+
+def _live_months(nets: dict) -> list[dict]:
+    """Synthetic months: 2026-10 is the live base (index 100), later months are live."""
+    rows, idx = [{"month": "2026-10", "live": False, "account_index": 100.0}], 100.0
+    for m, r in nets.items():
+        idx *= 1 + r
+        rows.append({"month": m, "live": True, "account_index": round(idx, 3)})
+    return rows
+
+
+def test_usd_value_before_switch():
+    months = _live_months({"2026-11": 0.02})
+    u = build.usd_account(months, "2026-11")
+    assert not u["usd_switched"] and u["usd_switch_note"] is None
+    assert u["account_usd"] == pytest.approx(100_000 * 102.0 / 100)
+
+
+def test_usd_value_new_capital_enters_at_switch_index():
+    # positions effective December 2026 published: November is booked, US$ starts at exactly 10,000,000
+    months = _live_months({"2026-11": 0.02})
+    u = build.usd_account(months, "2026-12")
+    assert u["usd_switched"] and u["index_at_switch"] == pytest.approx(102.0) and u["usd_switch_month"] == "2026-11"
+    assert u["account_usd"] == pytest.approx(10_000_000.0)
+    assert u["usd_switch_note"] == "Paper capital raised to US$10,000,000 (configuration change, not performance)"
+    # a month later the dollar figure moves with the index only; the note is gone
+    months = _live_months({"2026-11": 0.02, "2026-12": -0.01})
+    u = build.usd_account(months, "2027-01")
+    assert u["index_at_switch"] == pytest.approx(102.0) and u["usd_switch_note"] is None
+    assert u["account_usd"] == pytest.approx(10_000_000 * 0.99, abs=1)

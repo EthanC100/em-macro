@@ -240,7 +240,8 @@
         <div class="card hero rule">
           <span class="k">${esc(home.account_index_label || ACCOUNT_LABEL)}</span>
           <span class="v">${fmtNum(home.account_index, 1)}</span>
-          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; base ${fmtUsd(home.usd_base)}${home.usd_base_since ? ` from the ${fmtDate(home.usd_base_since)} rebalance` : ' before the 3 Dec 2026 rebalance, US$10,000,000 from it'})</span>
+          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; ${home.usd_switched ? `paper capital ${fmtUsd(home.usd_capital)} from the ${fmtDate(home.usd_switch_rebalance)} rebalance, at index ${fmtNum(home.index_at_switch, 1)}` : `paper capital ${fmtUsd(home.usd_capital)}, raised to US$10,000,000 at the ${fmtDate(home.usd_switch_rebalance)} rebalance`})</span>
+          ${home.usd_switch_note ? `<span class="s"><strong>${esc(home.usd_switch_note)}</strong></span>` : ''}
           <span class="s">Latest month ${fmtMonth(home.last_month)} ${fmtPct(home.last_month_net_pct, 2, true)}${home.live.months ? '' : ' (pre-live, not counted)'}</span>
         </div>
         <div class="stats">
