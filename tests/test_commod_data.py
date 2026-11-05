@@ -3,7 +3,7 @@ the suite).
 
 Synthetic tests always run.  The data-backed tests read the private Norgate snapshot (EM_MACRO_DATA pointing at a
 clone of EthanC100/em-macro-data) and are skipped when it is absent, e.g. in CI.  They encode the assertions
-exactly as pre-registered; see results/build0_commodity_data.md for which of them hold on the 2026-11 snapshot.
+exactly as pre-registered; see results/T20-T22/build0.md for which of them hold on the 2026-11 snapshot.
 """
 import os
 

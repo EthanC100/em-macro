@@ -245,7 +245,7 @@ def main(argv=None):
     results["_spend_usd_session"] = spend.spent
     results["_requests"] = len(reqs)
     results["_quoted_total_usd"] = total
-    out = CD.ROOT / "results" / "build0_commodity_a5.json"
+    out = CD.ROOT / "results" / "T20-T22" / "build0_a5.json"
     out.write_text(json.dumps(results, indent=1))
     print(f"wrote {out}")
 

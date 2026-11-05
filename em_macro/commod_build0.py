@@ -3,7 +3,7 @@
     EM_MACRO_DATA=/path/to/em-macro-data python -m em_macro.commod_build0 run
 
 Computes only what the A-tests require.  Aggregate statistics (counts, shares, correlations, pass/fail) go to
-results/build0_commodity_data.json; every per-market price, return, roll or intermediate table goes to the private
+results/T20-T22/build0.json; every per-market price, return, roll or intermediate table goes to the private
 data repo under norgate/derived/build0/ (never into this repository).  A8: nothing here reports a return, Sharpe
 ratio, drawdown or P&L of any sleeve or signal; the A3 and A4 series are written privately and only their
 correlations with the AQR benchmarks are reported.
@@ -20,7 +20,7 @@ import pandas as pd
 from . import commod_data as CD
 from .config import ROOT
 
-OUT_JSON = ROOT / "results" / "build0_commodity_data.json"
+OUT_JSON = ROOT / "results" / "T20-T22" / "build0.json"
 AQR_DIR_ENV = "AQR_DATA"          # folder with the two AQR workbooks (kept outside the repository)
 AQR_CFLR = "Commodities-for-the-Long-Run-Index-Level-Data-Monthly.xlsx"
 AQR_COFP = "Century-of-Factor-Premia-Monthly.xlsx"
