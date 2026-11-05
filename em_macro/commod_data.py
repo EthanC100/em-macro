@@ -407,16 +407,34 @@ class MarketData:
             out.append({"month": p, "execution": cal[i], "decision": cal[i - 1]})
         return pd.DataFrame(out).set_index("month")
 
-    def roll(self, buffer_days: int = BUFFER_DAYS) -> pd.DataFrame:
-        """F1, F2 and F13 per rebalance month (the 35-day rule, §2.3; F13 per §3.1)."""
+    def next_execution(self, month: pd.Period) -> pd.Timestamp:
+        """Execution date of the rebalance after `month` (first trading day on or after the 3rd of the next month,
+        on the market's calendar, which is extended with scheduled business days beyond the data)."""
+        nxt = month + 1
+        if nxt in self.schedule.index:
+            return self.schedule.at[nxt, "execution"]
+        return self.calendar.on_or_after(pd.Timestamp(nxt.year, nxt.month, 3))
+
+    def roll(self, buffer_days: int = BUFFER_DAYS, last_days_guard: int | None = None) -> pd.DataFrame:
+        """F1, F2 and F13 per rebalance month (the 35-day rule, §2.3; F13 per §3.1).
+
+        `last_days_guard` (default None = the pre-registered rule) evaluates the DRAFT Amendment 3: for a market
+        whose notice(T) is its LTD, F1 must also have more than `last_days_guard` trading days from the next
+        execution date to its LTD, both inclusive.  Not adopted; used only to show what the draft would produce."""
         ct = self.contracts
         names = ct.index.to_numpy()
         notice = ct["notice"].to_numpy()
         ltd = ct["ltd"].to_numpy()
+        guard = last_days_guard is not None and self.m.fnd_rule is None
         rows = []
         for month, r in self.schedule.iterrows():
             limit = np.datetime64(r["execution"] + pd.Timedelta(days=buffer_days))
-            ok = np.nonzero(notice > limit)[0]
+            ok_mask = notice > limit
+            if guard:
+                nxt = self.next_execution(month)
+                left = np.array([self.calendar.count_between(nxt, pd.Timestamp(x)) for x in ltd])
+                ok_mask &= left > last_days_guard
+            ok = np.nonzero(ok_mask)[0]
             if len(ok) == 0:
                 rows.append({"month": month, "F1": None, "F2": None, "F13": None})
                 continue

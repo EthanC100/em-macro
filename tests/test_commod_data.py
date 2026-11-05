@@ -157,3 +157,17 @@ def test_a9_no_unresolved_quality_issue(markets, code):
 def test_a11_f2_f13_listed(markets, code):
     res = B.a11_listed(markets[code])
     assert res["violations"] == 0, res["examples"]
+
+
+def test_draft_last_days_guard_is_off_by_default(toy_cl):
+    """The pre-registered rule is the default; the draft Amendment 3 guard only applies when asked for and keeps
+    the April 2020 choice (CLM20 has 12 trading days left at the May 2020 execution)."""
+    base = toy_cl.roll()
+    assert base.equals(toy_cl.rolls)
+    g = toy_cl.roll(last_days_guard=10)
+    assert g.at[pd.Period("2020-04", "M"), "F1"] == "CL-2020M"
+    ct = toy_cl.contracts
+    for m, row in g.dropna(subset=["F1"]).iterrows():
+        nxt = toy_cl.next_execution(m)
+        if nxt <= toy_cl.latest:
+            assert toy_cl.calendar.count_between(nxt, ct.at[row["F1"], "ltd"]) > 10
