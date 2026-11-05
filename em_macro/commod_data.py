@@ -40,7 +40,9 @@ import pandas as pd
 from .config import ROOT
 
 MONTH_CODES = "FGHJKMNQUVXZ"
-SNAPSHOT = "2026-11_futures"
+SNAPSHOT = "2026-11_futures"               # commodity contracts
+FIN_SNAPSHOT = "2026-11_financials"        # T22 financial futures (Build 0 follow-up export)
+META_SNAPSHOT = "2026-11_metadata"         # Norgate per-contract metadata for all markets (first notice, expiry)
 BUFFER_DAYS = 35
 LAST_DAYS_GUARD = 10     # Amendment 3: notice = LTD markets keep > 10 trading days to LTD at the next execution
 F13_TARGET_DAYS = 365
@@ -61,6 +63,26 @@ def data_root() -> Path:
 
 def snapshot_dir(snapshot: str = SNAPSHOT) -> Path:
     return data_root() / "norgate" / snapshot
+
+
+def snapshot_for(code: str) -> str:
+    return FIN_SNAPSHOT if MARKETS[code].kind == "financial" else SNAPSHOT
+
+
+_META_CACHE: dict = {}
+
+
+def norgate_metadata() -> pd.DataFrame | None:
+    """Norgate's per-contract metadata (scripts/norgate_export.py metadata), indexed by contract; None if absent."""
+    p = data_root() / "norgate" / META_SNAPSHOT / "metadata.csv"
+    if not p.exists():
+        return None
+    if p not in _META_CACHE:
+        m = pd.read_csv(p, dtype=str)
+        for c in ("first_quoted_date", "last_quoted_date", "first_notice_date"):
+            m[c] = pd.to_datetime(m[c], errors="coerce")
+        _META_CACHE[p] = m.drop_duplicates("contract").set_index("contract")
+    return _META_CACHE[p]
 
 
 def derived_dir() -> Path:
@@ -124,7 +146,7 @@ MARKETS: dict[str, Market] = {m.code: m for m in [
     Market("FOAT", "Euro-OAT", "FOAT", "Eurex", "bonds", "HMUZ", "EUR 100,000", 0.01, 10, 1, "physical", "EUREX", None, False, "B", F),
     Market("FBTP", "Euro-BTP", "FBTP", "Eurex", "bonds", "HMUZ", "EUR 100,000", 0.01, 10, 1, "physical", "EUREX", None, False, "B", F),
     Market("FBON", "Euro-Bono", None, "Eurex", "bonds", "HMUZ", "EUR 100,000", 0.01, 10, 1, "physical", "EUREX", None, False, "A", F),
-    Market("R", "Long Gilt", "LLG", "ICE Europe", "bonds", "HMUZ", "GBP 100,000", 0.01, 10, 1, "physical", "GILT", None, False, "B", F),
+    Market("R", "Long Gilt", "LLG", "ICE Europe", "bonds", "HMUZ", "GBP 100,000", 0.01, 10, 1, "physical", "GILT", "GILT", False, "B", F),
 ]}
 # Ticks above are in the units Norgate quotes (US cents for copper, silver, grains, softs and livestock; USD
 # otherwise), so that "within one tick" in A5 compares like with like.  The pre-registration's table states them
@@ -307,7 +329,12 @@ def _fnd_fbd(cal, y, m):    # live cattle: first business day of the contract mo
     return cal.month_days(y, m)[0]
 
 
-FND_RULES = {"LBD_PREV": _fnd_lbd_prev, "KC": _fnd_kc, "CC": _fnd_cc, "CT": _fnd_ct, "FBD": _fnd_fbd}
+def _fnd_gilt(cal, y, m):   # ICE Long Gilt: two business days prior to the first day of the delivery month
+    return cal.before(pd.Timestamp(y, m, 1), 2)
+
+
+FND_RULES = {"LBD_PREV": _fnd_lbd_prev, "KC": _fnd_kc, "CC": _fnd_cc, "CT": _fnd_ct, "FBD": _fnd_fbd,
+             "GILT": _fnd_gilt}
 
 
 # ----------------------------------------------------------------------------------------------- loading
@@ -334,9 +361,10 @@ def load_contract_csv(path: Path) -> pd.DataFrame:
 class MarketData:
     """Everything Build 0 needs for one market, loaded from the Norgate snapshot."""
 
-    def __init__(self, code: str, snapshot: str = SNAPSHOT, load_from: str = "1985-01-01"):
+    def __init__(self, code: str, snapshot: str | None = None, load_from: str = "1985-01-01"):
         self.m = MARKETS[code]
         self.code = code
+        snapshot = snapshot or snapshot_for(code)
         folder = snapshot_dir(snapshot) / "contracts" / code
         if self.m.norgate is None or not folder.is_dir():
             raise FileNotFoundError(f"{code}: no contract files in {folder}")
@@ -385,10 +413,23 @@ class MarketData:
         stopped = (~live) & (final < t["ltd_rule"] - pd.Timedelta(days=30))
         t["stopped_early"] = stopped
         t["final_settlement_row"] = final != t["last"]
-        t["ltd"] = pd.to_datetime(np.where(live | stopped, t["ltd_rule"], final))
-        t["fnd"] = ([fnd_rule(self.calendar, y, mo) for y, mo in zip(t["year"], t["month"])]
-                    if fnd_rule else pd.NaT)
-        t["fnd"] = pd.to_datetime(t["fnd"])
+        # live contracts: Norgate's last_quoted_date is the scheduled expiry -> it is the LTD when exported
+        meta = norgate_metadata()
+        nq = (meta["last_quoted_date"].reindex(t["contract"]).to_numpy() if meta is not None
+              else np.full(len(t), np.datetime64("NaT"), dtype="datetime64[ns]"))
+        live_ltd = np.where(pd.notna(nq), nq, t["ltd_rule"].to_numpy())
+        t["ltd"] = pd.to_datetime(np.where(live, live_ltd, np.where(stopped, t["ltd_rule"], final)))
+        t["ltd_source"] = np.where(live, np.where(pd.notna(nq), "norgate expiry", "exchange rule"),
+                                   np.where(stopped, "exchange rule", "norgate final settlement"))
+        # first notice: Norgate's first_notice_date where it has one, else the exchange rule
+        t["fnd_rule_date"] = pd.to_datetime([fnd_rule(self.calendar, y, mo) for y, mo in zip(t["year"], t["month"])]
+                                            if fnd_rule else pd.NaT)
+        nf = (meta["first_notice_date"].reindex(t["contract"]).to_numpy() if meta is not None
+              else np.full(len(t), np.datetime64("NaT"), dtype="datetime64[ns]"))
+        t["fnd_norgate"] = pd.to_datetime(nf)
+        t["fnd"] = pd.to_datetime(np.where(pd.notna(nf), nf, t["fnd_rule_date"].to_numpy()))
+        t["fnd_source"] = np.where(pd.notna(nf), "norgate", np.where(t["fnd_rule_date"].notna(), "exchange rule",
+                                                                       "none"))
         t["notice"] = t[["fnd", "ltd"]].min(axis=1)
         t["ym"] = t["year"] * 12 + t["month"]
         return t.sort_values("ym").set_index("contract")
@@ -513,6 +554,6 @@ class MarketData:
         return (1.0 + r).cumprod()
 
 
-def available_markets(snapshot: str = SNAPSHOT) -> list[str]:
-    root = snapshot_dir(snapshot) / "contracts"
-    return [c for c in MARKETS if (root / c).is_dir()]
+def available_markets(snapshot: str | None = None) -> list[str]:
+    return [c for c in MARKETS if MARKETS[c].norgate is not None
+            and (snapshot_dir(snapshot or snapshot_for(c)) / "contracts" / c).is_dir()]

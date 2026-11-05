@@ -69,7 +69,18 @@ def a1_contract_table(md: CD.MarketData) -> dict:
     cal = md.calendar
     diff = [cal.count_between(min(a, b), max(a, b)) - 1 for a, b in zip(exp["ltd_rule"], exp["ltd"])]
     diff = np.array(diff)
-    out = {"contracts": int(len(use)), "live": int(use["live"].sum()),
+    # metadata sources, and Norgate's first notice date against the exchange rule (contracts expiring 2000+)
+    src = {f"fnd_{k}": int(v) for k, v in use["fnd_source"].value_counts().items()}
+    src.update({f"ltd_{k}": int(v) for k, v in use["ltd_source"].value_counts().items()})
+    both = use[use["fnd_norgate"].notna() & use["fnd_rule_date"].notna() & (use["ltd"] >= "2000-01-01")]
+    fd = np.array([cal.count_between(min(a, b), max(a, b)) - 1 for a, b in
+                   zip(both["fnd_norgate"], both["fnd_rule_date"])]) if len(both) else np.array([])
+    fnd_cmp = {"n": int(len(both)), "exact": float(np.mean(fd == 0)) if len(fd) else None,
+               "within_2bd": float(np.mean(fd <= 2)) if len(fd) else None}
+    nf_after_ltd = int((use["fnd_norgate"] >= use["ltd"]).sum())
+    out = {"metadata_sources": src, "fnd_norgate_vs_rule": fnd_cmp,
+           "norgate_fnd_on_or_after_ltd": nf_after_ltd,
+           "contracts": int(len(use)), "live": int(use["live"].sum()),
            "first_contract": use.index[0], "last_contract": use.index[-1],
            "missing_designated": missing[:20], "n_missing_designated": len(missing),
            "ltd_rule_n": int(len(exp)),
@@ -100,8 +111,19 @@ def a6_roll_checks(md: CD.MarketData) -> dict:
     cal = md.calendar
     first = ct["first"]
     res = {"rebalances": int(len(r))}
+    # Amendment 4 (A4.4): the first-settlement assertion is evaluated on the contracts actually used, i.e. with a
+    # settlement on the decision date; a chosen contract without one makes the market missing that month
+    unused = [(str(m), w) for m, row in r.iterrows() for w in ("F1", "F2")
+              if row[w] is not None and not md.has_settle(row[w], row["decision"])]
     bad_first = [(str(m), w) for m, row in r.iterrows() for w in ("F1", "F2")
-                 if row[w] is not None and first[row[w]] > row["decision"]]
+                 if row[w] is not None and md.has_settle(row[w], row["decision"])
+                 and first[row[w]] > row["decision"]]
+    res["chosen_without_settlement"] = len(unused)
+    res["chosen_without_settlement_2000_2026"] = sum(m >= "2000-01" and m <= "2026-09" for m, _ in unused)
+    res["chosen_without_settlement_examples"] = unused[:6]
+    res["chosen_before_first_settlement_unamended"] = sum(
+        1 for m, row in r.iterrows() for w in ("F1", "F2")
+        if row[w] is not None and first[row[w]] > row["decision"])
     used13 = r.dropna(subset=["F13"])
     bad_first13 = [str(m) for m, row in used13.iterrows()
                    if md.has_settle(row["F13"], row["decision"]) and first[row["F13"]] > row["decision"]]
@@ -406,11 +428,14 @@ def coverage_gaps_in_window(md: CD.MarketData) -> pd.DataFrame:
 
 # ------------------------------------------------------------------------------------------------ main
 def run(markets: list[str] | None = None, write_private: bool = True) -> dict:
-    markets = markets or CD.COMMODITIES
+    markets = markets or CD.available_markets()
     priv = CD.derived_dir()
     if write_private:
         priv.mkdir(parents=True, exist_ok=True)
-    res: dict = {"snapshot": CD.SNAPSHOT, "markets": {}}
+    res: dict = {"snapshot": CD.SNAPSHOT, "financial_snapshot": CD.FIN_SNAPSHOT,
+                 "metadata_snapshot": CD.META_SNAPSHOT if CD.norgate_metadata() is not None else None,
+                 "amendments": "3 (roll rule guard) and 4 (A4 not gating; vendor-gap months missing) in force",
+                 "markets": {}}
     f1_monthly, carry_in, issues_all, gaps_all = {}, {}, [], []
     for code in markets:
         print(f"[build0] {code}", file=sys.stderr, flush=True)
@@ -436,8 +461,10 @@ def run(markets: list[str] | None = None, write_private: bool = True) -> dict:
         if not g.empty:
             g.insert(0, "market", code)
             gaps_all.append(g)
-        f1_monthly[code] = monthly_f1_returns(rets["F1"])
-        carry_in[code] = carry_portfolio_inputs(md, rets["F1"])
+        if code in CD.COMMODITIES:          # A3 and A4 are commodity benchmarks
+            f1_monthly[code] = monthly_f1_returns(rets["F1"])
+            carry_in[code] = carry_portfolio_inputs(md, rets["F1"])
+        mres["notice_is_ltd"] = md.notice_is_ltd
         res["markets"][code] = mres
         if write_private:
             ct = md.contracts.drop(columns=["ym"])
@@ -464,7 +491,7 @@ def run(markets: list[str] | None = None, write_private: bool = True) -> dict:
             port[m] = float((w * hold.loc[m, w.index]).sum())
     port = pd.Series(port, name="ours")
     j4 = pd.concat([port, aqr_carry], axis=1, join="inner").dropna()
-    res["A4"] = {"months": int(len(j4)), "first": str(j4.index[0]), "last": str(j4.index[-1]),
+    res["A4"] = {"gating": False, "note": "reported, not gating (Amendment 4)", "months": int(len(j4)), "first": str(j4.index[0]), "last": str(j4.index[-1]),
                  "corr": float(j4.corr().iloc[0, 1]),
                  "corr_2000_on": float(j4.loc["2000-01":].corr().iloc[0, 1]),
                  "markets_per_month_min": int(sig.loc[j4.index].notna().sum(axis=1).min())}

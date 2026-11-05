@@ -115,9 +115,18 @@ HAVE_DATA = (CD.snapshot_dir() / "contracts" / "CL").is_dir()
 needs_data = pytest.mark.skipif(not HAVE_DATA, reason="private Norgate snapshot not available (EM_MACRO_DATA)")
 
 
+ALL = CD.COMMODITIES + [c for c in CD.FINANCIALS if CD.MARKETS[c].norgate is not None]
+
+
 @pytest.fixture(scope="module")
 def markets():
-    return {c: CD.MarketData(c) for c in CD.available_markets() if CD.MARKETS[c].kind == "commodity"}
+    return {c: CD.MarketData(c) for c in CD.available_markets()}
+
+
+def _md(markets, code):
+    if code not in markets:
+        pytest.skip(f"{code} not in the exported snapshots")
+    return markets[code]
 
 
 @needs_data
@@ -126,25 +135,25 @@ def test_a6_april_2020_real(markets):
 
 
 @needs_data
-@pytest.mark.parametrize("code", CD.COMMODITIES)
+@pytest.mark.parametrize("code", ALL)
 def test_a6_first_settlement_and_notice(markets, code):
-    res = B.a6_roll_checks(markets[code])
+    res = B.a6_roll_checks(_md(markets, code))
     assert res["first_settle_after_decision"] == 0, res["first_settle_examples"]
     assert res["notice_violations"] == 0
 
 
 @needs_data
-@pytest.mark.parametrize("code", CD.COMMODITIES)
+@pytest.mark.parametrize("code", ALL)
 def test_a6_never_in_last_10_trading_days(markets, code):
-    res = B.a6_roll_checks(markets[code])
+    res = B.a6_roll_checks(_md(markets, code))
     assert res["F1_last10_violations"] == 0, res["F1_last10_examples"]
     assert res["F2_last10_violations"] == 0, res["F2_last10_examples"]
 
 
 @needs_data
-@pytest.mark.parametrize("code", CD.COMMODITIES)
+@pytest.mark.parametrize("code", ALL)
 def test_a9_no_unresolved_quality_issue(markets, code):
-    md = markets[code]
+    md = _md(markets, code)
     rets = {w: md.daily_returns(w) for w in ("F1", "F2")}
     _, issues = B.a9_quality(md, rets)
     issues = B.resolve_spikes(md, issues)
@@ -153,9 +162,9 @@ def test_a9_no_unresolved_quality_issue(markets, code):
 
 
 @needs_data
-@pytest.mark.parametrize("code", CD.COMMODITIES)
+@pytest.mark.parametrize("code", ALL)
 def test_a11_f2_f13_listed(markets, code):
-    res = B.a11_listed(markets[code])
+    res = B.a11_listed(_md(markets, code))
     assert res["violations"] == 0, res["examples"]
 
 
