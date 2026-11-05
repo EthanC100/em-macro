@@ -344,13 +344,15 @@ def spec_change_check(md: CD.MarketData) -> dict:
     z = ch / scale
     top = z.sort_values(ascending=False).head(3)
     res = {"top_moves": [(str(k), round(float(v), 1)) for k, v in top.items() if np.isfinite(v)]}
-    if md.code in CD.SPEC_CHANGES:
-        p, what = CD.SPEC_CHANGES[md.code]
+    res["changes"] = []
+    for p, what in CD.SPEC_CHANGES.get(md.code, []):
         p = pd.Period(p, "M")
-        win = z.loc[p - 3:p + 3]
-        res["change"] = what
-        res["window_max_multiple"] = round(float(win.max()), 1) if len(win.dropna()) else None
-        res["window_max_month"] = str(win.idxmax()) if len(win.dropna()) else None
+        win = z.loc[p - 3:p + 3].dropna()
+        rank = int((z.dropna() > win.max()).sum()) + 1 if len(win) else None
+        res["changes"].append({"change": what, "month": str(p),
+                               "window_max_multiple": round(float(win.max()), 1) if len(win) else None,
+                               "window_max_month": str(win.idxmax()) if len(win) else None,
+                               "rank_in_2000_2026": rank, "of": int(z.notna().sum())})
     # price-unit breaks: same-contract one-day moves > 30% that do not reverse (would show a rescaled series)
     return res
 

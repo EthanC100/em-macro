@@ -133,10 +133,16 @@ FINANCIALS = [c for c, m in MARKETS.items() if m.kind == F]
 XS_UNIVERSE = [c for c in COMMODITIES if c not in ("GC", "SI", "PL", "PA")]   # Amendment 1: 20 markets
 
 # Contract-specification changes inside the vendor's spliced history (§2.1 rule 2), checked in Build 0.
-SPEC_CHANGES = {
-    "HO": ("2013-05", "No. 2 heating oil -> ULSD (NY Harbor ULSD from the May 2013 contract)"),
-    "G": ("2015-01", "ICE gasoil -> low sulphur gasoil (10 ppm)"),
-    "RB": ("2006-01", "RBOB from the first listed contract (Oct 2005); unleaded gasoline not in Norgate"),
+SPEC_CHANGES = {   # market -> [(first affected month, description)]; exchange notices as recorded in Build 0
+    "HO": [("2013-05", "No. 2 heating oil -> NY Harbor ULSD from the May 2013 contract (SER-6198)")],
+    "G": [("2015-02", "ICE gasoil 0.1% sulphur -> 10 ppm low sulphur gasoil from the Feb 2015 contract")],
+    "RB": [("2006-01", "RBOB listed from Oct 2005 (Jan 2006 contract); unleaded gasoline not in Norgate")],
+    "B": [("2016-03", "Brent last-trading-day rule changed from the Mar 2016 contract")],
+    "KE": [("2013-12", "KC HRW wheat moved from KCBT to CBOT (trade date 16 Dec 2013)")],
+    "HE": [("2016-10", "CME Lean Hog Index redefined (negotiated formula purchases), effective 11 Oct 2016")],
+    "GF": [("2016-11", "Feeder Cattle Index weight band 650-849 lb -> 700-899 lb from the Nov 2016 contract")],
+    "LE": [("2021-02", "steer weight ceiling raised from the Feb 2021 contract"),
+           ("2022-02", "redelivery ban from the Feb 2022 contract")],
 }
 
 

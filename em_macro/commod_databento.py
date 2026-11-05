@@ -55,7 +55,7 @@ def resolve_symbols(reqs: list[dict]) -> None:
                 cand[raw_symbol(q["market"], con, dgt)] = con
         r = c.symbology.resolve(dataset=DATASET, symbols=list(cand), stype_in="raw_symbol",
                                 stype_out="instrument_id", start_date=q["start"], end_date=q["end"])
-        found = set(r.get("result", {}))
+        found = {k for k, v in r.get("result", {}).items() if v} - set(r.get("not_found", []))
         chosen = {}
         for sym, con in cand.items():
             if sym in found and con not in chosen.values():
@@ -106,6 +106,7 @@ class Spend:
         self.cap = cap
         self.ledger = private_dir() / "ledger.jsonl"
         self.spent = 0.0
+        self.lock = __import__("threading").Lock()
         if self.ledger.exists():   # earlier requests of this session (same ledger)
             for line in self.ledger.read_text().splitlines():
                 rec = json.loads(line)
@@ -143,40 +144,49 @@ def quote_all(reqs: list[dict]) -> float:
     return total
 
 
-def download(reqs: list[dict], spend: Spend) -> pd.DataFrame:
-    c = client()
-    out = []
-    cache = private_dir() / "settlements"
-    cache.mkdir(exist_ok=True)
-    for q in reqs:
-        if q.get("error"):
-            continue
-        f = cache / f"{q['market']}_{q['year']}.csv"
-        if f.exists():
-            out.append(pd.read_csv(f, parse_dates=["date"]))
-            continue
-        kw = dict(dataset=DATASET, symbols=q["symbols"], stype_in="raw_symbol", schema=SCHEMA,
-                  start=q["start"], end=q["end"])
-        cost = float(c.metadata.get_cost(**kw))
+def _fetch(c, q: dict, spend: Spend, cache) -> pd.DataFrame:
+    f = cache / f"{q['market']}_{q['year']}.csv"
+    if f.exists():
+        return pd.read_csv(f, parse_dates=["date"])
+    kw = dict(dataset=DATASET, symbols=q["symbols"], stype_in="raw_symbol", schema=SCHEMA,
+              start=q["start"], end=q["end"])
+    cost = float(c.metadata.get_cost(**kw))            # quoted before every request
+    with spend.lock:
         if spend.spent + cost > spend.cap:
             spend.log({**q, "quote": cost, "downloaded": False, "reason": "session cap"})
             raise RuntimeError(f"stop: request {q['market']} {q['year']} (US${cost:.4f}) would take the session "
                                f"spend above US${spend.cap:.2f} (spent US${spend.spent:.4f})")
-        data = c.timeseries.get_range(**kw)
-        spend.spent += cost
-        spend.log({**q, "quote": cost, "downloaded": True, "time": time.time()})
-        df = data.to_df(map_symbols=True)
-        if len(df):
-            df = df[df["stat_type"] == 3].sort_values("ts_recv")
-            df = df.groupby(["symbol", "ts_ref"]).tail(1)
-            s = pd.DataFrame({"contract": df["symbol"].map(q["map"]).values,
-                              "date": pd.to_datetime(df["ts_ref"]).dt.tz_localize(None).dt.normalize().values,
-                              "settle": df["price"].astype(float).values})
-        else:
-            s = pd.DataFrame(columns=["contract", "date", "settle"])
-        s.to_csv(f, index=False)
-        out.append(s)
-    return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=["contract", "date", "settle"])
+        spend.spent += cost                               # reserved before the request is sent
+    data = c.timeseries.get_range(**kw)
+    with spend.lock:
+        spend.log({**{k: v for k, v in q.items() if k != "map"}, "quote": cost, "downloaded": True,
+                   "time": time.time()})
+    df = data.to_df(map_symbols=True)
+    if len(df):
+        df = df[df["stat_type"] == 3].sort_values("ts_recv")
+        df = df.groupby(["symbol", "ts_ref"]).tail(1)
+        s = pd.DataFrame({"contract": df["symbol"].map(q["map"]).values,
+                          "date": pd.to_datetime(df["ts_ref"]).dt.tz_localize(None).dt.normalize().values,
+                          "settle": df["price"].astype(float).values})
+    else:
+        s = pd.DataFrame(columns=["contract", "date", "settle"])
+    s.to_csv(f, index=False)
+    return s
+
+
+def download(reqs: list[dict], spend: Spend, workers: int = 10) -> dict[str, pd.DataFrame]:
+    """Quote-then-fetch every request (parallel; the spend check is serialised).  Returns market -> settlements."""
+    from concurrent.futures import ThreadPoolExecutor
+    c = client()
+    cache = private_dir() / "settlements"
+    cache.mkdir(exist_ok=True)
+    todo = [q for q in reqs if not q.get("error")]
+    with ThreadPoolExecutor(workers) as ex:
+        frames = list(ex.map(lambda q: (q["market"], _fetch(c, q, spend, cache)), todo))
+    out: dict[str, list] = {}
+    for m, f in frames:
+        out.setdefault(m, []).append(f)
+    return {m: pd.concat(v, ignore_index=True) for m, v in out.items()}
 
 
 def compare(code: str, md: CD.MarketData, tab: pd.DataFrame, dbn: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
@@ -224,8 +234,9 @@ def main(argv=None):
     if spend.spent + total > SESSION_CAP_USD:
         sys.exit(f"stop: quoted total US${total:.4f} + spent US${spend.spent:.4f} exceeds the session cap")
     results = {}
+    allset = download(reqs, spend)
     for code in a.markets:
-        dbn = download([q for q in reqs if q["market"] == code], spend)
+        dbn = allset.get(code, pd.DataFrame(columns=["contract", "date", "settle"]))
         res, tab = compare(code, mds[code], tabs[code], dbn)
         tab.to_csv(private_dir() / f"A5_compare_{code}.csv", index=False)
         results[code] = res
