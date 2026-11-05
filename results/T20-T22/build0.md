@@ -18,7 +18,7 @@
 | A1 assembly | every one of 34 markets has a contract table and FND/LTD metadata, or is recorded as unavailable | 24 commodity markets: contract tables 1990-01 (RB 2005-10) to 2026-10, 7,047 designated contracts (expiring 1990-01 or later and listed by 2026-10, including live ones). 3 financial futures recorded as unavailable (6L, 6Z, FBON: not in Norgate). **7 financial futures (6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt) are in Norgate but not in the export**, so they have no contract table. FND is from exchange rules, not from Norgate (not exported). | **NOT COMPLETE** (cannot be finished as written without a new Norgate export) |
 | A2 F1/F2 coverage, 20-market universe | ≥ 18 markets with coverage ≥ 95% since 2000-01 | **20 of 20** markets at 100.0% (RB from its entry, 2006-12) | **PASS** |
 | A3 equal-weight index vs AQR *Commodities for the Long Run* | Pearson ≥ 0.90 | **0.975** (424 months, 1990-02..2025-05; 22–24 markets per month); 0.978 from 2000-01 | **PASS** |
-| A4 KMPV-style carry portfolio vs AQR commodity carry factor | Pearson ≥ 0.70 | **0.503** (433 months, 1990-02..2026-02; ≥ 21 markets per month); 0.524 from 2000-01 | **FAIL** |
+| A4 KMPV-style carry portfolio vs AQR commodity carry factor | Pearson ≥ 0.70 | **0.503** (434 months, 1990-01..2026-02, after the data fix in the A4 diagnostic; first run 0.503 over 433 months); 0.524 from 2000-01. Diagnostic (`build0_a4_diagnostic.md`): AQR's own documented construction on our data correlates 0.679 with AQR's factor, below the plan's 0.90, so A4 stands | **FAIL** |
 | A5 Databento cross-check, CME-group markets from 2010-06-06 | within one tick on ≥ 99% of days, per market | 18 of 18 markets pass: 14 at 100.000%, PA and HE at 99.976% (8,166–8,178 days each; KE 6,436 days, from Dec 2013) | **PASS** |
 | A6 roll-rule look-ahead tests | all assertions hold on the full history | April 2020 → **CLM20** (holds); notice(F1) > execution + 35 days on every rebalance (holds); no LME series (holds). **First settlement on or before the decision date fails for 35 F2 picks** (PL 13, PA 22 months, all 2000–2009). **"Never inside the last 10 trading days" fails for F1 in 5 markets**: 2000-01..2026-09 violations B 192, G 312, HE 213, GF 8, CL 3 of 321 rebalances | **FAIL** |
 | A7 Option A availability (T20), 20 markets | the assignment table is in the report, computed from availability only | §3: Option A for 14 markets, Option B for 6 | **PASS** |
@@ -203,8 +203,16 @@ last trade was 2020-04-21. No contract from an LME market or series exists anywh
 - PL: 13 months in 2000–2005.
 - PA: 22 months in 2000–2009.
 
-The rule picks the next designated month by calendar, and in these months Norgate has no bar for it yet: the far
-platinum and palladium months had no settlements before roughly a quarter before expiry in that period. No price is
+The rule picks the next designated month by calendar, and in these months Norgate has no bar for it yet.
+
+**Follow-up finding: this is a vendor-history issue, not a rule issue.**
+- In all 35 cases, Norgate's history for the F2 contract begins 5.3–7.8 months before its expiry.
+- In 9 of the 35 (PL 2001-03, 2001-09, 2001-10, 2003-12, 2005-03, 2005-06, 2005-07; PA 2002-01, 2004-02), a contract
+  further out than F2 already has settlements on the decision date. That is only possible if F2 was listed.
+- No case occurs after 2009-02.
+
+The exchanges' listing cycles of that period were not confirmed from an archive. Today's schedules (PL: three
+nearby months plus Jan/Apr/Jul/Oct within 15 months) would have F2 listed in every case. No price is
 used before it exists, because a missing F2 settlement makes the market-month uncovered. That is why PA fails the
 coverage gate. Still, the assertion as written does not hold.
 
