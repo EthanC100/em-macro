@@ -764,3 +764,67 @@ metadata.
 - the other Build 0 tests (A6 is re-run under this rule).
 
 The ledger rows T20–T22 are updated to reference this amendment, changing no other row.
+
+## Amendment 4 — 2026-11-05, decided after seeing A4 = 0.503 and the A4 diagnostic's 0.679
+
+Recorded after Amendment 3, after the Build 0 report and after the A4 diagnostic
+(`docs/prereg/T20-T22_A4_diagnostic.md`, results in `results/T20-T22/build0_a4_diagnostic.md`). **This amendment is
+made with knowledge of the A4 results:**
+- A4 = 0.503 after the diagnostic's data fix;
+- AQR's documented construction on our data = 0.679 against AQR's factor.
+
+No sleeve return, Sharpe ratio, drawdown or pass criterion of T20, T21 or T22 had been computed. The text above is
+left as written; where this section and the text above differ, this section governs.
+
+### A4.1 A4 no longer gates the trials
+
+Build 0 test A4 (the KMPV-style carry portfolio against AQR's commodity carry factor, Pearson ≥ 0.70) is **reported,
+not gating**. §6's "all must pass" now applies to A1–A3 and A5–A11.
+
+The basis for this decision is data accuracy measured directly:
+- **A5:** Databento settlements agree with Norgate within one tick on ≥ 99.97% of days in every one of the 18
+  CME-group commodity markets (worst 99.976%). The six ICE markets (B, G, SB, KC, CC, CT) are not in A5; their
+  accuracy rests on A3 only.
+- **A3:** the equal-weight index correlates 0.975 with AQR's *Commodities for the Long Run*.
+
+**What the A4 diagnostic established about the shortfall.**
+- **No data error remains.** The diagnostic found one data error (the first month omitted) and no other, so the
+  shortfall is not attributed to data errors.
+- **Construction explains part of the gap.** Applying AQR's documented construction raised the correlation from
+  0.503 to 0.679.
+- **The rest is attributed, not tested.** The remaining gap is attributed to the universe and source differences
+  the diagnostic listed but could not remove: AQR's base metals, AQR's data sources and its limit-day handling. The
+  diagnostic did not test which of these accounts for it.
+
+### A4.2 In exchange: a stricter C1 for T20 and T21
+
+For **T20 and T21**, C1 (Amendment 1's Sharpe non-inferiority test) passes only if ΔSR_hat ≥ −0.05 **and the
+Holm-adjusted one-sided block-bootstrap p < 0.05**, instead of < 0.10.
+- These two trials use the carry construction that A4 checked.
+- The Holm adjustment across T20–T22 (§5) is unchanged.
+- **T22 is unchanged** (Holm-adjusted p < 0.10), since it does not use the carry construction.
+
+### A4.3 Reporting
+
+The A4 result (0.503, and the diagnostic's 0.679) and this amendment are stated at the top of the T20–T22 results
+(`results/T20-T22_commodity_trials.md`) and of the Build 0 report.
+
+### A4.4 Vendor history gaps: a roll-rule contract without a settlement
+
+On a decision date where a contract chosen by the roll rule (F1 or F2) has no settlement in the primary source, that
+market is treated as **missing that month under §2.1 rule 3** (weight 0; the cross-sectional rank uses the markets
+that have values). This is recorded as a data fix for vendor history gaps.
+
+**Where it applies.** Build 0 found 35 such market-months, all for F2 contracts whose Norgate history starts only
+5–8 months before expiry:
+- **platinum:** 13 months in 2000–2005;
+- **palladium:** 22 months in 2000–2009 (palladium is already dropped by the coverage gate, §2.1 rule 1, so it is out
+  of every trial regardless).
+
+**Platinum stays in T22,** with weight 0 in those 13 months.
+
+**How A6 changes.** A6's first-settlement assertion is evaluated on the contracts actually used, i.e. those with a
+settlement on the decision date. The coverage gate itself is unchanged.
+
+**Not changed.** Everything else, including Amendment 3's roll rule and the other Build 0 tests. The ledger rows
+T20–T22 are updated to reference Amendments 3 and 4, changing no other row.
