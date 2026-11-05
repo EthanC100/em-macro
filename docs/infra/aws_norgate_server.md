@@ -15,7 +15,7 @@ Administrator password are not stored in the repo.
 | AMI | `ami-086db0bc6076e24da`: `Windows_Server-2022-English-Full-Base-2026.10.28` (latest Windows Server 2022 Base at launch) |
 | Root disk | 60 GB gp3 (`vol-0bb8fc606ddadf918`, 3000 IOPS, 125 MB/s), deleted on termination |
 | Network | Default VPC `vpc-022f609d49d165144`, subnet `subnet-001dc99bce37d1462`, auto-assigned public IPv4 |
-| Security group | `horizons-rdp` (`sg-0e77e6b03d0d9fdf8`): inbound **TCP 3389 from one /32 only** (119.56.17.159/32 as of 2026-11-05; changed with `allow-ip`, check with `scripts/aws_server.sh status`); outbound all (AWS default) |
+| Security group | `horizons-rdp` (`sg-0e77e6b03d0d9fdf8`): inbound **TCP 3389 from 119.56.17.0/24 only** (since 2026-11-05: the owner's mobile IP rotates within 119.56.17.x; check with `scripts/aws_server.sh status`). Outbound: all traffic (AWS default) |
 | IAM role (SSM) | `horizons-norgate-ssm`, attached via instance profile `horizons-norgate-ssm`. Trust: `ec2.amazonaws.com` only. Permissions: AWS managed policy `AmazonSSMManagedInstanceCore` only, with no inline policies (see [Systems Manager](#systems-manager-ssm)) |
 | Key pair | `horizons-win` (`key-048817a989af4b9fe`), RSA. The private key was kept only in a temporary session directory |
 | Login | `Administrator` (password decrypted with the key pair at setup; not recorded here) |
@@ -57,6 +57,7 @@ scripts/aws_server.sh status
 scripts/aws_server.sh start
 scripts/aws_server.sh stop
 scripts/aws_server.sh allow-ip 203.0.113.7    # or omit the IP to use this machine's public IP
+                                              # NOTE: replaces ALL RDP rules (including the /24) with one /32
 ```
 
 Raw equivalents:
@@ -71,11 +72,12 @@ aws ec2 describe-instances --region ap-southeast-2 --instance-ids i-091fbf95cc5a
 # Stop
 aws ec2 stop-instances --region ap-southeast-2 --instance-ids i-091fbf95cc5a6162a
 
-# Update the allowed RDP IP (replace OLD_IP and NEW_IP)
-aws ec2 revoke-security-group-ingress --region ap-southeast-2 --group-id sg-0e77e6b03d0d9fdf8 \
-  --protocol tcp --port 3389 --cidr OLD_IP/32
+# Replace the RDP rule with a range (as done on 2026-11-05 for 119.56.17.0/24). Add the new
+# rule first, then revoke the old one, so access isn't interrupted. Replace OLD_CIDR and NEW_CIDR.
 aws ec2 authorize-security-group-ingress --region ap-southeast-2 --group-id sg-0e77e6b03d0d9fdf8 \
-  --protocol tcp --port 3389 --cidr NEW_IP/32
+  --ip-permissions 'IpProtocol=tcp,FromPort=3389,ToPort=3389,IpRanges=[{CidrIp=NEW_CIDR,Description=RDP}]'
+aws ec2 revoke-security-group-ingress --region ap-southeast-2 --group-id sg-0e77e6b03d0d9fdf8 \
+  --protocol tcp --port 3389 --cidr OLD_CIDR
 ```
 
 Upgrade to t3.medium later (instance must be stopped; needs a plan that allows it):
@@ -91,6 +93,14 @@ Recover the Administrator password (needs the `horizons-win` private key):
 aws ec2 get-password-data --region ap-southeast-2 --instance-id i-091fbf95cc5a6162a \
   --priv-launch-key /path/to/horizons-win.pem --query PasswordData --output text
 ```
+
+## Software installed after launch (2026-11-05, via SSM)
+
+- **Norgate Data Updater 4.2.2.65**: program files in `C:\Program Files\Norgate Data Updater`, database in `C:\ProgramData\Norgate Data`.
+- **AWS CLI v2** (`C:\Program Files\Amazon\AWSCLIV2\aws.exe`), used to read the SecureString parameters.
+- **norgatedata** (PyPI) in Python 3.12.
+
+See [norgate_pipeline.md](norgate_pipeline.md) for setup details, the data checks and how to rerun the export.
 
 ## Systems Manager (SSM)
 
