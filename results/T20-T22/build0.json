@@ -2298,11 +2298,11 @@
   "markets_per_month_max": 24
  },
  "A4": {
-  "months": 433,
-  "first": "1990-02",
+  "months": 434,
+  "first": "1990-01",
   "last": "2026-02",
-  "corr": 0.5027412936797341,
-  "corr_2000_on": 0.5238305719485484,
+  "corr": 0.5032874351415978,
+  "corr_2000_on": 0.5238286634605881,
   "markets_per_month_min": 21
  },
  "A9_issue_counts": {

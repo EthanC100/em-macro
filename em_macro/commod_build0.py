@@ -281,9 +281,12 @@ def carry_portfolio_inputs(md: CD.MarketData, rets: pd.DataFrame) -> pd.DataFram
     execution date to the next (written privately; used only for the A4 correlation)."""
     ct = md.contracts
     r = md.rolls.dropna(subset=["F1"])
-    idx = (1 + rets["r"].fillna(0.0)).cumprod()
-    rows = []
     ex = list(r["execution"])
+    idx = (1 + rets["r"].fillna(0.0)).cumprod()
+    # the index is 1 at the first execution settlement (its first return is the next day), so the first
+    # rebalance month has a holding return too (A4 diagnostic (a), docs/prereg/T20-T22_A4_diagnostic.md)
+    idx = pd.concat([pd.Series([1.0], index=[ex[0]]), idx[idx.index > ex[0]]])
+    rows = []
     for k in range(len(r) - 1):
         row = r.iloc[k]
         t = row["decision"]
@@ -295,7 +298,7 @@ def carry_portfolio_inputs(md: CD.MarketData, rets: pd.DataFrame) -> pd.DataFram
             if d2 > d1:
                 carry = (np.log(f1) - np.log(f2)) * 365.0 / (d2 - d1)
         a, b = ex[k], ex[k + 1]
-        hold = idx.asof(b) / idx.asof(a) - 1 if a >= idx.index[0] else np.nan
+        hold = idx.asof(b) / idx.asof(a) - 1
         rows.append({"month": r.index[k], "carry_log": carry, "hold_ret": hold})
     return pd.DataFrame(rows).set_index("month")
 
