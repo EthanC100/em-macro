@@ -159,12 +159,13 @@ def test_a11_f2_f13_listed(markets, code):
     assert res["violations"] == 0, res["examples"]
 
 
-def test_draft_last_days_guard_is_off_by_default(toy_cl):
-    """The pre-registered rule is the default; the draft Amendment 3 guard only applies when asked for and keeps
-    the April 2020 choice (CLM20 has 12 trading days left at the May 2020 execution)."""
-    base = toy_cl.roll()
-    assert base.equals(toy_cl.rolls)
-    g = toy_cl.roll(last_days_guard=10)
+def test_amendment3_guard_is_the_default(toy_cl):
+    """Amendment 3 is in force by default; it keeps the April 2020 choice (CLM20 has 12 trading days left at the
+    May 2020 execution).  last_days_guard=None reproduces the rule as first registered."""
+    assert toy_cl.notice_is_ltd
+    g = toy_cl.roll()
+    assert g.equals(toy_cl.rolls)
+    assert toy_cl.roll(last_days_guard=None).at[pd.Period("2020-04", "M"), "F1"] == "CL-2020M"
     assert g.at[pd.Period("2020-04", "M"), "F1"] == "CL-2020M"
     ct = toy_cl.contracts
     for m, row in g.dropna(subset=["F1"]).iterrows():

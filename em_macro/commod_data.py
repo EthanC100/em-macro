@@ -42,6 +42,7 @@ from .config import ROOT
 MONTH_CODES = "FGHJKMNQUVXZ"
 SNAPSHOT = "2026-11_futures"
 BUFFER_DAYS = 35
+LAST_DAYS_GUARD = 10     # Amendment 3: notice = LTD markets keep > 10 trading days to LTD at the next execution
 F13_TARGET_DAYS = 365
 F13_WINDOW_DAYS = 45
 ASSEMBLY_START = pd.Timestamp("1990-01-01")   # A1: 1990-01 (or first listing) to 2026-10
@@ -407,6 +408,12 @@ class MarketData:
             out.append({"month": p, "execution": cal[i], "decision": cal[i - 1]})
         return pd.DataFrame(out).set_index("month")
 
+    @property
+    def notice_is_ltd(self) -> bool:
+        """True for a market whose notice date is its last trade date (no first notice before the LTD)."""
+        ct = self.contracts
+        return bool((ct["notice"] == ct["ltd"]).all())
+
     def next_execution(self, month: pd.Period) -> pd.Timestamp:
         """Execution date of the rebalance after `month` (first trading day on or after the 3rd of the next month,
         on the market's calendar, which is extended with scheduled business days beyond the data)."""
@@ -415,17 +422,15 @@ class MarketData:
             return self.schedule.at[nxt, "execution"]
         return self.calendar.on_or_after(pd.Timestamp(nxt.year, nxt.month, 3))
 
-    def roll(self, buffer_days: int = BUFFER_DAYS, last_days_guard: int | None = None) -> pd.DataFrame:
-        """F1, F2 and F13 per rebalance month (the 35-day rule, §2.3; F13 per §3.1).
-
-        `last_days_guard` (default None = the pre-registered rule) evaluates the DRAFT Amendment 3: for a market
+    def roll(self, buffer_days: int = BUFFER_DAYS, last_days_guard: int | None = LAST_DAYS_GUARD) -> pd.DataFrame:
+        """F1, F2 and F13 per rebalance month (the 35-day rule, §2.3; F13 per §3.1), with Amendment 3: for a market
         whose notice(T) is its LTD, F1 must also have more than `last_days_guard` trading days from the next
-        execution date to its LTD, both inclusive.  Not adopted; used only to show what the draft would produce."""
+        execution date to its LTD, both inclusive.  `last_days_guard=None` gives the rule as first registered."""
         ct = self.contracts
         names = ct.index.to_numpy()
         notice = ct["notice"].to_numpy()
         ltd = ct["ltd"].to_numpy()
-        guard = last_days_guard is not None and self.m.fnd_rule is None
+        guard = last_days_guard is not None and self.notice_is_ltd
         rows = []
         for month, r in self.schedule.iterrows():
             limit = np.datetime64(r["execution"] + pd.Timedelta(days=buffer_days))
