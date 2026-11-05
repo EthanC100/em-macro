@@ -102,4 +102,29 @@ It is computed once. No other variant is computed.
 
 ## (c) Result
 
-C_RESULT
+**Correlation with AQR's "Commodities Carry": 0.679** over 434 months (1990-01..2026-02), with 22–24 markets each
+month. It was computed once, as specified above.
+
+## Outcome under the plan
+
+| plan outcome | applies? |
+|---|---|
+| a data error is found in (a) | **yes.** A4 had omitted the first rebalance month. This was fixed as a data fix and A4 re-run once: **0.503 < 0.70** |
+| (c) ≥ 0.90 (data validated, unlike constructions) | **no:** 0.679 |
+| neither | — |
+
+**A4 stands as a FAIL** (0.503 against 0.70), and the trials remain blocked on A4.
+- **AQR's construction does not reach the validation level.** Applied to our data, AQR's documented construction
+  correlates 0.679 with AQR's factor, below the plan's 0.90. The plan's validation route therefore does not apply,
+  and the data are not validated against AQR's carry factor by this diagnostic.
+- **Construction differences explain part of the gap.** AQR's construction raises the correlation from 0.503 to
+  0.679.
+- **The documented differences that remain cannot be removed with our data.** These are:
+  - the six base metals and AQR's index series for them;
+  - the limit-day reassignment;
+  - AQR's CSI/Bloomberg data, against Norgate.
+
+  The plan does not provide for testing which of these accounts for the rest, and no further variant was computed.
+
+Nothing in the pre-registration is changed by this result. Any change to A4 (definition, benchmark or threshold) is an
+amendment for the owner.

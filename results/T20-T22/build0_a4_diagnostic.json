@@ -265,5 +265,13 @@
   "flags_summary": {},
   "outlier_list": [],
   "unit_list": []
+ },
+ "c": {
+  "months": 434,
+  "first": "1990-01",
+  "last": "2026-02",
+  "corr": 0.6790390990359396,
+  "markets_per_month_min": 22,
+  "markets_per_month_max": 24
  }
 }
