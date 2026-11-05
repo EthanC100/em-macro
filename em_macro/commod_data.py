@@ -416,7 +416,7 @@ class MarketData:
         # live contracts: Norgate's last_quoted_date is the scheduled expiry -> it is the LTD when exported
         meta = norgate_metadata()
         nq = (meta["last_quoted_date"].reindex(t["contract"]).to_numpy() if meta is not None
-              else np.full(len(t), np.datetime64("NaT"), dtype="datetime64[ns]"))
+              else np.full(len(t), np.datetime64("NaT", "ns"), dtype="datetime64[ns]"))
         live_ltd = np.where(pd.notna(nq), nq, t["ltd_rule"].to_numpy())
         t["ltd"] = pd.to_datetime(np.where(live, live_ltd, np.where(stopped, t["ltd_rule"], final)))
         t["ltd_source"] = np.where(live, np.where(pd.notna(nq), "norgate expiry", "exchange rule"),
@@ -425,7 +425,7 @@ class MarketData:
         t["fnd_rule_date"] = pd.to_datetime([fnd_rule(self.calendar, y, mo) for y, mo in zip(t["year"], t["month"])]
                                             if fnd_rule else pd.NaT)
         nf = (meta["first_notice_date"].reindex(t["contract"]).to_numpy() if meta is not None
-              else np.full(len(t), np.datetime64("NaT"), dtype="datetime64[ns]"))
+              else np.full(len(t), np.datetime64("NaT", "ns"), dtype="datetime64[ns]"))
         t["fnd_norgate"] = pd.to_datetime(nf)
         t["fnd"] = pd.to_datetime(np.where(pd.notna(nf), nf, t["fnd_rule_date"].to_numpy()))
         t["fnd_source"] = np.where(pd.notna(nf), "norgate", np.where(t["fnd_rule_date"].notna(), "exchange rule",
