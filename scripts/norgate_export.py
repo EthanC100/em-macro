@@ -47,7 +47,10 @@ OUT_COLUMNS = ["date", "open", "high", "low", "close", "volume", "open_interest"
 FIELD_MAP = {"open": "open", "high": "high", "low": "low", "close": "close",
              "volume": "volume", "openinterest": "open_interest"}
 DEFERRED_MONTHS_REQUIRED = 12
-EXPIRY_GRACE_DAYS = 5  # a contract is "live" if quoted within this many days of the market's latest date
+# Norgate's last_quoted_date() is the final bar for an expired contract but the scheduled
+# expiry/last-trade date for a live one (e.g. CL-2037G -> 2037-01-20), so "live" means
+# last_quoted_date > as-of date, where as-of is the date of the last Futures database update.
+RECENT_BAR_DAYS = 7  # the 12-month deferred contract must have a bar within this many days of as-of
 
 
 def _nd():
@@ -86,6 +89,31 @@ def to_date(value):
     return dt.date.fromisoformat(str(value)[:10])
 
 
+def fmt_price(v) -> str:
+    """Shortest text that round-trips the value at its own precision. Norgate returns float32,
+    so repr(float(v)) would print 50.54 as 50.540000915527344."""
+    import numpy as np
+    return np.format_float_positional(v, trim="-") if isinstance(v, np.floating) else repr(float(v))
+
+
+def as_of_date(nd) -> dt.date:
+    """Date of the last Futures database update (in NDU's local time zone); today if unknown."""
+    stamp, _ = call(nd.last_database_update_time, "Futures")
+    try:
+        return dt.date.fromisoformat(str(stamp)[:10])
+    except ValueError:
+        return dt.date.today()
+
+
+def last_bar_date(nd, symbol: str):
+    df, err = call(nd.price_timeseries, symbol,
+                   stock_price_adjustment_setting=nd.StockPriceAdjustmentType.NONE,
+                   padding_setting=nd.PaddingType.NONE, timeseriesformat="pandas-dataframe")
+    if err or df is None or len(df) == 0:
+        return None
+    return to_date(df.index[-1].to_pydatetime())
+
+
 def safe_name(symbol: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", symbol)
 
@@ -107,9 +135,13 @@ def list_markets(nd):
     for s in sessions:
         name, _ = call(nd.futures_market_session_name, s)
         stype, _ = call(nd.futures_market_session_type, s)
-        exch, _ = call(nd.exchange_name, s)
+        # exchange_name() takes a security (contract) symbol, not a market-session symbol
+        contracts, _ = call(nd.futures_market_session_contracts, s)
+        exch = None
+        if contracts:
+            exch, _ = call(nd.exchange_name, contracts[0])
         rows.append({"session_symbol": s, "name": name or "", "session_type": stype or "",
-                     "exchange": exch or ""})
+                     "exchange": exch or "", "contracts": len(contracts or [])})
     return rows
 
 
@@ -134,19 +166,23 @@ def coverage(nd, out: Path):
     out.mkdir(parents=True, exist_ok=True)
     markets = list_markets(nd)
     with open(out / "all_markets.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["session_symbol", "name", "session_type", "exchange"])
+        w = csv.DictWriter(f, fieldnames=["session_symbol", "name", "session_type", "exchange",
+                                          "contracts"])
         w.writeheader()
         w.writerows(markets)
     available = {m["session_symbol"] for m in markets}
     names = {m["session_symbol"]: m["name"] for m in markets}
 
+    as_of = as_of_date(nd)
     cov, resolved = [], {}
     for code, candidates in TARGETS.items():
         sym = next((c for c in candidates if c in available), None)
         row = {"market": code, "norgate_symbol": sym or "", "name": names.get(sym, ""),
-               "status": "", "contracts": 0, "expired": 0, "live": 0,
-               "first_contract": "", "last_contract": "", "first_date": "", "last_date": "",
-               "furthest_live_months_out": "", "deferred_12m": "", "note": ""}
+               "status": "", "as_of": str(as_of), "contracts": 0, "expired": 0, "live": 0,
+               "first_contract": "", "last_contract": "", "first_date": "",
+               "last_expired_contract": "", "furthest_live_contract": "",
+               "furthest_live_months_out": "", "deferred_12m": "", "deferred_12m_contract": "",
+               "deferred_12m_last_bar": "", "note": ""}
         if sym is None:
             row["status"] = "MISSING"
             row["note"] = "not in Norgate futures market list (tried: " + ", ".join(candidates) + ")"
@@ -159,26 +195,39 @@ def coverage(nd, out: Path):
             cov.append(row)
             continue
         resolved[code] = (sym, contracts)
-        last_dates = [c[4] for c in contracts if c[4]]
         firsts = [c[3] for c in contracts if c[3]]
-        as_of = max(last_dates) if last_dates else None
-        live = [c for c in contracts if c[4] and as_of and (as_of - c[4]).days <= EXPIRY_GRACE_DAYS]
+        live = [c for c in contracts if c[4] and c[4] > as_of]
         expired = [c for c in contracts if c not in live]
         row.update(contracts=len(contracts), expired=len(expired), live=len(live),
                    first_contract=contracts[0][0], last_contract=contracts[-1][0],
-                   first_date=str(min(firsts)) if firsts else "", last_date=str(as_of or ""))
-        if live and as_of:
+                   first_date=str(min(firsts)) if firsts else "",
+                   last_expired_contract=expired[-1][0] if expired else "")
+        problems = []
+        months = lambda c: (c[1] * 12 + c[2]) - (as_of.year * 12 + as_of.month)  # noqa: E731
+        if live:
             far = max(live, key=lambda c: (c[1], c[2]))
-            months_out = (far[1] * 12 + far[2]) - (as_of.year * 12 + as_of.month)
-            row["furthest_live_months_out"] = months_out
-            row["deferred_12m"] = "yes" if months_out >= DEFERRED_MONTHS_REQUIRED else "no"
+            row["furthest_live_contract"] = far[0]
+            row["furthest_live_months_out"] = months(far)
+            # nearest live contract at least 12 months out must exist AND have current prices
+            deferred = [c for c in live if months(c) >= DEFERRED_MONTHS_REQUIRED]
+            if deferred:
+                d = deferred[0]
+                bar = last_bar_date(nd, d[0])
+                row["deferred_12m_contract"] = d[0]
+                row["deferred_12m_last_bar"] = str(bar or "")
+                if bar and (as_of - bar).days <= RECENT_BAR_DAYS:
+                    row["deferred_12m"] = "yes"
+                else:
+                    row["deferred_12m"] = "no"
+                    problems.append(f"{d[0]} has no bar within {RECENT_BAR_DAYS} days of {as_of}")
+            else:
+                row["deferred_12m"] = "no"
+                problems.append(f"no live contract >= {DEFERRED_MONTHS_REQUIRED} months out")
         else:
             row["deferred_12m"] = "no"
-        problems = []
+            problems.append("no live contracts")
         if not expired:
             problems.append("no expired contracts")
-        if row["deferred_12m"] != "yes":
-            problems.append(f"no live contract >= {DEFERRED_MONTHS_REQUIRED} months out")
         row["status"] = "OK" if not problems else "GAP"
         row["note"] = "; ".join(problems)
         cov.append(row)
@@ -187,11 +236,14 @@ def coverage(nd, out: Path):
         w = csv.DictWriter(f, fieldnames=list(cov[0].keys()))
         w.writeheader()
         w.writerows(cov)
-    print(f"{len(markets)} futures markets available in Norgate")
-    print(f"{'market':6} {'symbol':7} {'status':12} {'contr':>5} {'exp':>4} {'live':>4} {'mo_out':>6}  note")
+    print(f"{len(markets)} futures markets available in Norgate; as-of {as_of}")
+    print(f"{'market':6} {'symbol':7} {'status':7} {'contr':>5} {'exp':>4} {'live':>4} "
+          f"{'first_date':10} {'furthest':10} {'mo_out':>6} {'12m_contract':12} {'12m_bar':10}  note")
     for r in cov:
-        print(f"{r['market']:6} {r['norgate_symbol']:7} {r['status']:12} {r['contracts']:>5} "
-              f"{r['expired']:>4} {r['live']:>4} {str(r['furthest_live_months_out']):>6}  {r['note']}")
+        print(f"{r['market']:6} {r['norgate_symbol']:7} {r['status']:7} {r['contracts']:>5} "
+              f"{r['expired']:>4} {r['live']:>4} {r['first_date']:10} {r['furthest_live_contract']:10} "
+              f"{str(r['furthest_live_months_out']):>6} {r['deferred_12m_contract']:12} "
+              f"{r['deferred_12m_last_bar']:10}  {r['note']}")
     return resolved
 
 
@@ -215,12 +267,15 @@ def export_contract(nd, symbol: str, path: Path):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(OUT_COLUMNS)
-        for idx, rec in df.iterrows():
+        # read each column as its own array so values keep Norgate's dtype (float32);
+        # iterrows() would upcast mixed-dtype rows to float64
+        cols = {c: df[colmap[c]].to_numpy() for c in OUT_COLUMNS[1:] if c in colmap}
+        for i, idx in enumerate(df.index):
             d = to_date(idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx)
             vals = []
             for c in OUT_COLUMNS[1:]:
-                v = rec[colmap[c]] if c in colmap else None
-                vals.append("" if v is None or v != v else (repr(float(v)) if c not in ("volume", "open_interest") else str(int(v))))
+                v = cols[c][i] if c in cols else None
+                vals.append("" if v is None or v != v else (fmt_price(v) if c not in ("volume", "open_interest") else str(int(v))))
             w.writerow([d.isoformat()] + vals)
             n += 1
             first = first or d
