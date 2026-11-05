@@ -15,7 +15,8 @@ Administrator password are not stored in the repo.
 | AMI | `ami-086db0bc6076e24da`: `Windows_Server-2022-English-Full-Base-2026.10.28` (latest Windows Server 2022 Base at launch) |
 | Root disk | 60 GB gp3 (`vol-0bb8fc606ddadf918`, 3000 IOPS, 125 MB/s), deleted on termination |
 | Network | Default VPC `vpc-022f609d49d165144`, subnet `subnet-001dc99bce37d1462`, auto-assigned public IPv4 |
-| Security group | `horizons-rdp` (`sg-0e77e6b03d0d9fdf8`): inbound **TCP 3389 from 119.56.17.79/32 only**; outbound all (AWS default) |
+| Security group | `horizons-rdp` (`sg-0e77e6b03d0d9fdf8`): inbound **TCP 3389 from one /32 only** (119.56.17.159/32 as of 2026-11-05; changed with `allow-ip`, check with `scripts/aws_server.sh status`); outbound all (AWS default) |
+| IAM role (SSM) | `horizons-norgate-ssm`, attached via instance profile `horizons-norgate-ssm`. Trust: `ec2.amazonaws.com` only. Permissions: AWS managed policy `AmazonSSMManagedInstanceCore` only, with no inline policies (see [Systems Manager](#systems-manager-ssm)) |
 | Key pair | `horizons-win` (`key-048817a989af4b9fe`), RSA. The private key was kept only in a temporary session directory |
 | Login | `Administrator` (password decrypted with the key pair at setup; not recorded here) |
 
@@ -91,6 +92,47 @@ aws ec2 get-password-data --region ap-southeast-2 --instance-id i-091fbf95cc5a61
   --priv-launch-key /path/to/horizons-win.pem --query PasswordData --output text
 ```
 
+## Systems Manager (SSM)
+
+Added 2026-11-05 so the server can be inspected and managed without RDP (Run Command).
+
+- Role `arn:aws:iam::267965637851:role/horizons-norgate-ssm` trusts only `ec2.amazonaws.com`
+  and has only `arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore` attached.
+- Instance profile `arn:aws:iam::267965637851:instance-profile/horizons-norgate-ssm` contains that
+  role and is associated with `i-091fbf95cc5a6162a`.
+- SSM needs no inbound ports: the agent connects out over HTTPS, so the security group is unchanged.
+  The instance must be running to receive commands.
+
+```bash
+# Is the server registered as a managed node?
+aws ssm describe-instance-information --region ap-southeast-2 \
+  --filters Key=InstanceIds,Values=i-091fbf95cc5a6162a \
+  --query 'InstanceInformationList[0].[PingStatus,AgentVersion]' --output text
+
+# Run a PowerShell command and read the output
+CMD_ID=$(aws ssm send-command --region ap-southeast-2 --instance-ids i-091fbf95cc5a6162a \
+  --document-name AWS-RunPowerShellScript \
+  --parameters 'commands=["python --version","git --version"]' \
+  --query Command.CommandId --output text)
+aws ssm wait command-executed --region ap-southeast-2 --command-id "$CMD_ID" --instance-id i-091fbf95cc5a6162a
+aws ssm get-command-invocation --region ap-southeast-2 --command-id "$CMD_ID" \
+  --instance-id i-091fbf95cc5a6162a --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+```
+
+To remove SSM access later:
+
+```bash
+ASSOC=$(aws ec2 describe-iam-instance-profile-associations --region ap-southeast-2 \
+  --filters Name=instance-id,Values=i-091fbf95cc5a6162a \
+  --query 'IamInstanceProfileAssociations[0].AssociationId' --output text)
+aws ec2 disassociate-iam-instance-profile --region ap-southeast-2 --association-id "$ASSOC"
+aws iam remove-role-from-instance-profile --instance-profile-name horizons-norgate-ssm --role-name horizons-norgate-ssm
+aws iam delete-instance-profile --instance-profile-name horizons-norgate-ssm
+aws iam detach-role-policy --role-name horizons-norgate-ssm \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam delete-role --role-name horizons-norgate-ssm
+```
+
 ## User-data used at launch
 
 It ran once at first boot as a PowerShell script via EC2Launch. It writes a log to
@@ -138,7 +180,7 @@ Log 'user-data done'
 </powershell>
 ```
 
-Install status could not be verified from outside the server: there is no SSM agent role, and
-EC2 serial console access is not set up. After the first RDP login, run
-`Get-Content C:\horizons-userdata.log`, `python --version` and `git --version` in a new
-PowerShell window.
+**Verified 2026-11-05 via SSM Run Command:** all three steps succeeded. The time zone is Singapore
+Standard Time, `python --version` gives `Python 3.12.10` and `git --version` gives
+`git version 2.56.0.windows.4` (installer exit codes 0). The first log line has a UTC
+timestamp because it was written before the time-zone change.
