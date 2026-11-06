@@ -33,6 +33,9 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
 | T02 | `econ_momentum_raw_2026-11-04.tar.gz` | 16533509 | `9be8876bba5596594a21e7ea7bd76b0dcb7a878018728c9b96a69e8081558f3c` | `data/raw/econ_momentum/` as used in the T02 run: 336 files (OECD revisions, ECB RTD, OECD KEI, ALFRED); `data/kept/T02/` (commit `0ba5ce4`), unchanged | 2026-11-04 | kept in repository (`data/kept/T02/econ_momentum_raw_2026-11-04.tar.gz`) |
 | T16-T19 | `T16-T19_raw_raw_2026-11-04.tar.gz` | 1036968 | `7a1f4ae84b72d2d0715ae2d22ac100d8087537a277f20faa41dd6ede4d6c4079` | the cached raw downloads v1.0's build_inputs and the T16-T19 batch read on 2026-11-04 (members under raw/: bis, chile, colombia, fred, yahoo; extract into data/); the git-kept folders bist, bondspot and imf_weo are not duplicated | 2026-11-04 | kept in repository (`data/kept/T16-T19/T16-T19_raw_raw_2026-11-04.tar.gz`) |
 | T16-T19 | `T16-T19_raw_raw_2026-11-04_manifest.csv` | 4913 | `879ba1ae0e634503a4c786c7a7eec17880186bede0b919acabbad5038c9a65d7` | per-file SHA-256 of T16-T19_raw_raw_2026-11-04.tar.gz | 2026-11-04 | kept in repository (`data/kept/T16-T19/T16-T19_raw_raw_2026-11-04_manifest.csv`) |
+| T20-T22 | Norgate `2026-11_futures/manifest.csv` | 1326695 | `1d6657e637d337a6f26f79f8b20ba86490affbe33dd9f171c44e3cec9c0e5f60` | per-file SHA-256 of the 9,473 commodity contract files (licensed; private repo `EthanC100/em-macro-data`, commit `12d7a0b`) | 2026-11-06 | kept privately (decision 13: vendor licence forbids redistribution) |
+| T20-T22 | Norgate `2026-11_financials/manifest.csv` | 126517 | `91d1d9e2411aceb31681086b96953faeac0e4c15b7fb7c42c404467e19aa5129` | per-file SHA-256 of the 886 financial-futures contract files (private, commit `bd24f9d`) | 2026-11-06 | kept privately |
+| T20-T22 | Norgate `2026-11_metadata/metadata.csv` | 1111384 | `2efd5eaaeaa7401994a9cfbb740d1a31787f017e46a24ec1d26616aecd9cad9d` | per-contract first notice, quoted dates, point value and tick for 10,359 contracts (private, commit `bd24f9d`) | 2026-11-06 | kept privately |
 
 ## Notes on what is and is not archived (2026-11-04)
 
@@ -62,3 +65,14 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
   rebuilt them exactly from a fresh download on 2026-11-04.
 - **Trials in other repositories** (ledger ids T02 gold events, T03, T04 and T08 in `trials.csv`) are out of scope
   here.
+
+## T20-T22 (commodity trials, 2026-11-06)
+
+- **Norgate inputs.** These are licensed for personal use and cannot be redistributed, so they are not committed
+  here (pre-registration decision 13). The exported contract files and their manifests are in the private repo
+  `EthanC100/em-macro-data` under `norgate/`, and the manifests' SHA-256 hashes are in the table above.
+- **Databento settlements.** Used for the Build 0 A5 cross-check, together with the per-request cost ledger. They
+  are kept privately under `norgate/derived/build0/databento/`.
+- **Other inputs.** The v1.1 baseline and the EUR/GBP conversion read v1.0's input snapshots at `7886867` and the
+  T16-T19 raw cache in `data/kept/T16-T19/`, which was restored and checked before the run. No new public download
+  was used.

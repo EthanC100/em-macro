@@ -1,0 +1,429 @@
+{
+ "T20": {
+  "bootstrap": {
+   "delta_sr": 0.061890124240586486,
+   "p_noninf": 0.27607239276072393,
+   "p_superiority": 0.38746125387461255,
+   "boot_mean": 0.08394606643900816,
+   "boot_sd": 0.16024903992795392,
+   "boot_q05": -0.17028195344604255,
+   "boot_q95": 0.3551533425228344,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "bootstrap_2x": {
+   "delta_sr": 0.028955695629422573,
+   "p_noninf": 0.3394660533946605,
+   "p_superiority": 0.46315368463153683,
+   "boot_mean": 0.048393491774844116,
+   "boot_sd": 0.15484016642584894,
+   "boot_q05": -0.1986016806416007,
+   "boot_q95": 0.31106756813124037,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "combined": [
+   {
+    "#": "C1",
+    "criterion": "non-inferiority dSR >= -0.05 and Holm p < 0.05",
+    "value": "dSR +0.0619; p raw 0.2761, Holm 0.3964",
+    "pass": false
+   },
+   {
+    "#": "C2",
+    "criterion": "half B: dSR >= -0.05 and |MaxDD| <= v1.1's",
+    "value": "dSR -0.0494; MaxDD -16.50% vs -15.42%",
+    "pass": false
+   },
+   {
+    "#": "C3",
+    "criterion": "|MaxDD| and ES97.5 <= 1.10 x v1.1's",
+    "value": "MaxDD -18.21% vs -15.42%; ES 7.39% vs 5.93%",
+    "pass": false
+   },
+   {
+    "#": "C4",
+    "criterion": "DSR(N=16) >= DSR(v1.1, N=13), noise-only null",
+    "value": "0.7444 vs 0.7393",
+    "pass": true
+   }
+  ],
+  "dsr": {
+   "trial": {
+    "N": 16,
+    "T": 81,
+    "SR_ann": 0.9781740427473199,
+    "skew": -0.507522489470868,
+    "kurtosis_raw": 4.773601737419013,
+    "PSR(SR*=0)": 0.9889305787754636,
+    "SR0_noise_ann": 0.6973129284454271,
+    "DSR_noise": 0.7443909750725921,
+    "SR0_dispersed_ann": 0.3600908478619018,
+    "DSR_dispersed": 0.9258713420033811
+   },
+   "v1.1": {
+    "N": 13,
+    "T": 81,
+    "SR_ann": 0.9162839185067334,
+    "skew": -0.09576336320630456,
+    "kurtosis_raw": 3.4384750783501734,
+    "PSR(SR*=0)": 0.9889689995072288,
+    "SR0_noise_ann": 0.659698246114428,
+    "DSR_noise": 0.7392610873683221,
+    "SR0_dispersed_ann": 0.34066670942978955,
+    "DSR_dispersed": 0.9248051846510758
+   }
+  },
+  "p_holm": 0.39636036396360363,
+  "p_holm_2x": 0.678932106789321,
+  "sleeve": [
+   {
+    "#": "S1",
+    "criterion": "net SR > 0.20 in 2000-01..2019-12 and 2020-01..2026-09",
+    "value": "0.1255 / 0.4639",
+    "pass": false
+   },
+   {
+    "#": "S2",
+    "criterion": "Clark-West one-sided p < 0.05, 2010-01..2026-09",
+    "value": "t -0.359, p 0.6403",
+    "pass": false
+   },
+   {
+    "#": "S3",
+    "criterion": "break-even cost multiple >= 2",
+    "value": "4.24",
+    "pass": true
+   }
+  ],
+  "overall_pass": false
+ },
+ "T21": {
+  "bootstrap": {
+   "delta_sr": 0.17292440555469402,
+   "p_noninf": 0.05019498050194981,
+   "p_superiority": 0.10058994100589941,
+   "boot_mean": 0.17538080862507213,
+   "boot_sd": 0.1329051835435071,
+   "boot_q05": -0.04083536141737032,
+   "boot_q95": 0.39585379375717955,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "bootstrap_2x": {
+   "delta_sr": 0.12023598105380529,
+   "p_noninf": 0.10178982101789821,
+   "p_superiority": 0.18098190180981902,
+   "boot_mean": 0.12116994448077889,
+   "boot_sd": 0.13301224716596935,
+   "boot_q05": -0.09529190776753896,
+   "boot_q95": 0.3398312742594272,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "combined": [
+   {
+    "#": "C1",
+    "criterion": "non-inferiority dSR >= -0.05 and Holm p < 0.05",
+    "value": "dSR +0.1729; p raw 0.0502, Holm 0.1506",
+    "pass": false
+   },
+   {
+    "#": "C2",
+    "criterion": "half B: dSR >= -0.05 and |MaxDD| <= v1.1's",
+    "value": "dSR +0.0247; MaxDD -16.30% vs -15.42%",
+    "pass": false
+   },
+   {
+    "#": "C3",
+    "criterion": "|MaxDD| and ES97.5 <= 1.10 x v1.1's",
+    "value": "MaxDD -15.89% vs -15.42%; ES 5.60% vs 5.93%",
+    "pass": true
+   },
+   {
+    "#": "C4",
+    "criterion": "DSR(N=16) >= DSR(v1.1, N=13), noise-only null",
+    "value": "0.8402 vs 0.7393",
+    "pass": true
+   }
+  ],
+  "dsr": {
+   "trial": {
+    "N": 16,
+    "T": 81,
+    "SR_ann": 1.0892083240614274,
+    "skew": 0.10101659195357886,
+    "kurtosis_raw": 3.6488285817931967,
+    "PSR(SR*=0)": 0.9971633786606237,
+    "SR0_noise_ann": 0.6973129284454271,
+    "DSR_noise": 0.8401891643706833,
+    "SR0_dispersed_ann": 0.3600908478619018,
+    "DSR_dispersed": 0.9679602256286816
+   },
+   "v1.1": {
+    "N": 13,
+    "T": 81,
+    "SR_ann": 0.9162839185067334,
+    "skew": -0.09576336320630456,
+    "kurtosis_raw": 3.4384750783501734,
+    "PSR(SR*=0)": 0.9889689995072288,
+    "SR0_noise_ann": 0.659698246114428,
+    "DSR_noise": 0.7392610873683221,
+    "SR0_dispersed_ann": 0.34066670942978955,
+    "DSR_dispersed": 0.9248051846510758
+   }
+  },
+  "p_holm": 0.15058494150584942,
+  "p_holm_2x": 0.3053694630536946,
+  "sleeve": [
+   {
+    "#": "S1",
+    "criterion": "NW (6) t of mean net return > 2, 2000-01..2026-09",
+    "value": "t 2.049",
+    "pass": true
+   },
+   {
+    "#": "S2",
+    "criterion": "alpha vs T20 sleeve > 0 and NW t > 1.5",
+    "value": "alpha 3.42%/yr, t 1.893",
+    "pass": true
+   },
+   {
+    "#": "S3",
+    "criterion": "break-even cost multiple >= 2",
+    "value": "5.47",
+    "pass": true
+   }
+  ],
+  "overall_pass": false
+ },
+ "T22": {
+  "bootstrap": {
+   "delta_sr": 0.040851745947773965,
+   "p_noninf": 0.19818018198180182,
+   "p_superiority": 0.34306569343065696,
+   "boot_mean": 0.040910994794521455,
+   "boot_sd": 0.10689596612456782,
+   "boot_q05": -0.1299295721447565,
+   "boot_q95": 0.22044548280995105,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "bootstrap_2x": {
+   "delta_sr": -0.009459332933393072,
+   "p_noninf": 0.3417658234176582,
+   "p_superiority": 0.5245475452454754,
+   "boot_mean": -0.01114694039476568,
+   "boot_sd": 0.10617265863453437,
+   "boot_q05": -0.18235704404103256,
+   "boot_q95": 0.16490717532133145,
+   "B": 10000,
+   "block": 6,
+   "seed": 20261103,
+   "months": 81
+  },
+  "combined": [
+   {
+    "#": "C1",
+    "criterion": "non-inferiority dSR >= -0.05 and Holm p < 0.10",
+    "value": "dSR +0.0409; p raw 0.1982, Holm 0.3964",
+    "pass": false
+   },
+   {
+    "#": "C2",
+    "criterion": "half B: dSR >= -0.05 and |MaxDD| <= v1.1's",
+    "value": "dSR +0.0153; MaxDD -16.37% vs -15.42%",
+    "pass": false
+   },
+   {
+    "#": "C3",
+    "criterion": "|MaxDD| and ES97.5 <= 1.10 x v1.1's",
+    "value": "MaxDD -16.50% vs -15.42%; ES 5.24% vs 5.93%",
+    "pass": true
+   },
+   {
+    "#": "C4",
+    "criterion": "DSR(N=16) >= DSR(v1.1, N=13), noise-only null",
+    "value": "0.7450 vs 0.7393",
+    "pass": true
+   }
+  ],
+  "dsr": {
+   "trial": {
+    "N": 16,
+    "T": 81,
+    "SR_ann": 0.9571356644545074,
+    "skew": 0.02833643423755699,
+    "kurtosis_raw": 3.3551266267229525,
+    "PSR(SR*=0)": 0.9923812651872524,
+    "SR0_noise_ann": 0.6973129284454271,
+    "DSR_noise": 0.7449701215866478,
+    "SR0_dispersed_ann": 0.3600908478619018,
+    "DSR_dispersed": 0.9349521536488625
+   },
+   "v1.1": {
+    "N": 13,
+    "T": 81,
+    "SR_ann": 0.9162839185067334,
+    "skew": -0.09576336320630456,
+    "kurtosis_raw": 3.4384750783501734,
+    "PSR(SR*=0)": 0.9889689995072288,
+    "SR0_noise_ann": 0.659698246114428,
+    "DSR_noise": 0.7392610873683221,
+    "SR0_dispersed_ann": 0.34066670942978955,
+    "DSR_dispersed": 0.9248051846510758
+   }
+  },
+  "p_holm": 0.39636036396360363,
+  "p_holm_2x": 0.678932106789321,
+  "sleeve": [
+   {
+    "#": "S1",
+    "criterion": "net SR > 0.20 in 2000-01..2019-12 and 2020-01..2026-09",
+    "value": "0.4020 / 0.2419",
+    "pass": true
+   },
+   {
+    "#": "S2",
+    "criterion": "corr(T22 sleeve, v1.0 carry sleeve) < 0 in carry's worst 8 months, 2020-01..2026-09",
+    "value": "-0.2230 (2020-03 2020-07 2021-10 2022-03 2023-04 2023-11 2023-12 2024-08)",
+    "pass": true
+   },
+   {
+    "#": "S3",
+    "criterion": "break-even cost multiple >= 2",
+    "value": "6.57",
+    "pass": true
+   }
+  ],
+  "overall_pass": false
+ },
+ "_extra": {
+  "clark_west": {
+   "2010-01..2026-09": {
+    "months": 201,
+    "mean_f": -3.13642021327337e-06,
+    "cw_t": -0.35913099084401,
+    "p_one_sided": 0.6402514506876478
+   },
+   "2020-01..2026-09": {
+    "months": 81,
+    "mean_f": 1.6822541253659704e-06,
+    "cw_t": 0.1179347951686334,
+    "p_one_sided": 0.4530596615318384
+   }
+  },
+  "t21_alpha_vs_t20": {
+   "months": 321,
+   "alpha_monthly": 0.0028511742614408136,
+   "alpha_ann": 0.034214091137289765,
+   "alpha_t": 1.8930884245813329,
+   "beta": 0.19248846352685348,
+   "beta_t": 2.0414041493826076
+  },
+  "t21_nw": {
+   "mean": 0.003220036934526966,
+   "t": 2.049036586696859
+  },
+  "breakeven": {
+   "T20": 4.2391556269418365,
+   "T21": 5.47361929902587,
+   "T22": 6.569517207060954
+  },
+  "carry_worst_months": [
+   "2020-03",
+   "2020-07",
+   "2021-10",
+   "2022-03",
+   "2023-04",
+   "2023-11",
+   "2023-12",
+   "2024-08"
+  ],
+  "holm_noninf": {
+   "T21": 0.15058494150584942,
+   "T22": 0.39636036396360363,
+   "T20": 0.39636036396360363
+  },
+  "holm_noninf_2x": {
+   "T21": 0.3053694630536946,
+   "T20": 0.678932106789321,
+   "T22": 0.678932106789321
+  },
+  "praw_noninf": {
+   "T20": 0.27607239276072393,
+   "T21": 0.05019498050194981,
+   "T22": 0.19818018198180182
+  },
+  "option": {
+   "CL": "A",
+   "B": "B",
+   "RB": "A",
+   "HO": "A",
+   "NG": "A",
+   "G": "B",
+   "HG": "A",
+   "ZC": "A",
+   "ZS": "A",
+   "ZW": "A",
+   "KE": "B",
+   "ZM": "A",
+   "ZL": "A",
+   "SB": "A",
+   "KC": "A",
+   "CC": "A",
+   "CT": "A",
+   "LE": "B",
+   "GF": "B",
+   "HE": "B"
+  },
+  "dropped": [
+   "6L",
+   "6Z",
+   "FBON",
+   "PA"
+  ],
+  "t22_universe": [
+   "CL",
+   "B",
+   "RB",
+   "HO",
+   "NG",
+   "G",
+   "HG",
+   "GC",
+   "SI",
+   "PL",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL",
+   "SB",
+   "KC",
+   "CC",
+   "CT",
+   "LE",
+   "GF",
+   "HE",
+   "6E",
+   "6B",
+   "6M",
+   "FGBL",
+   "FOAT",
+   "FBTP",
+   "R"
+  ]
+ }
+}

@@ -1,9 +1,23 @@
 {
  "snapshot": "2026-11_futures",
+ "financial_snapshot": "2026-11_financials",
+ "metadata_snapshot": "2026-11_metadata",
+ "amendments": "3 (roll rule guard) and 4 (A4 not gating; vendor-gap months missing) in force",
  "markets": {
   "CL": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 565,
+     "ltd_norgate final settlement": 442,
+     "ltd_norgate expiry": 123
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 565,
     "live": 123,
     "first_contract": "CL-1990G",
@@ -28,18 +42,18 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
-    "F1_last10_violations": 3,
-    "F1_last10_violations_2000_2026": 3,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
     "F1_last10_violations_excl_exit_day": 0,
-    "F1_last10_examples": [
-     "2001-08",
-     "2007-10",
-     "2012-10"
-    ],
-    "F1_min_trading_days_left_at_exit": 10,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
@@ -88,11 +102,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 1
+   "unit_breaks_2000_2026": 1,
+   "notice_is_ltd": true
   },
   "B": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 590,
+     "ltd_norgate final settlement": 443,
+     "ltd_norgate expiry": 147
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 590,
     "live": 147,
     "first_contract": "BRN-1990G",
@@ -117,31 +143,28 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
-    "F1_last10_violations": 311,
-    "F1_last10_violations_2000_2026": 192,
-    "F1_last10_violations_excl_exit_day": 194,
-    "F1_last10_examples": [
-     "1990-01",
-     "1990-03",
-     "1990-04",
-     "1990-05",
-     "1990-06",
-     "1990-07"
-    ],
-    "F1_min_trading_days_left_at_exit": 5,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 18,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
     "F2_last10_examples": [],
-    "F2_min_trading_days_left_at_exit": 20
+    "F2_min_trading_days_left_at_exit": 39
    },
    "A7": {
     "months": 240,
-    "with_F13": 199,
-    "share": 0.8291666666666667,
+    "with_F13": 198,
+    "share": 0.825,
     "option": "B"
    },
    "A9": {
@@ -167,33 +190,45 @@
     "top_moves": [
      [
       "2026-04",
-      24.9
+      26.3
      ],
      [
       "2020-04",
-      18.6
+      19.7
      ],
      [
       "2020-06",
-      15.1
+      16.0
      ]
     ],
     "changes": [
      {
       "change": "Brent last-trading-day rule changed from the Mar 2016 contract",
       "month": "2016-03",
-      "window_max_multiple": 3.7,
+      "window_max_multiple": 3.9,
       "window_max_month": "2016-03",
-      "rank_in_2000_2026": 33,
+      "rank_in_2000_2026": 22,
       "of": 320
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "RB": {
    "entry": "2006-12",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 289,
+     "ltd_norgate final settlement": 251,
+     "ltd_norgate expiry": 38
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 289,
     "live": 38,
     "first_contract": "RB-2006F",
@@ -218,6 +253,10 @@
    },
    "A6": {
     "rebalances": 252,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -283,11 +322,23 @@
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "HO": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 480,
+     "ltd_norgate final settlement": 442,
+     "ltd_norgate expiry": 38
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 480,
     "live": 38,
     "first_contract": "HO-1990G",
@@ -312,6 +363,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -377,11 +432,24 @@
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "NG": {
    "entry": "1991-06",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 568,
+     "ltd_norgate final settlement": 438,
+     "ltd_norgate expiry": 119,
+     "ltd_exchange rule": 11
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 568,
     "live": 119,
     "first_contract": "NG-1990M",
@@ -418,6 +486,10 @@
    },
    "A6": {
     "rebalances": 438,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -474,11 +546,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "G": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 516,
+     "ltd_norgate final settlement": 442,
+     "ltd_norgate expiry": 74
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 516,
     "live": 74,
     "first_contract": "GAS-1990F",
@@ -503,31 +587,28 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
-    "F1_last10_violations": 429,
-    "F1_last10_violations_2000_2026": 312,
-    "F1_last10_violations_excl_exit_day": 429,
-    "F1_last10_examples": [
-     "1990-01",
-     "1990-03",
-     "1990-04",
-     "1990-05",
-     "1990-06",
-     "1990-07"
-    ],
-    "F1_min_trading_days_left_at_exit": 4,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 24,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
     "F2_last10_examples": [],
-    "F2_min_trading_days_left_at_exit": 24
+    "F2_min_trading_days_left_at_exit": 45
    },
    "A7": {
     "months": 240,
-    "with_F13": 172,
-    "share": 0.7166666666666667,
+    "with_F13": 176,
+    "share": 0.7333333333333333,
     "option": "B"
    },
    "A9": {
@@ -553,33 +634,45 @@
     "top_moves": [
      [
       "2026-04",
-      21.1
+      25.0
      ],
      [
       "2003-04",
-      17.1
+      16.0
      ],
      [
       "2026-05",
-      15.9
+      14.9
      ]
     ],
     "changes": [
      {
       "change": "ICE gasoil 0.1% sulphur -> 10 ppm low sulphur gasoil from the Feb 2015 contract",
       "month": "2015-02",
-      "window_max_multiple": 4.2,
-      "window_max_month": "2014-12",
-      "rank_in_2000_2026": 22,
+      "window_max_multiple": 5.6,
+      "window_max_month": "2014-11",
+      "rank_in_2000_2026": 18,
       "of": 320
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "HG": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 210,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 26
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 160,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 210,
     "live": 26,
     "first_contract": "HG-1990H",
@@ -604,6 +697,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -660,11 +757,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "GC": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 241,
+     "ltd_norgate final settlement": 221,
+     "ltd_norgate expiry": 20
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 181,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 241,
     "live": 20,
     "first_contract": "GC-1990G",
@@ -704,6 +813,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -754,11 +867,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "SI": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 200,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 16
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 150,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 200,
     "live": 16,
     "first_contract": "SI-1990H",
@@ -792,6 +917,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -842,11 +971,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 1
+   "unit_breaks_2000_2026": 1,
+   "notice_is_ltd": false
   },
   "PL": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 160,
+     "ltd_norgate final settlement": 148,
+     "ltd_norgate expiry": 12
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 120,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 160,
     "live": 12,
     "first_contract": "PL-1990F",
@@ -885,8 +1026,9 @@
    },
    "A6": {
     "rebalances": 442,
-    "first_settle_after_decision": 13,
-    "first_settle_examples": [
+    "chosen_without_settlement": 13,
+    "chosen_without_settlement_2000_2026": 13,
+    "chosen_without_settlement_examples": [
      [
       "2000-09",
       "F2"
@@ -906,8 +1048,15 @@
      [
       "2001-10",
       "F2"
+     ],
+     [
+      "2003-12",
+      "F2"
      ]
     ],
+    "chosen_before_first_settlement_unamended": 13,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
     "notice_violations": 0,
     "F1_last10_violations": 0,
     "F1_last10_violations_2000_2026": 0,
@@ -956,11 +1105,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "PA": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 159,
+     "ltd_norgate final settlement": 147,
+     "ltd_norgate expiry": 12
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 119,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 159,
     "live": 12,
     "first_contract": "PA-1990H",
@@ -1008,8 +1169,9 @@
    },
    "A6": {
     "rebalances": 442,
-    "first_settle_after_decision": 22,
-    "first_settle_examples": [
+    "chosen_without_settlement": 22,
+    "chosen_without_settlement_2000_2026": 22,
+    "chosen_without_settlement_examples": [
      [
       "2000-02",
       "F2"
@@ -1029,8 +1191,15 @@
      [
       "2001-06",
       "F2"
+     ],
+     [
+      "2001-08",
+      "F2"
      ]
     ],
+    "chosen_before_first_settlement_unamended": 22,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
     "notice_violations": 0,
     "F1_last10_violations": 0,
     "F1_last10_violations_2000_2026": 0,
@@ -1079,11 +1248,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "ZC": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 197,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 13
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 147,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 197,
     "live": 13,
     "first_contract": "ZC-1990H",
@@ -1112,6 +1293,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1168,11 +1353,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "ZS": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 275,
+     "ltd_norgate final settlement": 258,
+     "ltd_norgate expiry": 17
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 205,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 275,
     "live": 17,
     "first_contract": "ZS-1990F",
@@ -1203,6 +1400,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1259,11 +1460,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "ZW": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 198,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 14
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 148,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 198,
     "live": 14,
     "first_contract": "ZW-1990H",
@@ -1288,6 +1501,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1344,11 +1561,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "KE": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 198,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 14
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 148,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 198,
     "live": 14,
     "first_contract": "KE-1990H",
@@ -1373,6 +1602,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1438,11 +1671,24 @@
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "ZM": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 315,
+     "ltd_norgate final settlement": 295,
+     "ltd_norgate expiry": 17,
+     "ltd_exchange rule": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 235,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 315,
     "live": 17,
     "first_contract": "ZM-1990F",
@@ -1477,6 +1723,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1533,11 +1783,24 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "ZL": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 315,
+     "ltd_norgate final settlement": 295,
+     "ltd_norgate expiry": 17,
+     "ltd_exchange rule": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 235,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 315,
     "live": 17,
     "first_contract": "ZL-1990F",
@@ -1572,6 +1835,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1628,11 +1895,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "SB": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 159,
+     "ltd_norgate final settlement": 148,
+     "ltd_norgate expiry": 11
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 159,
     "live": 11,
     "first_contract": "SB-1990H",
@@ -1657,6 +1936,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1713,11 +1996,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "KC": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 191,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 7
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 141,
+     "exact": 0.9361702127659575,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 191,
     "live": 7,
     "first_contract": "KC-1990H",
@@ -1742,6 +2037,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1798,11 +2097,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "CC": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 194,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 10
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 144,
+     "exact": 0.2361111111111111,
+     "within_2bd": 0.2361111111111111
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 194,
     "live": 10,
     "first_contract": "CC-1990H",
@@ -1827,6 +2138,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1883,11 +2198,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "CT": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 198,
+     "ltd_norgate final settlement": 184,
+     "ltd_norgate expiry": 14
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 148,
+     "exact": 0.9797297297297297,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 198,
     "live": 14,
     "first_contract": "CT-1990H",
@@ -1912,6 +2239,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -1968,11 +2299,23 @@
     ],
     "changes": []
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "LE": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 231,
+     "ltd_norgate final settlement": 221,
+     "ltd_norgate expiry": 10
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 171,
+     "exact": 0.0,
+     "within_2bd": 0.2982456140350877
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 231,
     "live": 10,
     "first_contract": "LE-1990G",
@@ -1997,6 +2340,10 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
@@ -2004,30 +2351,30 @@
     "F1_last10_violations_2000_2026": 0,
     "F1_last10_violations_excl_exit_day": 0,
     "F1_last10_examples": [],
-    "F1_min_trading_days_left_at_exit": 33,
+    "F1_min_trading_days_left_at_exit": 14,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
     "F2_last10_examples": [],
-    "F2_min_trading_days_left_at_exit": 75
+    "F2_min_trading_days_left_at_exit": 56
    },
    "A7": {
     "months": 240,
-    "with_F13": 147,
-    "share": 0.6125,
+    "with_F13": 151,
+    "share": 0.6291666666666667,
     "option": "B"
    },
    "A9": {
     "F1": {
      "gaps_gt5": 0,
      "spikes": 1,
-     "limit_locked_flags": 14,
+     "limit_locked_flags": 16,
      "filled_days": 0
     },
     "F2": {
      "gaps_gt5": 0,
      "spikes": 1,
-     "limit_locked_flags": 15,
+     "limit_locked_flags": 13,
      "filled_days": 0
     }
    },
@@ -2039,16 +2386,16 @@
    "spec_change": {
     "top_moves": [
      [
+      "2003-02",
+      9.2
+     ],
+     [
       "2017-01",
       8.5
      ],
      [
       "2019-01",
       7.7
-     ],
-     [
-      "2018-01",
-      7.6
      ]
     ],
     "changes": [
@@ -2057,7 +2404,7 @@
       "month": "2021-02",
       "window_max_multiple": 6.2,
       "window_max_month": "2021-01",
-      "rank_in_2000_2026": 14,
+      "rank_in_2000_2026": 15,
       "of": 320
      },
      {
@@ -2065,16 +2412,28 @@
       "month": "2022-02",
       "window_max_multiple": 5.6,
       "window_max_month": "2022-01",
-      "rank_in_2000_2026": 19,
+      "rank_in_2000_2026": 20,
       "of": 320
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   },
   "GF": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 304,
+     "ltd_norgate final settlement": 295,
+     "ltd_norgate expiry": 9
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 304,
     "live": 9,
     "first_contract": "GF-1990F",
@@ -2099,21 +2458,18 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
-    "F1_last10_violations": 10,
-    "F1_last10_violations_2000_2026": 8,
-    "F1_last10_violations_excl_exit_day": 4,
-    "F1_last10_examples": [
-     "1990-10",
-     "1995-10",
-     "2000-10",
-     "2001-10",
-     "2006-10",
-     "2007-10"
-    ],
-    "F1_min_trading_days_left_at_exit": 9,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
@@ -2130,7 +2486,7 @@
     "F1": {
      "gaps_gt5": 0,
      "spikes": 0,
-     "limit_locked_flags": 17,
+     "limit_locked_flags": 15,
      "filled_days": 0
     },
     "F2": {
@@ -2149,7 +2505,7 @@
     "top_moves": [
      [
       "2004-01",
-      12.8
+      12.7
      ],
      [
       "2023-05",
@@ -2157,7 +2513,7 @@
      ],
      [
       "2023-04",
-      9.6
+      9.5
      ]
     ],
     "changes": [
@@ -2166,16 +2522,28 @@
       "month": "2016-11",
       "window_max_multiple": 3.9,
       "window_max_month": "2017-01",
-      "rank_in_2000_2026": 35,
+      "rank_in_2000_2026": 36,
       "of": 320
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
   },
   "HE": {
    "entry": "1991-02",
    "A1": {
+    "metadata_sources": {
+     "fnd_none": 294,
+     "ltd_norgate final settlement": 283,
+     "ltd_norgate expiry": 11
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
     "contracts": 294,
     "live": 11,
     "first_contract": "HE-1990G",
@@ -2213,31 +2581,28 @@
    },
    "A6": {
     "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
     "first_settle_after_decision": 0,
     "first_settle_examples": [],
     "notice_violations": 0,
-    "F1_last10_violations": 233,
-    "F1_last10_violations_2000_2026": 213,
-    "F1_last10_violations_excl_exit_day": 201,
-    "F1_last10_examples": [
-     "1997-03",
-     "1997-05",
-     "1997-06",
-     "1997-07",
-     "1997-09",
-     "1997-11"
-    ],
-    "F1_min_trading_days_left_at_exit": 7,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
     "F2_last10_violations": 0,
     "F2_last10_violations_2000_2026": 0,
     "F2_last10_violations_excl_exit_day": 0,
     "F2_last10_examples": [],
-    "F2_min_trading_days_left_at_exit": 29
+    "F2_min_trading_days_left_at_exit": 34
    },
    "A7": {
     "months": 240,
-    "with_F13": 180,
-    "share": 0.75,
+    "with_F13": 148,
+    "share": 0.6166666666666667,
     "option": "B"
    },
    "A9": {
@@ -2250,7 +2615,7 @@
     "F2": {
      "gaps_gt5": 0,
      "spikes": 0,
-     "limit_locked_flags": 12,
+     "limit_locked_flags": 15,
      "filled_days": 0
     }
    },
@@ -2262,51 +2627,744 @@
    "spec_change": {
     "top_moves": [
      [
-      "2018-07",
-      6.5
+      "2018-09",
+      8.9
      ],
      [
-      "2016-10",
-      5.8
+      "2002-09",
+      7.0
      ],
      [
-      "2024-07",
-      5.3
+      "2018-06",
+      6.9
      ]
     ],
     "changes": [
      {
       "change": "CME Lean Hog Index redefined (negotiated formula purchases), effective 11 Oct 2016",
       "month": "2016-10",
-      "window_max_multiple": 5.8,
-      "window_max_month": "2016-10",
-      "rank_in_2000_2026": 2,
+      "window_max_multiple": 5.3,
+      "window_max_month": "2016-09",
+      "rank_in_2000_2026": 14,
       "of": 320
      }
     ]
    },
-   "unit_breaks_2000_2026": 0
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "6E": {
+   "entry": "2000-03",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 131,
+     "ltd_norgate final settlement": 111,
+     "ltd_norgate expiry": 20
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 131,
+    "live": 20,
+    "first_contract": "6E-1999H",
+    "last_contract": "6E-2031U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "FX"
+   },
+   "coverage": {
+    "start": "2000-03",
+    "months": 319,
+    "covered": 319,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 333,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 67
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 333,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2008-10",
+      16.6
+     ],
+     [
+      "2008-02",
+      11.5
+     ],
+     [
+      "2009-02",
+      9.3
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "6B": {
+   "entry": "1991-02",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 167,
+     "ltd_norgate final settlement": 147,
+     "ltd_norgate expiry": 20
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 167,
+    "live": 20,
+    "first_contract": "6B-1990H",
+    "last_contract": "6B-2031U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "FX"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 67
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2008-12",
+      15.2
+     ],
+     [
+      "2022-11",
+      14.1
+     ],
+     [
+      "2008-02",
+      13.2
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "6M": {
+   "entry": "1996-06",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 146,
+     "ltd_norgate final settlement": 126,
+     "ltd_norgate expiry": 20
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 146,
+    "live": 20,
+    "first_contract": "6M-1995M",
+    "last_contract": "6M-2031U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "FX"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 378,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 67
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 2,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 378,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2009-02",
+      10.8
+     ],
+     [
+      "2002-07",
+      10.2
+     ],
+     [
+      "2000-03",
+      8.7
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "FGBL": {
+   "entry": "2000-03",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 114,
+     "ltd_norgate final settlement": 111,
+     "ltd_norgate expiry": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 114,
+    "live": 3,
+    "first_contract": "FGBL-1999H",
+    "last_contract": "FGBL-2027M",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "EUREX"
+   },
+   "coverage": {
+    "start": "2000-03",
+    "months": 319,
+    "covered": 319,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 333,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 24,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 84
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 333,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2020-08",
+      14.9
+     ],
+     [
+      "2016-11",
+      14.9
+     ],
+     [
+      "2016-08",
+      14.8
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "FOAT": {
+   "entry": "2013-06",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 61,
+     "ltd_norgate final settlement": 58,
+     "ltd_norgate expiry": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 61,
+    "live": 3,
+    "first_contract": "FOAT-2012M",
+    "last_contract": "FOAT-2027M",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 58,
+    "ltd_rule_exact": 0.9827586206896551,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "EUREX"
+   },
+   "coverage": {
+    "start": "2013-06",
+    "months": 160,
+    "covered": 160,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 174,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 24,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 84
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 174,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2021-05",
+      30.3
+     ],
+     [
+      "2021-08",
+      29.5
+     ],
+     [
+      "2022-05",
+      23.9
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "FBTP": {
+   "entry": "2010-11",
+   "A1": {
+    "metadata_sources": {
+     "fnd_none": 71,
+     "ltd_norgate final settlement": 68,
+     "ltd_norgate expiry": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 0,
+     "exact": null,
+     "within_2bd": null
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 71,
+    "live": 3,
+    "first_contract": "FBTP-2009Z",
+    "last_contract": "FBTP-2027M",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 68,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "EUREX"
+   },
+   "coverage": {
+    "start": "2010-11",
+    "months": 191,
+    "covered": 191,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 205,
+    "chosen_without_settlement": 0,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [],
+    "chosen_before_first_settlement_unamended": 0,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 24,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 84
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 205,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2021-05",
+      8.7
+     ],
+     [
+      "2022-11",
+      8.1
+     ],
+     [
+      "2021-11",
+      7.3
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": true
+  },
+  "R": {
+   "entry": "1991-02",
+   "A1": {
+    "metadata_sources": {
+     "fnd_norgate": 150,
+     "ltd_norgate final settlement": 147,
+     "ltd_norgate expiry": 3
+    },
+    "fnd_norgate_vs_rule": {
+     "n": 110,
+     "exact": 1.0,
+     "within_2bd": 1.0
+    },
+    "norgate_fnd_on_or_after_ltd": 0,
+    "contracts": 150,
+    "live": 3,
+    "first_contract": "LLG-1990H",
+    "last_contract": "LLG-2027M",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "GILT",
+    "ltd_rule": "GILT"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "chosen_without_settlement": 35,
+    "chosen_without_settlement_2000_2026": 0,
+    "chosen_without_settlement_examples": [
+     [
+      "1990-02",
+      "F2"
+     ],
+     [
+      "1990-05",
+      "F2"
+     ],
+     [
+      "1990-08",
+      "F2"
+     ],
+     [
+      "1991-08",
+      "F2"
+     ],
+     [
+      "1991-11",
+      "F2"
+     ],
+     [
+      "1992-02",
+      "F2"
+     ]
+    ],
+    "chosen_before_first_settlement_unamended": 35,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 36,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 98
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 32,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 458
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2003-08",
+      107.3
+     ],
+     [
+      "2003-11",
+      92.8
+     ],
+     [
+      "2010-10",
+      62.1
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0,
+   "notice_is_ltd": false
   }
  },
  "A3": {
   "months": 424,
   "first": "1990-02",
   "last": "2025-05",
-  "corr": 0.9745940420837217,
-  "corr_2000_on": 0.9777212952821981,
+  "corr": 0.975378356939011,
+  "corr_2000_on": 0.9786259290480105,
   "markets_per_month_min": 22,
   "markets_per_month_max": 24
  },
  "A4": {
+  "gating": false,
+  "note": "reported, not gating (Amendment 4)",
   "months": 434,
   "first": "1990-01",
   "last": "2026-02",
-  "corr": 0.5032874351415978,
-  "corr_2000_on": 0.5238286634605881,
+  "corr": 0.4975052396166106,
+  "corr_2000_on": 0.5217304902801664,
   "markets_per_month_min": 21
  },
  "A9_issue_counts": {
-  "gap|not held by any trial (F2 of a market outside T21)": 16,
-  "spike|genuine (curve confirms)": 14
+  "gap|not held by any trial (F2 of a market outside T21)": 48,
+  "spike|genuine (curve confirms)": 17
  }
 }

@@ -144,10 +144,31 @@ def quote_all(reqs: list[dict]) -> float:
     return total
 
 
+def _previous_symbols(spend: Spend, market: str, year: int) -> set[str]:
+    out = set()
+    if spend.ledger.exists():
+        for line in spend.ledger.read_text().splitlines():
+            rec = json.loads(line)
+            if rec.get("downloaded") and rec.get("market") == market and rec.get("year") == year:
+                out |= set(rec.get("symbols", []))
+    return out
+
+
 def _fetch(c, q: dict, spend: Spend, cache) -> pd.DataFrame:
+    """Cached per market-year; when the plan now needs contracts that an earlier request did not cover (a changed
+    roll table), only those are requested (quoted first) and appended."""
+    import hashlib
     f = cache / f"{q['market']}_{q['year']}.csv"
+    have = None
     if f.exists():
-        return pd.read_csv(f, parse_dates=["date"])
+        files = [f] + sorted(cache.glob(f"{q['market']}_{q['year']}_extra_*.csv"))
+        have = pd.concat([pd.read_csv(x, parse_dates=["date"]) for x in files], ignore_index=True)
+        missing = sorted(set(q["symbols"]) - _previous_symbols(spend, q["market"], q["year"]))
+        if not missing:
+            return have
+        q = {**q, "symbols": missing, "map": {k: v for k, v in q["map"].items() if k in missing}}
+        tag = hashlib.sha256(",".join(missing).encode()).hexdigest()[:10]
+        f = cache / f"{q['market']}_{q['year']}_extra_{tag}.csv"
     kw = dict(dataset=DATASET, symbols=q["symbols"], stype_in="raw_symbol", schema=SCHEMA,
               start=q["start"], end=q["end"])
     cost = float(c.metadata.get_cost(**kw))            # quoted before every request
@@ -157,7 +178,15 @@ def _fetch(c, q: dict, spend: Spend, cache) -> pd.DataFrame:
             raise RuntimeError(f"stop: request {q['market']} {q['year']} (US${cost:.4f}) would take the session "
                                f"spend above US${spend.cap:.2f} (spent US${spend.spent:.4f})")
         spend.spent += cost                               # reserved before the request is sent
-    data = c.timeseries.get_range(**kw)
+    for attempt in range(3):                              # transient connection resets: retry the same request
+        try:
+            data = c.timeseries.get_range(**kw)
+            break
+        except Exception as e:  # noqa: BLE001
+            if attempt == 2:
+                raise
+            print(f"[A5] retry {q['market']} {q['year']}: {str(e)[:80]}", file=sys.stderr)
+            time.sleep(5 * (attempt + 1))
     with spend.lock:
         spend.log({**{k: v for k, v in q.items() if k != "map"}, "quote": cost, "downloaded": True,
                    "time": time.time()})
@@ -171,7 +200,7 @@ def _fetch(c, q: dict, spend: Spend, cache) -> pd.DataFrame:
     else:
         s = pd.DataFrame(columns=["contract", "date", "settle"])
     s.to_csv(f, index=False)
-    return s
+    return s if have is None else pd.concat([have, s], ignore_index=True)
 
 
 def download(reqs: list[dict], spend: Spend, workers: int = 10) -> dict[str, pd.DataFrame]:
