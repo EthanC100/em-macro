@@ -46,6 +46,7 @@
   --book-algo-fill: #f2b705;
   --book-algo-2: #6b4a00;
   --book-janus: #7a2bd1;
+  --book-fund: #0b7a6b;
   --badge-alpha: 11%;
   --font-display: ui-serif, "New York", "Iowan Old Style", "Charter", Georgia, "Times New Roman", serif;
   --font-body: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
@@ -64,13 +65,13 @@
     --open: #6ea4ff; --good: #5fd38a; --bad: #ff7b8a; --warn: #ffd24d; --warn-fill: #ffd24d; --neutral: #9fa2d0;
     --series-me: #6ea4ff; --series-claude: #ff7aa8; --series-market: #ff7b8a; --series-backtest: #6ea4ff;
     --series-live: #ffd24d; --series-prelive: #9aa0b4; --series-up: #5fd38a; --series-down: #ff7b8a; --grid: #2d346a;
-    --book-me: #6ea4ff; --book-algo: #ffd24d; --book-algo-fill: #ffd24d; --book-algo-2: #ffb547; --book-janus: #c494ff;
+    --book-me: #6ea4ff; --book-algo: #ffd24d; --book-algo-fill: #ffd24d; --book-algo-2: #ffb547; --book-janus: #c494ff; --book-fund: #4fd1bd;
     --badge-alpha: 16%;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --book-me: #6ea4ff; --book-algo: #ffd24d; --book-algo-fill: #ffd24d; --book-algo-2: #ffb547; --book-janus: #c494ff;
+  --book-me: #6ea4ff; --book-algo: #ffd24d; --book-algo-fill: #ffd24d; --book-algo-2: #ffb547; --book-janus: #c494ff; --book-fund: #4fd1bd;
   --bg: #121633; --surface: #1b2046; --surface-2: #262c5c; --line: #343b74;
   --fg: #f0f0ff; --fg-2: #c6c8ee; --muted: #9fa2d0; --on-accent: #121633;
   --c-home: #b39bff; --c-decisions: #6ea4ff; --c-algorithm: #ffd24d; --c-algorithm-fill: #ffd24d;
@@ -302,9 +303,10 @@ td.wrap { white-space: normal; min-width: 180px; }
 .b-me { --bk: var(--book-me); --bk-fill: var(--book-me); }
 .b-algorithm { --bk: var(--book-algo); --bk-fill: var(--book-algo-fill); }
 .b-janus { --bk: var(--book-janus); --bk-fill: var(--book-janus); }
+.b-fund { --bk: var(--book-fund); --bk-fill: var(--book-fund); }
 .b-none { --bk: var(--muted); --bk-fill: var(--muted); }
-.b-me-t { color: var(--book-me); } .b-algorithm-t { color: var(--book-algo); } .b-janus-t { color: var(--book-janus); }
-.card.b-me, .card.b-algorithm, .card.b-janus, .row-link.b-me, .row-link.b-algorithm, .row-link.b-janus, .row-link.b-none { border-left: 5px solid var(--bk); }
+.b-me-t { color: var(--book-me); } .b-algorithm-t { color: var(--book-algo); } .b-janus-t { color: var(--book-janus); } .b-fund-t { color: var(--book-fund); }
+.card.b-me, .card.b-algorithm, .card.b-janus, .card.b-fund, .row-link.b-me, .row-link.b-algorithm, .row-link.b-janus, .row-link.b-none { border-left: 5px solid var(--bk); }
 .pill.bk { color: var(--bk); background: color-mix(in srgb, var(--bk-fill) 16%, var(--surface)); border-color: color-mix(in srgb, var(--bk-fill) 55%, transparent); display: inline-flex; align-items: center; gap: 4px; }
 .pill.bk .janus-icon { width: 13px; height: 13px; }
 .janus-icon { width: 20px; height: 20px; color: var(--book-janus); flex: none; vertical-align: -4px; }
@@ -325,7 +327,8 @@ td.wrap { white-space: normal; min-width: 180px; }
 
 /* cockpit */
 .cockpit { display: grid; gap: 10px; }
-@media (min-width: 720px) { .cockpit { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 720px) { .cockpit { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .cockpit { grid-template-columns: repeat(4, 1fr); } }
 .book-card { display: grid; gap: 8px; color: var(--fg); font-weight: 400; text-decoration: none !important; border-top: 4px solid var(--bk); border-left: 1px solid var(--line) !important; }
 .bc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .bc-name { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; color: var(--bk); }
@@ -429,3 +432,10 @@ details.clerk .clerk-body { padding: 12px 14px; }
 details.clerk .clerk-body ol { margin: 0 0 10px; padding-left: 20px; }
 details.clerk .clerk-body li { margin: 4px 0; }
 details.clerk .clerk-body code { overflow-wrap: anywhere; }
+
+/* Horizons fund (ledger/fund.py) */
+.alloc { display: grid; gap: 6px; }
+.alloc .bar-row .bl { white-space: normal; }
+.alloc .bar-row .bt::before { display: none; }
+.alloc .bar-row .bt i.w { left: 0; background: var(--book-fund); }
+table.corr td.num { font-variant-numeric: tabular-nums; }

@@ -31,6 +31,7 @@ from . import audit as AUD
 from . import books as BOOKS
 from . import capacity as CAP
 from . import derivs as DV
+from . import fund as FUND
 from . import janus as JN
 from . import postmortem as PM
 from . import risk as RISK
@@ -1089,6 +1090,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     evidence = build_evidence(trials, algorithm, today)
     home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
     books = BOOKS.build_books(today, algorithm)
+    fund = FUND.build_fund(books, today)          # read only: built from the books, never written back into them
     janus = books["janus"].pop("summary")
     books["janus"]["summary_file"] = "janus.json"
     calendar = build_calendar(today, {**books, "janus": {**books["janus"], "summary": janus}})
@@ -1129,7 +1131,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
                       ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener),
                       ("todo", todo), ("books", books), ("janus", janus), ("calendar", calendar), ("stress", stress),
-                      ("changes", changes), ("postmortems", postmortems)):
+                      ("changes", changes), ("postmortems", postmortems), ("fund", fund)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")
