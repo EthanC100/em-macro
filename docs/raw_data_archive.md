@@ -36,6 +36,9 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
 | T20-T22 | Norgate `2026-11_futures/manifest.csv` | 1326695 | `1d6657e637d337a6f26f79f8b20ba86490affbe33dd9f171c44e3cec9c0e5f60` | per-file SHA-256 of the 9,473 commodity contract files (licensed; private repo `EthanC100/em-macro-data`, commit `12d7a0b`) | 2026-11-06 | kept privately (decision 13: vendor licence forbids redistribution) |
 | T20-T22 | Norgate `2026-11_financials/manifest.csv` | 126517 | `91d1d9e2411aceb31681086b96953faeac0e4c15b7fb7c42c404467e19aa5129` | per-file SHA-256 of the 886 financial-futures contract files (private, commit `bd24f9d`) | 2026-11-06 | kept privately |
 | T20-T22 | Norgate `2026-11_metadata/metadata.csv` | 1111384 | `2efd5eaaeaa7401994a9cfbb740d1a31787f017e46a24ec1d26616aecd9cad9d` | per-contract first notice, quoted dates, point value and tick for 10,359 contracts (private, commit `bd24f9d`) | 2026-11-06 | kept privately |
+| T23-T24 | AQR `Commodities-for-the-Long-Run-Index-Level-Data-Monthly.xlsx` | 454950 | `eeb89c65fa7dca2bfbbebb7af2cbecade7b470d6a4da52883e9413a162b5fe75` | public AQR data set (D3 benchmark: equal-weight excess return), downloaded 2026-11-06 from aqr.com; copy in the private repo `EthanC100/em-macro-data` under `norgate/derived/T23-T24/aqr/` | 2026-11-06 | kept privately (as Build 0's AQR files) |
+| T23-T24 | AQR `Century-of-Factor-Premia-Monthly.xlsx` | 1784414 | `0bf8ba978e64964282ead98a6a25691218d4517d07c98c89e2716706f6f0a127` | public AQR data set, read by Build 0's `load_aqr` alongside the first (not used by any T23-T24 statistic); same location | 2026-11-06 | kept privately |
+| T23-T24 | Norgate snapshots `2026-11_futures`, `2026-11_financials`, `2026-11_metadata` | — | as the T20-T22 rows above (re-checked 2026-11-06) | the same licensed inputs as T20-T22; nothing new exported | 2026-11-06 | kept privately |
 
 ## Notes on what is and is not archived (2026-11-04)
 
@@ -76,3 +79,12 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
 - **Other inputs.** The v1.1 baseline and the EUR/GBP conversion read v1.0's input snapshots at `7886867` and the
   T16-T19 raw cache in `data/kept/T16-T19/`, which was restored and checked before the run. No new public download
   was used.
+
+## T23-T24 (T21 and T22 on 1979-1999, 2026-11-06)
+
+- **Norgate inputs.** The same private snapshots as T20-T22, with the manifest hashes above; their SHA-256 were
+  re-checked before the run (`results/T23-T24/RUN.json`).
+- **AQR benchmark files.** Public, downloaded for check D3 (A3 on the window); kept privately with Build 0's practice,
+  hashes above.
+- **Per-market outputs** (held weights, signals, trades, daily gross by market, the A3 window series and the A9 window
+  issues) are private, under `norgate/derived/T23-T24/` in `EthanC100/em-macro-data`.

@@ -1,0 +1,490 @@
+{
+ "stopped": "window check: T22 sleeve|full active counts do not reproduce the pre-registered window",
+ "checks": {
+  "D0": {
+   "pass": true,
+   "sha256": {
+    "em_macro/t2022.py": "d54cdc750668baa26eb408bfb394ec25e0467fd6e7b77ea919583f8a3345528a",
+    "em_macro/commod_data.py": "e5ffe76b98d959d268f46e38b97eb2bfe78aa2f114922efb43b9bbbb8f49cb25",
+    "em_macro/commod_build0.py": "2c58f7e2bde920e76605d973a2cf6763fdf49b670c7724a33265affaf5e1951c",
+    "em_macro/t18_rebal.py": "dda6456d676281b48080d3c0a6c304d51c928cea39e0f70c696a364a10f96c43",
+    "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+    "em_macro/t01.py": "bc52b3e01869efd0bf8c18bc891bcd17df376e96bbc8e68e40fe2f8412432b2b"
+   }
+  },
+  "D1": {
+   "pass": true,
+   "rows": 264,
+   "identical_text": true
+  },
+  "D2": {
+   "markets": {
+    "CL": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 4,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 4,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [
+       {
+        "date": "1991-01-17",
+        "contract": "CL-1991H",
+        "unit_break": false
+       }
+      ],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "B": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "HO": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "NG": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "G": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "HG": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "GC": {
+     "held_series": [
+      "F1"
+     ],
+     "issues_in_window": 1,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 1,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": []
+     },
+     "unit_breaks": 0
+    },
+    "SI": {
+     "held_series": [
+      "F1"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": []
+     },
+     "unit_breaks": 0
+    },
+    "PL": {
+     "held_series": [
+      "F1"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": []
+     },
+     "unit_breaks": 0
+    },
+    "ZC": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 19,
+      "F2": 14
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "ZS": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 7,
+      "F2": 5
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "ZW": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 6,
+      "F2": 13
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "KE": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 3,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 3,
+     "limit_locked_flags_1977_1999": {
+      "F1": 11,
+      "F2": 15
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "ZM": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 2,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 2,
+     "limit_locked_flags_1977_1999": {
+      "F1": 10,
+      "F2": 12
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "ZL": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 8,
+      "F2": 3
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "SB": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "KC": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "CC": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "CT": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 2,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 2,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "LE": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 13,
+      "F2": 11
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "GF": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 13,
+      "F2": 12
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "HE": {
+     "held_series": [
+      "F1",
+      "F2"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 6,
+      "F2": 12
+     },
+     "large_moves": {
+      "F1": [],
+      "F2": []
+     },
+     "unit_breaks": 0
+    },
+    "6B": {
+     "held_series": [
+      "F1"
+     ],
+     "issues_in_window": 0,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 0,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": []
+     },
+     "unit_breaks": 0
+    },
+    "6M": {
+     "held_series": [
+      "F1"
+     ],
+     "issues_in_window": 3,
+     "unresolved_in_held": 0,
+     "spikes_genuine": 3,
+     "limit_locked_flags_1977_1999": {
+      "F1": 0,
+      "F2": 0
+     },
+     "large_moves": {
+      "F1": []
+     },
+     "unit_breaks": 0
+    }
+   },
+   "dropped": [],
+   "pass_no_drop": true
+  },
+  "aqr_files": {
+   "Commodities-for-the-Long-Run-Index-Level-Data-Monthly.xlsx": {
+    "bytes": 454950,
+    "sha256": "eeb89c65fa7dca2bfbbebb7af2cbecade7b470d6a4da52883e9413a162b5fe75",
+    "url": "https://www.aqr.com/-/media/AQR/Documents/Insights/Data-Sets/Commodities-for-the-Long-Run-Index-Level-Data-Monthly.xlsx",
+    "downloaded_utc": "2026-11-06T12:55:51+00:00"
+   },
+   "Century-of-Factor-Premia-Monthly.xlsx": {
+    "bytes": 1784414,
+    "sha256": "0bf8ba978e64964282ead98a6a25691218d4517d07c98c89e2716706f6f0a127",
+    "url": "https://www.aqr.com/-/media/AQR/Documents/Insights/Data-Sets/Century-of-Factor-Premia-Monthly.xlsx",
+    "downloaded_utc": "2026-11-06T12:55:51+00:00"
+   }
+  },
+  "D3": {
+   "months": 249,
+   "first": "1979-04",
+   "last": "1999-12",
+   "corr": 0.9624204988439119,
+   "corr_to_1990_01": 0.9607009139222821,
+   "corr_1990_02_on": 0.9669294428612099,
+   "markets_per_month_min": 16,
+   "markets_per_month_max": 22,
+   "threshold": 0.9,
+   "pass": true
+  },
+  "active_T21 sleeve|full": {
+   "min_in_window": 6,
+   "before_window": 5
+  },
+  "active_T22 sleeve|full": {
+   "min_in_window": 5,
+   "before_window": 5
+  }
+ },
+ "started_utc": "2026-11-06T12:56:22+00:00"
+}

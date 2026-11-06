@@ -72,6 +72,7 @@ V11_DIR = "results/systematic_v1.1"
 V11_LIVE_START_MONTH = "2026-12"
 V11_LIVE_SINCE = "2026-12-03"
 V11_TRIAL_ID = "T18"
+BACKTEST_ONLY_PASSES = {"T23", "T24"}    # passed pre-2000 sleeve backtests; not live, not validated ideas
 V11_NAME = "v1.1 systematic macro strategy (v1.0 + T18 turnover rule: risk-unit band and partial rebalancing)"
 LIVE_TURNOVER_FILE = "results/live_compare/turnover.csv"
 T18_PERFORMANCE_FILE = "results/T16-T19/performance.csv"
@@ -949,7 +950,9 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
               for t in trials["items"] if t["status"] == "fail"]
     n_live = live_months
     # a passed trial that is now a live version (T18 -> v1.1) is a systematic rule change, not a discretionary idea
-    discretionary = [t for t in passed if t["id"] != V11_TRIAL_ID]
+    # passed sleeve backtests (T23-T24) support only a later zero-size shadow pre-registration: not validated ideas
+    backtests = [t for t in passed if t["id"] in BACKTEST_ONLY_PASSES]
+    discretionary = [t for t in passed if t["id"] != V11_TRIAL_ID and t["id"] not in BACKTEST_ONLY_PASSES]
     v11_text = (f"v1.1 (v1.0 + {V11_TRIAL_ID}, passed) live for {n11} month{'s' if n11 != 1 else ''} "
                 f"from the {_day_month(V11_LIVE_SINCE)} rebalance, in parallel with v1.0")
     if discretionary:
@@ -960,7 +963,10 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
         overall = (f"No validated discretionary edge yet; v1.0 live for {n_live} month{'s' if n_live != 1 else ''} "
                    f"({months_needed} needed for a 90%-confidence track record); {v11_text}; "
                    f"{len(prospective)} idea{'s' if len(prospective) != 1 else ''} under prospective test; "
-                   f"{len(failed)} rejected.")
+                   + (f"{len(backtests)} commodity backtest{'s' if len(backtests) != 1 else ''} passed "
+                      f"({', '.join(t['id'] for t in backtests)}; zero-size shadow not yet pre-registered); "
+                      if backtests else "")
+                   + f"{len(failed)} rejected.")
     return {
         "overall": overall, "as_of": today.isoformat(),
         "groups": [
