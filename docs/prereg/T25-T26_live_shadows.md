@@ -58,7 +58,7 @@ No a160bfd function is edited or reimplemented.
 
 | # | difference | why | effect |
 |---|---|---|---|
-| D1 | **Universe restricted to markets with Databento GLBX.MDP3 daily settlements** (CME, CBOT, NYMEX, COMEX, CME FX). **Excluded:** the ICE markets (Brent B, gasoil G, sugar SB, coffee KC, cocoa CC, cotton CT), all non-CME bonds (Euro-Bund FGBL, Euro-OAT FOAT, Euro-BTP FBTP on Eurex; Long Gilt R on ICE). | The live marks come from the one licensed source the programme has for daily settlements, with a quoted cost and a daily cap. The ICE and Eurex data would need separate licences. | T21's cross-section shrinks from 20 to 14 markets, and T22's universe from 30 to 20 instruments (§3.2). Breadth falls: at equal per-market quality the expected Sharpe falls by about √(N/N₀) (§5.4). The sector mix changes: T21 loses all softs and two of its five energy markets; T22 loses its bonds entirely. |
+| D1 | **Universe restricted to markets with Databento GLBX.MDP3 daily settlements** (CME, CBOT, NYMEX, COMEX, CME FX). **Excluded:** the ICE markets (Brent B, gasoil G, sugar SB, coffee KC, cocoa CC, cotton CT), all non-CME bonds (Euro-Bund FGBL, Euro-OAT FOAT, Euro-BTP FBTP on Eurex; Long Gilt R on ICE). | The live marks come from the one licensed source the programme has for daily settlements, with a quoted cost and a daily cap. The ICE and Eurex data would need separate licences. | The exchange rule alone leaves 14 markets for T21 and 20 instruments for T22. With the availability rule (§3.2), which also drops livestock markets, the universes are **11** (T25) and **18** (T26). Breadth falls: at equal per-market quality the expected Sharpe falls by about √(N/N₀) (§5.2). The sector mix changes: T25 keeps four energy markets, copper and six grains and oilseeds, and has no softs and no livestock; T26 loses its bonds, all softs, Brent, gasoil, feeder cattle and lean hogs. |
 | D2 | **Data:** warm-up history from the a160bfd Norgate snapshot; live dates from Databento final settlements (stat_type 3, final flag). | Norgate is not updated live in this programme. Databento agrees with Norgate within one tick on ≥ 99.97% of days in every CME-group market (Build 0 A5). | One splice per market at the snapshot's last date, checked before go-live (§8, P2). |
 | D3 | **Both sleeves start flat** in the first live month: `build_targets` is called with `months` = the live months only. | So no sleeve return, position or T18 band path is ever computed for the restricted universe before live data exist. | The first month's trades are full entries, charged at decisive costs, as in the backtests' first months (T23–T24 §3). |
 | D4 | **Zero capital: fractional weights**, with no integer contracts and no live rounding rule (T20–T22 §4.4). | Zero size, as T23–T24 §1 specifies. | None on returns: the backtests' decisive runs used fractional weights. |
@@ -77,13 +77,46 @@ A market is in a shadow's universe if all of the following hold:
 
 `python -m em_macro.t2526_avail run` (this commit):
 - **Contracts:** it lists F1 and F2 at each of the twelve rebalances December 2026..November 2027 under the a160bfd roll rule, using `commod_data`'s exchange LTD/FND rules on a weekday calendar without US holidays or Good Friday.
-- **Request:** it resolves each contract's Globex symbol and requests the `statistics` schema over 2026-08-03 to the dataset's available end. The request was quoted first and refused above US$0.50.
+- **Request:** it resolves each contract's Globex symbol and requests the `statistics` schema over 2026-08-03 to the dataset's available end, one request per market. Every request is quoted first, and the check refuses to run if the quotes total more than US$0.50. A first attempt as a single request timed out after 10 minutes, having downloaded and recorded nothing.
 - **Counts:** it counts, per contract, the days with a **final** settlement.
 - **No prices:** settlement values were read only to test that a final settlement exists. None was kept, printed or written.
 
 The full output is in `results/T25-T26/availability.md`, `availability_counts.csv` and `availability.json`.
 
-AVAILABILITY_RESULT
+Run 2026-11-06 22:27 UTC: 167 contracts over 2026-08-03 .. 2026-11-06 (68 settlement days), one request per
+market, quoted at US$0.1371 in total.
+
+| market | exchange | F1 / F2 at the Dec 2026 rebalance | lowest F1 share | lowest F2 share | T25 (T21) | T26 (T22) |
+|---|---|---|---|---|---|---|
+| CL RB HO NG | NYMEX | Feb / Mar 2027 | 100% | 100% | yes | yes |
+| HG | COMEX | Mar / May 2027 | 100% | 100% | yes | yes |
+| ZC ZS ZW KE ZM ZL | CBOT | Mar / May 2027 | 100% | 100% | yes | yes |
+| LE | CME | Feb / Apr 2027 | 100% | 72.1% | **no** (F2 below 95%) | yes (needs F1 only) |
+| GF | CME | Jan / Mar 2027 | 0% | 0% | **no** | **no** |
+| HE | CME | Feb / Apr 2027 | 87.0% | 26.1% | **no** | **no** |
+| GC SI PL | COMEX, NYMEX | GC Feb / Apr, SI Mar / May, PL Apr / Jul 2027 | 100% | 100% | — | yes |
+| 6E 6B | CME | Mar / Jun 2027 | 100% | 100% | — | yes |
+| 6M | CME | Mar / Jun 2027 | 100% | 86.8% | — | yes (needs F1 only) |
+| B G SB KC CC CT | ICE | — | — | — | no (§3.1 rule 2) | no |
+| FGBL FOAT FBTP / R | Eurex / ICE | — | — | — | — | no (§3.1 rule 2) |
+
+The shares are the lowest over the F1 (or F2) contracts of all twelve rebalances.
+
+**Universes (fixed by the rule above):**
+- **T25: 11 markets:** CL RB HO NG HG ZC ZS ZW KE ZM ZL.
+- **T26: 18 instruments:** CL RB HO NG HG ZC ZS ZW KE ZM ZL LE GC SI PL 6E 6B 6M.
+
+**Read with care.**
+- **Why the livestock shares are low is not diagnosed.** The check counts days only. LE's and HE's lowest shares
+  are in their later contracts, which may simply have been listed during the window, so the shortfall may not be
+  a data gap.
+- **GF has no final settlement for any of its contracts**, and two of them (Jan and Mar 2028) did not resolve.
+  The cause (symbology, or how Databento flags feeder cattle's settlements) was not investigated, because looking
+  further could only lead to changing the rule after seeing the result.
+- **The rule is applied as fixed.** All three livestock markets leave T25, and GF and HE leave T26. Under §3.3 they
+  never re-enter.
+- **What this costs:** the universes shrink further than §2.2 D1's exchange rule alone (14 and 20), and the
+  breadth adjustment of §5.2 uses the actual counts, 11 and 18.
 
 ### 3.3 Universe changes after go-live
 
@@ -139,14 +172,14 @@ The universe is fixed at go-live and changes only mechanically, under §7. No ma
   - **36 more months (8 years in all) is a judgement about how long the programme will wait, not a power optimum.**
     The length of the extension hardly changes how well the outcomes separate a real effect from none. A longer
     extension raises the final confirmation rate under the backtest effect and under zero effect almost equally
-    (Monte Carlo as §5.4, 6,000 paths):
+    (Monte Carlo as §5.4, 6,000 paths, `results/T25-T26/power_mc_extension.py`):
 
     | extension | total | final confirmed, backtest effect (T25 / T26) | final confirmed, zero effect (T25 / T26) |
     |---|---|---|---|
-    | 24 months | 7 years | 74% / 78% | 45% / 46% |
-    | **36 months** | **8 years** | **77% / 80%** | **46% / 48%** |
-    | 60 months | 10 years | 80% / 83% | 48% / 50% |
-    | 96 months | 13 years | 85% / 86% | 50% / 52% |
+    | 24 months | 7 years | 72% / 76% | 46% / 46% |
+    | **36 months** | **8 years** | **74% / 79%** | **46% / 48%** |
+    | 60 months | 10 years | 78% / 82% | 49% / 50% |
+    | 96 months | 13 years | 82% / 85% | 50% / 52% |
 
     36 months keeps the whole test within 8 years, and the programme can still act on the answer.
 
@@ -156,7 +189,7 @@ The universe is fixed at go-live and changes only mechanically, under §7. No ma
 |---|---|
 | r_t | the shadow's monthly net return at decisive costs, `Sleeve.monthly(2.0)` |
 | m̂, ŝ | the sample mean and standard deviation (ddof 1) of r_t over the window |
-| SR_pred | the **backtest prediction**, fixed now: the pooled decisive Sharpe ratio of the sleeve's two backtests, months-weighted (T21 2000-01..2026-09 and T23 1979-05..1999-12: **0.4346**; T22 2000-01..2019-12 and 2020-01..2026-09 with T24 1979-05..1999-12: **0.4998**), times **√(N / N₀)** for the restricted universe (N = the number of universe markets at go-live; N₀ = 20 for T21, 30 for T22). With the §3.2 universes (N = 14 and 20): **0.364** (T25) and **0.408** (T26). |
+| SR_pred | the **backtest prediction**, fixed now: the pooled decisive Sharpe ratio of the sleeve's two backtests, months-weighted (T21 2000-01..2026-09 and T23 1979-05..1999-12: **0.4346**; T22 2000-01..2019-12 and 2020-01..2026-09 with T24 1979-05..1999-12: **0.4998**), times **√(N / N₀)** for the restricted universe (N = the number of universe markets at go-live; N₀ = 20 for T21, 30 for T22). With the §3.2 universes (N = 11 and 18): **0.322** (T25) and **0.387** (T26). If P1 (§8) removes a market before go-live, N is the count at go-live, recorded in the go-live record. |
 | m₀ | the predicted monthly mean at the shadow's own realised volatility: m₀ = SR_pred / √12 × ŝ. The shadow targets 10% volatility, as did the backtests, so the prediction is stated in Sharpe units and scaled by the realised volatility. |
 | t_d | the decay statistic: t_d = (m̂ − m₀) / se_NW, with se_NW the Newey–West (6 lags) standard error of the mean (`t2022.nw_tstat`'s estimator) |
 | p_d | one-sided decay p-value: p_d = Φ(t_d) (small when the live mean is far below the prediction) |
@@ -189,7 +222,7 @@ non-inferiority conditions are point estimates and are not adjusted, as T20–T2
 
 ### 5.4 Probabilities of each outcome (Monte Carlo, before any live data)
 
-**Method.** 8,000 paths per case, seed 20261106 (script reproduced in Phase 2's report):
+**Method.** 8,000 paths per case, seed 20261106 (`results/T25-T26/power_mc.py`; the extension table of §5.1 from `power_mc_extension.py`):
 - monthly returns of v1.1 and the two shadows, normal, each at 10% annual volatility, over 96 months;
 - correlations from the 2020-01..2026-09 backtest diagnostics: T21–v1.1 0.08, T22–v1.1 0.05, T21–T22 0.20;
 - v1.1's Sharpe ratio at its 2006–2026 decisive value, 0.71;
@@ -197,27 +230,27 @@ non-inferiority conditions are point estimates and are not adjusted, as T20–T2
   Holm across the sleeves evaluated at each date. A plain standard error stands in for Newey–West on independent
   normal returns. The combined book is the 0.75/0.25 return mix rescaled to v1.1's volatility.
 
-Three cases for the true Sharpe ratio: the **backtest effect** (SR_pred: 0.364 and 0.408), **half** of it, and
+Three cases for the true Sharpe ratio: the **backtest effect** (SR_pred: 0.322 and 0.387), **half** of it, and
 **zero**. Monte Carlo error is about ±0.5 percentage points.
 
 | true effect | sleeve | at 5 years: decayed | confirmed | inconclusive | at 8 years: confirmed | inconclusive → decayed | **final: confirmed** | **final: decayed** |
 |---|---|---|---|---|---|---|---|---|
-| backtest effect | T25 | 2.6% | 65.0% | 32.4% | 12.6% | 17.2% | **77.6%** | **22.4%** |
-| backtest effect | T26 | 2.4% | 67.8% | 29.8% | 12.6% | 14.5% | **80.4%** | **19.6%** |
-| half | T25 | 7.1% | 49.4% | 43.5% | 13.2% | 24.7% | 62.6% | 37.4% |
-| half | T26 | 6.8% | 53.0% | 40.2% | 13.1% | 21.0% | 66.1% | 33.9% |
-| **zero** | T25 | 14.0% | 36.6% | 49.3% | 9.5% | 28.0% | **46.2%** | **53.8%** |
-| **zero** | T26 | 16.9% | 37.1% | 45.9% | 10.7% | 22.8% | **47.9%** | **52.1%** |
+| backtest effect | T25 | 2.6% | 62.0% | 35.3% | 13.0% | 19.7% | **75.0%** | **25.0%** |
+| backtest effect | T26 | 2.4% | 66.7% | 31.0% | 12.7% | 15.6% | **79.4%** | **20.6%** |
+| half | T25 | 6.5% | 47.8% | 45.7% | 12.9% | 27.6% | 60.6% | 39.4% |
+| half | T26 | 6.6% | 52.3% | 41.0% | 13.1% | 22.3% | 65.4% | 34.6% |
+| **zero** | T25 | 12.2% | 36.6% | 51.1% | 9.6% | 31.2% | **46.3%** | **53.7%** |
+| **zero** | T26 | 15.7% | 37.1% | 47.2% | 10.8% | 24.8% | **47.9%** | **52.1%** |
 
 "Final: decayed" includes decayed at either evaluation and inconclusive-then-decayed at 8 years.
 
 **What this means, stated plainly.**
-- **If the backtest effect is real**, each sleeve is confirmed about 78–80% of the time, and wrongly closed about
-  20–22% of the time. Most of those wrong closures (15–17 points) come from "inconclusive at 8 years counts as
+- **If the backtest effect is real**, each sleeve is confirmed about 75–79% of the time, and wrongly closed about
+  21–25% of the time. Most of those wrong closures (16–20 points) come from "inconclusive at 8 years counts as
   decayed", not from the decay test, which rejects a real effect only about 2–3% of the time at 5 years.
 - **If the true effect is zero**, each sleeve is still **confirmed about 46–48% of the time**. Confirmation asks
   only for a positive mean that is not significantly below the prediction. A sleeve with no edge has a positive
-  mean about half the time, and the decay test has little power against a prediction of Sharpe 0.36–0.41. So
+  mean about half the time, and the decay test has little power against a prediction of Sharpe 0.32–0.39. So
   **confirmation is weak evidence that the effect exists.** It means only "not shown to have decayed, positive,
   and harmless to v1.1", and it gives eligibility for a v1.2 pre-registration that must carry its own test.
 - **A closure is also weak evidence that the effect is gone:** with no effect, a sleeve is closed about 52–54% of
