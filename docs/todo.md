@@ -9,13 +9,14 @@ Edit it by hand; the next build picks it up.
 - [ ] Frozen-code guard blocks `stage_test` (`frozen_design.json` records the pre-label code hash; `evaluate()` has to be called directly to reproduce the test)
 - [ ] October 2026 labelled "test" in `systematic.py` (the paper P&L sample label; the file is hashed in `docs/v1.0_freeze.md`, so it stays until v1.1)
 - [ ] Raw data not kept (downloads live in the Actions cache and are refreshed monthly; only BondSpot, Borsa Istanbul and the IMF WEO files are committed)
-- [ ] 9 of 23 instruments lack daily prices and bond returns use monthly-average yields (the Ledger registry now marks 21 of 28 instruments daily, but the algorithm's inputs are unchanged; the French and Italian 10-year yields and the Indonesian, Colombian and Chilean 10-year yields still have no free daily source)
+- [ ] 9 of 23 instruments lack daily prices and bond returns use monthly-average yields (the Ledger registry now marks 21 of 28 instruments daily, but the algorithm's inputs are unchanged; France is marked daily from the Riksbank since 6 Nov 2026; the Italian, Indonesian, Colombian and Chilean 10-year yields still have no free daily source)
 - [ ] T02 data gaps (Chile CPI after 2023; stale euro-area, Mexican and South African series)
-- [ ] Capital change only on the T02 branch
+- [x] Paper capital US$500m from the 3 Dec 2026 rebalance (C03; capacity checks on the Algorithm page)
 - [ ] Election tracker unmerged (`build/election-tracker`; `data/elections/` does not exist on main, the app falls back to `data/events/`)
 - [ ] Background file overstates the election edge
 - [ ] Turkey's lira is crawl-like (eligibility review under Algorithm)
-- [ ] No commodity data
+- [ ] No commodity data for the algorithm (Janus marks five energy markets on official spot prices, an estimate; no free daily futures settlements, metals or grains)
+- [ ] Turkish and Mexican 10y bonds exceed 10% of daily volume at US$500m (capacity diagnostic; the frozen algorithm is unchanged)
 
 ## Automation
 
@@ -25,7 +26,9 @@ Edit it by hand; the next build picks it up.
 - [x] Screener (`ledger/screener.py`, after each monthly rebalance; report and app page)
 - [ ] Anthropic API key (add the `ANTHROPIC_API_KEY` repository secret; until then event forecasts get a [RESOLVE?] issue)
 - [ ] Election-tracker jobs inactive until merged
-- [ ] The Opposition and daily briefings (done in the Claude app, not automated)
+- [x] The Opposition (automated for every new Janus position; daily briefings still in the Claude app)
+- [x] Janus weekly run, post-mortems, investor letters, stress tests, audit seals (`janus-weekly`, `ledger-daily`, `systematic-monthly`)
+- [x] Stale-marks alert (`ledger-watchdog` and ledger-daily open "[ALERT] Ledger marks stale" after 2 days)
 
 ## Algorithm
 

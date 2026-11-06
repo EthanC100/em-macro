@@ -88,3 +88,23 @@ def test_pricing_conventions():
     assert PX.ret_long("usd_per_fx", 1.0, 1.1) == pytest.approx(0.1)
     assert PX.ret_long("yield", 4.0, 5.0) == pytest.approx(-PX.duration_10y(4.0) / 100)
     assert PX.stop_hit("spread", "short", 159, 115, 110) and not PX.stop_hit("spread", "short", 159, 115, 150)
+
+
+def test_site_has_three_books_audit_badge_offline_and_no_stale_labels(tmp_path):
+    site = build.SITE_SRC
+    html = (site / "index.html").read_text()
+    js = (site / "app.js").read_text()
+    for tab in ('data-tab="me"', 'data-tab="algorithm"', 'data-tab="janus"', 'id="audit"'):
+        assert tab in html
+    assert "Paper P&L to" not in js and "positions as of" not in js.split("pageScreener")[0]
+    assert "issue_forms.decision" in js and "scored by Brier only" in js
+    out = tmp_path / "app"
+    build.build(out, today=TODAY)
+    man = json.loads((out / "data/manifest.json").read_text())
+    for f in ("books", "janus", "calendar", "stress", "changes", "postmortems"):
+        assert f"data/{f}.json" in man["files"]
+    meta = json.loads((out / "data/meta.json").read_text())
+    assert meta["audit"]["ok"] and meta["audit"]["label"] == "record verified"
+    assert meta["sources"]["positions_set"]["v1.0"] == "2026-11-04"
+    css = (site / "app.css").read_text()
+    assert "--book-janus" in css and "table.stack" in css and 'data-theme="light"' in html

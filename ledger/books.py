@@ -241,7 +241,11 @@ def algo_estimate(positions: list[dict], mb: MarkBook, month: str, today: date) 
                     "mark": last[1] if last else None, "mark_date": last[0].isoformat() if last else None,
                     "mtd_pct": round(100 * contrib, 4) if contrib is not None else None,
                     "carried": inst in flagged,
-                    "carry_z": p.get("carry_z"), "trend_z": p.get("trend_z"), "value_z": p.get("value_z")})
+                    "carry_z": p.get("carry_z"), "trend_z": p.get("trend_z"), "value_z": p.get("value_z"),
+                    "unit": reg.get("unit"), "frequency": mb.frequency(inst), "description": p.get("description"),
+                    "risk_share_pct": p.get("risk_share_pct"), "instrument_vol_pct": p.get("instrument_vol_pct"),
+                    "mark_history": [[x[0].isoformat(), x[1], x[2].get("frequency") or ""]
+                                     for x in mb.series(inst, all_marks=True) if x[0] >= base_day - timedelta(days=10)]})
     series = [[d.isoformat(), round(100 * v, 4)] for d, v in sorted(daily.items())]
     return {"month": month, "base_date": base_day.isoformat(), "mtd_pct": series[-1][1] if series else 0.0,
             "series": series, "positions": per, "carried": sorted(set(flagged)),
@@ -276,6 +280,19 @@ def group(per: list[dict], key: str, val: str) -> list[dict]:
             continue
         g[p.get(key) or "Other"] = g.get(p.get(key) or "Other", 0.0) + p[val]
     return [{"key": k, "pnl_pct": round(v, 4)} for k, v in sorted(g.items(), key=lambda kv: -abs(kv[1]))]
+
+
+def positions_set(vid: str) -> str | None:
+    """The date the current positions were set: the run date in the positions file (v1.0), else its rebalance log."""
+    rel = "results/systematic/positions.csv" if vid == "v1.0" else "results/systematic_v1.1/positions.csv"
+    rows = _rows(ROOT / rel)
+    if rows and rows[0].get("run_date"):
+        return rows[0]["run_date"]
+    log = _rows(ROOT / ("results/systematic_v1.1/rebalance_log.csv" if vid == "v1.1" else "results/systematic/rebalance_log.csv"))
+    if log:
+        return log[-1].get("run_date") or log[-1].get("date")
+    from .capacity import _git
+    return (_git("log", "-1", "--format=%as", "--", rel) or "").strip() or None
 
 
 def algo_book(alg: dict, mb: MarkBook, today: date) -> dict:
@@ -323,7 +340,7 @@ def algo_book(alg: dict, mb: MarkBook, today: date) -> dict:
             "pre_live_estimate_pct": est["mtd_pct"] if (est and not is_live) else None,
             "index": series[-1][1] if (is_live or live_months) else 100.0, "official_index": round(idx, 4),
             "n_positions": len(pos), "gross_leverage": round(gross, 3), "leverage_cap": ALGO_LEVERAGE_CAP,
-            "effective_from": eff, "positions_set": pos[0].get("run_date") if pos and pos[0].get("run_date") else None,
+            "effective_from": eff, "positions_set": positions_set(vid),
             "capacity_flagged": (cap or {}).get("flagged", []),
             "attribution": {
                 "country": group(est["positions"], "country", "mtd_pct") if est else [],
