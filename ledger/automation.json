@@ -14,8 +14,8 @@
   "screener_vol_months": 36,
   "resolve_issue_title_prefix": "[RESOLVE?]",
   "janus_model": "claude-opus-5-5",
-  "janus_web_searches": 12,
-  "opposition_web_searches": 6,
+  "janus_web_searches": 25,
+  "opposition_web_searches": 8,
   "janus_timeout_seconds": 900,
   "postmortems_per_day": 6
 }

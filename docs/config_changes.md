@@ -231,3 +231,8 @@ it is recorded as C03 and the existing record is not renumbered.
 - **Marks:** each daily run now stores every recent observation a source returns (up to 31 days), not only the
   latest, so a missed run leaves no gap. A fallback is never used when it is older than the previous first-hand
   daily mark.
+- **First run (2026-11-06, run 42163218263 on `build/ledger-v2`):** the API key was accepted; `claude-opus-5-5`
+  made 12 web searches. It opened nothing and logged a `no_trade` record with its reasoning (records 1-3 of
+  `data/janus/records.jsonl`). It said it ran out of searches before checking the BoE, payrolls, the BoJ and the
+  ECB, so the search budget was raised from 12 to 25 (8 for The Opposition) for the next runs. The run was not
+  repeated the same day: asking again until it trades would bias the record.
