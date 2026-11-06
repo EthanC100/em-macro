@@ -1,12 +1,13 @@
 # Daily Ledger automation: mark every registry instrument to market (data/ledger/marks.csv), close
-# decisions whose stop was hit or whose horizon passed, resolve forecasts past their resolution date
-# (official data for mechanical questions; the Anthropic API with web search for event questions,
-# only when the ANTHROPIC_API_KEY secret exists), open "[RESOLVE?] <id>" issues for anything that
-# could not be settled, commit the ledger files and rebuild the app.
+# decisions whose stop was hit or whose horizon passed, resolve mechanical forecasts past their resolution date
+# from official data, open "[RESOLVE?] <id>" issues for anything that could not be settled, commit the ledger
+# files, apply Janus's fills and the audit seals through scripts/ledger_commit.sh, and rebuild the app.
+# No API call to Claude is made: event forecasts are settled by the "Ledger forecast resolver" Claude Code
+# session (docs/ledger/forecast_resolver.md); this run opens their [RESOLVE?] issue only if no session has
+# settled them within session_resolve_grace_days (ledger/automation.json).
 #
 # Repository settings needed once: Settings > Actions > General > Workflow permissions = "Read and
-# write permissions"; optionally Settings > Secrets and variables > Actions > New repository secret
-# ANTHROPIC_API_KEY (without it event forecasts get a [RESOLVE?] issue instead; nothing fails).
+# write permissions".
 name: ledger-daily
 
 # 2026-11-06: runs on 4 and 5 Nov were green but committed nothing: `git add` listed automation_log.csv and
@@ -19,11 +20,6 @@ on:
     - cron: "52 5 * * *"      # 05:52 UTC daily, before the 06:41 app build
     - cron: "22 9 * * *"      # 09:22 UTC backup: GitHub delays or drops scheduled runs (5 Nov ran at 13:31); re-running is idempotent
   workflow_dispatch:
-    inputs:
-      skip_api:
-        description: "Skip the Anthropic API even if the secret exists"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -53,7 +49,7 @@ jobs:
 
       - name: Install
         id: install
-        run: pip install -r requirements.txt anthropic pytest 2>&1 | tee "$RUNNER_TEMP/install.log"
+        run: pip install -r requirements.txt pytest 2>&1 | tee "$RUNNER_TEMP/install.log"
 
       - name: Mark every instrument to market
         id: marks
@@ -62,18 +58,16 @@ jobs:
       - name: Close decisions and resolve forecasts
         id: resolve
         env:
-          ANTHROPIC_API_KEY: ${{ github.event.inputs.skip_api == 'true' && '' || secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: python -m ledger.resolve --out "$RUNNER_TEMP/resolve.json" 2>&1 | tee "$RUNNER_TEMP/resolve.log"
 
       # Post-mortems are written in the Janus daily review session (docs/janus/daily_review.md), not here.
-      - name: Stress tests, what changed, audit seals
+      - name: Stress tests and what changed
         id: analytics
         continue-on-error: true
         run: |
           python -m ledger.stress 2>&1 | tee "$RUNNER_TEMP/analytics.log"
           python -m ledger.changes 2>&1 | tee -a "$RUNNER_TEMP/analytics.log"
-          python -m ledger.audit seal 2>&1 | tee -a "$RUNNER_TEMP/analytics.log"
 
       - name: Ledger tests still pass
         id: tests
@@ -86,7 +80,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/ledger/postmortems
-                 data/ledger/reports data/ledger/seals.jsonl data/ledger/changes.json data/ledger/state.json
+                 data/ledger/reports data/ledger/changes.json data/ledger/state.json
                  data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot)
           existing=()
           for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
@@ -110,9 +104,10 @@ jobs:
           python -c "import json;print(json.load(open('$RUNNER_TEMP/resolve.json')).get('summary',''))" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      # Janus fills at the next official daily mark, stops, horizons: applied on a fresh main after the marks above are
-      # pushed, through the same script the Janus sessions use, so concurrent appends never break the hash chain.
-      - name: Janus fills, stops and horizon closes
+      # Janus fills at the next official daily mark, stops, horizons, and the audit seals of today's closes and
+      # resolutions: applied on a fresh main after the commit above, through the same script the sessions use, so
+      # concurrent appends never break a hash chain.
+      - name: Janus fills, stops and horizon closes; audit seals
         id: janus
         run: |
           git config user.name "github-actions[bot]"
@@ -120,7 +115,7 @@ jobs:
           git fetch -q origin main
           git worktree add -q --detach "$RUNNER_TEMP/janus-wt" origin/main     # a clean tree: the job's caches stay here
           cd "$RUNNER_TEMP/janus-wt"
-          bash scripts/janus_commit.sh "Janus daily marks $(date -u +%Y-%m-%d): fills, stops and closes" -- true 2>&1 | tee "$RUNNER_TEMP/janus.log"
+          bash scripts/ledger_commit.sh "Ledger daily $(date -u +%Y-%m-%d): Janus fills, stops and closes; seals" -- true 2>&1 | tee "$RUNNER_TEMP/janus.log"
 
       - name: Open or update [RESOLVE?] issues
         id: issues

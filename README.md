@@ -1274,19 +1274,26 @@ used, else none.
    `ledger:report` on its first run; nothing to do by hand.
 4. Run the `ledger-pages` workflow once (Actions → ledger-pages → Run workflow) or push to `main` to publish
    the first build.
-5. **Secret (optional):** Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY`,
-   for the event-forecast resolver (section 14). Without it everything runs; event forecasts get a `[RESOLVE?]` issue.
+5. **Claude Code scheduled tasks** (no Anthropic API key is used anywhere): the Janus quick check (API trigger,
+   fired by `janus-fire`; secrets `JANUS_FIRE_URL` and `JANUS_FIRE_TOKEN`), the Janus daily review, the Ledger
+   forecast resolver and the Ledger monthly letters. Each one's prompt points at its runbook in `docs/janus/`,
+   `docs/ledger/` or `docs/letters/` (section 14).
 
 ## 14. Automation
 
-Four daily and monthly jobs keep the Ledger current without a hand. Nothing here touches the v1.0 code or any file
+Daily and monthly jobs keep the Ledger current without a hand. Nothing here touches the v1.0 code or any file
 hashed in `docs/v1.0_freeze.md`; the screener imports the frozen signal code read-only. Settings live in
-`ledger/automation.json` (the Anthropic model, `claude-sonnet-5-5`, the daily API cap of 10 calls, the thresholds).
+`ledger/automation.json`. GitHub Actions makes no Anthropic API call. Everything that needs Claude runs as a
+Claude Code scheduled task on the account's plan, and writes only through the CLIs and `scripts/ledger_commit.sh`:
+- **Janus:** `docs/janus/quick_check.md` and `docs/janus/daily_review.md`, with The Opposition and the
+  post-mortems;
+- **event forecasts:** `docs/ledger/forecast_resolver.md`;
+- **the investor letters' narrative:** `docs/letters/monthly_letters.md`.
 
 | Job | Workflow and schedule | What it does |
 |---|---|---|
 | Marks | `ledger-daily`, 05:52 UTC daily | `python -m ledger.marks` fetches every instrument in `data/ledger/instruments.csv` from its free official source (fallback, then the previous mark; one bad source never stops the run) and appends to `data/ledger/marks.csv`. The app shows each open decision's live P&L and a Marks page. |
-| Auto-resolver | same run | `python -m ledger.resolve` closes a decision when a mark crosses its stop (as wrong, at that mark) or its horizon passes (right / wrong / scratched by the P&L; a no-trade whose stop was never hit is right), and settles forecasts past their resolution date: central-bank questions from BIS daily policy rates, price / yield / spread questions from the marks, event questions through the Anthropic API with web search, accepted only when two sources from different organisations agree. Anything else gets a `[RESOLVE?] <id>` issue saying what was found and is retried the next day. Every automatic resolution is written in the Resolve form's format with its source links, prefixed `Auto-resolved`, and scored like a manual one; a Resolve form always overrides it. |
+| Auto-resolver | same run | `python -m ledger.resolve` closes a decision when a mark crosses its stop (as wrong, at that mark) or its horizon passes (right / wrong / scratched by the P&L; a no-trade whose stop was never hit is right), and settles forecasts past their resolution date: central-bank questions from BIS daily policy rates, price / yield / spread questions from the marks. Event questions are settled by the forecast resolver session (`python -m ledger.resolve events` / `settle-events`), accepted only when two sources from different organisations agree. One still unsettled 2 days after its resolution date, or anything else unsettled, gets a `[RESOLVE?] <id>` issue saying what was found. Every automatic resolution is written in the Resolve form's format with its source links, prefixed `Auto-resolved`, and scored like a manual one; a Resolve form always overrides it. |
 | Risk Manager | `ledger-intake`, on every Decision form | `ledger/risk.py` rejects a stop without a numeric level, a continuous position risking more than 2%, or an event bet not sized at half of quarter-Kelly on its probability; flags overlap with the algorithm's positions in the same country or currency and any Ledger-calendar catalyst inside the holding period. The check is posted as a comment on the issue. |
 | Screener | `systematic-monthly`, after each rebalance (and `ledger-screener` by hand) | `python -m ledger.screener` writes `results/screener/latest.json`, a CSV and a report (type screener) with every country's carry, real carry, value, trend, signal ranks, the algorithm's position, upcoming elections and rating reviews (`data/events/rating_calendar.csv`) and any instrument that moved more than 2σ in the month. Shown on the Screener page. |
 
@@ -1299,8 +1306,8 @@ panel because no reachable free daily source exists: FR-DE and IT-DE (ECB IRS av
 (OECD). The Marks page says which, and a decision on one of them shows "marked monthly". A mark dated before a
 decision never prices or closes it.
 
-**Logs.** `data/ledger/automation_log.csv` (every close, resolution and issue), `data/ledger/api_log.csv` (every
-API call with tokens and web searches; the daily cap counts its rows). `docs/todo.md` is the to-do list the app
+**Logs.** `data/ledger/automation_log.csv` (every close, resolution, session finding and issue). The API logs
+`data/ledger/api_log.csv` and `data/janus/api_log.csv` are kept as history from before the move to sessions. `docs/todo.md` is the to-do list the app
 renders under More, To do.
 
 ## Repository layout
@@ -1337,7 +1344,7 @@ data/processed/    daily_panel.csv, carry_monthly_returns.csv, event_table.csv, 
 results/           coverage_report.md, carry_benchmark.csv, fit/, test/, test_run1_superseded/, figures
 tests/             unit tests (bond maths, windows, carry formula, spike filter); test_ledger.py (Ledger build + intake)
 ledger/            Ledger app: build.py (files -> JSON + static site in app/), intake.py (issue forms -> ledger files),
-                   marks.py (instrument registry -> marks.csv), resolve.py (auto-resolver), resolver_api.py (Anthropic API),
+                   marks.py (instrument registry -> marks.csv), resolve.py (auto-resolver and the resolver session's CLI), independence.py (two-source rule),
                    risk.py (Risk Manager), screener.py (monthly screener), automation.json (settings),
                    schema.py (validation), scoring.py (Brier, P&L), site/ (HTML, CSS, JS, icons, vendored Chart.js and marked)
 data/ledger/       decisions.csv, forecasts.csv, reports/ (the ledger's source of truth)

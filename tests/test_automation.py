@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ledger import intake, marks, resolve, resolver_api, schema, scoring
+from ledger import independence, intake, marks, resolve, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = marks.load_registry()
@@ -311,87 +311,82 @@ def test_level_question_resolves_from_marks():
     assert r["outcome"] == "no"
 
 
-def _answer(outcome, sources):
-    return lambda prompt: {"text": "Here you go:\n" + json.dumps({"outcome": outcome, "confidence": 0.9, "summary": "AP called it on 4 Nov 2026.", "sources": sources}),
-                           "usage": {"input_tokens": 1000, "output_tokens": 200}, "searches": 3, "model": "claude-sonnet-5-5"}
-
-
 AP = {"organisation": "Associated Press", "url": "https://apnews.com/article/senate-2026", "date": "2026-11-04", "quote": "AP called the race"}
 REUTERS = {"organisation": "Reuters", "url": "https://www.reuters.com/world/us/senate", "date": "2026-11-04", "quote": "AP projected"}
 AP_HUB = {"organisation": "AP News", "url": "https://apnews.com/hub/senate", "date": "2026-11-04", "quote": "same org again"}
 AP_MIRROR = {"organisation": "The Associated Press", "url": "https://news.yahoo.com/ap-senate", "date": "2026-11-04", "quote": "AP wire"}
 
 
-def test_event_resolution_needs_two_independent_sources():
-    cfg = marks.CONFIG
-    ok = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "United States", "2026-11-11", cfg, "k", ask=_answer("yes", [AP, REUTERS]))
-    assert ok["status"] == "resolved" and ok["outcome"] == "yes" and len(ok["sources"]) == 2
-    same_org = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, "k", ask=_answer("yes", [AP, AP_HUB]))
-    assert same_org["status"] == "unresolved" and "only 1 independent source" in same_org["reason"]
-    same_name = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, "k", ask=_answer("no", [AP, AP_MIRROR]))
-    assert same_name["status"] == "unresolved"
-    unres = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, "k", ask=_answer("unresolved", [AP, REUTERS]))
-    assert unres["status"] == "unresolved" and "not settled" in unres["reason"]
-    nokey = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, None)
-    assert nokey["status"] == "no_key"
-    bad = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, "k", ask=lambda p: {"text": "no json here"})
-    assert bad["status"] == "unresolved" and "no JSON" in bad["reason"]
-    err = resolver_api.resolve_event("q", "2026-11-10", "AP race call", "", "2026-11-11", cfg, "k", ask=lambda p: (_ for _ in ()).throw(RuntimeError("boom")))
-    assert err["status"] == "error" and "boom" in err["reason"]
-    assert resolver_api.registrable_domain("https://www.bbc.co.uk/news/x") == "bbc.co.uk"
-    assert resolver_api.registrable_domain("https://apnews.com/a") == "apnews.com"
+def _settle(root, results, model="claude-opus-5-5", today=date(2026, 11, 11)):
+    return resolve.settle_events({"model": model, "results": results}, root=root, today=today)
 
 
-def test_event_forecasts_resolve_score_and_cap(root):
-    fc = root / "data/ledger/forecasts.csv"
-    rows = _rows(fc)
-    ev = _forecast(id="F010", question="Republicans keep control of the US Senate", resolution_source="AP race call",
-                   resolution_date="2026-11-10", my_prob="45", market_prob="30", claude_prob="41")
-    _write(fc, rows + [ev], schema.FORECAST_COLUMNS)
-    res = resolve.run(today=date(2026, 11, 11), root=root, api_key="k", ask=_answer("yes", [AP, REUTERS]))
-    assert "F010" in res["resolved"]
-    row = next(r for r in _rows(fc) if r["id"] == "F010")
-    assert row["status"] == "resolved" and row["outcome"] == "yes" and row["result"].startswith("Auto-resolved yes")
-    assert "https://apnews.com/article/senate-2026" in row["result"] and "reuters.com" in row["result"]
-    sc = scoring.score_forecast(row)
-    assert sc["brier_me"] == 0.3025 and sc["brier_market"] == 0.49 and sc["brier_claude"] == 0.3481
-    api = _rows(root / "data/ledger/api_log.csv")
-    assert len(api) == 6 and api[-1]["forecast_id"] == "F010" and api[-1]["status"] == "resolved"   # F001-F005 too
-    # the seed forecasts (AP race call) were asked as well, and the issues carry the sources found
-    assert all(r["status"] == "resolved" for r in _rows(fc))
-    # the daily cap: with 6 calls logged and a cap of 10, four more are allowed today
-    more = [_forecast(id=f"F0{n}", question=f"Event {n}", resolution_source="AP", resolution_date="2026-11-10") for n in range(20, 26)]
-    _write(fc, _rows(fc) + more, schema.FORECAST_COLUMNS)
-    res = resolve.run(today=date(2026, 11, 11), root=root, api_key="k", ask=_answer("yes", [AP, REUTERS]))
-    assert len(res["resolved"]) == 4 and len(res["issues"]) == 2
-    assert all("daily cap" in i["body"] for i in res["issues"])
-    assert resolve.api_calls_today(date(2026, 11, 11), root / "data/ledger/api_log.csv") == 10
+def test_independent_sources_rule():
+    req = marks.CONFIG["forecast_independent_sources_required"]
+    assert independence.independent_sources([AP, REUTERS], req)[0]
+    assert not independence.independent_sources([AP, AP_HUB], req)[0]          # same domain
+    assert not independence.independent_sources([AP, AP_MIRROR], req)[0]      # same organisation name
+    assert independence.registrable_domain("https://www.bbc.co.uk/news/x") == "bbc.co.uk"
+    assert independence.registrable_domain("https://apnews.com/a") == "apnews.com"
 
 
-def test_event_forecast_without_key_opens_an_issue_and_nothing_fails(root):
-    res = resolve.run(today=date(2026, 11, 11), root=root, api_key=None)
-    assert res["resolved"] == [] and [i["title"] for i in res["issues"]] == [f"[RESOLVE?] F00{n}" for n in range(1, 6)]
-    assert all("ANTHROPIC_API_KEY" in i["body"] and "Resolve form" in i["body"] for i in res["issues"])
+def test_event_forecasts_are_left_for_the_session_then_issued(root):
+    # the daily run never settles an event question; within the grace period it waits for the session
+    res = resolve.run(today=date(2026, 11, 11), root=root)
+    assert res["resolved"] == [] and res["issues"] == [] and all("resolver session" in x for x in res["log"])
     assert all(r["status"] == "open" for r in _rows(root / "data/ledger/forecasts.csv"))
-    assert not (root / "data/ledger/api_log.csv").exists()
-    log = _rows(root / "data/ledger/automation_log.csv")
-    assert len(log) == 5 and log[0]["action"] == "[RESOLVE?]"
+    res = resolve.run(today=date(2026, 11, 12), root=root)
+    assert [i["title"] for i in res["issues"]] == [f"[RESOLVE?] F00{n}" for n in range(1, 6)]
+    assert all("no forecast resolver session has settled it" in i["body"] and "Resolve form" in i["body"] for i in res["issues"])
+    assert "ANTHROPIC" not in " ".join(i["body"] for i in res["issues"])
 
 
-def test_unconfirmed_event_opens_issue_with_findings(root):
+def test_session_lists_due_events_blind_and_settles_with_two_sources(root):
+    due = resolve.due_events(root, date(2026, 11, 11))
+    assert [d["id"] for d in due] == [f"F00{n}" for n in range(1, 6)]
+    assert all(k not in d for d in due for k in ("my_prob", "market_prob", "claude_prob"))   # blind
+    res = _settle(root, [{"id": "F001", "outcome": "yes", "summary": "AP called it on 4 Nov 2026.", "sources": [AP, REUTERS]}])
+    assert res["ok"] and res["resolved"] == ["F001"]
+    row = next(r for r in _rows(root / "data/ledger/forecasts.csv") if r["id"] == "F001")
+    assert row["status"] == "resolved" and row["outcome"] == "yes" and row["result"].startswith("Auto-resolved yes")
+    assert "resolver session (claude-opus-5-5" in row["result"] and "reuters.com" in row["result"]
+    assert scoring.score_forecast(row)["brier_me"] == 0.3025
+    assert "F001" not in [d["id"] for d in resolve.due_events(root, date(2026, 11, 11))]
+
+
+def test_session_findings_are_rejected_whole_when_a_rule_breaks(root):
     fc = root / "data/ledger/forecasts.csv"
-    _write(fc, [_forecast(id="F001", question="X wins", resolution_source="AP race call", resolution_date="2026-11-10")], schema.FORECAST_COLUMNS)
-    res = resolve.run(today=date(2026, 11, 11), root=root, api_key="k", ask=_answer("yes", [AP, AP_HUB]))
-    assert res["resolved"] == [] and len(res["issues"]) == 1
-    body = res["issues"][0]["body"]
-    assert "only 1 independent source" in body and "apnews.com/hub/senate" in body and "AP called it" in body
-    assert _rows(fc)[0]["status"] == "open"
-    # mechanical questions never call the API
+    before = fc.read_text()
+    for results, expect in (
+        ([{"id": "F001", "outcome": "yes", "summary": "s", "sources": [AP, AP_HUB]}], "independent source"),
+        ([{"id": "F001", "outcome": "yes", "summary": "s", "sources": [AP, AP_MIRROR]}], "independent source"),
+        ([{"id": "F001", "outcome": "maybe", "summary": "s", "sources": [AP, REUTERS]}], "outcome must be"),
+        ([{"id": "F001", "outcome": "no", "summary": "", "sources": [AP, REUTERS]}], "summary is required"),
+        ([{"id": "F099", "outcome": "no", "summary": "s", "sources": [AP, REUTERS]}], "not an open event forecast"),
+        ([{"id": "F001", "outcome": "yes", "summary": "s", "sources": [AP, REUTERS]},
+          {"id": "F002", "outcome": "yes", "summary": "s", "sources": [AP]}], "independent source"),
+    ):
+        res = _settle(root, results)
+        assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
+    assert not _settle(root, [{"id": "F001", "outcome": "yes", "summary": "s", "sources": [AP, REUTERS]}], model="")["ok"]
+    assert fc.read_text() == before                                             # nothing written by a rejection
+
+
+def test_unresolved_finding_is_logged_and_carried_into_the_issue(root):
+    res = _settle(root, [{"id": "F002", "outcome": "unresolved", "summary": "AP has not called Michigan yet (98% counted)."}])
+    assert res["ok"] and res["unresolved"] == ["F002"]
+    assert next(r for r in _rows(root / "data/ledger/forecasts.csv") if r["id"] == "F002")["status"] == "open"
+    res = resolve.run(today=date(2026, 11, 13), root=root)
+    body = next(i["body"] for i in res["issues"] if i["ref"] == "F002")
+    assert "AP has not called Michigan yet" in body
+
+
+def test_mechanical_questions_still_resolve_in_the_daily_run(root):
+    fc = root / "data/ledger/forecasts.csv"
     _write(fc, [_forecast(id="F002")], schema.FORECAST_COLUMNS)
-    called = []
-    res = resolve.run(today=date(2026, 12, 20), root=root, api_key="k", ask=lambda p: called.append(p),
+    res = resolve.run(today=date(2026, 12, 20), root=root,
                       get=_bis([("2026-11-30", 2.5), ("2026-12-18", 2.25), ("2026-12-19", 2.25)]))
-    assert called == [] and res["resolved"] == ["F002"]
+    assert res["resolved"] == ["F002"]
     row = _rows(fc)[0]
     assert row["outcome"] == "yes" and "BIS" in row["result"] and "stats.bis.org" in row["result"]
 
@@ -558,7 +553,7 @@ def test_todo_parsing_and_build(tmp_path):
     assert titles == ["Technical", "Automation", "Algorithm"]
     auto = {i["text"]: i["done"] for i in real["sections"][1]["items"]}
     assert auto["Resolving decisions and forecasts"] and auto["Marking open positions"] and auto["Risk Manager"] and auto["Screener"]
-    assert not auto["Anthropic API key"]
+    assert auto["No Anthropic API key needed"]
     out = tmp_path / "app"
     build.build(out, today=date(2026, 11, 4))
     for name in ("todo", "marks", "screener"):
