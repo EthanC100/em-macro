@@ -64,7 +64,14 @@ token is never written to disk, a command line or the remote URL.
 - **NDU cannot run headless.** Started from SSM (session 0) it crashes immediately
   (`InvalidOperationException` in `Form.ShowDialog`). It must run in an interactive desktop session.
 
-### Starting NDU (the one manual step)
+### Starting NDU
+
+**Since 2026-11-06 this is automatic.** The server logs on as Administrator at boot and a scheduled task starts NDU
+(see [aws_norgate_server.md](aws_norgate_server.md#auto-logon-ndu-starts-at-boot-without-rdp-2026-11-06)). After
+`scripts/aws_server.sh start`, wait about 2–3 minutes, then check over SSM (step 2 of "Rerunning"). The manual
+procedure below is only needed if auto-logon is undone.
+
+#### Manual procedure (before auto-logon, or after it is undone)
 
 After every start of the instance, NDU is not running. Someone has to:
 1. RDP in as Administrator (RDP is allowed from the range in `aws_norgate_server.md`).
@@ -143,7 +150,7 @@ data repo.
 
 ## Rerunning
 
-1. Start the server and start NDU over RDP (see above):
+1. Start the server; NDU starts by itself at boot (auto-logon, see above):
    ```bash
    scripts/aws_server.sh start
    ```
@@ -190,3 +197,24 @@ data repo.
   four tests in the licence's definition: it cannot substitute for, resemble, be traced to, or be
   reverse-engineered back into the Content. Examples are backtest results and related statistics.
 - The software may not be reverse engineered or decompiled.
+
+## Build 0 follow-up export (T20–T22, A1 and A10)
+
+This export completes Build 0 tests A1 and A10 (`results/T20-T22/build0.md`). Run it once, after NDU is started over
+RDP as in "Starting NDU" above. It needs the current `scripts/norgate_export.py`, which adds the 10 financial targets
+and the `metadata` subcommand.
+
+| what | why | command (on the server, in PowerShell) |
+|---|---|---|
+| Daily contracts for 6E, 6B, 6M, FGBL, FOAT, FBTP and Long Gilt (LLG). 6L, 6Z and FBON are recorded as MISSING | A1 contract tables; A10 coverage | `python -I norgate_export.py all --markets financials --out C:\norgate-export\2026-11_financials` |
+| Per-contract `first_notice_date`, `first_quoted_date`, `last_quoted_date` (scheduled expiry for live contracts), `point_value` and `tick_size` for all 34 markets | A1 metadata from the primary source (Build 0 used exchange rules for FND) | `python -I norgate_export.py metadata --out C:\norgate-export\2026-11_metadata` |
+
+Notes on reading the output:
+- **Coverage status GAP is expected for the financial futures.** They list fewer than 12 months ahead, so their
+  status in `coverage.csv` reads GAP; this does not stop the export.
+- **Check which metadata functions existed.** `metadata_fields.json` records which `norgatedata` functions were
+  available and how many contracts returned errors. Physical commodity contracts should have a first notice date;
+  cash-settled ones may not.
+
+Push both folders to `em-macro-data` as `norgate/2026-11_financials/` and `norgate/2026-11_metadata/`, using step 4
+of "Rerunning" with the folder names changed. **Do not `/MIR` over `norgate/2026-11_futures/`.**

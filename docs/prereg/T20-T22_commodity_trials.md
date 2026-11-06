@@ -705,3 +705,126 @@ ratios and both drawdowns are reported; half A and 2000–2019 remain context.
 trial passes only if all of its sleeve-level gates (§4.2) and all of C1–C4 hold, C1 after the Holm correction.
 Nothing else in this document changes. The ledger rows T20–T22 are updated to reference this amendment's commit,
 changing no other row.
+
+## Amendment 3 — 2026-11-05, after Build 0 and before any sleeve return was computed
+
+Recorded after the Build 0 report (`results/T20-T22/build0.md`), which found A6 failing. **No signal portfolio,
+sleeve return, Sharpe ratio, drawdown or pass criterion of T20, T21 or T22 had been computed.** Build 0 had computed
+only coverage counts, data-quality flags, availability shares, the A3/A4 benchmark correlations and the A5 tick
+agreement. The text above is left as written. Where this section and the text above differ, this section governs.
+Only the roll rule of §2.3 changes, and only for the markets named below.
+
+### A3.1 Roll rule: guarantee the stated invariant for markets whose notice date is the last trade date
+
+**Reason.** §2.3 states that "a held contract is never inside its last 10 trading days (spec §7)", and Build 0 test
+A6 checks it. Build 0 showed that the 35-day buffer does not guarantee this when notice(T) = LTD:
+- The rule only requires LTD > execution + 35 calendar days.
+- The contract is held to the next execution date, 31–35 days later.
+- It can therefore be held into its last 2–10 trading days.
+
+On 2000-01..2026-09 this happened in 312 of 321 months for gasoil, 213 for lean hogs, 192 for Brent (all before its
+2016 rule change), 8 for feeder cattle and 3 for WTI. The amendment restores the invariant the pre-registration
+already states, using the simplest rule that guarantees it at the next rebalance. The rule was decided from the
+contract calendar only.
+
+**Change.** For every market whose notice(T) is its last trade date, F1 in §2.3 becomes:
+
+```
+F1(i, t) = the earliest contract T in i's designated calendar such that
+           notice(T) > execution_date + 35 calendar days
+           and   #trading days d of market i with  next_execution_date <= d <= LTD(T)  > 10
+F2(i, t) = the next contract after F1 in the designated calendar (unchanged definition)
+```
+
+**Which markets.** Among the commodities these are CL, B, RB, HO, NG, G, SB, GF and HE. The same criterion applies
+to any T22 financial future whose notice date is its last trade date, as determined in Build 0 from the vendor's
+metadata.
+
+**How the condition is evaluated.**
+- `next_execution_date` is the execution date of the following rebalance as defined in §2.3: market i's first
+  settlement on or after the 3rd of the next month. After a late rebalance it is the actual next execution date.
+- Trading days are counted on the exchange's published trading calendar, which is known in advance, so no
+  information after t is used.
+- For markets with a first notice date before the LTD, the condition is already implied by the existing rule, since
+  Build 0's minimum was 19 trading days left at exit. Those markets are unchanged.
+- F2, F13 (T20 Option A), the first- and second-nearby series (T21) and the held contract (T22) all follow the new
+  F1.
+- The April 2020 unit test is unchanged: CLM20 has 12 trading days from the May 2020 execution to its LTD.
+
+**Effect measured in Build 0, from the contract calendar only.**
+- **Contracts that change.** F1 changes in 2000-01..2026-09 for G (312 months), HE (213), B (192), GF (8) and CL (3),
+  and nowhere else.
+- **A6.** The last-10-trading-days violations fall to 0 in every market.
+- **Other Build 0 results.** A2 coverage stays 20 of 20 at 100%, A11 stays at 0 violations, and every Option A/B
+  assignment (A7) is unchanged.
+
+**Not changed.** The following stay as written:
+- the 35-day buffer, the designated calendars, the coverage gate and entry;
+- costs, signals, the combination with v1.1, periods, statistics and pass rules;
+- the other Build 0 tests (A6 is re-run under this rule).
+
+The ledger rows T20–T22 are updated to reference this amendment, changing no other row.
+
+## Amendment 4 — 2026-11-05, decided after seeing A4 = 0.503 and the A4 diagnostic's 0.679
+
+Recorded after Amendment 3, after the Build 0 report and after the A4 diagnostic
+(`docs/prereg/T20-T22_A4_diagnostic.md`, results in `results/T20-T22/build0_a4_diagnostic.md`). **This amendment is
+made with knowledge of the A4 results:**
+- A4 = 0.503 after the diagnostic's data fix;
+- AQR's documented construction on our data = 0.679 against AQR's factor.
+
+No sleeve return, Sharpe ratio, drawdown or pass criterion of T20, T21 or T22 had been computed. The text above is
+left as written; where this section and the text above differ, this section governs.
+
+### A4.1 A4 no longer gates the trials
+
+Build 0 test A4 (the KMPV-style carry portfolio against AQR's commodity carry factor, Pearson ≥ 0.70) is **reported,
+not gating**. §6's "all must pass" now applies to A1–A3 and A5–A11.
+
+The basis for this decision is data accuracy measured directly:
+- **A5:** Databento settlements agree with Norgate within one tick on ≥ 99.97% of days in every one of the 18
+  CME-group commodity markets (worst 99.976%). The six ICE markets (B, G, SB, KC, CC, CT) are not in A5; their
+  accuracy rests on A3 only.
+- **A3:** the equal-weight index correlates 0.975 with AQR's *Commodities for the Long Run*.
+
+**What the A4 diagnostic established about the shortfall.**
+- **No data error remains.** The diagnostic found one data error (the first month omitted) and no other, so the
+  shortfall is not attributed to data errors.
+- **Construction explains part of the gap.** Applying AQR's documented construction raised the correlation from
+  0.503 to 0.679.
+- **The rest is attributed, not tested.** The remaining gap is attributed to the universe and source differences
+  the diagnostic listed but could not remove: AQR's base metals, AQR's data sources and its limit-day handling. The
+  diagnostic did not test which of these accounts for it.
+
+### A4.2 In exchange: a stricter C1 for T20 and T21
+
+For **T20 and T21**, C1 (Amendment 1's Sharpe non-inferiority test) passes only if ΔSR_hat ≥ −0.05 **and the
+Holm-adjusted one-sided block-bootstrap p < 0.05**, instead of < 0.10.
+- These two trials use the carry construction that A4 checked.
+- The Holm adjustment across T20–T22 (§5) is unchanged.
+- **T22 is unchanged** (Holm-adjusted p < 0.10), since it does not use the carry construction.
+
+### A4.3 Reporting
+
+The A4 result (0.503, and the diagnostic's 0.679) and this amendment are stated at the top of the T20–T22 results
+(`results/T20-T22_commodity_trials.md`) and of the Build 0 report.
+
+### A4.4 Vendor history gaps: a roll-rule contract without a settlement
+
+On a decision date where a contract chosen by the roll rule (F1 or F2) has no settlement in the primary source, that
+market is treated as **missing that month under §2.1 rule 3** (weight 0; the cross-sectional rank uses the markets
+that have values). This is recorded as a data fix for vendor history gaps.
+
+**Where it applies.** Build 0 found 35 such market-months, all for F2 contracts whose Norgate history starts only
+5–8 months before expiry:
+- **platinum:** 13 months in 2000–2005;
+- **palladium:** 22 months in 2000–2009 (palladium is already dropped by the coverage gate, §2.1 rule 1, so it is out
+  of every trial regardless).
+
+**Platinum stays in T22,** with weight 0 in those 13 months.
+
+**How A6 changes.** A6's first-settlement assertion is evaluated on the contracts actually used, i.e. those with a
+settlement on the decision date. The coverage gate itself is unchanged.
+
+**Not changed.** Everything else, including Amendment 3's roll rule and the other Build 0 tests. The ledger rows
+T20–T22 are updated to reference Amendments 3 and 4, changing no other row.

@@ -1,0 +1,277 @@
+{
+ "a": {
+  "per_market": {
+   "CL": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "B": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "RB": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 251
+   },
+   "HO": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "NG": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 437
+   },
+   "G": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "HG": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "GC": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "SI": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "PL": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 428
+   },
+   "PA": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 419
+   },
+   "ZC": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "ZS": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "ZW": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "KE": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "ZM": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "ZL": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "SB": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "KC": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "CC": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "CT": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "LE": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "GF": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   },
+   "HE": {
+    "pairing": 0,
+    "d_range": 0,
+    "sign": 0,
+    "unit": 0,
+    "settle_mismatch": 0,
+    "hold_mismatch": 0,
+    "carry_outliers": 0,
+    "months_used": 441
+   }
+  },
+  "weights": {
+   "months": 441,
+   "weight_violations": 0
+  },
+  "alignment": {
+   "aqr_dates_business_month_end": true,
+   "aqr_months_consecutive": true,
+   "aqr_rows": 1196,
+   "our_label_is_execution_month": true
+  },
+  "totals": {
+   "pairing": 0,
+   "d_range": 0,
+   "sign": 0,
+   "unit": 0,
+   "settle_mismatch": 0,
+   "hold_mismatch": 0,
+   "carry_outliers": 0,
+   "months_used": 10355
+  },
+  "flags_summary": {},
+  "outlier_list": [],
+  "unit_list": []
+ },
+ "c": {
+  "months": 434,
+  "first": "1990-01",
+  "last": "2026-02",
+  "corr": 0.6790390990359396,
+  "markets_per_month_min": 22,
+  "markets_per_month_max": 24
+ }
+}

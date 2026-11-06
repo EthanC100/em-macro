@@ -1,0 +1,2312 @@
+{
+ "snapshot": "2026-11_futures",
+ "markets": {
+  "CL": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 565,
+    "live": 123,
+    "first_contract": "CL-1990G",
+    "last_contract": "CL-2037G",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 322,
+    "ltd_rule_exact": 0.984472049689441,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "CL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 3,
+    "F1_last10_violations_2000_2026": 3,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [
+     "2001-08",
+     "2007-10",
+     "2012-10"
+    ],
+    "F1_min_trading_days_left_at_exit": 10,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 30
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2026-04",
+      23.3
+     ],
+     [
+      "2020-06",
+      21.9
+     ],
+     [
+      "2020-04",
+      18.1
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 1
+  },
+  "B": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 590,
+    "live": 147,
+    "first_contract": "BRN-1990G",
+    "last_contract": "BRN-2039H",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 323,
+    "ltd_rule_exact": 0.3622291021671827,
+    "ltd_rule_within_2bd": 0.4024767801857585,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "BRN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 311,
+    "F1_last10_violations_2000_2026": 192,
+    "F1_last10_violations_excl_exit_day": 194,
+    "F1_last10_examples": [
+     "1990-01",
+     "1990-03",
+     "1990-04",
+     "1990-05",
+     "1990-06",
+     "1990-07"
+    ],
+    "F1_min_trading_days_left_at_exit": 5,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 20
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 199,
+    "share": 0.8291666666666667,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2026-04",
+      24.9
+     ],
+     [
+      "2020-04",
+      18.6
+     ],
+     [
+      "2020-06",
+      15.1
+     ]
+    ],
+    "changes": [
+     {
+      "change": "Brent last-trading-day rule changed from the Mar 2016 contract",
+      "month": "2016-03",
+      "window_max_multiple": 3.7,
+      "window_max_month": "2016-03",
+      "rank_in_2000_2026": 33,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "RB": {
+   "entry": "2006-12",
+   "A1": {
+    "contracts": 289,
+    "live": 38,
+    "first_contract": "RB-2006F",
+    "last_contract": "RB-2030F",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 251,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "LBD_PREV"
+   },
+   "coverage": {
+    "start": "2006-12",
+    "months": 238,
+    "covered": 238,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 252,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 17,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 38
+   },
+   "A7": {
+    "months": 157,
+    "with_F13": 154,
+    "share": 0.9808917197452229,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 252,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2015-02",
+      11.6
+     ],
+     [
+      "2016-02",
+      11.4
+     ],
+     [
+      "2015-01",
+      11.2
+     ]
+    ],
+    "changes": [
+     {
+      "change": "RBOB listed from Oct 2005 (Jan 2006 contract); unleaded gasoline not in Norgate",
+      "month": "2006-01",
+      "window_max_multiple": 5.4,
+      "window_max_month": "2006-01",
+      "rank_in_2000_2026": 37,
+      "of": 250
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "HO": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 480,
+    "live": 38,
+    "first_contract": "HO-1990G",
+    "last_contract": "HO-2030F",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 322,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "LBD_PREV"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 16,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 37
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 237,
+    "share": 0.9875,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2026-04",
+      21.6
+     ],
+     [
+      "2003-04",
+      19.2
+     ],
+     [
+      "2026-05",
+      18.4
+     ]
+    ],
+    "changes": [
+     {
+      "change": "No. 2 heating oil -> NY Harbor ULSD from the May 2013 contract (SER-6198)",
+      "month": "2013-05",
+      "window_max_multiple": 5.5,
+      "window_max_month": "2013-03",
+      "rank_in_2000_2026": 22,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "NG": {
+   "entry": "1991-06",
+   "A1": {
+    "contracts": 568,
+    "live": 119,
+    "first_contract": "NG-1990M",
+    "last_contract": "NG-2037U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 322,
+    "ltd_rule_exact": 0.9813664596273292,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [
+     "NG-2036X",
+     "NG-2036Z",
+     "NG-2037F",
+     "NG-2037G",
+     "NG-2037H",
+     "NG-2037J",
+     "NG-2037K",
+     "NG-2037M",
+     "NG-2037N",
+     "NG-2037Q",
+     "NG-2037U"
+    ],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "NG"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 438,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 11,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 31
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 438,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2001-02",
+      14.0
+     ],
+     [
+      "2001-01",
+      12.9
+     ],
+     [
+      "2024-08",
+      9.5
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "G": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 516,
+    "live": 74,
+    "first_contract": "GAS-1990F",
+    "last_contract": "GAS-2032Z",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 322,
+    "ltd_rule_exact": 0.9937888198757764,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "GAS"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 429,
+    "F1_last10_violations_2000_2026": 312,
+    "F1_last10_violations_excl_exit_day": 429,
+    "F1_last10_examples": [
+     "1990-01",
+     "1990-03",
+     "1990-04",
+     "1990-05",
+     "1990-06",
+     "1990-07"
+    ],
+    "F1_min_trading_days_left_at_exit": 4,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 24
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 172,
+    "share": 0.7166666666666667,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2026-04",
+      21.1
+     ],
+     [
+      "2003-04",
+      17.1
+     ],
+     [
+      "2026-05",
+      15.9
+     ]
+    ],
+    "changes": [
+     {
+      "change": "ICE gasoil 0.1% sulphur -> 10 ppm low sulphur gasoil from the Feb 2015 contract",
+      "month": "2015-02",
+      "window_max_multiple": 4.2,
+      "window_max_month": "2014-12",
+      "rank_in_2000_2026": 22,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "HG": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 210,
+    "live": 26,
+    "first_contract": "HG-1990H",
+    "last_contract": "HG-2031Z",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "METAL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 35,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 78
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2005-06",
+      29.0
+     ],
+     [
+      "2006-06",
+      11.3
+     ],
+     [
+      "2005-09",
+      10.2
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "GC": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 241,
+    "live": 20,
+    "first_contract": "GC-1990G",
+    "last_contract": "GC-2032M",
+    "missing_designated": [
+     "2029G",
+     "2029J",
+     "2029Q",
+     "2029V",
+     "2030G",
+     "2030J",
+     "2030Q",
+     "2030V",
+     "2031G",
+     "2031J",
+     "2031Q",
+     "2031V",
+     "2032G",
+     "2032J"
+    ],
+    "n_missing_designated": 14,
+    "ltd_rule_n": 161,
+    "ltd_rule_exact": 0.9875776397515528,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "METAL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 35,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 75
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2020-06",
+      17.0
+     ],
+     [
+      "2008-11",
+      13.7
+     ],
+     [
+      "2020-04",
+      12.2
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "SI": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 200,
+    "live": 16,
+    "first_contract": "SI-1990H",
+    "last_contract": "SI-2031N",
+    "missing_designated": [
+     "2029H",
+     "2029K",
+     "2029U",
+     "2030H",
+     "2030K",
+     "2030U",
+     "2031H",
+     "2031K"
+    ],
+    "n_missing_designated": 8,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9925373134328358,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "METAL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 35,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 78
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 2,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 2,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2008-11",
+      13.9
+     ],
+     [
+      "2005-07",
+      10.8
+     ],
+     [
+      "2023-06",
+      10.8
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 1
+  },
+  "PL": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 160,
+    "live": 12,
+    "first_contract": "PL-1990F",
+    "last_contract": "PL-2029V",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 108,
+    "ltd_rule_exact": 0.8148148148148148,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "METAL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 308,
+    "coverage": 0.9595015576323987,
+    "missing_months": [
+     "2000-09",
+     "2000-12",
+     "2001-03",
+     "2001-09",
+     "2001-10",
+     "2003-12",
+     "2004-09",
+     "2004-10",
+     "2004-12",
+     "2005-03",
+     "2005-06",
+     "2005-07",
+     "2005-12"
+    ]
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 13,
+    "first_settle_examples": [
+     [
+      "2000-09",
+      "F2"
+     ],
+     [
+      "2000-12",
+      "F2"
+     ],
+     [
+      "2001-03",
+      "F2"
+     ],
+     [
+      "2001-09",
+      "F2"
+     ],
+     [
+      "2001-10",
+      "F2"
+     ]
+    ],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 35,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 96
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 8,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 131
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2001-02",
+      32.1
+     ],
+     [
+      "2000-05",
+      15.3
+     ],
+     [
+      "2002-09",
+      13.6
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "PA": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 159,
+    "live": 12,
+    "first_contract": "PA-1990H",
+    "last_contract": "PA-2029U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 107,
+    "ltd_rule_exact": 0.8037383177570093,
+    "ltd_rule_within_2bd": 0.9906542056074766,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "METAL"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 299,
+    "coverage": 0.9314641744548287,
+    "missing_months": [
+     "2000-02",
+     "2000-08",
+     "2001-02",
+     "2001-05",
+     "2001-06",
+     "2001-08",
+     "2001-09",
+     "2001-10",
+     "2001-11",
+     "2001-12",
+     "2002-01",
+     "2002-05",
+     "2002-06",
+     "2002-07",
+     "2002-08",
+     "2002-09",
+     "2002-11",
+     "2002-12",
+     "2003-01",
+     "2003-02",
+     "2004-02",
+     "2009-02"
+    ]
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 22,
+    "first_settle_examples": [
+     [
+      "2000-02",
+      "F2"
+     ],
+     [
+      "2000-08",
+      "F2"
+     ],
+     [
+      "2001-02",
+      "F2"
+     ],
+     [
+      "2001-05",
+      "F2"
+     ],
+     [
+      "2001-06",
+      "F2"
+     ]
+    ],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 34,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 94
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 8,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 252
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2024-07",
+      12.5
+     ],
+     [
+      "2000-06",
+      10.0
+     ],
+     [
+      "2026-02",
+      9.6
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "ZC": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 197,
+    "live": 13,
+    "first_contract": "ZC-1990H",
+    "last_contract": "ZC-2029Z",
+    "missing_designated": [
+     "2029H",
+     "2029K",
+     "2029U"
+    ],
+    "n_missing_designated": 3,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9552238805970149,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 27,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 69
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 239,
+    "share": 0.9958333333333333,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 23,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 16,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2012-04",
+      30.4
+     ],
+     [
+      "2023-06",
+      27.0
+     ],
+     [
+      "2012-06",
+      26.6
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "ZS": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 275,
+    "live": 17,
+    "first_contract": "ZS-1990F",
+    "last_contract": "ZS-2029X",
+    "missing_designated": [
+     "2029F",
+     "2029H",
+     "2029K",
+     "2029Q",
+     "2029U"
+    ],
+    "n_missing_designated": 5,
+    "ltd_rule_n": 188,
+    "ltd_rule_exact": 0.9414893617021277,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 27,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 49
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 219,
+    "share": 0.9125,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 11,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 8,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2014-07",
+      22.7
+     ],
+     [
+      "2004-08",
+      21.3
+     ],
+     [
+      "2003-08",
+      19.5
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "ZW": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 198,
+    "live": 14,
+    "first_contract": "ZW-1990H",
+    "last_contract": "ZW-2029N",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9477611940298507,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 27,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 69
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 216,
+    "share": 0.9,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 1,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 7,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2002-11",
+      19.5
+     ],
+     [
+      "2008-02",
+      19.3
+     ],
+     [
+      "2008-04",
+      18.1
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "KE": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 198,
+    "live": 14,
+    "first_contract": "KE-1990H",
+    "last_contract": "KE-2029N",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.8283582089552238,
+    "ltd_rule_within_2bd": 0.8283582089552238,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 27,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 69
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 203,
+    "share": 0.8458333333333333,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 7,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 15,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2008-04",
+      13.7
+     ],
+     [
+      "2005-04",
+      10.8
+     ],
+     [
+      "2007-11",
+      8.8
+     ]
+    ],
+    "changes": [
+     {
+      "change": "KC HRW wheat moved from KCBT to CBOT (trade date 16 Dec 2013)",
+      "month": "2013-12",
+      "window_max_multiple": 3.7,
+      "window_max_month": "2014-02",
+      "rank_in_2000_2026": 31,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "ZM": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 315,
+    "live": 17,
+    "first_contract": "ZM-1990F",
+    "last_contract": "ZM-2029Z",
+    "missing_designated": [
+     "2029F",
+     "2029H",
+     "2029K",
+     "2029Q",
+     "2029U"
+    ],
+    "n_missing_designated": 5,
+    "ltd_rule_n": 215,
+    "ltd_rule_exact": 0.9441860465116279,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [
+     "ZM-2029N",
+     "ZM-2029V",
+     "ZM-2029Z"
+    ],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 26,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 46
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 230,
+    "share": 0.9583333333333334,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 11,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 10,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2004-08",
+      25.0
+     ],
+     [
+      "2004-07",
+      16.1
+     ],
+     [
+      "2003-08",
+      13.3
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "ZL": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 315,
+    "live": 17,
+    "first_contract": "ZL-1990F",
+    "last_contract": "ZL-2029Z",
+    "missing_designated": [
+     "2029F",
+     "2029H",
+     "2029K",
+     "2029Q",
+     "2029U"
+    ],
+    "n_missing_designated": 5,
+    "ltd_rule_n": 215,
+    "ltd_rule_exact": 0.9441860465116279,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [
+     "ZL-2029N",
+     "ZL-2029V",
+     "ZL-2029Z"
+    ],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "LBD_PREV",
+    "ltd_rule": "GRAIN"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 26,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 46
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 232,
+    "share": 0.9666666666666667,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 7,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 8,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2021-06",
+      21.5
+     ],
+     [
+      "2021-05",
+      18.3
+     ],
+     [
+      "2004-08",
+      14.6
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "SB": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 159,
+    "live": 11,
+    "first_contract": "SB-1990H",
+    "last_contract": "SB-2029N",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 108,
+    "ltd_rule_exact": 0.9907407407407407,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "LBD_PREV"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 17,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 59
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2009-09",
+      10.4
+     ],
+     [
+      "2002-04",
+      10.0
+     ],
+     [
+      "2015-09",
+      8.2
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "KC": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 191,
+    "live": 7,
+    "first_contract": "KC-1990H",
+    "last_contract": "KC-2028H",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9552238805970149,
+    "ltd_rule_within_2bd": 0.9925373134328358,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "KC",
+    "ltd_rule": "KC"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 27,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 72
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2022-11",
+      11.0
+     ],
+     [
+      "2026-04",
+      9.8
+     ],
+     [
+      "2001-11",
+      9.3
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "CC": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 194,
+    "live": 10,
+    "first_contract": "CC-1990H",
+    "last_contract": "CC-2028U",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9253731343283582,
+    "ltd_rule_within_2bd": 0.9925373134328358,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "CC",
+    "ltd_rule": "CC"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 25,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 69
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 2,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2024-11",
+      36.2
+     ],
+     [
+      "2024-09",
+      23.5
+     ],
+     [
+      "2024-08",
+      17.4
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "CT": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 198,
+    "live": 14,
+    "first_contract": "CT-1990H",
+    "last_contract": "CT-2029N",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 134,
+    "ltd_rule_exact": 0.9626865671641791,
+    "ltd_rule_within_2bd": 0.9925373134328358,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "CT",
+    "ltd_rule": "CT"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 19,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 59
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 240,
+    "share": 1.0,
+    "option": "A"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 0,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2011-04",
+      22.4
+     ],
+     [
+      "2011-05",
+      17.0
+     ],
+     [
+      "2014-06",
+      15.6
+     ]
+    ],
+    "changes": []
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "LE": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 231,
+    "live": 10,
+    "first_contract": "LE-1990G",
+    "last_contract": "LE-2028M",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 161,
+    "ltd_rule_exact": 1.0,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "min(FND, LTD)",
+    "fnd_rule": "FBD",
+    "ltd_rule": "LBD"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 0,
+    "F1_last10_violations_2000_2026": 0,
+    "F1_last10_violations_excl_exit_day": 0,
+    "F1_last10_examples": [],
+    "F1_min_trading_days_left_at_exit": 33,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 75
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 147,
+    "share": 0.6125,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 14,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 15,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2017-01",
+      8.5
+     ],
+     [
+      "2019-01",
+      7.7
+     ],
+     [
+      "2018-01",
+      7.6
+     ]
+    ],
+    "changes": [
+     {
+      "change": "steer weight ceiling raised from the Feb 2021 contract",
+      "month": "2021-02",
+      "window_max_multiple": 6.2,
+      "window_max_month": "2021-01",
+      "rank_in_2000_2026": 14,
+      "of": 320
+     },
+     {
+      "change": "redelivery ban from the Feb 2022 contract",
+      "month": "2022-02",
+      "window_max_multiple": 5.6,
+      "window_max_month": "2022-01",
+      "rank_in_2000_2026": 19,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "GF": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 304,
+    "live": 9,
+    "first_contract": "GF-1990F",
+    "last_contract": "GF-2027X",
+    "missing_designated": [],
+    "n_missing_designated": 0,
+    "ltd_rule_n": 215,
+    "ltd_rule_exact": 0.6558139534883721,
+    "ltd_rule_within_2bd": 0.8465116279069768,
+    "stopped_early": [],
+    "final_settlement_rows": 0,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "GF"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 10,
+    "F1_last10_violations_2000_2026": 8,
+    "F1_last10_violations_excl_exit_day": 4,
+    "F1_last10_examples": [
+     "1990-10",
+     "1995-10",
+     "2000-10",
+     "2001-10",
+     "2006-10",
+     "2007-10"
+    ],
+    "F1_min_trading_days_left_at_exit": 9,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 32
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 0,
+    "share": 0.0,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 17,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 1,
+     "limit_locked_flags": 13,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2004-01",
+      12.8
+     ],
+     [
+      "2023-05",
+      11.7
+     ],
+     [
+      "2023-04",
+      9.6
+     ]
+    ],
+    "changes": [
+     {
+      "change": "Feeder Cattle Index weight band 650-849 lb -> 700-899 lb from the Nov 2016 contract",
+      "month": "2016-11",
+      "window_max_multiple": 3.9,
+      "window_max_month": "2017-01",
+      "rank_in_2000_2026": 35,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  },
+  "HE": {
+   "entry": "1991-02",
+   "A1": {
+    "contracts": 294,
+    "live": 11,
+    "first_contract": "HE-1990G",
+    "last_contract": "HE-2028J",
+    "missing_designated": [
+     "1990K",
+     "1991K",
+     "1992K",
+     "1993K",
+     "1994K",
+     "1995K",
+     "1996K",
+     "1997K",
+     "1998K",
+     "1999K",
+     "2000K",
+     "2001K"
+    ],
+    "n_missing_designated": 12,
+    "ltd_rule_n": 213,
+    "ltd_rule_exact": 0.9953051643192489,
+    "ltd_rule_within_2bd": 1.0,
+    "stopped_early": [],
+    "final_settlement_rows": 92,
+    "notice": "LTD",
+    "fnd_rule": null,
+    "ltd_rule": "HE"
+   },
+   "coverage": {
+    "start": "2000-01",
+    "months": 321,
+    "covered": 321,
+    "coverage": 1.0,
+    "missing_months": []
+   },
+   "A6": {
+    "rebalances": 442,
+    "first_settle_after_decision": 0,
+    "first_settle_examples": [],
+    "notice_violations": 0,
+    "F1_last10_violations": 233,
+    "F1_last10_violations_2000_2026": 213,
+    "F1_last10_violations_excl_exit_day": 201,
+    "F1_last10_examples": [
+     "1997-03",
+     "1997-05",
+     "1997-06",
+     "1997-07",
+     "1997-09",
+     "1997-11"
+    ],
+    "F1_min_trading_days_left_at_exit": 7,
+    "F2_last10_violations": 0,
+    "F2_last10_violations_2000_2026": 0,
+    "F2_last10_violations_excl_exit_day": 0,
+    "F2_last10_examples": [],
+    "F2_min_trading_days_left_at_exit": 29
+   },
+   "A7": {
+    "months": 240,
+    "with_F13": 180,
+    "share": 0.75,
+    "option": "B"
+   },
+   "A9": {
+    "F1": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 8,
+     "filled_days": 0
+    },
+    "F2": {
+     "gaps_gt5": 0,
+     "spikes": 0,
+     "limit_locked_flags": 12,
+     "filled_days": 0
+    }
+   },
+   "A11": {
+    "checked": 442,
+    "violations": 0,
+    "examples": []
+   },
+   "spec_change": {
+    "top_moves": [
+     [
+      "2018-07",
+      6.5
+     ],
+     [
+      "2016-10",
+      5.8
+     ],
+     [
+      "2024-07",
+      5.3
+     ]
+    ],
+    "changes": [
+     {
+      "change": "CME Lean Hog Index redefined (negotiated formula purchases), effective 11 Oct 2016",
+      "month": "2016-10",
+      "window_max_multiple": 5.8,
+      "window_max_month": "2016-10",
+      "rank_in_2000_2026": 2,
+      "of": 320
+     }
+    ]
+   },
+   "unit_breaks_2000_2026": 0
+  }
+ },
+ "A3": {
+  "months": 424,
+  "first": "1990-02",
+  "last": "2025-05",
+  "corr": 0.9745940420837217,
+  "corr_2000_on": 0.9777212952821981,
+  "markets_per_month_min": 22,
+  "markets_per_month_max": 24
+ },
+ "A4": {
+  "months": 434,
+  "first": "1990-01",
+  "last": "2026-02",
+  "corr": 0.5032874351415978,
+  "corr_2000_on": 0.5238286634605881,
+  "markets_per_month_min": 21
+ },
+ "A9_issue_counts": {
+  "gap|not held by any trial (F2 of a market outside T21)": 16,
+  "spike|genuine (curve confirms)": 14
+ }
+}

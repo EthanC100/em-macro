@@ -15,6 +15,8 @@ export    Write one CSV per individual contract
           <out>/contracts/<MARKET>/<CONTRACT>.csv, plus <out>/manifest.csv and
           <out>/manifest.json with a SHA-256 hash, byte size, row count and date range for each.
 all       coverage, then export (the manifest also hashes coverage.csv and all_markets.csv).
+metadata  coverage, then one row per contract with Norgate's metadata (first/last quoted date, first notice
+          date, point value, tick size, currency, exchange) in <out>/metadata.csv.
 
 Markets missing from Norgate are recorded as missing, never substituted.
 
@@ -39,7 +41,21 @@ TARGETS: dict[str, list[str]] = {
     "ZC": ["ZC"], "ZS": ["ZS"], "ZW": ["ZW"], "KE": ["KE"], "ZM": ["ZM"], "ZL": ["ZL"],
     "SB": ["SB"], "KC": ["KC"], "CC": ["CC"], "CT": ["CT"],
     "LE": ["LE"], "GF": ["GF"], "HE": ["HE"],
+    # T22 financial futures (docs/prereg/T20-T22_commodity_trials.md §2.1). Settlement sessions only: Eurex
+    # "Electronic", not the "(Last)" sessions FGBL9/FOAT9/FBTP9. 6L, 6Z and FBON are not in Norgate's list
+    # (2026-11) and are kept here so coverage.csv records them as MISSING.
+    "6E": ["6E"], "6B": ["6B"], "6M": ["6M"], "6L": ["6L"], "6Z": ["6Z"],
+    "FGBL": ["FGBL"], "FOAT": ["FOAT"], "FBTP": ["FBTP"], "FBON": ["FBON"], "R": ["LLG"],
 }
+COMMODITY_CODES = ["CL", "B", "HO", "RB", "NG", "G", "HG", "GC", "SI", "PL", "PA", "ZC", "ZS", "ZW", "KE",
+                   "ZM", "ZL", "SB", "KC", "CC", "CT", "LE", "GF", "HE"]
+FINANCIAL_CODES = ["6E", "6B", "6M", "6L", "6Z", "FGBL", "FOAT", "FBTP", "FBON", "R"]
+# Per-contract metadata fields: (column, norgatedata function). A function missing from the installed
+# norgatedata version is recorded in metadata_fields.json, never guessed.
+METADATA_FUNCS = [("first_quoted_date", "first_quoted_date"), ("last_quoted_date", "last_quoted_date"),
+                  ("first_notice_date", "first_notice_date"), ("point_value", "point_value"),
+                  ("tick_size", "tick_size"), ("lowest_ever_tick_size", "lowest_ever_tick_size"),
+                  ("currency", "currency"), ("exchange", "exchange_name"), ("name", "security_name")]
 MONTH_CODES = "FGHJKMNQUVXZ"
 CONTRACT_RE = re.compile(r"-(\d{4})([FGHJKMNQUVXZ])$")
 OUT_COLUMNS = ["date", "open", "high", "low", "close", "volume", "open_interest"]
@@ -247,6 +263,53 @@ def coverage(nd, out: Path):
     return resolved
 
 
+# --------------------------------------------------------------------------- metadata
+def metadata(nd, out: Path, resolved):
+    """One row per contract with Norgate's own metadata: first/last quoted date (for a live contract
+    last_quoted_date is the scheduled expiry), first notice date, point value, tick size, currency, exchange.
+    Writes <out>/metadata.csv and <out>/metadata_fields.json (which functions existed and their error counts)."""
+    out.mkdir(parents=True, exist_ok=True)
+    as_of = as_of_date(nd)
+    avail = {col: getattr(nd, fn, None) for col, fn in METADATA_FUNCS}
+    errs = {col: 0 for col in avail}
+    rows = []
+    for code, (sym, contracts) in resolved.items():
+        for c in contracts:
+            row = {"market": code, "norgate_symbol": sym, "contract": c[0], "as_of": str(as_of)}
+            for col, fn in avail.items():
+                if fn is None:
+                    row[col] = ""
+                    continue
+                v, err = call(fn, c[0])
+                if err:
+                    errs[col] += 1
+                    v = ""
+                elif col.endswith("_date") and v not in (None, ""):
+                    try:
+                        v = str(to_date(v) or "")
+                    except (TypeError, ValueError):
+                        errs[col] += 1
+                        v = ""
+                row[col] = "" if v is None else v
+            rows.append(row)
+        print(f"{code}: metadata for {sum(r['market'] == code for r in rows)} contracts")
+    cols = ["market", "norgate_symbol", "contract", "as_of"] + [c for c, _ in METADATA_FUNCS]
+    with open(out / "metadata.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    info = {"generated_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "norgatedata": getattr(nd, "__version__", ""), "as_of": str(as_of), "contracts": len(rows),
+            "fields": {col: {"function": fn, "available": avail[col] is not None, "errors": errs[col]}
+                       for col, fn in METADATA_FUNCS}}
+    (out / "metadata_fields.json").write_text(json.dumps(info, indent=1), encoding="utf-8")
+    missing = [c for c, f in avail.items() if f is None]
+    print(f"wrote metadata for {len(rows)} contracts; functions not in this norgatedata: {missing or 'none'}")
+    for p in ("metadata.csv", "metadata_fields.json"):
+        print(f"  {p}  sha256 {sha256(out / p)}")
+    return info
+
+
 # --------------------------------------------------------------------------- export
 def export_contract(nd, symbol: str, path: Path):
     df, err = call(nd.price_timeseries, symbol,
@@ -325,11 +388,14 @@ def export(nd, out: Path, resolved):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["coverage", "export", "all"])
+    ap.add_argument("command", choices=["coverage", "export", "all", "metadata"])
     ap.add_argument("--out", required=True, type=Path, help="output directory")
-    ap.add_argument("--markets", nargs="*", help="limit to these target codes (default: all)")
+    ap.add_argument("--markets", nargs="*", help="limit to these target codes (default: all), or the "
+                    "group names 'commodities' / 'financials'")
     a = ap.parse_args(argv)
     if a.markets:
+        groups = {"commodities": COMMODITY_CODES, "financials": FINANCIAL_CODES}
+        a.markets = [m for g in a.markets for m in groups.get(g, [g])]
         unknown = set(a.markets) - set(TARGETS)
         if unknown:
             ap.error(f"unknown market codes: {sorted(unknown)}")
@@ -340,6 +406,8 @@ def main(argv=None):
     resolved = coverage(nd, a.out)
     if a.command in ("export", "all"):
         export(nd, a.out, resolved)
+    if a.command == "metadata":
+        metadata(nd, a.out, resolved)
 
 
 if __name__ == "__main__":
