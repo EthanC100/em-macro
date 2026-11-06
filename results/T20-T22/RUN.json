@@ -1,0 +1,84 @@
+{
+ "run_started_utc": "2026-11-06T06:26:44+00:00",
+ "run_finished_utc": "2026-11-06T06:33:27+00:00",
+ "git_head_at_run": "7405e5f1182c7069ea7ea16216016d2f82206618",
+ "pandas": "3.0.5",
+ "numpy": "2.5.3",
+ "reproduction": {
+  "v1.0_identical": true,
+  "v1.1_reproduces_T18": true,
+  "checks": {
+   "performance.csv (T18 rows)": {
+    "rows": 12,
+    "identical": true
+   },
+   "monthly_net.csv (T18 columns)": {
+    "columns": 6,
+    "months": 248,
+    "identical": true
+   },
+   "by_year_2020_2026.csv (T18 rows)": {
+    "rows": 14,
+    "identical": true
+   },
+   "t18_tradelog_all_1x.csv": {
+    "rows": 4455,
+    "identical": true
+   },
+   "t18_tradelog_halfB_1x.csv": {
+    "rows": 1966,
+    "identical": true
+   },
+   "t18_tradelog_halfA_1x.csv": {
+    "rows": 1788,
+    "identical": true
+   },
+   "t18_tradelog_all_2x.csv": {
+    "rows": 4455,
+    "identical": true
+   },
+   "t18_tradelog_halfB_2x.csv": {
+    "rows": 1966,
+    "identical": true
+   },
+   "t18_tradelog_halfA_2x.csv": {
+    "rows": 1788,
+    "identical": true
+   },
+   "criteria.json (1x, T18 statistics)": {
+    "max_abs_diff": 0.0,
+    "identical": true
+   },
+   "turnover() == t01.turnover": {
+    "identical": true
+   }
+  }
+ },
+ "inputs": {
+  "norgate": [
+   "2026-11_futures",
+   "2026-11_financials",
+   "2026-11_metadata"
+  ],
+  "v1.1": "v1.0 data/processed snapshots at 7886867 and data/kept/T16-T19 raw cache",
+  "fx": "FRED DEXUSEU, DEXUSUK"
+ },
+ "decisions": [
+  "T21: the 12 holding months are measured between consecutive decision dates (the twelve months to t, settlements up to and including t), from the chained F1 and F2 indices",
+  "The 10% single-market risk cap of section 2.4 (a sleeve-construction convention) is applied to all three sleeves, measured with each sleeve's own sigma",
+  "Combination timing: the scale s_t and the gross cap are set at month-end t from v1.1's held weights and the sleeve's weights held after its rebalance in month t; the sleeve leg earns kappa_t = 0.25 s_t (capped) times the sleeve's net return in month t+1 (positions decided at month-end earn next month, as v1.1's FX legs); a change of kappa is a trade of |dkappa| x the sleeve's held notional, charged at its cost rates",
+  "Clark-West: target = the market's F1 holding-period excess return from this execution to the next; the prevailing mean and the pooled slope use pairs with s < t as pre-registered (holding periods of earlier rebalance months, first forecast at the 2010-01 decision); beta_t = OLS slope of r on z with an intercept; z = cross-sectional ranks standardised to mean 0, SD 1, winsorised at +-2"
+ ],
+ "sha256": {
+  "em_macro/t2022.py": "d54cdc750668baa26eb408bfb394ec25e0467fd6e7b77ea919583f8a3345528a",
+  "em_macro/t2022_report.py": "f71072ee5cb294515ea03966ef71412366a1a3824012466d400acd8d8d01de15",
+  "em_macro/commod_data.py": "e5ffe76b98d959d268f46e38b97eb2bfe78aa2f114922efb43b9bbbb8f49cb25",
+  "em_macro/commod_build0.py": "2c58f7e2bde920e76605d973a2cf6763fdf49b670c7724a33265affaf5e1951c",
+  "em_macro/systematic.py": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "em_macro/systematic_v11.py": "b3c4404ed80209efd1b3fa0e993f30bbac2650b2a9af042f07f8e21175885952",
+  "em_macro/t18_rebal.py": "dda6456d676281b48080d3c0a6c304d51c928cea39e0f70c696a364a10f96c43",
+  "docs/prereg/T20-T22_commodity_trials.md": "2f178b2f5dff418c69e05d464d18b9a623f4e4dc45c1e4de46c599e880a1c32e",
+  "results/T20-T22/build0.md": "77c08539b1f2104f0f8cfcf01aae942d6751d0fd194efe71db1bee2357e8b238",
+  "results/T20-T22/build0.json": "9fb5fc4bbc7b09916281cb6e9345193ca9372b963d3ab43b0135e756290003d5"
+ }
+}

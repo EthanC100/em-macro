@@ -13,6 +13,28 @@ REPORT = RESULTS / "T20-T22_commodity_trials.md"
 TRIALS = {"T20": "commodity carry", "T21": "basis-momentum", "T22": "diversified futures trend"}
 
 
+STATIC_READINGS = [
+    "Positions are held in the F1 contract in all three trials (T21's F2 series is used only for its signal). "
+    "Between executions the number of contracts is constant: daily P&L = w x (F_d - F_d-1) x fx_d / (F_ref x fx_ref), "
+    "with a missing settlement carried forward.",
+    "Costs are charged at the execution settlement, with c_raw recomputed for each trade from that contract's "
+    "settlement and fx; a roll is two trades (old and new contract).",
+    "Volatility: both estimators are annualised with sqrt(252). For T22 only relative sizes matter, because the "
+    "sleeve is rescaled to 10%. The RiskMetrics EWMA starts from the first squared return. MOP's EWMA is the "
+    "demeaned pandas ewm with a centre of mass of 60.",
+    "Sleeve scaling: the pro-forma volatility uses the markets' calendar-month F1 excess returns over the 36 complete "
+    "months before the rebalance month (at least 12).",
+    "Sleeve rebalancing: v1.1's T18 rule (t18_rebal.apply_rules) on the sleeve's own sigma, with one risk budget "
+    "over the sleeve's active positions.",
+    "T22: S_t = the number of instruments with a signal that month. A market-month made missing by Amendment 4.4 "
+    "(platinum, 13 months) has weight 0.",
+    "Non-USD futures (Eurex in EUR, Long Gilt in GBP) are converted with FRED DEXUSEU and DEXUSUK, read from the kept "
+    "T16-T19 raw cache.",
+    "Diagnostics only: the rounding diagnostic sizes the combined sleeve leg (kappa x held weight) at US$10m. Combined "
+    "turnover is dated in the decision month.",
+]
+
+
 def _f(x, nd=3):
     try:
         return f"{float(x):.{nd}f}"
@@ -162,7 +184,11 @@ def write():
         a(f"| {t} mean net weight by sector, 2020-01..2026-09 | " +
           ", ".join(f"{k} {_f(v, 3)}" for k, v in diag[f"{t}_mean_net_weight_by_sector"].items()) + " |")
     a("\n## 8. Implementation readings (decisions taken under the simplest-reading rule)\n")
+    i = 0
     for i, d in enumerate(run["decisions"], 1):
+        a(f"{i}. {d}")
+    for d in STATIC_READINGS:
+        i += 1
         a(f"{i}. {d}")
     a("\nNot reported: T22's P&L attribution by horizon and its net duration. The sleeve holds one blended position "
       "per instrument after the T18 band, so a horizon split would itself require an allocation rule. Duration data "
