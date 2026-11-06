@@ -1,18 +1,20 @@
-"""Monthly investor letter per book, generated on the 3rd (figures from the data, narrative via the API).
+"""Monthly investor letter per book (Me, Algorithm, Janus): figures from the data, narrative from a Claude Code
+session (docs/letters/monthly_letters.md, a scheduled task on the 3rd). No API call is made here.
 
-    python -m ledger.letters [--month 2026-11]     # default: the month that just ended
+    python -m ledger.letters figures [--month 2026-11]       # JSON: is the month booked, the figures, letters written
+    python -m ledger.letters write --month 2026-11 --book me --file N.json --model M
 
-One letter per book (Me, Algorithm, Janus), written to data/ledger/reports/<YYYY-MM-03>_letter-<book>-<month>.md
-(type "investor letter") and archived under Reports. The figures (performance, contributors, positions, risk) are
-computed here from the repository's data and inserted as they are; the model writes only the narrative sections
-(what worked, what did not, outlook for the risk) and must not invent figures. Without ANTHROPIC_API_KEY the letter
-is written with the figures and a note in place of the narrative.
+``write`` checks the narrative (summary, what_worked, what_did_not, risk; plain text) and that every percentage it
+quotes matches a figure in the data (within rounding), refuses before the algorithm's month is booked by the
+3rd-of-month run, and refuses a second letter for the same book and month. It writes
+data/ledger/reports/<YYYY-MM-03>_letter-<book>-<month>.md (type "investor letter"), with the figures inserted
+verbatim by code, so the narrative can never change a number.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -20,10 +22,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "data/ledger/reports"
 
-SYSTEM = """You write the narrative sections of a short monthly investor letter for one paper-trading book. Use ONLY the figures given; never invent a number, a position or an event that is not in the data. Plain, direct English, no hype. If the book is the algorithm, it is a frozen set of mechanical rules: describe what the rules did, do not second-guess them. If the book is Janus, it is an AI experiment with no claimed edge.
-
-Reply with ONLY one JSON object:
-{"summary": "2-3 sentences", "what_worked": "2-4 sentences", "what_did_not": "2-4 sentences", "risk": "2-3 sentences on current positions and risk"}"""
+BOOKS = ("me", "algorithm", "janus")
+NARRATIVE_KEYS = ("summary", "what_worked", "what_did_not", "risk")
+PCT = re.compile(r"([+\-\u2212]?\d+(?:\.\d+)?)\s*(?:%|per ?cent|percentage points?|pp\b)")
 
 
 def month_bounds(month: str) -> tuple[date, date]:
@@ -75,40 +76,106 @@ def render(book: str, month: str, figs: dict, narrative: dict | None, model: str
         lines += [n.get("summary", ""), "", "## What worked", "", n.get("what_worked", ""), "",
                   "## What did not", "", n.get("what_did_not", ""), "", "## Risk", "", n.get("risk", ""), ""]
     else:
-        lines += ["_Narrative not generated (ANTHROPIC_API_KEY not set); figures below._", ""]
+        lines += ["_No narrative; figures below._", ""]
     lines += ["## Figures (from the data)", "", "```json", json.dumps(figs, indent=1, default=str), "```", "",
               f"_Figures computed by ledger/letters.py from the repository; narrative by {model or '—'}. "
               "Forecasts are scored by Brier only and are not in any P&L._"]
     return "\n".join(lines) + "\n"
 
 
-def main(argv=None) -> int:
+def letter_path(book: str, month: str) -> Path:
+    _, e = month_bounds(month)
+    return REPORTS / f"{(e + timedelta(days=3)).isoformat()}_letter-{book}-{month}.md"
+
+
+def _numbers(obj) -> list[float]:
+    out = []
+    if isinstance(obj, bool):
+        return out
+    if isinstance(obj, (int, float)):
+        return [float(obj)]
+    if isinstance(obj, dict):
+        for v in obj.values():
+            out += _numbers(v)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            out += _numbers(v)
+    return out
+
+
+def check_narrative(narr: dict, figs: dict) -> list[str]:
+    errs = []
+    for k in NARRATIVE_KEYS:
+        v = narr.get(k)
+        if not isinstance(v, str) or not v.strip():
+            errs.append(f"{k} is required (plain text)")
+        elif len(v) > 1500:
+            errs.append(f"{k} is longer than 1,500 characters")
+    known = [abs(x) for x in _numbers(figs)]
+    for k in NARRATIVE_KEYS:
+        for m in PCT.finditer(str(narr.get(k) or "")):
+            x = abs(float(m.group(1).replace("\u2212", "-")))
+            if not any(abs(x - y) <= 0.051 or abs(x - round(y, 0)) < 1e-9 for y in known):
+                errs.append(f"{k}: '{m.group(0)}' matches no figure in the data (never invent a number)")
+    return errs
+
+
+def booked(month: str, alg_months: list[dict]) -> bool:
+    return any(m["month"] == month and m.get("net") is not None for m in alg_months)
+
+
+def _context(month: str):
     from . import books as B
     from . import build
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--month", default=None)
-    a = ap.parse_args(argv)
     today = date.today()
-    month = a.month or (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
     alg = build.build_algorithm()
     bk = B.build_books(today, alg)
     bk["_alg_months"] = {"v1.0": alg["months"], "v1.1": alg["v11"]["months"]}
-    figs = figures(month, bk)
+    return figures(month, bk), booked(month, alg["months"])
+
+
+def write(book: str, month: str, narr: dict, model: str) -> Path:
+    if book not in BOOKS:
+        raise ValueError(f"book must be one of {BOOKS}")
+    if not str(model or "").strip():
+        raise ValueError("model is required")
+    path = letter_path(book, month)
+    if path.exists():
+        raise ValueError(f"the {book} letter for {month} already exists ({path.name}); letters are written once")
+    figs, is_booked = _context(month)
+    if not is_booked:
+        raise ValueError(f"{month} is not booked yet (the 3rd-of-month run has not written it); try again later")
+    errs = check_narrative(narr, figs[book])
+    if errs:
+        raise ValueError("; ".join(errs))
     REPORTS.mkdir(parents=True, exist_ok=True)
-    from . import llm
-    for book in ("me", "algorithm", "janus"):
-        narrative, model = None, None
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            try:
-                res = llm.call(SYSTEM, f"BOOK: {book}\nMONTH: {month}\nFIGURES:\n{json.dumps(figs[book], indent=1, default=str)}",
-                               purpose="investor letter", ref=f"{book}-{month}", effort="medium", web_search=0, max_tokens=8000)
-                narrative, model = llm.parse_json(res.get("text", ""), "summary"), res.get("model")
-            except llm.KeyRejected as e:
-                print(f"narrative skipped: {e}")
-        _, e = month_bounds(month)
-        path = REPORTS / f"{(e + timedelta(days=3)).isoformat()}_letter-{book}-{month}.md"
-        path.write_text(render(book, month, figs[book], narrative, model), encoding="utf-8")
-        print(f"wrote {path.relative_to(ROOT)}")
+    path.write_text(render(book, month, figs[book], {k: " ".join(narr[k].split()) for k in NARRATIVE_KEYS}, model.strip()),
+                    encoding="utf-8")
+    return path
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", choices=["figures", "write"])
+    ap.add_argument("--month", default=None, help="YYYY-MM; default: the month that just ended")
+    ap.add_argument("--book", default=None)
+    ap.add_argument("--file", default=None)
+    ap.add_argument("--model", default="")
+    a = ap.parse_args(argv)
+    month = a.month or (date.today().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    if a.cmd == "figures":
+        figs, is_booked = _context(month)
+        print(json.dumps({"month": month, "booked": is_booked,
+                          "written": [b for b in BOOKS if letter_path(b, month).exists()],
+                          "figures": figs}, indent=1, default=str))
+        return 0
+    try:
+        narr = json.loads(Path(a.file).read_text(encoding="utf-8"))
+        model = a.model or narr.pop("model", "")
+        print(write(a.book, month, narr, model).relative_to(ROOT))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as e:
+        print(f"REJECTED: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

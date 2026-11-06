@@ -111,18 +111,12 @@ jobs:
         continue-on-error: true
         run: python -m em_macro.systematic_v11 rebalance 2>&1 | tee "$RUNNER_TEMP/rebalance_v11.log"
 
-      # Monthly investor letters (ledger/letters.py): one per book (Me, Algorithm, Janus) for the month just booked,
-      # figures from the data, narrative via the Anthropic API when the secret exists. Never blocks the rebalance.
-      # (Post-mortems are written in the Janus daily review session, not here.)
-      - name: Investor letters and what changed
+      # What changed (Home). The investor letters are written by the "Ledger monthly letters" Claude Code session
+      # (docs/letters/monthly_letters.md) once this run has booked the month; no API call to Claude is made here.
+      - name: What changed
         id: letters
         continue-on-error: true
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          pip install anthropic >/dev/null 2>&1 || true
-          python -m ledger.letters 2>&1 | tee "$RUNNER_TEMP/letters.log"
-          python -m ledger.changes 2>&1 | tee -a "$RUNNER_TEMP/letters.log"
+        run: python -m ledger.changes 2>&1 | tee "$RUNNER_TEMP/letters.log"
 
       - name: Tests
         id: tests

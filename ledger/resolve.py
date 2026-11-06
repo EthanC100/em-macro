@@ -13,8 +13,10 @@ Decisions (data/ledger/decisions.csv), for every open row whose instrument is in
 Forecasts (data/ledger/forecasts.csv), for every open row past its resolution date:
   * mechanical, a central-bank decision: BIS daily policy rates (WS_CBPOL), no API;
   * mechanical, a price, yield or spread level: the registry's marks, no API;
-  * event: the Anthropic API with web search (ledger/resolver_api.py), accepted only with two
-    independent sources, at most ``api_calls_per_day`` calls a day, skipped without a key;
+  * event: settled by the forecast resolver session (a Claude Code scheduled task, docs/ledger/forecast_resolver.md:
+    ``python -m ledger.resolve events`` lists them blind, ``settle-events --file`` settles them, accepted only with
+    two independent sources). No API call is made here. If no session has settled one ``session_resolve_grace_days``
+    after its resolution date, a [RESOLVE?] issue is opened with the session's last finding;
   * anything else, or a question the official data cannot settle yet, gets a "[RESOLVE?] <id>"
     issue (written to the --out JSON for the workflow to open) and is tried again the next day.
 Every automatic resolution is written in the Resolve form's format (status, outcome, exit /
@@ -27,7 +29,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -36,15 +37,13 @@ from pathlib import Path
 from .intake import read_rows, write_rows
 from .marks import (CONFIG, http_get, latest_marks, load_registry, mark_can_act, mark_is_current,
                     match_instrument, read_marks)
-from .resolver_api import resolve_event
+from .independence import independent_sources
 from .schema import (AUTO_PREFIX, DECISION_COLUMNS, FORECAST_COLUMNS, parse_date, parse_number)
 from .scoring import pnl_at_level, score_decision, score_forecast
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_URL = "https://github.com/ethanc100/em-macro"
-API_LOG = ROOT / "data/ledger/api_log.csv"
 AUTO_LOG = ROOT / "data/ledger/automation_log.csv"
-API_LOG_COLUMNS = ["date", "time_utc", "forecast_id", "status", "model", "input_tokens", "output_tokens", "web_searches"]
 AUTO_LOG_COLUMNS = ["date", "kind", "id", "action", "detail"]
 
 ABOVE_WORDS = r"above|over|rises?|rising|widens?|widening|wider|higher|greater|more than|exceeds?|breaks? above|closes? above|at least|at or above|up through|hikes?"
@@ -323,20 +322,6 @@ def classify_forecast(f: dict, registry: list[dict]) -> str:
     return "event"
 
 
-def api_calls_today(today: date, path: Path = API_LOG) -> int:
-    return sum(1 for r in read_rows(path) if r.get("date") == today.isoformat() and r.get("status") not in ("no_key", "cap"))
-
-
-def log_api_call(fid: str, res: dict, today: date, path: Path = API_LOG) -> None:
-    rows = read_rows(path)
-    u = res.get("usage") or {}
-    rows.append({"date": today.isoformat(), "time_utc": now_utc().strftime("%H:%M:%S"), "forecast_id": fid,
-                 "status": res.get("status", ""), "model": res.get("model", ""),
-                 "input_tokens": u.get("input_tokens") or "", "output_tokens": u.get("output_tokens") or "",
-                 "web_searches": res.get("searches", "")})
-    write_rows(path, rows, API_LOG_COLUMNS)
-
-
 def _sources_text(sources: list[dict]) -> str:
     return "; ".join(f"{s.get('organisation', '')} {s.get('url', '')}".strip() for s in sources if s.get("url"))
 
@@ -362,12 +347,16 @@ def resolve_issue(ref: str, kind: str, row: dict, found: str, extra: str = "") -
     return {"title": title, "body": body, "ref": ref}
 
 
-def process_forecasts(rows: list[dict], marks_rows: list[dict], registry: list[dict], today: date, api_key: str | None,
-                      ask=None, get=http_get, api_log: Path = API_LOG) -> tuple[list[dict], list[dict], list[str]]:
+def last_session_finding(fid: str, auto_log: list[dict]) -> str | None:
+    rows = [r for r in auto_log if r.get("id") == fid and r.get("kind") == "event check"]
+    return f"{rows[-1]['date']}: {rows[-1]['detail']}" if rows else None
+
+
+def process_forecasts(rows: list[dict], marks_rows: list[dict], registry: list[dict], today: date, get=http_get,
+                      auto_log: list[dict] | None = None) -> tuple[list[dict], list[dict], list[str]]:
     changed, issues, log = [], [], []
-    calls = api_calls_today(today, api_log)
-    cap = int(CONFIG.get("api_calls_per_day", 10))
     wait_days = int(CONFIG.get("mechanical_wait_days", 10))
+    grace = int(CONFIG.get("session_resolve_grace_days", 2))
     for f in rows:
         if (f.get("status") or "open").strip().lower() != "open":
             continue
@@ -382,16 +371,15 @@ def process_forecasts(rows: list[dict], marks_rows: list[dict], registry: list[d
             res = resolve_level_question(f, marks_rows, registry, today)
             method = "official data (registry marks)"
         else:
-            method = f"the Anthropic API with web search (model {CONFIG.get('anthropic_model')})"
-            if ask is None and not api_key:
-                res = {"status": "no_key", "reason": "no ANTHROPIC_API_KEY secret: event forecasts are not checked automatically"}
-            elif calls >= cap:
-                res = {"status": "cap", "reason": f"the daily cap of {cap} API calls is reached; tried again tomorrow"}
-            else:
-                calls += 1
-                res = resolve_event(f.get("question", ""), f.get("resolution_date", ""), f.get("resolution_source", ""),
-                                    f.get("country", ""), today.isoformat(), CONFIG, api_key, ask=ask)
-                log_api_call(f["id"], res, today, api_log)
+            method = "the forecast resolver session"
+            if (today - rd).days < grace:
+                log.append(f"{f['id']} event question: left for the forecast resolver session")
+                continue
+            seen = last_session_finding(f["id"], auto_log or [])
+            res = {"status": "unresolved",
+                   "reason": (f"not settled by the forecast resolver session {grace} or more days after the resolution "
+                              f"date; its last finding: {seen}" if seen else
+                              f"no forecast resolver session has settled it {grace} or more days after the resolution date")}
         if res.get("status") == "resolved":
             settle_forecast(f, res["outcome"], method, res.get("summary", ""), res.get("sources", []), today)
             changed.append(f)
@@ -411,9 +399,6 @@ def process_forecasts(rows: list[dict], marks_rows: list[dict], registry: list[d
             extra = "**Sources the search returned:**\n" + "\n".join(
                 f"- {s.get('organisation', '')}: {s.get('url', '')}" + (f" — \"{s.get('quote')}\"" if s.get("quote") else "")
                 for s in srcs)
-        if res.get("status") == "no_key":
-            extra += ("\n\nAdd the `ANTHROPIC_API_KEY` repository secret (Settings > Secrets and variables > Actions) "
-                      "and event forecasts are checked automatically.")
         issues.append(resolve_issue(f["id"], "forecast", f, f"{kind} question; {found}", extra))
         log.append(f"{f['id']} not resolved ({kind}): {found}")
     return changed, issues, log
@@ -426,16 +411,15 @@ def append_auto_log(entries: list[dict], path: Path = AUTO_LOG) -> None:
     write_rows(path, rows, AUTO_LOG_COLUMNS)
 
 
-def run(today: date | None = None, root: Path = ROOT, api_key: str | None = None, dry_run: bool = False,
-        ask=None, get=http_get) -> dict:
+def run(today: date | None = None, root: Path = ROOT, dry_run: bool = False, get=http_get) -> dict:
     today = today or date.today()
     registry = load_registry(root / "data/ledger/instruments.csv")
     marks_rows = read_marks(root / "data/ledger/marks.csv")
     dec_path, fc_path = root / "data/ledger/decisions.csv", root / "data/ledger/forecasts.csv"
     decisions, forecasts = read_rows(dec_path), read_rows(fc_path)
     d_changed, d_issues, d_log = process_decisions(decisions, marks_rows, registry, today)
-    f_changed, f_issues, f_log = process_forecasts(forecasts, marks_rows, registry, today, api_key, ask=ask, get=get,
-                                                   api_log=root / "data/ledger/api_log.csv")
+    f_changed, f_issues, f_log = process_forecasts(forecasts, marks_rows, registry, today, get=get,
+                                                   auto_log=read_rows(root / "data/ledger/automation_log.csv"))
     entries = []
     for d in d_changed:
         sc = score_decision(d)
@@ -461,14 +445,113 @@ def run(today: date | None = None, root: Path = ROOT, api_key: str | None = None
             "issues": d_issues + f_issues, "log": d_log + f_log}
 
 
+# ----------------------------------------------------------------------------- the resolver session
+def due_events(root: Path = ROOT, today: date | None = None) -> list[dict]:
+    """Event forecasts past their resolution date, still open: what the session must try to settle. Blind: the
+    question and how it resolves, never my, the market's or Claude's probability."""
+    today = today or date.today()
+    registry = load_registry(root / "data/ledger/instruments.csv")
+    out = []
+    for f in read_rows(root / "data/ledger/forecasts.csv"):
+        rd = parse_date(f.get("resolution_date"))
+        if (f.get("status") or "open").strip().lower() != "open" or not rd or today < rd:
+            continue
+        if classify_forecast(f, registry) != "event":
+            continue
+        out.append({"id": f["id"], "question": f.get("question"), "country": f.get("country"),
+                    "resolution_date": f.get("resolution_date"), "resolution_source": f.get("resolution_source"),
+                    "days_past": (today - rd).days})
+    return out
+
+
+def settle_events(payload: dict, root: Path = ROOT, today: date | None = None) -> dict:
+    """Apply a session's findings atomically. Each result: {"id", "outcome": "yes"|"no"|"unresolved", "summary",
+    "sources": [{"organisation", "url", "date", "quote"}]}. yes/no needs two independent sources (else the whole
+    payload is rejected); "unresolved" is logged with its reason and the forecast stays open."""
+    today = today or date.today()
+    required = int(CONFIG.get("forecast_independent_sources_required", 2))
+    model = str(payload.get("model") or "").strip()
+    errors = [] if model else ["model is required (the session's model string)"]
+    due = {e["id"]: e for e in due_events(root, today)}
+    plan = []
+    seen = set()
+    for r in payload.get("results") or []:
+        fid = str(r.get("id", "")).strip()
+        if fid not in due:
+            errors.append(f"{fid or '?'}: not an open event forecast past its resolution date")
+            continue
+        if fid in seen:
+            errors.append(f"{fid}: listed twice")
+            continue
+        seen.add(fid)
+        outcome = str(r.get("outcome", "")).strip().lower()
+        summary = " ".join(str(r.get("summary") or "").split())
+        if outcome not in ("yes", "no", "unresolved"):
+            errors.append(f"{fid}: outcome must be yes, no or unresolved")
+            continue
+        if not summary:
+            errors.append(f"{fid}: a summary is required (what settles it, with the date)")
+            continue
+        if outcome in ("yes", "no"):
+            ok, kept = independent_sources(r.get("sources") or [], required)
+            if not ok:
+                errors.append(f"{fid}: only {len(kept)} independent source(s); {required} from different organisations "
+                              "(different domains and names) are required to settle it")
+                continue
+            plan.append((fid, outcome, summary, kept))
+        else:
+            plan.append((fid, "unresolved", summary, []))
+    if not (payload.get("results") or []):
+        errors.append("no results")
+    if errors:
+        return {"ok": False, "errors": errors, "resolved": [], "unresolved": []}
+    fc_path = root / "data/ledger/forecasts.csv"
+    rows = read_rows(fc_path)
+    by_id = {f["id"]: f for f in rows}
+    entries, resolved, unresolved = [], [], []
+    for fid, outcome, summary, kept in plan:
+        if outcome == "unresolved":
+            entries.append({"date": today.isoformat(), "kind": "event check", "id": fid, "action": "unresolved",
+                            "detail": f"{summary} ({model})"[:300]})
+            unresolved.append(fid)
+            continue
+        f = by_id[fid]
+        settle_forecast(f, outcome, f"the forecast resolver session ({model}, web search)", summary, kept, today)
+        sc = score_forecast(f)
+        entries.append({"date": today.isoformat(), "kind": "forecast", "id": fid, "action": f"resolved {outcome}",
+                        "detail": f"session ({model}); Brier me {sc['brier_me']}, market {sc['brier_market']}, Claude {sc['brier_claude']}"})
+        resolved.append(fid)
+    if resolved:
+        write_rows(fc_path, rows, FORECAST_COLUMNS)
+    append_auto_log(entries, root / "data/ledger/automation_log.csv")
+    return {"ok": True, "errors": [], "resolved": resolved, "unresolved": unresolved}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", nargs="?", default="daily", choices=["daily", "events", "settle-events"])
+    ap.add_argument("--file", default=None, help="settle-events: the session's findings (JSON, outside the repository)")
     ap.add_argument("--out", default=None)
     ap.add_argument("--today", default=None)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     today = parse_date(a.today) if a.today else date.today()
-    res = run(today=today, api_key=os.environ.get("ANTHROPIC_API_KEY") or None, dry_run=a.dry_run)
+    if a.cmd == "events":
+        print(json.dumps(due_events(today=today), indent=1))
+        return 0
+    if a.cmd == "settle-events":
+        try:
+            payload = json.loads(Path(a.file).read_text(encoding="utf-8"))
+        except (OSError, TypeError, json.JSONDecodeError) as e:
+            print(f"REJECTED: cannot read the findings: {e}", file=sys.stderr)
+            return 1
+        res = settle_events(payload, today=today)
+        print(json.dumps(res, indent=1))
+        if not res["ok"]:
+            print("REJECTED: nothing was written. Fix every error above and try again.", file=sys.stderr)
+            return 1
+        return 0
+    res = run(today=today, dry_run=a.dry_run)
     for line in res["log"]:
         print(line)
     print(res["summary"])

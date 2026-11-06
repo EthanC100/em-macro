@@ -94,14 +94,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python -m ledger.audit seal        # hash-chain seal of the new entry (data/ledger/seals.jsonl)
-          git add $(cat /tmp/files.txt) data/ledger/seals.jsonl
+          git add $(cat /tmp/files.txt)
           git commit -m "Ledger ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }} (issue #${{ github.event.issue.number }})"
           for i in 1 2 3 4; do
             if git push origin HEAD:main; then exit 0; fi
             sleep $((i * 3)); git pull --rebase origin main
           done
           exit 1
+
+      # the hash-chain seal of the new entry (data/ledger/seals.jsonl), on a fresh main through the shared script
+      - name: Seal the new entry
+        if: steps.intake.outputs.ok == 'true'
+        run: |
+          git fetch -q origin main
+          git worktree add -q --detach "$RUNNER_TEMP/seal-wt" origin/main
+          cd "$RUNNER_TEMP/seal-wt"
+          bash scripts/ledger_commit.sh "Seal ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }}" -- true
 
       - name: Comment and close
         if: steps.intake.outputs.ok == 'true'

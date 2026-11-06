@@ -281,3 +281,31 @@ it is recorded as C03 and the existing record is not renumbered.
 - **Ledger:** the Janus page shows "last checked" and states that trades fill at the next official daily mark.
 - **Still calling the API from Actions (not Janus):** the event-forecast resolver in `ledger-daily` and the
   investor letters' narrative in `systematic-monthly`, both via the `ANTHROPIC_API_KEY` secret.
+
+## 2026-11-06: no Anthropic API call anywhere: the forecast resolver and the investor letters move to sessions
+
+- **Event-forecast resolver:** its own short daily Claude Code task ("Ledger forecast resolver",
+  `docs/ledger/forecast_resolver.md`), not a step of the Janus review. Reasons:
+  - Janus must stay independent of my forecasts.
+  - Forecasts resolve on weekends too, and the Janus review runs on weekdays only.
+  - One task failing never blocks the other.
+
+  How it works:
+  - The session works **blind**: `python -m ledger.resolve events` gives question, resolution source and dates,
+    never the probabilities.
+  - It settles events with `python -m ledger.resolve settle-events --file` (atomic). Settling requires two
+    independent sources (`ledger/independence.py`); an `unresolved` finding is logged.
+  - `ledger-daily` still settles mechanical questions from official data. It opens an event's `[RESOLVE?]` issue
+    only if no session has settled it `session_resolve_grace_days` (2) after its resolution date, quoting the
+    session's last finding.
+- **Investor letters:** `docs/letters/monthly_letters.md`, a scheduled task on the 3rd to the 6th.
+  - `python -m ledger.letters figures` and `write` (no API).
+  - Code inserts the figures verbatim and rejects any percentage in the narrative that matches no figure.
+  - It refuses before the month is booked, and refuses a second letter.
+- **Removed:** `ledger/llm.py` and `ledger/resolver_api.py`. From the workflows: the `ANTHROPIC_API_KEY` env, the
+  `anthropic` install and ledger-daily's `skip_api` input. From `ledger/automation.json`: the API settings.
+- **Seals:** `scripts/ledger_commit.sh` (formerly `janus_commit.sh`, which remains as a wrapper) now also seals,
+  and is the only writer of `data/ledger/seals.jsonl`. `ledger-daily` and `ledger-intake` seal through it on a
+  fresh `main`.
+- **Test:** `tests/test_sessions.py` fails if any workflow uses `ANTHROPIC_API_KEY` or installs the SDK, or if any
+  code imports `anthropic`.

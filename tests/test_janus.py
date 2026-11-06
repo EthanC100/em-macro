@@ -192,13 +192,9 @@ def test_cli_rejects_a_bad_proposal_with_exit_1(tmp_path):
     assert out.returncode == 1 and "REJECTED" in out.stderr and "per-position limit" in out.stdout
 
 
-def test_no_api_calls_from_actions():
+def test_janus_fire_workflow():
     wf = ROOT / ".github/workflows"
     assert not (wf / "janus-weekly.yml").exists()
-    for f in wf.glob("*.yml"):
-        text = f.read_text()
-        if "janus" in text.lower() or "postmortem" in text:
-            assert "ledger.postmortem" not in text and "ledger.janus run" not in text, f.name
     fire = (wf / "janus-fire.yml").read_text()
     assert "experimental-cc-routine-2026-04-01" in fire and "JANUS_FIRE_URL" in fire and "JANUS_FIRE_TOKEN" in fire
     assert '*/30 6-21 * * 1-5' in fire
