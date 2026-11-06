@@ -111,6 +111,19 @@ jobs:
         continue-on-error: true
         run: python -m em_macro.systematic_v11 rebalance 2>&1 | tee "$RUNNER_TEMP/rebalance_v11.log"
 
+      # Monthly investor letters (ledger/letters.py): one per book (Me, Algorithm, Janus) for the month just booked,
+      # figures from the data, narrative via the Anthropic API when the secret exists. Never blocks the rebalance.
+      - name: Investor letters and what changed
+        id: letters
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          pip install anthropic >/dev/null 2>&1 || true
+          python -m ledger.letters 2>&1 | tee "$RUNNER_TEMP/letters.log"
+          python -m ledger.postmortem 2>&1 | tee -a "$RUNNER_TEMP/letters.log"
+          python -m ledger.changes 2>&1 | tee -a "$RUNNER_TEMP/letters.log"
+
       - name: Tests
         id: tests
         run: python -m pytest -q tests 2>&1 | tee "$RUNNER_TEMP/tests.log"
@@ -127,6 +140,9 @@ jobs:
                     data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
                     results/coverage_report.md results/panel_coverage.md \
                     results/screener data/ledger/reports
+            for f in data/ledger/changes.json data/ledger/state.json data/ledger/postmortems data/janus; do
+              [ -e "$f" ] && git add -- "$f"     # one path at a time: a missing path must not unstage the others
+            done
             # v1.1 (its own folder) and the v1.0/v1.1 turnover comparison; absent only if v1.1 never ran
             git add results/systematic_v1.1 results/live_compare 2>/dev/null || true
             if git diff --cached --quiet; then

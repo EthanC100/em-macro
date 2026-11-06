@@ -94,7 +94,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $(cat /tmp/files.txt)
+          python -m ledger.audit seal        # hash-chain seal of the new entry (data/ledger/seals.jsonl)
+          git add $(cat /tmp/files.txt) data/ledger/seals.jsonl
           git commit -m "Ledger ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }} (issue #${{ github.event.issue.number }})"
           for i in 1 2 3 4; do
             if git push origin HEAD:main; then exit 0; fi

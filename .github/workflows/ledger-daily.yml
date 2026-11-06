@@ -70,6 +70,17 @@ jobs:
         id: janus
         run: python -m ledger.janus mark 2>&1 | tee "$RUNNER_TEMP/janus.log"
 
+      - name: Post-mortems, stress tests, what changed, audit seals
+        id: analytics
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ github.event.inputs.skip_api == 'true' && '' || secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m ledger.postmortem 2>&1 | tee "$RUNNER_TEMP/analytics.log"
+          python -m ledger.stress 2>&1 | tee -a "$RUNNER_TEMP/analytics.log"
+          python -m ledger.changes 2>&1 | tee -a "$RUNNER_TEMP/analytics.log"
+          python -m ledger.audit seal 2>&1 | tee -a "$RUNNER_TEMP/analytics.log"
+
       - name: Ledger tests still pass
         id: tests
         run: python -m pytest -q tests/test_ledger.py tests/test_automation.py tests/test_janus.py 2>&1 | tee "$RUNNER_TEMP/tests.log"
@@ -81,7 +92,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/janus data/ledger/postmortems
-                 data/ledger/reports data/raw/bist data/raw/bondspot)
+                 data/ledger/reports data/ledger/seals.jsonl data/ledger/changes.json data/ledger/state.json
+                 data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot)
           existing=()
           for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
           git add -- "${existing[@]}"

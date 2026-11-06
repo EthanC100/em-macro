@@ -27,7 +27,12 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from . import audit as AUD
+from . import books as BOOKS
 from . import capacity as CAP
+from . import janus as JN
+from . import postmortem as PM
+from . import risk as RISK
 from .marks import latest_marks, live_mark, load_registry, read_marks
 from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct,
                      parse_date, parse_number, parse_probability)
@@ -1017,6 +1022,43 @@ def build_home(today: date, decisions, forecasts, algorithm, elections, reports,
     }
 
 
+# ----------------------------------------------------------------------------- calendar
+CAL_BOOK = {"decision horizon": "me", "algorithm rebalance": "algorithm", "janus horizon": "janus",
+            "janus review": "janus", "investor letters": "all"}
+
+
+def build_calendar(today: date, books: dict) -> dict:
+    """Catalysts, horizon dates, rebalances and Janus review days, next 180 days."""
+    end = today + timedelta(days=180)
+    items = []
+    for c in RISK.ledger_calendar(ROOT, today):
+        if c["date"] > end:
+            continue
+        kind = c["kind"]
+        link = "#/forecasts" if kind == "forecast resolves" else ("#/algorithm" if kind == "algorithm rebalance" else "")
+        if kind == "decision horizon":
+            link = f"#/position/me/{c['label'].split(' ')[0]}"
+        label = c["label"] if kind != "algorithm rebalance" else "Algorithm rebalance: v1.0 and v1.1 (monthly run on the 3rd)"
+        items.append({"date": c["date"].isoformat(), "kind": kind, "book": CAL_BOOK.get(kind, "catalyst"),
+                      "country": c.get("country") or "", "label": label, "link": link})
+        if kind == "algorithm rebalance":
+            items.append({"date": c["date"].isoformat(), "kind": "investor letters", "book": "all", "country": "",
+                          "label": "Monthly investor letters (Me, Algorithm, Janus)", "link": "#/reports"})
+    for p in books["janus"]["summary"]["open"]:
+        hz = parse_date(p["horizon"])
+        if hz and today <= hz <= end:
+            items.append({"date": hz.isoformat(), "kind": "janus horizon", "book": "janus", "country": p.get("country") or "",
+                          "label": f"{p['id']} {p['direction']} {p['instrument']} horizon", "link": f"#/position/janus/{p['id']}"})
+    d = today
+    while d <= end:
+        if d.weekday() == 0:
+            items.append({"date": d.isoformat(), "kind": "janus review", "book": "janus", "country": "",
+                          "label": "Janus weekly review (06:00 UTC)", "link": "#/janus"})
+        d += timedelta(days=1)
+    items.sort(key=lambda c: (c["date"], c["kind"]))
+    return {"items": items, "from": today.isoformat(), "to": end.isoformat()}
+
+
 # ----------------------------------------------------------------------------- site
 def write_json(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1041,6 +1083,16 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     todo = build_todo()
     evidence = build_evidence(trials, algorithm, today)
     home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
+    books = BOOKS.build_books(today, algorithm)
+    janus = books["janus"].pop("summary")
+    books["janus"]["summary_file"] = "janus.json"
+    calendar = build_calendar(today, {**books, "janus": {**books["janus"], "summary": janus}})
+    stress = json.loads((ROOT / "data/ledger/stress.json").read_text(encoding="utf-8")) \
+        if (ROOT / "data/ledger/stress.json").exists() else {"scenarios": []}
+    changes = json.loads((ROOT / "data/ledger/changes.json").read_text(encoding="utf-8")) \
+        if (ROOT / "data/ledger/changes.json").exists() else {"items": []}
+    postmortems = {"items": PM.load_all()}
+    audit = AUD.verify_all()
     commit = git("rev-parse", "--short", "HEAD")
     meta = {
         "app": "Ledger", "built_at": now.replace(microsecond=0).isoformat(), "today": today.isoformat(),
@@ -1054,7 +1106,11 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
             "marks_updated": git_last_date("data/ledger/marks.csv"),
             "marks_last_fetch": marks["summary"]["last_fetch"],
             "elections": elections["sources"],
+            "positions_set": {"v1.0": algorithm["positions"][0].get("run_date") if algorithm["positions"] else None,
+                              "v1.1": books["algorithm"]["versions"][1].get("positions_set")},
+            "latest_mark": books["latest_mark"], "latest_fetch": books["latest_fetch"],
         },
+        "audit": {k: audit[k] for k in ("ok", "label", "detail", "checked_at")},
         "issue_forms": {
             "decision": f"{REPO_URL}/issues/new?template=decision.yml",
             "forecast": f"{REPO_URL}/issues/new?template=forecast.yml",
@@ -1066,7 +1122,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
                       ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener),
-                      ("todo", todo)):
+                      ("todo", todo), ("books", books), ("janus", janus), ("calendar", calendar), ("stress", stress),
+                      ("changes", changes), ("postmortems", postmortems)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

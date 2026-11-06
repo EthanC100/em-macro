@@ -272,9 +272,9 @@ def fetch_em_macro(spec: str, get=None):
     if isinstance(s, tuple):
         s = s[0]
     s = s.dropna()
-    d = s.index[-1]
-    d = d.date() if hasattr(d, "date") else parse_date(str(d))
-    return d, float(s.iloc[-1]), f"em_macro.{spec}"
+    pts = [((i.date() if hasattr(i, "date") else parse_date(str(i))), float(v)) for i, v in s.tail(40).items()]
+    d, v = _last(pts)
+    return d, v, f"em_macro.{spec}"
 
 
 def _panel_rows(path: Path):
