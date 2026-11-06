@@ -4,8 +4,9 @@ Run by .github/workflows/ledger-intake.yml with the issue in environment variabl
 (ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY, ISSUE_LABELS, ISSUE_USER, GITHUB_TOKEN). Writes a
 result JSON (--out) with ok, kind, id, comment and the changed files. The workflow then
 commits the files, comments with the id and closes the issue, or comments with the errors
-and leaves it open. Everything here is also importable for tests: parse_issue_body(),
-classify() and process().
+and leaves it open. An issue labelled `ledger` whose body is a pasted DECISION RECORD or FORECAST block
+("Field: value" lines) is read into the same fields as the forms and handled the same way. Everything here is
+also importable for tests: parse_issue_body(), classify(), process(), parse_paste() and process_paste().
 """
 from __future__ import annotations
 
@@ -158,12 +159,12 @@ def _entry_level_from_trigger(trigger: str, rec: dict) -> str:
     return f"{v:g}" if v is not None else ""
 
 
-def handle_forecast(fields: dict, issue: int, today: date, root: Path) -> dict:
+def handle_forecast(fields: dict, issue: int, today: date, root: Path, require_market: bool = True) -> dict:
     f = _map(fields, FORECAST_FIELDS)
     rec = {c: "" for c in FORECAST_COLUMNS}
     rec.update(f)
     rec["date"] = today.isoformat()
-    errors, notes = validate_forecast(rec)
+    errors, notes = validate_forecast(rec, require_market=require_market)
     if errors:
         return {"ok": False, "kind": "forecast",
                 "comment": "This forecast was **not** logged. Please edit the issue to fix:\n\n"
@@ -173,7 +174,7 @@ def handle_forecast(fields: dict, issue: int, today: date, root: Path) -> dict:
     rec["id"] = next_id([r.get("id", "") for r in rows], "F")
     rec["question"] = " ".join(f["question"].split())
     rec["my_prob"] = f"{parse_probability(f['my_prob']):g}"
-    rec["market_prob"] = f"{parse_probability(f['market_prob']):g}"
+    rec["market_prob"] = f"{parse_probability(f['market_prob']):g}" if f["market_prob"] else ""
     rec["claude_prob"] = f"{parse_probability(f['claude_prob']):g}" if f["claude_prob"] else ""
     rec["resolution_date"] = parse_date(f["resolution_date"]).isoformat()
     rec["resolution_source"] = " ".join(f["resolution_source"].split())
@@ -182,9 +183,16 @@ def handle_forecast(fields: dict, issue: int, today: date, root: Path) -> dict:
     rec["logged_at"] = today.isoformat()
     rows.append(rec)
     write_rows(path, rows, FORECAST_COLUMNS)
-    comment = (f"Logged as **{rec['id']}**: \"{rec['question']}\" — me {rec['my_prob']}%, market {rec['market_prob']}%"
+    comment = (f"Logged as **{rec['id']}**: \"{rec['question']}\" — me {rec['my_prob']}%"
+               + (f", market {rec['market_prob']}%" if rec["market_prob"] else "")
                + (f", Claude {rec['claude_prob']}%" if rec["claude_prob"] else "")
-               + f"; resolves {rec['resolution_date']} by **{rec['resolution_source']}**.\n\n"
+               + f"; resolves {rec['resolution_date']}"
+               + (f" by **{rec['resolution_source']}**" if rec["resolution_source"] else "") + ".\n\n"
+               + ("" if rec["market_prob"] else "- No market probability given: this forecast gets no market Brier "
+                  "score to compare against.\n")
+               + ("" if rec["resolution_source"] else "- No resolution source given: the resolver works from the "
+                  "question text alone.\n")
+               + ("\n" if not (rec["market_prob"] and rec["resolution_source"]) else "") +
                "After the resolution date the daily resolver settles it from official data (prices, rates, "
                "central-bank decisions) or, for an event, from two independent sources found by web search; "
                "otherwise it opens a [RESOLVE?] issue. A *Resolve* form with this id always overrides it.")
@@ -351,6 +359,136 @@ def _strip_front_matter(text: str) -> tuple[dict, str]:
     return meta, text[m.end():]
 
 
+# ----------------------------------------------------------------------------- pasted blocks
+# A ledger-labelled issue whose body starts with "DECISION RECORD" or "FORECAST" (the "Quick decision (paste)"
+# form, or a blank issue) is read as one "Field: value" line per field and turned into the same fields the
+# Decision record / Forecast forms produce, then handled exactly like those forms.
+PASTE_TITLE_PREFIX = "[Paste]"
+PASTE_HEADER_RE = re.compile(r"^[\s#*_>]*(DECISION RECORD|FORECAST)[\s*_:]*$", re.I)   # the header alone on its line
+PASTE_LINE_RE = re.compile(r"^\s*(?:[-*]\s+)?[*_]*\s*([A-Za-z][A-Za-z /%()'?-]*?)\s*[*_]*\s*:\s*[*_]*\s*(.*?)\s*$")
+# pasted label -> issue-form label (required lines); labels are matched case-insensitively via _paste_label()
+DECISION_PASTE_FIELDS = {
+    "Date": "Date", "Country": "Country", "Instrument": "Instrument", "Action": "Action",
+    "Size": "Size (% of account at risk)", "Probability": "Probability my view is right",
+    "Horizon": "Horizon (date)", "Entry trigger": "Entry trigger", "Stop / exit if wrong": "Stop / exit if wrong",
+    "Thesis": "Thesis", "Key factors": "Key factors", "What would change my mind": "What would change my mind",
+    "How this differs from market consensus": "How this differs from market consensus",
+}
+DECISION_PASTE_OPTIONAL = {"Position type": "Position type"}   # absent: continuous for a Buy/Sell, as in the form
+FORECAST_PASTE_FIELDS = {"Question": "Question", "Probability": "My probability", "Resolves by": "Resolution date"}
+FORECAST_PASTE_OPTIONAL = {
+    "Market probability": "Market probability", "Market source": "Market source",
+    "Claude probability": "Claude probability (optional)", "Resolution source": "Resolution source",
+    "Country": "Country (optional)",
+}
+# the forms' own wording is accepted too (keys and values in _paste_label() form)
+PASTE_ALIASES = {
+    "size (% of account at risk)": "size", "size (%)": "size", "probability my view is right": "probability",
+    "horizon (date)": "horizon", "stop": "stop/exit if wrong", "my probability": "probability",
+    "resolution date": "resolves by",
+}
+PASTE_ACTIONS = {"buy": "Buy", "sell": "Sell", "no trade": "No trade", "no-trade": "No trade", "notrade": "No trade"}
+PASTE_DATE_KEYS = ("Date", "Horizon (date)", "Resolution date")
+# the forms' textareas: their value may run over several lines; any other field is one line (its value may sit
+# on the line after the label), so stray text after the block cannot spill into a date or a number
+PASTE_MULTILINE = {"Entry trigger", "Stop / exit if wrong", "Thesis", "Key factors", "What would change my mind",
+                   "How this differs from market consensus", "Question"}
+
+
+def _paste_label(label: str) -> str:
+    t = " ".join(label.lower().replace("(optional)", "").split())
+    t = re.sub(r"\s*/\s*", "/", t).strip()
+    return PASTE_ALIASES.get(t, t)
+
+
+def _paste_lines(body: str) -> tuple[str | None, list[str]]:
+    """('decision' | 'forecast' | None, the lines after the header). Leading blank lines, code fences and the
+    form's own '### ...' heading are skipped before looking for the header."""
+    lines = [ln for ln in (body or "").replace("\r\n", "\n").split("\n") if not ln.strip().startswith("```")]
+    for i, line in enumerate(lines):
+        m = PASTE_HEADER_RE.match(line)
+        if m:
+            return ("decision" if m.group(1).upper() == "DECISION RECORD" else "forecast"), lines[i + 1:]
+        if line.strip() and not line.lstrip().startswith("#"):
+            return None, []
+    return None, []
+
+
+def paste_kind(body: str) -> str | None:
+    """'decision' or 'forecast' when the issue body is a pasted DECISION RECORD or FORECAST block."""
+    return _paste_lines(body)[0]
+
+
+def _paste_date(text: str) -> str:
+    """ISO date when it parses ('6 Nov 2026', '6 Nov. 2026', 'Fri 6 Nov 2026', '2026-11-06'); otherwise as given,
+    so the usual check reports it."""
+    t = " ".join((text or "").split())
+    d = parse_date(t)
+    if d is None:
+        c = re.sub(r"^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+", "", t, flags=re.I)
+        c = re.sub(r"\b([A-Za-z]{3,9})\.", r"\1", c)          # 'Nov.' -> 'Nov'
+        c = re.sub(r"\bSept\b", "Sep", c, flags=re.I)
+        d = parse_date(c) or parse_date(c.replace(",", ""))
+    return d.isoformat() if d else t
+
+
+def parse_paste(body: str) -> tuple[str | None, dict[str, str], list[str]]:
+    """(kind, fields keyed by the issue-form labels, missing required pasted labels). A line 'Label: value' starts a
+    field when Label is one of the block's fields (not yet seen); any other line continues the current field if
+    that field is a multi-line one (or still empty)."""
+    kind, lines = _paste_lines(body)
+    if kind is None:
+        return None, {}, []
+    required = DECISION_PASTE_FIELDS if kind == "decision" else FORECAST_PASTE_FIELDS
+    optional = DECISION_PASTE_OPTIONAL if kind == "decision" else FORECAST_PASTE_OPTIONAL
+    known = {_paste_label(k): v for k, v in {**required, **optional}.items()}
+    values: dict[str, list[str]] = {}
+    current = None
+    for line in lines:
+        m = PASTE_LINE_RE.match(line)
+        key = _paste_label(m.group(1)) if m else None
+        if key in known and key not in values:
+            current = key
+            values[key] = [m.group(2)]
+        elif current is not None and (known[current] in PASTE_MULTILINE or not "".join(values[current]).strip()):
+            values[current].append(line.rstrip())
+    fields = {known[k]: "\n".join(v).strip() for k, v in values.items()}
+    missing = [k for k, lbl in required.items() if not fields.get(lbl)]
+    for k in PASTE_DATE_KEYS:
+        if fields.get(k):
+            fields[k] = _paste_date(fields[k])
+    if fields.get("Action"):
+        fields["Action"] = PASTE_ACTIONS.get(" ".join(fields["Action"].lower().split()), fields["Action"])
+    for k in ("Size (% of account at risk)", "Probability my view is right", "My probability", "Market probability",
+              "Claude probability (optional)"):
+        if fields.get(k):
+            fields[k] = re.sub(r"\s*%$", "", fields[k])     # '62%' -> '62', as the forms are filled in
+    return kind, fields, missing
+
+
+def process_paste(body: str, issue: int, today: date, root: Path = ROOT) -> dict:
+    """Handle a pasted DECISION RECORD or FORECAST block with the same handlers (and, for a decision, the same
+    Risk Manager check) as the forms."""
+    kind, fields, missing = parse_paste(body)
+    if kind is None:
+        return {"ok": False, "kind": None,
+                "comment": "Nothing was logged: the issue body must start with a `DECISION RECORD` or `FORECAST` "
+                           "line, followed by one `Field: value` line per field. Edit the issue to fix it."}
+    header = "DECISION RECORD" if kind == "decision" else "FORECAST"
+    if missing:
+        return {"ok": False, "kind": kind,
+                "comment": f"This {header} block was **not** logged. These lines are missing or empty:\n\n"
+                           + _fmt_errors([f"`{m}:`" for m in missing])
+                           + "\n\nEach field goes on its own `Field: value` line (a value may continue on the "
+                             "following lines). The workflow re-runs when the issue is edited."}
+    if kind == "decision":
+        res = handle_decision(fields, issue, today, root)
+    else:
+        res = handle_forecast(fields, issue, today, root, require_market=False)
+    res["comment"] = f"_Read from a pasted {header} block._\n\n" + res["comment"]
+    return res
+
+
 def process(kind: str, body: str, issue: int, today: date, root: Path = ROOT, token: str | None = None) -> dict:
     fields = parse_issue_body(body)
     if kind == "decision":
@@ -370,14 +508,16 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default=str(ROOT))
     a = ap.parse_args(argv)
     labels = [s.strip() for s in os.environ.get("ISSUE_LABELS", "").split(",") if s.strip()]
-    kind = classify(os.environ.get("ISSUE_TITLE", ""), labels)
+    title, body = os.environ.get("ISSUE_TITLE", ""), os.environ.get("ISSUE_BODY", "")
+    kind = classify(title, labels)
     today = parse_date(os.environ.get("TODAY")) or date.today()
     issue = int(os.environ.get("ISSUE_NUMBER", "0") or 0)
-    if kind is None:
+    if "ledger" in labels and (paste_kind(body) or title.strip().startswith(PASTE_TITLE_PREFIX)):
+        result = process_paste(body, issue, today, Path(a.root))
+    elif kind is None:
         result = {"ok": False, "kind": None, "skip": True, "comment": ""}
     else:
-        result = process(kind, os.environ.get("ISSUE_BODY", ""), issue, today, Path(a.root),
-                         os.environ.get("GITHUB_TOKEN"))
+        result = process(kind, body, issue, today, Path(a.root), os.environ.get("GITHUB_TOKEN"))
     result.setdefault("files", [])
     Path(a.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "comment"}))

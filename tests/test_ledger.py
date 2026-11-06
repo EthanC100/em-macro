@@ -355,6 +355,95 @@ def test_decision_resolution_scores_pnl(ledger_root):
     assert "P&L: **+0.75%**" in res["comment"]
 
 
+PASTE_DECISION = """### Pasted block
+
+DECISION RECORD
+Date: 4 Nov 2026
+Country: Mexico
+Instrument: MX10Y
+Action: buy
+Size: 1.5%
+Probability: 62%
+Horizon: 15 Jan 2027
+Entry trigger: Buy at 9.20% yield
+Stop / exit if wrong: Exit if the 10y yield rises above 9.80
+Thesis: Banxico cuts faster than priced.
+Key factors: Inflation; Fed.
+What would change my mind: A hawkish turn.
+How this differs from market consensus: Market prices two cuts; I expect four.
+"""
+
+
+def test_paste_decision_matches_the_form(ledger_root, tmp_path):
+    assert intake.paste_kind(PASTE_DECISION) == "decision"
+    assert intake.paste_kind(DECISION_BODY) is None and intake.paste_kind(FORECAST_BODY) is None
+    res = intake.process_paste(PASTE_DECISION, 80, TODAY, ledger_root)
+    assert res["ok"] and res["kind"] == "decision" and "Risk Manager: passed" in res["risk_comment"]
+    pasted = _rows(ledger_root / "data/ledger/decisions.csv")[-1]
+    # the same record through the existing form, on a fresh copy of the ledger
+    form_root = tmp_path / "form"
+    (form_root / "data").mkdir(parents=True)
+    shutil.copytree(ROOT / "data/ledger", form_root / "data/ledger")
+    assert intake.process("decision", DECISION_BODY, 80, TODAY, form_root)["ok"]
+    formed = _rows(form_root / "data/ledger/decisions.csv")[-1]
+    assert pasted == formed
+    assert pasted["date"] == "2026-11-04" and pasted["horizon"] == "2027-01-15" and pasted["entry_level"] == "9.2"
+
+
+def test_paste_decision_multiline_dates_and_rejections(ledger_root):
+    body = (PASTE_DECISION.replace("Thesis: Banxico cuts faster than priced.",
+                                   "Thesis:\nBanxico cuts faster than priced.\nNote: inflation is falling.")
+            .replace("4 Nov 2026", "Wed 4 Nov. 2026").replace("15 Jan 2027", "2027-01-15"))
+    kind, fields, missing = intake.parse_paste(body)
+    assert kind == "decision" and not missing
+    assert fields["Thesis"] == "Banxico cuts faster than priced.\nNote: inflation is falling."
+    assert fields["Date"] == "2026-11-04" and fields["Horizon (date)"] == "2027-01-15" and fields["Action"] == "Buy"
+    n = len(_rows(ledger_root / "data/ledger/decisions.csv"))
+    res = intake.process_paste(body.replace("above 9.80", "badly"), 81, TODAY, ledger_root)   # no numeric stop
+    assert not res["ok"] and "Risk Manager: rejected" in res["risk_comment"] and "numeric" in res["comment"]
+    res = intake.process_paste(body.replace("Key factors: Inflation; Fed.\n", ""), 82, TODAY, ledger_root)
+    assert not res["ok"] and "`Key factors:`" in res["comment"]
+    res = intake.process_paste(body.replace("Size: 1.5%", "Size: 2.5"), 83, TODAY, ledger_root)
+    assert not res["ok"] and "at most 2%" in res["comment"]
+    assert len(_rows(ledger_root / "data/ledger/decisions.csv")) == n
+
+
+def test_paste_forecast(ledger_root):
+    body = "FORECAST\nQuestion: Banxico cuts at its 17 December 2026 meeting\nProbability: 70%\nResolves by: 18 Dec 2026\n\nsent from my phone\n"
+    res = intake.process_paste(body, 90, TODAY, ledger_root)
+    assert res["ok"] and res["kind"] == "forecast"
+    row = _rows(ledger_root / "data/ledger/forecasts.csv")[-1]
+    assert (row["question"], row["my_prob"], row["resolution_date"]) == ("Banxico cuts at its 17 December 2026 meeting", "70", "2026-12-18")
+    assert row["market_prob"] == "" and row["resolution_source"] == "" and row["date"] == TODAY.isoformat()
+    full = body.replace("Resolves by", "Market probability: 55\nResolution source: Banxico statement\nResolves by")
+    assert intake.process_paste(full, 91, TODAY, ledger_root)["ok"]
+    row = _rows(ledger_root / "data/ledger/forecasts.csv")[-1]
+    assert row["market_prob"] == "55" and row["resolution_source"] == "Banxico statement"
+    res = intake.process_paste(body.replace("18 Dec 2026", "December"), 92, TODAY, ledger_root)
+    assert not res["ok"] and "Resolution date" in res["comment"]
+    res = intake.process_paste("FORECAST\nQuestion: x\n", 93, TODAY, ledger_root)
+    assert not res["ok"] and "`Probability:`" in res["comment"] and "`Resolves by:`" in res["comment"]
+
+
+def test_paste_routing_in_main(ledger_root, tmp_path, monkeypatch):
+    out = tmp_path / "out.json"
+    env = {"ISSUE_NUMBER": "95", "ISSUE_TITLE": "[Paste] MX10Y", "ISSUE_BODY": PASTE_DECISION,
+           "ISSUE_LABELS": "ledger", "TODAY": TODAY.isoformat()}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    intake.main(["--out", str(out), "--root", str(ledger_root)])
+    assert json.loads(out.read_text())["ok"]
+    monkeypatch.setenv("ISSUE_BODY", "### Pasted block\n\nhello")
+    intake.main(["--out", str(out), "--root", str(ledger_root)])
+    r = json.loads(out.read_text())
+    assert not r["ok"] and not r.get("skip") and "DECISION RECORD" in r["comment"]
+    monkeypatch.setenv("ISSUE_LABELS", "")          # no ledger label: not processed
+    monkeypatch.setenv("ISSUE_TITLE", "notes")
+    monkeypatch.setenv("ISSUE_BODY", PASTE_DECISION)
+    intake.main(["--out", str(out), "--root", str(ledger_root)])
+    assert json.loads(out.read_text()).get("skip")
+
+
 def test_report_intake_writes_markdown(ledger_root):
     body = "### Title\n\nWeekly review, week 45\n\n### Type\n\nweekly review\n\n### Country\n\nGlobal\n\n### Date (optional)\n\n_No response_\n\n### Content\n\n# Week 45\n\nCarry held up.\n"
     res = intake.process("report", body, 70, TODAY, ledger_root)

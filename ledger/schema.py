@@ -147,20 +147,26 @@ def validate_decision(d: dict) -> tuple[list[str], list[str]]:
     return errors, notes
 
 
-def validate_forecast(f: dict) -> tuple[list[str], list[str]]:
+def validate_forecast(f: dict, require_market: bool = True) -> tuple[list[str], list[str]]:
+    """Return (errors, notes) for a forecast. require_market=False (a pasted FORECAST block, which has only
+    Question, Probability and Resolves by) makes market probability, market source and resolution source
+    optional; a market probability that is given must still be a percentage."""
     errors: list[str] = []
     notes: list[str] = []
     if not str(f.get("question") or "").strip():
         errors.append("Question is required.")
     if parse_probability(f.get("my_prob")) is None:
         errors.append("My probability must be a percentage between 0 and 100.")
-    if parse_probability(f.get("market_prob")) is None:
-        errors.append("Market probability must be a percentage between 0 and 100.")
-    if not str(f.get("market_source") or "").strip():
-        errors.append("Market source is required (where the market probability comes from).")
-    if not str(f.get("resolution_source") or "").strip():
-        errors.append("Resolution source is required: what settles the question, for example 'AP race call', "
-                      "'BCB official statement' or 'ECB press release'.")
+    if require_market:
+        if parse_probability(f.get("market_prob")) is None:
+            errors.append("Market probability must be a percentage between 0 and 100.")
+        if not str(f.get("market_source") or "").strip():
+            errors.append("Market source is required (where the market probability comes from).")
+        if not str(f.get("resolution_source") or "").strip():
+            errors.append("Resolution source is required: what settles the question, for example 'AP race call', "
+                          "'BCB official statement' or 'ECB press release'.")
+    elif f.get("market_prob") and parse_probability(f.get("market_prob")) is None:
+        errors.append("Market probability must be a percentage between 0 and 100 if given.")
     c = f.get("claude_prob")
     if c and parse_probability(c) is None:
         errors.append("Claude probability must be a percentage between 0 and 100 if given.")

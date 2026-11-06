@@ -1,0 +1,30 @@
+name: Quick decision (paste)
+description: Paste a DECISION RECORD or FORECAST block. A workflow reads it into the same fields as the Decision record / Forecast forms, runs the same checks and logs it.
+title: "[Paste] "
+labels: ["ledger"]
+body:
+  - type: textarea
+    id: block
+    attributes:
+      label: Pasted block
+      description: |
+        Start with a line `DECISION RECORD` or `FORECAST`, then one `Field: value` line per field (a long value may continue on the next lines). Dates can be YYYY-MM-DD or like 6 Nov 2026.
+        DECISION RECORD fields: Date, Country, Instrument, Action (Buy / Sell / No trade), Size (% of account at risk), Probability, Horizon, Entry trigger (put the entry level in it, "at 5.40"), Stop / exit if wrong (with a numeric level), Thesis, Key factors, What would change my mind, How this differs from market consensus. Optional: Position type (event bet; a Buy or Sell is otherwise a continuous position). The Risk Manager checks it exactly as for the Decision record form.
+        FORECAST fields: Question, Probability, Resolves by. Optional: Market probability, Market source, Claude probability, Resolution source, Country.
+      placeholder: |
+        DECISION RECORD
+        Date: 6 Nov 2026
+        Country: Brazil
+        Instrument: USD/BRL
+        Action: Sell
+        Size: 1.0
+        Probability: 62
+        Horizon: 30 Apr 2027
+        Entry trigger: Sell at 5.40
+        Stop / exit if wrong: Exit if USD/BRL closes above 5.70
+        Thesis: ...
+        Key factors: ...
+        What would change my mind: ...
+        How this differs from market consensus: ...
+    validations:
+      required: true

@@ -1243,6 +1243,7 @@ Logging goes through GitHub issue forms, which the GitHub mobile app renders as 
 |---|---|---|
 | **Decision record** | Date; Country; Instrument; Action (Buy / Sell / No trade); Size (% of account at risk); Position type (continuous position / event bet); Probability my view is right; Horizon (date); Entry trigger (state the entry level, e.g. "at 5.40"); Stop / exit if wrong; Thesis; Key factors; What would change my mind; How this differs from market consensus | Checked by the Risk Manager (section 14), then appended to `data/ledger/decisions.csv` as the next `Dnnn` |
 | **Forecast** | Question; My probability; Market probability; Market source; Claude probability (optional); Resolution date; Resolution source (what settles it: "AP race call", "BCB official statement", "ECB press release"); Country (optional) | Appended to `data/ledger/forecasts.csv` as the next `Fnnn`; resolved automatically after the resolution date (section 14) |
+| **Quick decision (paste)** | One box: a pasted block starting `DECISION RECORD` (Date; Country; Instrument; Action; Size; Probability; Horizon; Entry trigger; Stop / exit if wrong; Thesis; Key factors; What would change my mind; How this differs from market consensus; optional Position type) or `FORECAST` (Question; Probability; Resolves by; optional Market probability, Market source, Claude probability, Resolution source, Country), one `Field: value` line each. Dates such as `6 Nov 2026` work | Read into the same fields as the Decision record / Forecast form, then the same Risk Manager check and logging. Any issue labelled `ledger` whose body starts with one of these blocks is handled the same way. A pasted forecast without a market probability is scored on its own but left out of the me-vs-market Brier comparison |
 | **Resolve** | Decision or forecast id; Outcome (right / wrong / scratched for a decision, yes / no / void for a forecast); Exit price or result; P&L % of account (optional); Note (optional) | Marks the row resolved and scores it; always overrides an automatic resolution |
 | **Report** | Title; Type (daily briefing, weekly review, monthly notebook, research, other); Country; Date (optional); Content (pasted text, or a `.md`, `.txt` or `.pdf` attached in the content box) | Written to `data/ledger/reports/YYYY-MM-DD_slug.md` (or `.pdf` with a `.meta.yml` sidecar) with a front-matter header |
 
@@ -1348,6 +1349,6 @@ ledger/            Ledger app: build.py (files -> JSON + static site in app/), i
                    risk.py (Risk Manager), screener.py (monthly screener), automation.json (settings),
                    schema.py (validation), scoring.py (Brier, P&L), site/ (HTML, CSS, JS, icons, vendored Chart.js and marked)
 data/ledger/       decisions.csv, forecasts.csv, reports/ (the ledger's source of truth)
-.github/           ISSUE_TEMPLATE/ (Decision record, Forecast, Resolve, Report forms);
+.github/           ISSUE_TEMPLATE/ (Decision record, Forecast, Quick decision (paste), Resolve, Report forms);
                    workflows/ledger-intake.yml, ledger-pages.yml, ledger-daily.yml, ledger-screener.yml, systematic.yml
 ```

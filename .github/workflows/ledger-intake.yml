@@ -1,5 +1,7 @@
 # Turn a filled-in Ledger issue form (Decision record, Forecast, Resolve, Report) into a
-# ledger entry. Validates it; on success appends it to the right file under data/ledger/,
+# ledger entry. An issue labelled `ledger` whose body is a pasted DECISION RECORD or FORECAST
+# block (the "Quick decision (paste)" form) is read into the same fields and handled the same
+# way. Validates it; on success appends it to the right file under data/ledger/,
 # commits, comments with the new id and closes the issue; on failure comments with what is
 # wrong and leaves the issue open (editing the issue re-runs the check).
 #
@@ -26,7 +28,10 @@ jobs:
       github.event.issue.state == 'open' &&
       (startsWith(github.event.issue.title, '[Decision]') || startsWith(github.event.issue.title, '[Forecast]') ||
        startsWith(github.event.issue.title, '[Resolve]') || startsWith(github.event.issue.title, '[Report]') ||
-       contains(join(github.event.issue.labels.*.name, ','), 'ledger:'))
+       contains(join(github.event.issue.labels.*.name, ','), 'ledger:') ||
+       (contains(github.event.issue.labels.*.name, 'ledger') &&
+        (startsWith(github.event.issue.title, '[Paste]') || contains(github.event.issue.body, 'DECISION RECORD') ||
+         contains(github.event.issue.body, 'FORECAST'))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
