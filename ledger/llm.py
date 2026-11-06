@@ -51,9 +51,15 @@ def call(system: str, prompt: str, *, purpose: str, ref: str = "", effort: str =
                           output_config={"effort": effort})
             if tools:
                 kwargs["tools"] = tools
-            with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-                                             **kwargs) as stream:
-                resp = stream.get_final_message()
+            try:
+                with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+                                                 **kwargs) as stream:
+                    resp = stream.get_final_message()
+            except anthropic.BadRequestError as e:
+                if "fallback" not in str(e).lower():
+                    raise
+                with client.messages.stream(**kwargs) as stream:   # account without the fallback beta
+                    resp = stream.get_final_message()
             req_id = getattr(resp, "_request_id", "") or req_id
             served = getattr(resp, "model", model)
             u = getattr(resp, "usage", None)
