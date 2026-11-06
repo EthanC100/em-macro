@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import seed_ledger
 from ledger import clerk, intake
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,10 +40,7 @@ def _rows(path):
 
 @pytest.fixture()
 def ledger_root(tmp_path):
-    root = tmp_path / "repo"
-    (root / "data").mkdir(parents=True)
-    shutil.copytree(ROOT / "data/ledger", root / "data/ledger")
-    return root
+    return seed_ledger(tmp_path / "repo")
 
 
 def test_check_is_the_intake_result_and_writes_nothing(ledger_root, tmp_path):
@@ -99,8 +97,7 @@ def test_log_writes_through_ledger_commit_and_seals(tmp_path):
     work.mkdir()
     for d in ("ledger", "scripts"):
         shutil.copytree(ROOT / d, work / d, ignore=shutil.ignore_patterns("__pycache__", "site"))
-    (work / "data").mkdir()
-    shutil.copytree(ROOT / "data/ledger", work / "data/ledger")
+    seed_ledger(work)
     shutil.copytree(ROOT / "data/janus", work / "data/janus")
     (work / ".gitignore").write_text("__pycache__/\n")
     _git("init", "-q", "-b", "test", cwd=work)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import seed_ledger
 from ledger import build, intake, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,7 +130,8 @@ def test_build_writes_site_and_json(tmp_path):
     d1 = next(d for d in dec["items"] if d["id"] == "D001")
     assert d1["kelly_cap_pct"] == 3.75 and d1["stop_level"] == 115.0 and d1["horizon"] == "2027-04-18"
     fc = json.loads((out / "data/forecasts.json").read_text())
-    assert fc["summary"]["n"] >= 5 and fc["items"][0]["my_prob"] == 45.0
+    seeds = {f["id"]: f for f in fc["items"] if f["id"] in ("F001", "F002", "F003", "F004", "F005")}   # by id, never by position
+    assert fc["summary"]["n"] >= 5 and len(seeds) == 5 and seeds["F001"]["my_prob"] == 45.0
     alg = json.loads((out / "data/algorithm.json").read_text())
     assert alg["backtest"]["months"] == 81
     assert abs(alg["backtest"]["ann_return_pct"] - 5.959) < 0.01
@@ -251,9 +253,7 @@ Market prices two cuts; I expect four.
 
 @pytest.fixture
 def ledger_root(tmp_path):
-    (tmp_path / "data").mkdir()
-    shutil.copytree(ROOT / "data/ledger", tmp_path / "data/ledger")
-    return tmp_path
+    return seed_ledger(tmp_path)
 
 
 def _rows(path):
@@ -382,8 +382,7 @@ def test_paste_decision_matches_the_form(ledger_root, tmp_path):
     pasted = _rows(ledger_root / "data/ledger/decisions.csv")[-1]
     # the same record through the existing form, on a fresh copy of the ledger
     form_root = tmp_path / "form"
-    (form_root / "data").mkdir(parents=True)
-    shutil.copytree(ROOT / "data/ledger", form_root / "data/ledger")
+    seed_ledger(form_root)
     assert intake.process("decision", DECISION_BODY, 80, TODAY, form_root)["ok"]
     formed = _rows(form_root / "data/ledger/decisions.csv")[-1]
     assert pasted == formed

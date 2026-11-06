@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import seed_ledger
 from ledger import audit, derivs as DV, intake, resolve
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,9 +107,7 @@ def test_parsing():
 # ----------------------------------------------------------------------------- terms and the Risk Manager
 @pytest.fixture()
 def ledger_root(tmp_path, monkeypatch):
-    root = tmp_path / "repo"
-    (root / "data").mkdir(parents=True)
-    shutil.copytree(ROOT / "data/ledger", root / "data/ledger")
+    root = seed_ledger(tmp_path / "repo")
     store = tmp_path / "em-macro-data"
     store.mkdir()
     monkeypatch.setenv("EM_MACRO_DATA", str(store))

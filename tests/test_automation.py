@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import seed_ledger
 from ledger import independence, intake, marks, resolve, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,11 +52,7 @@ def _mark(instrument, day, value, unit="BRL per USD", freq="daily"):
 
 @pytest.fixture
 def root(tmp_path):
-    (tmp_path / "data").mkdir()
-    shutil.copytree(ROOT / "data/ledger", tmp_path / "data/ledger")
-    (tmp_path / "data/ledger/marks.csv").unlink(missing_ok=True)
-    for p in ("api_log.csv", "automation_log.csv"):
-        (tmp_path / "data/ledger" / p).unlink(missing_ok=True)
+    seed_ledger(tmp_path, marks=False)
     (tmp_path / "results/systematic").mkdir(parents=True)
     shutil.copy(ROOT / "results/systematic/positions.csv", tmp_path / "results/systematic/positions.csv")
     return tmp_path
@@ -564,7 +561,7 @@ def test_todo_parsing_and_build(tmp_path):
     assert d1["mark_instrument"] == "FR-DE" and d1["mark_frequency"] == "daily" and d1["position_type"] == "continuous"
     assert d1["mark"] > 120 and d1["mark_can_act"]
     fc = json.loads((out / "data/forecasts.json").read_text())
-    assert all(f["resolution_source"] == "AP race call" for f in fc["items"][:5])
+    assert all(f["resolution_source"] == "AP race call" for f in fc["items"] if f["id"] in ("F001", "F002", "F003", "F004", "F005"))
 
 
 def test_marks_watchdog_flags_marks_older_than_two_days(tmp_path):

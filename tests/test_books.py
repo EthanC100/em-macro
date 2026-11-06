@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from conftest import seed_ledger
 from ledger import audit, books, build, changes, pricing as PX, stress
 
 TODAY = date(2026, 11, 6)
@@ -49,9 +50,7 @@ def test_signal_attribution_splits_by_aligned_z():
 
 def test_audit_seals_detect_an_edited_decision(tmp_path, monkeypatch):
     root = tmp_path
-    (root / "data/ledger").mkdir(parents=True)
-    for f in ("decisions.csv", "forecasts.csv"):
-        shutil.copy(audit.ROOT / "data/ledger" / f, root / "data/ledger" / f)
+    seed_ledger(root, marks=False)
     monkeypatch.setattr(audit, "ROOT", root)
     seals = root / "data/ledger/seals.jsonl"
     assert audit.seal(seals, now="2026-11-06T00:00:00+00:00")
@@ -112,9 +111,7 @@ def test_site_has_three_books_audit_badge_offline_and_no_stale_labels(tmp_path):
 
 def test_documented_correction_keeps_the_chain_verified_and_anything_else_fails(tmp_path, monkeypatch):
     root = tmp_path
-    (root / "data/ledger").mkdir(parents=True)
-    for f in ("decisions.csv", "forecasts.csv"):
-        shutil.copy(audit.ROOT / "data/ledger" / f, root / "data/ledger" / f)
+    seed_ledger(root, marks=False)
     monkeypatch.setattr(audit, "ROOT", root)
     seals = root / "data/ledger/seals.jsonl"
     audit.seal(seals, now="2026-11-06T00:00:00+00:00")
