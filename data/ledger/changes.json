@@ -1,11 +1,12 @@
 {
- "since": null,
- "at": "2026-11-06T04:23:16+00:00",
+ "since": "2026-11-06T04:23:16+00:00",
+ "at": "2026-11-06T04:36:18+00:00",
  "items": [
   {
-   "book": "all",
-   "kind": "baseline",
-   "text": "First snapshot: changes are listed from the next update on."
+   "book": "janus",
+   "kind": "no trade",
+   "link": "#/janus",
+   "text": "Janus reviewed and opened nothing (no-trade record)"
   }
  ]
 }
