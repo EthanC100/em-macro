@@ -442,3 +442,8 @@ details.clerk .clerk-body code { overflow-wrap: anywhere; }
 .alloc .bar-row .bt::before { display: none; }
 .alloc .bar-row .bt i.w { left: 0; background: var(--book-fund); }
 table.corr td.num { font-variant-numeric: tabular-nums; }
+
+/* collateral interest (display only): total return incl. T-bill */
+.vs-cash.tbill { margin-top: 6px; }
+details.tbill-months { margin-top: 8px; }
+details.tbill-months > summary h3 { margin: 0; font-size: 0.95rem; }

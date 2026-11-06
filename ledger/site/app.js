@@ -797,6 +797,26 @@
     return b;
   }
 
+  // ------------------------------------------------------------------ collateral interest (display only)
+  // total return = excess return + 3-month T-bill interest on the full account value (ledger/books.py TBILL_NOTE)
+  const TOTAL_LABEL = 'total return (incl. T-bill)';
+  const EXCESS_LABEL = 'excess of cash';
+  function totalLine(o) {
+    if (!o || !(o.total_series || []).length) return '';
+    return `<div class="vs-cash tbill"><span>Excess of cash ${fmtPct(o.excess_since_start_pct, 2, true)}</span><span>T-bill interest ${fmtPct((o.total_since_start_pct || 0) - (o.excess_since_start_pct || 0), 2, true)}</span><span><b>Total return (incl. T-bill) ${fmtPct(o.total_since_start_pct, 2, true)}</b></span></div>`;
+  }
+  function tbillTable(o, title = 'Monthly, with T-bill interest') {
+    const rows = (o && o.monthly_tbill) || [];
+    if (!rows.length) return '';
+    return `<details class="collapsible tbill-months"><summary><h3>${esc(title)}</h3>${info(o.tbill_note)}</summary>
+      <div class="table-wrap"><table class="compact"><thead><tr><th>Month</th><th class="num">Excess</th><th class="num">T-bill</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows.slice().reverse().map((r) => `<tr><td>${fmtMonth(r.month)}</td><td class="num ${signClass(r.excess_pct)}">${fmtPct(r.excess_pct, 2, true)}</td><td class="num">${fmtPct(r.tbill_pct, 2, true)}</td><td class="num ${signClass(r.total_pct)}"><b>${fmtPct(r.total_pct, 2, true)}</b></td></tr>`).join('')}</tbody></table></div>
+      <p class="small">Excess = excess of cash, the book's recorded P&L and the basis of every evaluation. T-bill = interest at the 3-month US T-bill rate on the full account value. Total = total return (incl. T-bill), display only.</p></details>`;
+  }
+  const totalDataset = (o, label, color) => ((o && (o.total_series || []).length > 1)
+    ? [{ label: `${label}, ${TOTAL_LABEL}`, data: o.total_series, color, dash: [5, 4], width: 1.5 }] : []);
+  const withNote = (text, o) => `${text} Solid line: ${EXCESS_LABEL} (the recorded P&L, used for every evaluation). Dashed line: ${TOTAL_LABEL}. ${(o && o.tbill_note) || ''}`;
+
   // ------------------------------------------------------------------ Horizons fund (ledger/fund.py, read only)
   const FUND_NAMES = { 'algorithm v1.1': 'Algorithm v1.1', janus: 'Janus', me: 'Me' };
   const fundMix = (fd) => Object.entries(fd.allocation.weights).map(([k, w]) => `${esc(FUND_NAMES[k] || k)} ${fmtPct(100 * w, 0)}`).join(' · ');
@@ -808,8 +828,8 @@
     return `<section class="section">
         <div class="section-head"><h2>Performance and allocation</h2></div>
         <div class="card b-fund">
-          ${fd.live ? `<div class="stats"><div class="stat"><span class="k">Since ${fmtDate(fd.live_start)}</span><span class="v ${signClass(fd.since_start_pct)}">${fmtPct(fd.since_start_pct, 2, true)}</span><span class="s">index ${fmtNum(fd.index, 2)}</span></div><div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(fd.mtd_pct)}</span><span class="s">combined, by risk</span></div></div>
-          <div class="chart"><canvas id="c-fund"></canvas></div>` : `<p class="empty">Not started: ${esc(fd.status)}${fd.live_start ? ` (index 100 on ${fmtDate(fd.live_start)})` : ''}. The fund starts at 100 on the first date every member is live.</p>`}
+          ${fd.live ? `<div class="stats"><div class="stat"><span class="k">Since ${fmtDate(fd.live_start)}</span><span class="v ${signClass(fd.since_start_pct)}">${fmtPct(fd.since_start_pct, 2, true)}</span><span class="s">index ${fmtNum(fd.index, 2)}</span></div><div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(fd.mtd_pct)}</span><span class="s">excess of cash, combined by risk</span></div><div class="stat"><span class="k">Total return (incl. T-bill)</span><span class="v ${signClass(fd.total_since_start_pct)}">${fmtPct(fd.total_since_start_pct, 2, true)}</span><span class="s">MTD ${fmtPct(fd.total_mtd_pct, 2, true)} · display only</span></div></div>
+          <div class="chart"><canvas id="c-fund"></canvas></div>${legendRow([['Fund, excess of cash', '--book-fund'], ['Fund, total return (incl. T-bill)', '--book-fund', true]])}${tbillTable(fd)}` : `<p class="empty">Not started: ${esc(fd.status)}${fd.live_start ? ` (index 100 on ${fmtDate(fd.live_start)})` : ''}. The fund starts at 100 on the first date every member is live.</p>`}
           <h3>Allocation${a.from ? ` from ${fmtDate(a.from)}` : ' (the rule today)'}</h3>
           <div class="bars alloc">${bars}</div>
           <p class="small">Weights: ${esc(a.basis)}. Janus's risk share: ${fmtPct(100 * jr.share, 0)}, ${esc(jr.reason)}; drawdown ${fmtPct(jr.drawdown_pct, 1)}. The rule: <a href="${esc(meta.repo_url)}/blob/main/docs/fund/allocation.md" target="_blank" rel="noopener">docs/fund/allocation.md</a>. My decisions (Me) are outside the fund; no fund figure is written into any book.</p>
@@ -827,9 +847,9 @@
     const hist = (fd.history || []).slice().reverse();
     const histRows = hist.map((h) => `<tr><td>${fmtDate(h.from)}</td>${Object.keys(h.weights).map((k) => `<td class="num">${fmtPct(100 * h.weights[k], 1)}</td>`).join('')}<td class="num">${fmtPct(100 * h.janus_rule.share, 0)}</td><td>${h.basis.startsWith('risk') ? 'risk' : 'capital'}</td></tr>`).join('');
     view.innerHTML = `
-      <section class="section"><div class="card b-fund notice"><b>A combined view, read only.</b> Built from the published indices of Algorithm v1.1 (risk share 90%) and Janus (10%) on every build. The books keep their own records; no fund figure is written into any of them, and my decisions (Me) are outside the fund. ${info(fd.note)}</div></section>
+      <section class="section"><div class="card b-fund notice"><b>A combined view, read only.</b> Built from the published indices of Algorithm v1.1 (risk share 90%) and Janus (10%) on every build. The books keep their own records; no fund figure is written into any of them, and my decisions (Me) are outside the fund. ${info(`${fd.note} ${fd.tbill_note || ""} The allocation rule, weights, volatilities and correlations use excess returns only.`)}</div></section>
       ${fundSection(fd)}
-      ${fd.live ? `<section class="section"><div class="section-head"><h2>The fund and its members</h2>${info('Each line is that book\'s own index, rebased to 100 on the fund\'s start; the fund is their risk-weighted combination.')}</div>
+      ${fd.live ? `<section class="section"><div class="section-head"><h2>The fund and its members</h2>${info('Each line is that book\'s own excess-of-cash index, rebased to 100 on the fund\'s start; the fund is their risk-weighted combination. Weights and correlations use excess returns only.')}</div>
         <div class="card"><div class="chart"><canvas id="c-fund-members"></canvas></div>${legendRow([['Fund', '--book-fund'], ['Algorithm v1.1', '--book-algo'], ['Janus', '--book-janus']])}</div></section>` : ''}
       <section class="section"><div class="section-head"><h2>Allocation history</h2>${info('Weights set at each month start. Share = Janus\'s risk share under the rule. Basis: capital = the risk shares themselves (fewer than 6 months of data); risk = risk share ÷ trailing volatility.')}</div>
         <div class="card">${histRows ? `<div class="table-wrap"><table class="compact"><thead><tr><th>From</th>${Object.keys(fd.allocation.weights).map((k) => `<th class="num">${k === 'janus' ? 'Janus' : 'v1.1'}</th>`).join('')}<th class="num">Share</th><th>Basis</th></tr></thead><tbody>${histRows}</tbody></table></div>` : '<p class="empty">No allocation has been applied yet: the fund has not started.</p>'}</div></section>
@@ -840,7 +860,7 @@
           <li><b>10%</b> otherwise. Evaluated at each month start on data to the previous month end.</li></ul>
           <p class="small"><a href="${esc(meta.repo_url)}/blob/main/docs/fund/allocation.md" target="_blank" rel="noopener">docs/fund/allocation.md</a> · config change C04</p></div></section>`;
     if (fd.series.length) {
-      dateChart('c-fund', [{ label: 'Fund', data: fd.series, color: '--book-fund', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+      dateChart('c-fund', [{ label: 'Fund, excess of cash', data: fd.series, color: '--book-fund', fill: true }, ...totalDataset(fd, 'Fund', '--book-fund')], { fmt: (v) => fmtNum(v, 2) });
       const rebase = (ser) => { const base = ser.find((p) => p[0] >= fd.live_start) || ser[0]; return ser.filter((p) => p[0] >= fd.live_start).map((p) => [p[0], 100 * p[1] / base[1]]); };
       dateChart('c-fund-members', [
         { label: 'Fund', data: fd.series, color: '--book-fund', width: 2.6 },
@@ -854,11 +874,13 @@
   async function pageHome() {
     const [b, jn, ch, fd] = await Promise.all([homeHead(), load('janus'), load('changes'), load('fund')]);
     const v10 = b.algorithm.versions[0], v11 = b.algorithm.versions[1];
+    const TOT_MTD = { me: b.me.total_mtd_pct, algorithm: v10.total_mtd_pct, janus: b.janus.total_mtd_pct, fund: fd.live ? fd.total_mtd_pct : null };
     const card = (id, title, sub, mtd, est, open, gauge_, extra, openLabel = 'Open positions') => `
       <a class="card book-card ${bookOf(id).cls}" href="${bookOf(id).link}">
         <div class="bc-head"><span class="bc-name">${bookIcon(id)}${esc(title)}</span><span class="bc-kind">${esc(sub)}</span></div>
         <div class="bc-body"><div class="bc-spark"><canvas id="spark-${id}"></canvas></div>
-          <div class="bc-stats"><span class="k">Month to date</span><span class="v">${mtdHtml(mtd, est)}</span>
+          <div class="bc-stats"><span class="k">MTD, excess of cash</span><span class="v">${mtdHtml(mtd, est)}</span>
+          <span class="k">MTD, total incl. T-bill</span><span class="v sm ${signClass(TOT_MTD[id])}">${isNum(TOT_MTD[id]) ? fmtPct(TOT_MTD[id], 2, true) : '—'}</span>
           <span class="k">${esc(openLabel)}</span><span class="v sm">${open}</span></div>${gauge_}</div>${extra || ''}</a>`;
     const items = (ch.items || []);
     const changed = items.length ? items.map((it) => `<li class="chg ${bookOf(it.book).cls}">${it.book in BOOK ? bookPill(it.book) : pill(it.book)} ${it.link ? `<a href="${esc(it.link)}">${esc(it.text)}</a>` : esc(it.text)}</li>`).join('')
@@ -886,7 +908,7 @@
         <div class="section-head"><h2>Three books, the fund and cash</h2>${info(cmp.note + ' The fund starts at 100 on its own live start. Forecasts are not books: they are scored by Brier only and appear only on the Forecasts page.')}</div>
         <div class="card"><div class="chart"><canvas id="c-compare"></canvas></div>
         ${legendRow([['Me', '--book-me'], ['Algorithm v1.0', '--book-algo'], ['Janus', '--book-janus'], ['Fund', '--book-fund'], ['Cash (3m T-bill)', '--muted', true]])}
-        <div class="vs-cash">${Object.entries(cmp.vs_cash).map(([k, v]) => `<span class="${bookOf(k).cls}-t">${esc(bookOf(k).name)} ${fmtPct(v.book_pct, 2, true)} vs cash ${fmtPct(v.cash_pct, 2, true)}</span>`).join('')}</div></div>
+        <div class="vs-cash">${Object.entries(cmp.vs_cash).map(([k, v]) => `<span class="${bookOf(k).cls}-t">${esc(bookOf(k).name)} ${fmtPct(v.book_pct, 2, true)} excess of cash vs cash ${fmtPct(v.cash_pct, 2, true)}${isNum(v.total_pct) ? ` · total return (incl. T-bill) ${fmtPct(v.total_pct, 2, true)}` : ''}</span>`).join('')}</div></div>
       </section>
       <section class="section">
         <div class="section-head"><h2>Combined risk</h2><a class="more" href="#/risk">Risk and stress tests</a></div>
@@ -942,8 +964,8 @@
         </div>
       </section>
       <section class="section">
-        <div class="section-head"><h2>Account, from my first decision</h2>${info('Index = 100 + live P&L in % of my account. Open positions are marked at first-hand daily marks dated on or after the decision; a monthly or stale mark is shown but never prices or closes a position.')}</div>
-        <div class="card"><div class="chart"><canvas id="c-me"></canvas></div></div>
+        <div class="section-head"><h2>Account, from my first decision</h2>${info(withNote('Index = 100 + live P&L in % of my account. Open positions are marked at first-hand daily marks dated on or after the decision; a monthly or stale mark is shown but never prices or closes a position.', me))}</div>
+        <div class="card"><div class="chart"><canvas id="c-me"></canvas></div>${legendRow([['Me, excess of cash', '--book-me'], ['Me, total return (incl. T-bill)', '--book-me', true]])}${totalLine(me)}${tbillTable(me)}</div>
       </section>
       <section class="section"><div class="section-head"><h2>Open</h2><span class="muted small">${open.length}</span></div>
         <div class="list">${open.map(row).join('') || '<p class="empty">No open decisions.</p>'}</div></section>
@@ -951,7 +973,7 @@
         <div class="list">${resolved.map(row).join('') || '<p class="empty">Nothing resolved yet.</p>'}</div></section>
       ${attributionSection('me', me.attribution, 'Live P&L of open positions, % of account')}
       <section class="section"><div class="btn-row">${clerkButton(meta)}<a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
-    dateChart('c-me', [{ label: 'Me', data: me.series, color: '--book-me', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+    dateChart('c-me', [{ label: 'Me, excess of cash', data: me.series, color: '--book-me', fill: true }, ...totalDataset(me, 'Me', '--book-me')], { fmt: (v) => fmtNum(v, 2) });
   }
 
   function attributionSection(book, att, note) {
@@ -985,8 +1007,9 @@
           <div class="stat">${gauge(v.gross_leverage, v.leverage_cap, 'gross leverage, x')}</div>
         </div>
         ${v.series.length ? `<div class="card"><div class="chart"><canvas id="c-${v.id.replace('.', '')}"></canvas></div>
-          ${legendRow([['Official monthly P&L, then estimate', '--book-algo'], ['Estimated P&L with impact', '--book-algo-2', true]])}
-          ${info(`${(est.note || '')} The official P&L keeps the frozen cost model; the dashed line subtracts the square-root market-impact estimate of each rebalance's trades at that month's paper capital (US$100,000 to Nov 2026, US$500,000,000 from Dec 2026).`)}</div>` : `<div class="card"><p class="empty">${esc(liveTxt)}. The chart starts at 100 then.</p></div>`}
+          ${legendRow([['Official monthly P&L, then estimate (excess of cash)', '--book-algo'], ['Estimated P&L with impact', '--book-algo-2', true], ['Total return (incl. T-bill)', '--book-algo', true]])}
+          ${totalLine(v)}${tbillTable(v)}
+          ${info(`${withNote('', v)} ${(est.note || '')} The official P&L keeps the frozen cost model; the dashed line subtracts the square-root market-impact estimate of each rebalance's trades at that month's paper capital (US$100,000 to Nov 2026, US$500,000,000 from Dec 2026).`)}</div>` : `<div class="card"><p class="empty">${esc(liveTxt)}. The chart starts at 100 then.</p></div>`}
         <h3 class="sub">Positions (effective ${fmtMonth(v.effective_from)}, set ${fmtDate(v.positions_set)})</h3>
         <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Country</th><th>Side</th><th class="num">Size</th><th class="num">Mark</th><th class="num">MTD</th></tr></thead><tbody>${rows}</tbody></table></div>
         ${est.carried && est.carried.length ? `<p class="small"><span class="pill warn">carried</span> no free daily source or no current mark, carried at the last mark: ${esc(est.carried.join(', '))}</p>` : ''}
@@ -1022,6 +1045,7 @@
       dateChart(`c-${v.id.replace('.', '')}`, [
         { label: `${v.id} (official, then estimate)`, data: v.series.map((p) => [p[0], p[1]]), color: '--book-algo', fill: true },
         { label: `${v.id} with impact`, data: v.impact_series, color: '--book-algo-2', dash: [5, 4], width: 1.6 },
+        ...totalDataset(v, v.id, '--book-algo'),
       ], { fmt: (x) => fmtNum(x, 2) });
     }
     const details = view.querySelector('details.collapsible');
@@ -1067,9 +1091,10 @@
         <div class="card"><div class="row-top"><b>Resolved calls: ${jn.n_closed} of ${jn.calls_needed || '—'} needed</b>${info(jn.significance_method)}</div><div class="progress"><i style="width:${counter.toFixed(1)}%"></i></div></div>
       </section>
       <section class="section">
-        <div class="section-head"><h2>Equity</h2>${info((jn.benchmark && jn.benchmark.method) || '')}</div>
+        <div class="section-head"><h2>Equity</h2>${info(withNote((jn.benchmark && jn.benchmark.method) || '', b.janus))}</div>
         <div class="card">${eq.length ? '<div class="chart"><canvas id="c-janus"></canvas></div>' : '<p class="empty">The equity curve starts with the first run.</p>'}
-          <div class="vs-cash"><span>Janus ${isNum(jn.benchmark.janus_pnl_pct) ? fmtPct(jn.benchmark.janus_pnl_pct, 2, true) : '—'}</span><span>Equal-weight benchmark of the same instruments ${isNum(jn.benchmark.pnl_pct) ? fmtPct(jn.benchmark.pnl_pct, 2, true) : '—'}</span>${b.comparison.vs_cash.janus ? `<span>Cash ${fmtPct(b.comparison.vs_cash.janus.cash_pct, 2, true)}</span>` : ''}</div></div>
+          <div class="vs-cash"><span>Janus ${isNum(jn.benchmark.janus_pnl_pct) ? fmtPct(jn.benchmark.janus_pnl_pct, 2, true) : '—'}</span><span>Equal-weight benchmark of the same instruments ${isNum(jn.benchmark.pnl_pct) ? fmtPct(jn.benchmark.pnl_pct, 2, true) : '—'}</span>${b.comparison.vs_cash.janus ? `<span>Cash ${fmtPct(b.comparison.vs_cash.janus.cash_pct, 2, true)}</span>` : ''}</div>
+          ${eq.length ? legendRow([['Janus, excess of cash', '--book-janus'], ['Janus, total return (incl. T-bill)', '--book-janus', true]]) : ''}${totalLine(b.janus)}${tbillTable(b.janus)}</div>
       </section>
       <section class="section"><div class="section-head"><h2>Open positions</h2><span class="muted small">${jn.n_open} of ${jn.max_open}</span></div>
         ${jn.open.map(posCard).join('') || '<p class="empty">No open positions.</p>'}</section>
@@ -1084,7 +1109,7 @@
         <div class="table-wrap"><table><thead><tr><th>Code</th><th>Market</th><th>Daily source</th></tr></thead><tbody>${jn.universe.map((u) => `<tr><td><b>${esc(u.instrument)}</b>${u.estimate ? ` ${pill('estimate', 'warn')}` : ''}</td><td class="wrap">${esc(u.name)}</td><td class="wrap small">${esc(u.source)} ${esc(u.source_id)}</td></tr>`).join('')}</tbody></table></div>
         <h3 class="sub">Dropped</h3><ul class="plain">${jn.dropped.map((d) => `<li><b>${esc(d.market)}</b>: ${esc(d.reason)}</li>`).join('')}</ul>
         <p class="small">Record chain: ${jn.chain.ok ? `<span class="good">verified</span> (${jn.chain.n} records)` : `<span class="bad">FAILED: ${esc(jn.chain.error)}</span>`}</p></section>`;
-    if (eq.length) dateChart('c-janus', [{ label: 'Janus', data: eq, color: '--book-janus', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+    if (eq.length) dateChart('c-janus', [{ label: 'Janus, excess of cash', data: eq, color: '--book-janus', fill: true }, ...totalDataset(b.janus, 'Janus', '--book-janus')], { fmt: (v) => fmtNum(v, 2) });
   }
 
   // ------------------------------------------------------------------ position detail (any book)
