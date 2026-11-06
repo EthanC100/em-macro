@@ -64,7 +64,14 @@ token is never written to disk, a command line or the remote URL.
 - **NDU cannot run headless.** Started from SSM (session 0) it crashes immediately
   (`InvalidOperationException` in `Form.ShowDialog`). It must run in an interactive desktop session.
 
-### Starting NDU (the one manual step)
+### Starting NDU
+
+**Since 2026-11-06 this is automatic.** The server logs on as Administrator at boot and a scheduled task starts NDU
+(see [aws_norgate_server.md](aws_norgate_server.md#auto-logon-ndu-starts-at-boot-without-rdp-2026-11-06)). After
+`scripts/aws_server.sh start`, wait about 2–3 minutes, then check over SSM (step 2 of "Rerunning"). The manual
+procedure below is only needed if auto-logon is undone.
+
+#### Manual procedure (before auto-logon, or after it is undone)
 
 After every start of the instance, NDU is not running. Someone has to:
 1. RDP in as Administrator (RDP is allowed from the range in `aws_norgate_server.md`).
@@ -143,7 +150,7 @@ data repo.
 
 ## Rerunning
 
-1. Start the server and start NDU over RDP (see above):
+1. Start the server; NDU starts by itself at boot (auto-logon, see above):
    ```bash
    scripts/aws_server.sh start
    ```

@@ -143,6 +143,53 @@ aws iam detach-role-policy --role-name horizons-norgate-ssm \
 aws iam delete-role --role-name horizons-norgate-ssm
 ```
 
+## Auto-logon: NDU starts at boot without RDP (2026-11-06)
+
+Set up with the owner's approval on 2026-11-06, over SSM. After every start or reboot, Windows logs the built-in
+**Administrator** on at the console by itself. A scheduled task starts NDU in that session, so `norgatedata` answers
+over SSM with no RDP step.
+
+**Why Administrator.** NDU is already signed in to the Norgate subscription in the Administrator profile. A separate
+low-privilege account would need its own NDU sign-in through the GUI, so it would be neither as simple nor as
+reliable.
+
+**Tested 2026-11-06.** The instance was rebooted and SSM was online about 90 s later.
+- `query user` showed `administrator` on `console`, Active.
+- `dataupdater.norgate.exe` ran in session 1, started by the task 30 s after logon.
+- `norgatedata.status()` returned `True`.
+- NDU updated the Futures database by itself within about 2 minutes.
+
+| item | setting |
+|---|---|
+| Administrator password | **changed on 2026-11-06** to a random 28-character password. It is stored only as SSM SecureString `/horizons/windows/administrator-password` (ap-southeast-2, `alias/aws/ssm`), was generated off the server and was never printed. The original launch password (decrypted with the `horizons-win` key) no longer works. For RDP: `aws ssm get-parameter --region ap-southeast-2 --name /horizons/windows/administrator-password --with-decryption --query Parameter.Value --output text` |
+| auto-logon | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`: `AutoAdminLogon = 1`, `DefaultUserName = Administrator`, `DefaultDomainName = EC2AMAZ-JR2R3P9`. The password is stored as the **LSA secret `DefaultPassword`**, the same mechanism as Sysinternals Autologon. There is no plain-text `DefaultPassword` registry value. |
+| NDU at logon | scheduled task `\Horizons\Horizons NDU at logon`: at logon of Administrator, 30 s delay, interactive, runs `C:\Program Files\Norgate Data Updater\bin\dataupdater.norgate.exe`, no time limit |
+| console lock | scheduled task `\Horizons\Horizons lock console after logon`: at logon, 3 min delay, `rundll32.exe user32.dll,LockWorkStation`. NDU keeps running while the session is locked. |
+
+**Security trade-off.** Anyone who can reach the console session starts from a logged-on Administrator, until the lock
+task runs. Today the only ways in are RDP, restricted to the security-group range, and the EC2 serial console, which
+is not enabled. Whoever can read the SecureString can log on as Administrator.
+
+**Undo.** Run this over SSM as SYSTEM, then reboot. The SecureString can be deleted afterwards.
+
+```powershell
+$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+Set-ItemProperty $wl -Name AutoAdminLogon -Value '0'
+Remove-ItemProperty $wl -Name DefaultUserName, DefaultDomainName -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskPath '\Horizons\' -TaskName 'Horizons NDU at logon' -Confirm:$false
+Unregister-ScheduledTask -TaskPath '\Horizons\' -TaskName 'Horizons lock console after logon' -Confirm:$false
+# clear the LSA secret: the same P/Invoke helper as at setup, with a null value
+#   [HorizonsLsa]::Set('DefaultPassword', $null)
+# (or Sysinternals Autologon: Autologon64.exe /accepteula, then press Disable)
+```
+
+```bash
+aws ssm delete-parameter --region ap-southeast-2 --name /horizons/windows/administrator-password   # after undo
+```
+
+The Administrator password stays at the SecureString's value until it is changed again, for example with
+`Set-LocalUser` over SSM.
+
 ## User-data used at launch
 
 It ran once at first boot as a PowerShell script via EC2Launch. It writes a log to
