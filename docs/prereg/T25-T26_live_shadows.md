@@ -13,7 +13,7 @@
 | written | 2026-11-06. **No return, signal, position, sleeve or statistic of the restricted (CME-group) universe was computed in writing it, for any period.** The only data step was the availability check of §3.2: counts of final-settlement days per contract, and no price was summarised, printed or kept. |
 | changes nothing else | No v1.0, v1.1, T20–T22 or T23–T24 file is modified (pre-registrations, Build 0 report, results, trial code). v1.0 and v1.1 run as before. |
 
-## 1. Hypotheses, and what the result means
+## 1. Hypotheses, and what each outcome means
 
 | trial | hypothesis (restated from T21/T23 and T22/T24) | prior evidence |
 |---|---|---|
@@ -318,7 +318,7 @@ None of these can change an outcome:
      with at least 6 active markets; or
    - its record was interrupted for more than 3 consecutive months.
 
-   It is then neither passed nor failed, and §1 applies.
+   It is then neither decayed nor confirmed, and §1 applies.
 7. **Bugs.** A bug found before the evaluation date is fixed only if the fix restores what this document and the a160bfd code specify. The fix, its commit and the affected months are recorded. The whole live path is then recomputed from M1, as every run does, so the record stays consistent. No outcome rule, prediction, margin or date changes.
 8. **Late runs.** If the rebalance is computed after the 3rd (item 2, or a delayed run), the decision still uses only settlements up to t. The execution date is the market's first settlement on or after the 3rd, so a late computation never changes the positions.
 
