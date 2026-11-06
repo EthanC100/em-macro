@@ -226,11 +226,50 @@
   "norgate_missing": 0,
   "databento_missing": 16,
   "scale": 1.0,
-  "agree_share": 0.9997550820475141,
-  "agree_share_F1": 0.9995101640950281,
+  "agree_share": 1.0,
+  "agree_share_F1": 1.0,
   "agree_share_F2": 1.0,
-  "disagree_days": 2,
-  "max_diff_ticks": 3803.9999999999995,
+  "disagree_days": 0,
+  "max_diff_ticks": 0.9999999999999432,
+  "pass": true
+ },
+ "6E": {
+  "days_planned": 8188,
+  "days_compared": 8180,
+  "norgate_missing": 0,
+  "databento_missing": 8,
+  "scale": 1.0,
+  "agree_share": 1.0,
+  "agree_share_F1": 1.0,
+  "agree_share_F2": 1.0,
+  "disagree_days": 0,
+  "max_diff_ticks": 0.0,
+  "pass": true
+ },
+ "6B": {
+  "days_planned": 8188,
+  "days_compared": 8180,
+  "norgate_missing": 0,
+  "databento_missing": 8,
+  "scale": 1.0,
+  "agree_share": 1.0,
+  "agree_share_F1": 1.0,
+  "agree_share_F2": 1.0,
+  "disagree_days": 0,
+  "max_diff_ticks": 0.0,
+  "pass": true
+ },
+ "6M": {
+  "days_planned": 8188,
+  "days_compared": 8178,
+  "norgate_missing": 0,
+  "databento_missing": 10,
+  "scale": 1.0,
+  "agree_share": 1.0,
+  "agree_share_F1": 1.0,
+  "agree_share_F2": 1.0,
+  "disagree_days": 0,
+  "max_diff_ticks": 0.4999999999991122,
   "pass": true
  },
  "_not_found": {
@@ -266,7 +305,7 @@
    "KE-2013Z"
   ]
  },
- "_spend_usd_session": 5.1382625848100005,
- "_requests": 306,
- "_quoted_total_usd": 5.138262584810001
+ "_spend_usd_session": 5.693124160176001,
+ "_requests": 357,
+ "_quoted_total_usd": 5.687778592117003
 }

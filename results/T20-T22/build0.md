@@ -1,160 +1,125 @@
 # Build 0 — commodity data acceptance tests for trials T20–T22
 
+**Status (re-run 2026-11-06): every test A1–A11 passes under the pre-registration as amended.** A4 is reported but
+no longer gates the trials (Amendment 4). A6 holds under the roll-rule guard of Amendment 3 and the missing-month rule
+of Amendment 4.4. T20–T22 may proceed.
+
 | item | value |
 |---|---|
-| pre-registration | `docs/prereg/T20-T22_commodity_trials.md` §6 (A1–A11), as amended in `023c829` (Amendment 1: 20-market cross-sectional universe) and `6ac4616` (Amendment 2: C2 only, no Build 0 change). The pre-registration is not modified. |
-| branch | `build/commodity-build0`. Report at the pre-registered path `results/T20-T22/build0.md` (first committed as `results/build0_commodity_data.md`, moved in the follow-up); aggregate statistics in `results/T20-T22/build0.json` and `build0_a5.json`. |
-| code | `em_macro/commod_data.py` (data layer: contract tables, calendars, 35-day roll rule, F1/F2/F13, chained same-contract index), `em_macro/commod_build0.py` (A1–A4, A6, A7, A9–A11 and the extra checks), `em_macro/commod_databento.py` (A5), `tests/test_commod_data.py` (A6, A9, A11 as tests; synthetic tests always run, data-backed tests skip without the private data) |
-| primary source | Norgate snapshot `2026-11_futures` (as of 2026-11-05, latest bar 2026-11-04) in the private repo `EthanC100/em-macro-data`, `norgate/2026-11_futures/` (9,473 contract files; SHA-256 per file in its `manifest.csv`). Read in this session's container from a clone of the data repo; the AWS server was not needed and was not started. |
-| benchmarks | AQR data library, downloaded 2026-11-05: *Commodities for the Long Run* (monthly, to 2025-05) and *Century of Factor Premia* (monthly, to 2026-02). Kept outside this repository. |
-| cross-check | Databento GLBX.MDP3, schema `statistics` (settlement prices), 2010-06-07 to 2026-10 |
-| licence | This repository holds code, this report and aggregate statistics only. Contract tables, roll tables, return series, the A3/A4 series, the Databento settlements and every per-day comparison are in `em-macro-data/norgate/derived/build0/` (private). |
-| blindness | No T20, T21 or T22 sleeve return, Sharpe ratio, drawdown or pass criterion was computed. Nothing was combined with v1.0 or v1.1. A3 and A4 build the two benchmark-comparison series the tests define; only their correlations are reported (A8). |
+| pre-registration | `docs/prereg/T20-T22_commodity_trials.md` §6 (A1–A11), with Amendment 1 (`023c829`), Amendment 2 (`6ac4616`, no Build 0 change), Amendment 3 (`869c73e`: roll-rule guard for markets whose notice date is the last trade date) and Amendment 4 (`4ea2bfe`: A4 not gating; missing-month rule for vendor gaps). The pre-registration text above its amendments is not modified. |
+| report path | the pre-registered `results/T20-T22/build0.md` (first committed as `results/build0_commodity_data.md`); aggregate statistics in `results/T20-T22/build0.json` and `build0_a5.json`; the A4 diagnostic in `build0_a4_diagnostic.md` |
+| code | `em_macro/commod_data.py` (contract tables, calendars, the roll rule with Amendment 3, F1/F2/F13, chained same-contract index), `em_macro/commod_build0.py` (A1–A4, A6, A7, A9–A11, extra checks), `em_macro/commod_databento.py` (A5), `scripts/norgate_export.py` (exports), `tests/test_commod_data.py` (A6, A9 and A11 as tests: synthetic tests always run, data-backed ones need the private data) |
+| primary source | Norgate, in the private repo `EthanC100/em-macro-data`: commodity contracts `norgate/2026-11_futures/` (as of 2026-11-05); T22 financial futures `norgate/2026-11_financials/` and per-contract metadata for all markets `norgate/2026-11_metadata/` (both exported 2026-11-06 on horizons-norgate, commit `bd24f9d`; first notice date, first/last quoted date, point value, tick size, currency) |
+| benchmarks | AQR *Commodities for the Long Run* (to 2025-05) and *Century of Factor Premia* (to 2026-02), downloaded 2026-11-05, kept outside this repository |
+| cross-check | Databento GLBX.MDP3 `statistics` (settlement prices), 2010-06-07 to 2026-10 |
+| licence | This repository holds code, this report and aggregate statistics only. Contract and roll tables, return series, the A3/A4 series, Databento settlements and per-day comparisons are private (`em-macro-data/norgate/derived/build0/`). |
+| blindness | No T20, T21 or T22 sleeve return, Sharpe ratio, drawdown or pass criterion was computed in Build 0. |
 
-## 1. Result
+## 1. Result (re-run with Amendments 3 and 4 and the follow-up exports)
 
-| test | threshold (pre-registered) | measured | result |
+| test | threshold | measured | result |
 |---|---|---|---|
-| A1 assembly | every one of 34 markets has a contract table and FND/LTD metadata, or is recorded as unavailable | 24 commodity markets: contract tables 1990-01 (RB 2005-10) to 2026-10, 7,047 designated contracts (expiring 1990-01 or later and listed by 2026-10, including live ones). 3 financial futures recorded as unavailable (6L, 6Z, FBON: not in Norgate). **7 financial futures (6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt) are in Norgate but not in the export**, so they have no contract table. FND is from exchange rules, not from Norgate (not exported). | **NOT COMPLETE** (cannot be finished as written without a new Norgate export) |
-| A2 F1/F2 coverage, 20-market universe | ≥ 18 markets with coverage ≥ 95% since 2000-01 | **20 of 20** markets at 100.0% (RB from its entry, 2006-12) | **PASS** |
-| A3 equal-weight index vs AQR *Commodities for the Long Run* | Pearson ≥ 0.90 | **0.975** (424 months, 1990-02..2025-05; 22–24 markets per month); 0.978 from 2000-01 | **PASS** |
-| A4 KMPV-style carry portfolio vs AQR commodity carry factor | Pearson ≥ 0.70 | **0.503** (434 months, 1990-01..2026-02, after the data fix in the A4 diagnostic; first run 0.503 over 433 months); 0.524 from 2000-01. Diagnostic (`build0_a4_diagnostic.md`): AQR's own documented construction on our data correlates 0.679 with AQR's factor, below the plan's 0.90, so A4 stands | **FAIL** |
-| A5 Databento cross-check, CME-group markets from 2010-06-06 | within one tick on ≥ 99% of days, per market | 18 of 18 markets pass: 14 at 100.000%, PA and HE at 99.976% (8,166–8,178 days each; KE 6,436 days, from Dec 2013) | **PASS** |
-| A6 roll-rule look-ahead tests | all assertions hold on the full history | April 2020 → **CLM20** (holds); notice(F1) > execution + 35 days on every rebalance (holds); no LME series (holds). **First settlement on or before the decision date fails for 35 F2 picks** (PL 13, PA 22 months, all 2000–2009). **"Never inside the last 10 trading days" fails for F1 in 5 markets**: 2000-01..2026-09 violations B 192, G 312, HE 213, GF 8, CL 3 of 321 rebalances | **FAIL** |
-| A7 Option A availability (T20), 20 markets | the assignment table is in the report, computed from availability only | §3: Option A for 14 markets, Option B for 6 | **PASS** |
-| A8 no peeking | no return, Sharpe, drawdown or P&L of any sleeve or signal in the report | reviewed before the commit: the report and `results/T20-T22/build0*.json` contain counts, shares, correlations, dates and tick-agreement rates only | **PASS** |
-| A9 data quality | no unresolved > 5-day held-contract gap or fully reversing 8-MAD spike; limit-locked days flagged | held F1: 0 gaps > 5 days in any market. 16 F2 gaps > 5 days, all in PL and PA, whose F2 series no trial holds (T21 excludes them). 14 reversing spikes, all confirmed by the adjacent contract on the same day (genuine market moves). 203 limit-lock flags in grains and livestock (flagged, not failed) | **PASS** |
-| A10 T22 financial futures coverage | each market ≥ 95% or dropped and recorded | 6L, 6Z, FBON dropped (not in the primary source). 6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt: **not run** (no export) | **NOT COMPLETE** |
-| A11 F2 and F13 listed on every date used | assertion holds | 0 violations in 24 markets (F2/F13 counted as used when they settle on the decision date) | **PASS** |
+| A1 assembly | all 34 markets have contract tables and FND/LTD metadata from the primary source, or are recorded unavailable | 31 markets with contract tables and Norgate metadata: 24 commodities and 7 financial futures (6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt). 3 recorded unavailable (6L, 6Z, FBON: not in Norgate). FND from Norgate's `first_notice_date` wherever Norgate has one (metals, grains, KC, CC, CT, LE, Long Gilt); none exists for the other markets, whose notice date is the LTD. LTD from Norgate: final settlement for expired contracts, `last_quoted_date` (scheduled expiry) for live ones. | **PASS** |
+| A2 F1/F2 coverage, 20-market universe | ≥ 18 markets ≥ 95% since 2000-01 | **20 of 20** at 100.0% | **PASS** |
+| A3 equal-weight index vs AQR *Commodities for the Long Run* | ≥ 0.90 | **0.975** (424 months, 1990-02..2025-05) | **PASS** |
+| A4 carry portfolio vs AQR carry factor | ≥ 0.70 (gating until Amendment 4) | **0.498** (434 months, 1990-01..2026-02); the A4 diagnostic: AQR's own construction on these data 0.679 | reported, **not gating** (Amendment 4) |
+| A5 Databento cross-check, CME-group markets from 2010-06-06 | within one tick on ≥ 99% of days, per market | **21 of 21** pass: 18 commodities and 6E, 6B, 6M; 20 at 100.000%, PA 99.976% | **PASS** |
+| A6 roll-rule tests | all assertions hold on the full history | April 2020 → CLM20; notice(F1) > execution + 35 days on every rebalance; **no held F1 or F2 inside its last 10 trading days in any of the 31 markets** (Amendment 3); first settlement on or before t for every contract used (Amendment 4.4: 13 platinum months and 22 palladium months in 2000–2009 whose F2 has no Norgate settlement are missing months); no LME series | **PASS** |
+| A7 Option A availability (T20) | table in the report, from availability only | Option A for 14 markets, B for 6 (B, G, KE, LE, GF, HE): §3 | **PASS** |
+| A8 no peeking | no return, Sharpe, drawdown or P&L of any sleeve or signal | reviewed before this commit: counts, shares, correlations, dates and tick-agreement rates only | **PASS** |
+| A9 data quality | none unresolved | no held F1 contract has a gap over 5 days; 48 F2 gap runs over 5 days, all in series no trial holds (PL and PA F2 16; Long Gilt F2 32: T21 holds F2 only for its 20 commodities, T22 holds F1 only); 17 fully reversing 8-MAD spikes, all confirmed by the adjacent contract the same day; 204 limit-lock flags (flagged) | **PASS** |
+| A10 T22 financial futures | each ≥ 95% or dropped and recorded | 6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt **100%** each since the later of 2000-01 and entry; 6L, 6Z, FBON dropped (not in Norgate) | **PASS** |
+| A11 F2 and F13 listed when used | holds | 0 violations in 31 markets | **PASS** |
 
-**Can T20–T22 proceed? No.** §6 requires every test to pass before any trial runs, and "a failure stops the trials".
-A4 and A6 fail, and A1 and A10 cannot be completed from the current export. What each failure needs is in §6
-below. None of it was changed here: the roll rule, the buffer and the A4 definition are pre-registered, and changing
-them is a pre-registration amendment for the owner, not a data fix.
+**Markets dropped mechanically.** **PA** fails the coverage gate (§2.1 rule 1: 93.15%) and is out of every trial.
+**6L, 6Z, FBON** are not in the primary source and are out of T22. Platinum stays in T22 (95.95%), and its 13
+uncovered months are missing months under Amendment 4.4.
 
-**Markets dropped mechanically**
-- **PA (palladium)** fails the coverage gate of §2.1 rule 1 (93.15%, 299 of 321 decision dates, below 95%) and is
-  dropped from every trial. Since Amendment 1 it was only in T22.
-- **6L, 6Z, FBON** are not in Norgate's futures list, so they are recorded as unavailable (A1) and dropped from T22 (A10).
+**T22 universe: 30 instruments.** These are 23 commodities (all 24 except PA) and 7 financial futures (6E, 6B, 6M,
+FGBL, FOAT, FBTP, Long Gilt). **T20 and T21: 20 markets**, as amended.
 
-PL passes the gate at 95.95% (308 of 321) and stays in T22.
+## 2. Changes from the previous Build 0 run, each with its cause
 
-## 2. A1 — contract tables and metadata
+The first run (`a2c85ae`, then `4fe6e27` after the A4 diagnostic's data fix) used the pre-registered roll rule,
+exchange-rule first-notice dates and no financial futures. Every value that moved is listed here with its cause.
 
-| market | Norgate | designated contracts 1990–2026 (live) | notice(T) | LTD rule vs Norgate final bar, expired contracts 2000–2026: exact / within 2 business days (n) | data notes |
-|---|---|---|---|---|---|
-| CL | CL | 565 (123) | LTD | 98.4% / 100.0% (322) |  |
-| B | BRN | 590 (147) | LTD | 36.2% / 40.2% (323) | pre-2016 contracts under the old LTD rule |
-| RB | RB | 289 (38) | LTD | 100.0% / 100.0% (251) | RBOB only, from 2005-10 |
-| HO | HO | 480 (38) | LTD | 100.0% / 100.0% (322) | vendor splice heating oil → ULSD (May 2013) |
-| NG | NG | 568 (119) | LTD | 98.1% / 100.0% (322) | 11 stray far quotes (2036X–2037U) flagged |
-| G | GAS | 516 (74) | LTD | 99.4% / 100.0% (322) | vendor splice gasoil → 10 ppm (Feb 2015) |
-| HG | HG | 210 (26) | min(FND, LTD) | 100.0% / 100.0% (134) |  |
-| GC | GC | 241 (20) | min(FND, LTD) | 98.8% / 100.0% (161) |  |
-| SI | SI | 200 (16) | min(FND, LTD) | 99.3% / 100.0% (134) |  |
-| PL | PL | 160 (12) | min(FND, LTD) | 81.5% / 100.0% (108) | far months unlisted in 2000–05 (A6) |
-| PA | PA | 159 (12) | min(FND, LTD) | 80.4% / 99.1% (107) | far months unlisted in 2000–09 (A6); coverage 93.15% → dropped |
-| ZC | ZC | 197 (13) | min(FND, LTD) | 95.5% / 100.0% (134) |  |
-| ZS | ZS | 275 (17) | min(FND, LTD) | 94.1% / 100.0% (188) |  |
-| ZW | ZW | 198 (14) | min(FND, LTD) | 94.8% / 100.0% (134) |  |
-| KE | KE | 198 (14) | min(FND, LTD) | 82.8% / 82.8% (134) | KCBT rules before 2013 |
-| ZM | ZM | 315 (17) | min(FND, LTD) | 94.4% / 100.0% (215) | 2029N/V/Z stopped quoting 2026-09-29, flagged |
-| ZL | ZL | 315 (17) | min(FND, LTD) | 94.4% / 100.0% (215) | 2029N/V/Z stopped quoting 2026-09-29, flagged |
-| SB | SB | 159 (11) | LTD | 99.1% / 100.0% (108) |  |
-| KC | KC | 191 (7) | min(FND, LTD) | 95.5% / 99.3% (134) |  |
-| CC | CC | 194 (10) | min(FND, LTD) | 92.5% / 99.3% (134) |  |
-| CT | CT | 198 (14) | min(FND, LTD) | 96.3% / 99.3% (134) |  |
-| LE | LE | 231 (10) | min(FND, LTD) | 100.0% / 100.0% (161) |  |
-| GF | GF | 304 (9) | LTD | 65.6% / 84.7% (215) | Nov/holiday LTD exceptions |
-| HE | HE | 294 (11) | LTD | 99.5% / 100.0% (213) | 92 final-settlement rows corrected; May not listed before 2002 |
-| 6E | 6E | — | — | — | in Norgate (6E) but not exported → no table |
-| 6B | 6B | — | — | — | in Norgate (6B) but not exported → no table |
-| 6M | 6M | — | — | — | in Norgate (6M) but not exported → no table |
-| 6L | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
-| 6Z | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
-| FGBL | FGBL | — | — | — | in Norgate (FGBL) but not exported → no table |
-| FOAT | FOAT | — | — | — | in Norgate (FOAT) but not exported → no table |
-| FBTP | FBTP | — | — | — | in Norgate (FBTP) but not exported → no table |
-| FBON | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
-| R | LLG | — | — | — | in Norgate (LLG) but not exported → no table |
+| test | previous | now | cause |
+|---|---|---|---|
+| A1 | 24 commodity markets; FND from exchange rules; 7 financial futures not exported | 31 markets with tables; FND and live LTD from Norgate's metadata | follow-up exports (approved) |
+| A2 | 20 of 20 at 100% | unchanged | — |
+| A3 | 0.9746 | 0.9754 | Amendment 3 changes F1 in G (312 months), HE (213), B (192), GF (8), CL (3): 0.97541 with Amendment 3 alone; Norgate's LE first-notice dates change F1 in 12 LE months: −0.00003 |
+| A4 | 0.503 (gating) | 0.498 (not gating) | Amendments 3 and 4; metadata (LE) |
+| A5 | 18 of 18 pass; HE 99.976% (2 days with a Databento zero settlement record) | 21 of 21 pass; HE 100% | Amendment 3 moves HE's F1 away from the two contract-days with Databento's zero records; 6E, 6B, 6M added by the export. The other 17 markets are unchanged. |
+| A6 | fails: last-10-days in G, HE, B, GF, CL; 35 PL/PA F2 picks before their first settlement | passes in 31 markets | Amendment 3 (guard; applied also to 6E, 6B, 6M, FGBL, FOAT, FBTP, whose Norgate metadata shows no first notice date before the LTD); Amendment 4.4 |
+| A7 shares | B 82.9%, G 71.7%, HE 75.0%, LE 61.3% | B 82.5%, G 73.3%, HE 61.7%, LE 62.9% | B, G, HE: Amendment 3 (different F1, so a different F13 target). LE: Norgate's first-notice dates. **Option A/B assignment unchanged.** |
+| A9 | 16 F2 gaps (PL, PA), 14 spikes, 203 limit-lock flags | 48 F2 gaps, 17 spikes, 204 flags | +32 Long Gilt F2 gaps and +3 6M spikes (curve-confirmed): the financial exports. Limit-lock flags move between markets with their contracts: GF F1 17→15 and HE F2 12→15 (Amendment 3), LE F1 14→16 and F2 15→13 (LE metadata). |
+| A10 | not run | 7 of 7 at 100% | follow-up exports |
+| A11 | 0 | 0 | — |
 
-How the metadata was built (decision 2 in §7):
-- **LTD.** For an expired contract, LTD = Norgate's final settlement. Per `docs/infra/norgate_pipeline.md`, this is what
-  Norgate's `last_quoted_date` returns for expired contracts. There are two corrections:
-  - **Lean hogs.** Norgate adds a cash final-settlement row two business days after the last trading day, with a
-    missing day in between. For these 92 contracts in 2000–2026, LTD = the bar before the gap.
-  - **Contracts that stopped quoting more than 30 days before their scheduled LTD** (NG 2036X–2037U, ZM and ZL
-    2029N/V/Z) keep the exchange-rule LTD and are flagged. None was ever used as F1, F2 or F13.
+**Live cattle.** Norgate's LE first notice date is 1–6 business days after the first business day of the contract
+month, around the 7th. The exchange-rule date used in the first run, the first business day, is superseded by the
+primary source. **Cocoa.** Norgate's CC dates follow the pre-2016 ICE rule (five business days earlier) and the
+current rule after 2016; no F1 changes. Norgate's dates agree exactly with the exchange rules for the metals,
+grains and Long Gilt, and to within two business days for KC and CT.
 
-  For a live contract, LTD = the exchange rule.
-- **FND.** The exchange rule, on the market's own trading calendar (the union of its settlement dates; weekdays
-  without US federal holidays and Good Friday after 2026-11-04). The rules used:
-  - **Last business day of the prior month:** metals and grains.
-  - **ICE softs:** KC 7 business days before the first business day of the delivery month; CC 10 business days
-    before its sixth business day; CT 5 business days before its first business day.
-  - **LE:** first business day of the contract month. CME's rulebook has no pre-LTD FND for live cattle. Any date
-    from the 1st to the 6th selects the same contracts, because execution + 35 days always falls after the 7th.
-  - **All other markets:** notice = LTD.
-- **Lower agreement for B, PL, PA, KE and GF means old rules, not bad data.** Agreement between the exchange rule and
-  Norgate's final bar is lower in these markets because their old contracts expired under earlier rules:
-  - **B:** the pre-2016 Brent rule (15 days before the delivery month). Among contracts from 2016 on, the current
-    rule matches the final bar exactly for 117 and is one business day off for 13 (holiday-adjacent expiries).
-  - **KE:** KCBT rules before the CBOT move.
-  - **PL/PA:** 4th-last against 3rd-last business day.
-  - **GF:** November and holiday exceptions.
+## 3. A1 — contract tables and metadata
 
-  Using the final bar for expired contracts means the roll rule always sees the date each contract actually expired.
-- **Gaps in the designated calendar** are all contracts that are not yet listed or were never listed:
-  - GC, SI, ZC, ZS, ZM and ZL months in 2029–2032, not listed yet.
-  - HE May contracts before 2002, not listed then.
-- **Specification check.** Multipliers, ticks, listed months and LTD/FND rules were checked against the ICE and Eurex
-  specification pages, and against official CME rulebook and fact-card text. cmegroup.com refused direct fetches, so
-  official text was read through search snippets. All multipliers, tick values and designated calendars match the
-  pre-registered table, except these data facts (to be logged, not trial changes):
-  - **PA:** the outright tick has been **0.50 = US$50** since 7 Dec 2020 (SER-8668R); 0.10 = US$10 now applies only to
-    spreads and settlements. This affects T22's PA cost line, but PA is dropped (above).
-  - **6Z:** the tick is **0.000025 = US$12.50**. The pre-registration had "per exchange spec".
-  - **6E** was 0.0001 = US$12.50 until 11 Jan 2016. **6M** was US$12.50 until 14 Jul 2014. The pre-registered ticks
-    are today's.
-  - **Brent** is EFP-deliverable with an option to cash settle. The pre-registration already treats it as cash
-    (notice = LTD).
-  - **CC FND** is "ten business days prior to the sixth business day of the delivery month". It was used as such.
-  - Ticks are applied in Norgate's quoting units: US cents for copper, silver, grains, softs and livestock.
-- **Vendor splices (§2.1 rule 2).**
-  - **HO:** Norgate's HO series runs from 1978 under one symbol ("NY Harbor ULSD"). No. 2 heating oil to the Apr-2013
-    contract, ULSD from May 2013 (SER-6198). Treated as one market.
-  - **G:** Norgate's GAS series runs from 1988. 0.1% gasoil to the Jan-2015 contract, 10 ppm from Feb 2015. Treated
-    as one market.
-  - **RB:** Norgate has RBOB only, from 2005-10-03. Unleaded gasoline is not in its list, so RB enters 12 months
-    after its first F1 settlement, at the **2006-12** rebalance.
-- **Financial futures.** Norgate's futures list has 6E (131 contracts), 6B (207), 6M (146), FGBL (114), FOAT (61),
-  FBTP (71) and Long Gilt (LLG, 156). The `2026-11_futures` export covered only the 24 commodity targets of
-  `scripts/norgate_export.py`. 6L, 6Z and FBON are not in Norgate.
+| market | Norgate | designated contracts (live) | notice(T) | FND source | Norgate FND vs exchange rule, expired 2000–2026: exact / within 2 bd (n) | LTD rule vs Norgate final bar: exact / within 2 bd | notes |
+|---|---|---|---|---|---|---|---|
+| CL | CL | 565 (123) | LTD | none (notice = LTD) | — | 98.4% / 100.0% |  |
+| B | BRN | 590 (147) | LTD | none (notice = LTD) | — | 36.2% / 40.2% | pre-2016 contracts under the old LTD rule |
+| RB | RB | 289 (38) | LTD | none (notice = LTD) | — | 100.0% / 100.0% | RBOB only, from 2005-10; entry 2006-12 |
+| HO | HO | 480 (38) | LTD | none (notice = LTD) | — | 100.0% / 100.0% | vendor splice heating oil → ULSD (May 2013) |
+| NG | NG | 568 (119) | LTD | none (notice = LTD) | — | 98.1% / 100.0% | 11 stray far quotes (2036X–2037U) flagged |
+| G | GAS | 516 (74) | LTD | none (notice = LTD) | — | 99.4% / 100.0% | vendor splice gasoil → 10 ppm (Feb 2015) |
+| HG | HG | 210 (26) | min(FND, LTD) | Norgate | 100.0% / 100.0% (160) | 100.0% / 100.0% |  |
+| GC | GC | 241 (20) | min(FND, LTD) | Norgate | 100.0% / 100.0% (181) | 98.8% / 100.0% |  |
+| SI | SI | 200 (16) | min(FND, LTD) | Norgate | 100.0% / 100.0% (150) | 99.3% / 100.0% |  |
+| PL | PL | 160 (12) | min(FND, LTD) | Norgate | 100.0% / 100.0% (120) | 81.5% / 100.0% | far F2 months unlisted in Norgate 2000–05 (A6, Amendment 4.4) |
+| PA | PA | 159 (12) | min(FND, LTD) | Norgate | 100.0% / 100.0% (119) | 80.4% / 99.1% | same, 2000–09; coverage 93.15% → dropped |
+| ZC | ZC | 197 (13) | min(FND, LTD) | Norgate | 100.0% / 100.0% (147) | 95.5% / 100.0% |  |
+| ZS | ZS | 275 (17) | min(FND, LTD) | Norgate | 100.0% / 100.0% (205) | 94.1% / 100.0% |  |
+| ZW | ZW | 198 (14) | min(FND, LTD) | Norgate | 100.0% / 100.0% (148) | 94.8% / 100.0% |  |
+| KE | KE | 198 (14) | min(FND, LTD) | Norgate | 100.0% / 100.0% (148) | 82.8% / 82.8% | KCBT rules before 2013 |
+| ZM | ZM | 315 (17) | min(FND, LTD) | Norgate | 100.0% / 100.0% (235) | 94.4% / 100.0% | 2029N/V/Z stopped quoting 2026-09-29, flagged |
+| ZL | ZL | 315 (17) | min(FND, LTD) | Norgate | 100.0% / 100.0% (235) | 94.4% / 100.0% | 2029N/V/Z stopped quoting 2026-09-29, flagged |
+| SB | SB | 159 (11) | LTD | none (notice = LTD) | — | 99.1% / 100.0% |  |
+| KC | KC | 191 (7) | min(FND, LTD) | Norgate | 93.6% / 100.0% (141) | 95.5% / 99.3% |  |
+| CC | CC | 194 (10) | min(FND, LTD) | Norgate | 23.6% / 23.6% (144) | 92.5% / 99.3% | Norgate FND follows the pre-2016 ICE rule, then the current one |
+| CT | CT | 198 (14) | min(FND, LTD) | Norgate | 98.0% / 100.0% (148) | 96.3% / 99.3% |  |
+| LE | LE | 231 (10) | min(FND, LTD) | Norgate | 0.0% / 29.8% (171) | 100.0% / 100.0% | Norgate FND ≈ first business Monday (~7th); my rule (1st business day) superseded |
+| GF | GF | 304 (9) | LTD | none (notice = LTD) | — | 65.6% / 84.7% | Nov/holiday LTD exceptions |
+| HE | HE | 294 (11) | LTD | none (notice = LTD) | — | 99.5% / 100.0% | 92 final-settlement rows corrected; May not listed before 2002 |
+| 6E | 6E | 131 (20) | LTD | none (notice = LTD) | — | 100.0% / 100.0% |  |
+| 6B | 6B | 167 (20) | LTD | none (notice = LTD) | — | 100.0% / 100.0% |  |
+| 6M | 6M | 146 (20) | LTD | none (notice = LTD) | — | 100.0% / 100.0% |  |
+| FGBL | FGBL | 114 (3) | LTD | none (notice = LTD) | — | 100.0% / 100.0% |  |
+| FOAT | FOAT | 61 (3) | LTD | none (notice = LTD) | — | 98.3% / 100.0% | listed 2012; entry 2013-06 |
+| FBTP | FBTP | 71 (3) | LTD | none (notice = LTD) | — | 100.0% / 100.0% | listed 2009; entry 2010-11 |
+| R | LLG | 150 (3) | min(FND, LTD) | Norgate | 100.0% / 100.0% (110) | 100.0% / 100.0% |  |
+| 6L | — | — | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
+| 6Z | — | — | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
+| FBON | — | — | — | — | — | — | not in Norgate → unavailable, dropped from T22 |
 
-## 3. A7 — Option A/B assignment for T20 (computed from availability only, before any carry return)
+## 4. A7 — Option A/B assignment for T20 (availability only)
 
-Share of design-sample decision dates (2000-01..2019-12, after entry) with an eligible F13 settlement. The rule is
-Option A if the share is ≥ 90%, otherwise Option B for the whole sample.
+Share of design-sample decision dates (2000-01..2019-12, after entry) with an eligible F13 settlement; Option A if
+≥ 90%.
 
 | market | share | option | market | share | option |
 |---|---|---|---|---|---|
-| CL | 100.0% (240/240) | A | B | 82.9% (199/240) | B |
+| CL | 100.0% (240/240) | A | B | 82.5% (198/240) | B |
 | RB | 98.1% (154/157) | A | HO | 98.8% (237/240) | A |
-| NG | 100.0% (240/240) | A | G | 71.7% (172/240) | B |
+| NG | 100.0% (240/240) | A | G | 73.3% (176/240) | B |
 | HG | 100.0% (240/240) | A | ZC | 99.6% (239/240) | A |
 | ZS | 91.2% (219/240) | A | ZW | 90.0% (216/240) | A |
 | KE | 84.6% (203/240) | B | ZM | 95.8% (230/240) | A |
 | ZL | 96.7% (232/240) | A | SB | 100.0% (240/240) | A |
 | KC | 100.0% (240/240) | A | CC | 100.0% (240/240) | A |
-| CT | 100.0% (240/240) | A | LE | 61.3% (147/240) | B |
-| GF | 0.0% (0/240) | B | HE | 75.0% (180/240) | B |
+| CT | 100.0% (240/240) | A | LE | 62.9% (151/240) | B |
+| GF | 0.0% (0/240) | B | HE | 61.7% (148/240) | B |
 
-The result is **Option A for 14 markets and Option B for 6** (B, G, KE, LE, GF, HE).
-- ZW is exactly at the threshold: 216 of 240 dates, 90.0%, so Option A because the rule is ≥.
-- GF's 0% follows from CME listing feeder cattle only about 12 months ahead, so no contract 10.5–13.5 months after F1
-  has a settlement on the decision date.
-
-## 4. A5 — Databento cross-check (CME-group commodity markets)
+## 5. A5 — Databento cross-check (CME-group markets)
 
 | market | days compared | Databento has no settlement | scale | within 1 tick | days outside | result |
 |---|---|---|---|---|---|---|
@@ -175,202 +140,124 @@ The result is **Option A for 14 markets and Option B for 6** (B, G, KE, LE, GF, 
 | ZL | 8,178 | 4 | ×1 | 100.000% | 0 | PASS |
 | LE | 8,166 | 16 | ×1 | 100.000% | 0 | PASS |
 | GF | 8,166 | 16 | ×1 | 100.000% | 0 | PASS |
-| HE | 8,166 | 16 | ×1 | 99.976% | 2 | PASS |
+| HE | 8,166 | 16 | ×1 | 100.000% | 0 | PASS |
+| 6E | 8,180 | 8 | ×1 | 100.000% | 0 | PASS |
+| 6B | 8,180 | 8 | ×1 | 100.000% | 0 | PASS |
+| 6M | 8,178 | 10 | ×1 | 100.000% | 0 | PASS |
 
-The comparison window is 2010-06-07 to the 2026-10 decision date. Each market has 8,182 F1/F2 contract-days
-(F1 and F2 on every market day from each month's decision date to the next). **All 18 CME-group commodity markets
-pass. 14 agree on every compared day, and PA and HE agree on 99.976%.** That is ≥ 99.9% for every market, against
-a threshold of 99%.
-- **HE, 2 days** (HE-2012N on 2012-06-19, HE-2012Q on 2012-07-17). Databento's last settlement record for the
-  contract that day has a price of exactly 0. Norgate's series is continuous through both days (ordinary
-  day-to-day moves), and F2 agrees on the same days. These are Databento artefacts, not Norgate errors.
-- **PA, 2 days** (2020-12-04, 2022-09-22). 2 ticks (0.20) apart, after the Dec-2020 tick change. Small and not
-  investigated further.
-- **Days with no Databento settlement.** There are 4–16 such days in most markets, for example a GLBX gap in LE/GF/HE
-  in February 2012 and some days Databento flags as degraded in June 2014. KE has 1,746: KC HRW wheat was a KCBT
-  product until the CBOT transfer (December 2013), and its 2010–2013 contracts do not resolve in GLBX.MDP3. **KE is
-  therefore cross-checked from December 2013 only** (6,436 days). Norgate has a settlement on every planned day.
-- **Not cross-checked.** The CME FX futures (6E, 6B, 6M) are not in the Norgate export, so there is nothing to
-  compare. ICE markets (B, G, SB, KC, CC, CT) are outside A5, as instructed.
+All 21 CME-group markets pass.
+- **PA.** Two days are 2 ticks apart (2020-12-04, 2022-09-22).
+- **KE.** Cross-checked from December 2013, when it moved to CBOT; its KCBT contracts are not in GLBX.MDP3.
+- **Long Gilt and Eurex.** Not CME-group, so outside A5; the ICE commodities are likewise outside A5 by instruction.
 
-## 5. A6, A9, A11 and A2 detail
+## 6. A10 — T22 financial futures
 
-**A6, notice and look-ahead.** The rule always selects a contract whose notice(T) is after execution + 35 days. On the
-April 2020 decision date (decision 2020-04-02, execution 2020-04-03) it selects **CL-2020M**, not CL-2020K, whose
-last trade was 2020-04-21. No contract from an LME market or series exists anywhere in the data layer.
-
-**A6, first settlement.** The assertion fails for 35 F2 picks:
-- PL: 13 months in 2000–2005.
-- PA: 22 months in 2000–2009.
-
-The rule picks the next designated month by calendar, and in these months Norgate has no bar for it yet.
-
-**Follow-up finding: this is a vendor-history issue, not a rule issue.**
-- In all 35 cases, Norgate's history for the F2 contract begins 5.3–7.8 months before its expiry.
-- In 9 of the 35 (PL 2001-03, 2001-09, 2001-10, 2003-12, 2005-03, 2005-06, 2005-07; PA 2002-01, 2004-02), a contract
-  further out than F2 already has settlements on the decision date. That is only possible if F2 was listed.
-- No case occurs after 2009-02.
-
-The exchanges' listing cycles of that period were not confirmed from an archive. Today's schedules (PL: three
-nearby months plus Jan/Apr/Jul/Oct within 15 months) would have F2 listed in every case. No price is
-used before it exists, because a missing F2 settlement makes the market-month uncovered. That is why PA fails the
-coverage gate. Still, the assertion as written does not hold.
-
-**A6, "never inside the last 10 trading days" (spec §7).** This was checked on every held day from the entry
-settlement to the exit settlement inclusive, counting trading days from that day to the contract's LTD inclusive.
-Violations, F1, 2000-01..2026-09 (321 rebalances):
-
-| market | notice(T) | violations | of which 2016–2026 | fewest trading days left at exit | violations if the exit day is excluded (full history) |
+| market | Norgate | first contract | entry | coverage since the later of 2000-01 and entry | result |
 |---|---|---|---|---|---|
-| G gasoil | LTD = 2 business days before the 14th of the delivery month | 312 | 125 | 4 | 429 of 442 |
-| HE lean hogs | LTD = 10th business day of the contract month | 213 | 87 | 7 | 201 of 442 |
-| B Brent | LTD (pre-2016 rule ~15 days before the month; current rule end of the 2nd month before) | 192 | 0 | 7 | 194 of 442 |
-| GF feeder cattle | LTD = last Thursday of the contract month | 8 | 3 | 9 | 4 of 442 |
-| CL WTI | LTD = 3 business days before the 25th of the prior month | 3 | 0 | 10 | 0 of 442 |
-| other 19 markets | | 0 | 0 | ≥ 11 | 0 |
+| 6E | 6E | 6E-1999H | 2000-03 | 100.0% (319/319, from 2000-03) | PASS |
+| 6B | 6B | 6B-1990H | 1991-02 | 100.0% (321/321, from 2000-01) | PASS |
+| 6M | 6M | 6M-1995M | 1996-06 | 100.0% (321/321, from 2000-01) | PASS |
+| FGBL | FGBL | FGBL-1999H | 2000-03 | 100.0% (319/319, from 2000-03) | PASS |
+| FOAT | FOAT | FOAT-2012M | 2013-06 | 100.0% (160/160, from 2013-06) | PASS |
+| FBTP | FBTP | FBTP-2009Z | 2010-11 | 100.0% (191/191, from 2010-11) | PASS |
+| R | LLG | LLG-1990H | 1991-02 | 100.0% (321/321, from 2000-01) | PASS |
+| 6L | — | — | — | not in the primary source | dropped and recorded |
+| 6Z | — | — | — | not in the primary source | dropped and recorded |
+| FBON | — | — | — | not in the primary source | dropped and recorded |
 
-F2 is never inside its last 10 trading days in any market.
+## 7. A6 — roll rule under Amendments 3 and 4.4
 
-**Why the rule fails.** The pre-registration's argument ("the holding period is at most 31 days plus the execution
-lag") does not hold for markets where notice(T) = LTD. The rule only guarantees LTD > execution + 35 days, while the
-next execution date can be 31–35 days later. A contract can therefore be held until 2–10 trading days before its last
-trade.
-- **Gasoil** is the clearest case: at the November execution, the December contract (LTD around the 10th–12th of
-  December) passes the 35-day test and is held to the December execution.
-- **Brent's** failures are all from the pre-2016 rule.
+| market | notice | F1 last-10 violations | F2 last-10 violations | fewest trading days left at exit | chosen contracts without a settlement on t (Amendment 4.4) |
+|---|---|---|---|---|---|
+| CL | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| B | LTD (Amendment 3 guard) | 0 | 0 | 18 | 0 |
+| RB | LTD (Amendment 3 guard) | 0 | 0 | 17 | 0 |
+| HO | LTD (Amendment 3 guard) | 0 | 0 | 16 | 0 |
+| NG | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| G | LTD (Amendment 3 guard) | 0 | 0 | 24 | 0 |
+| HG | min(FND, LTD) | 0 | 0 | 35 | 0 |
+| GC | min(FND, LTD) | 0 | 0 | 35 | 0 |
+| SI | min(FND, LTD) | 0 | 0 | 35 | 0 |
+| PL | min(FND, LTD) | 0 | 0 | 35 | 13 |
+| PA | min(FND, LTD) | 0 | 0 | 34 | 22 |
+| ZC | min(FND, LTD) | 0 | 0 | 27 | 0 |
+| ZS | min(FND, LTD) | 0 | 0 | 27 | 0 |
+| ZW | min(FND, LTD) | 0 | 0 | 27 | 0 |
+| KE | min(FND, LTD) | 0 | 0 | 27 | 0 |
+| ZM | min(FND, LTD) | 0 | 0 | 26 | 0 |
+| ZL | min(FND, LTD) | 0 | 0 | 26 | 0 |
+| SB | LTD (Amendment 3 guard) | 0 | 0 | 17 | 0 |
+| KC | min(FND, LTD) | 0 | 0 | 27 | 0 |
+| CC | min(FND, LTD) | 0 | 0 | 25 | 0 |
+| CT | min(FND, LTD) | 0 | 0 | 19 | 0 |
+| LE | min(FND, LTD) | 0 | 0 | 14 | 0 |
+| GF | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| HE | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| 6E | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| 6B | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| 6M | LTD (Amendment 3 guard) | 0 | 0 | 11 | 0 |
+| FGBL | LTD (Amendment 3 guard) | 0 | 0 | 24 | 0 |
+| FOAT | LTD (Amendment 3 guard) | 0 | 0 | 24 | 0 |
+| FBTP | LTD (Amendment 3 guard) | 0 | 0 | 24 | 0 |
+| R | min(FND, LTD) | 0 | 0 | 36 | 0 |
 
-This is a property of the pre-registered rule, not of the data. Correcting it means amending the rule, so it is
-reported, not fixed. Two possible amendments, for the owner to choose:
-- require notice(T) > next execution date + 10 trading days, or
-- measure the buffer to the LTD for cash-settled and LTD-notice markets.
+## 8. Decisions taken under the task's rules
 
-**A9.** The checks were run on the held F1 and F2 series from 1990.
-- **Gaps.** No held F1 contract in any market has a gap of more than 5 consecutive market days. The F1 series has no
-  filled days at all.
-- **Reversing spikes.** A spike is a one-day move more than 8 rolling 252-day MADs from the rolling median (the MAD is
-  floored at one tick), followed by a next-day move that reverses at least 90% of it. There are 14 (B 2020-03-18, GC
-  1993-09-21, SI 2014-11-28 and 2025-12-30, ZM 1994-05-23, CC 2024-05-02/03, LE 2020-03-16, GF 2019-08-13). Each
-  is matched on the same day by the adjacent designated contract, moving the same way by at least half as much and
-  reversing too, so they are genuine curve-wide moves.
-- **Limit-lock flags.** Unchanged settlement after a > 3-MAD move, in grains and livestock: ZC 39, ZS 19, ZW 8,
-  KE 22, ZM 21, ZL 15, LE 29, GF 30, HE 20. These are flagged, not failed.
-- **The 16 F2 gaps in PL and PA.** They are the not-yet-listed F2 periods described under A6. They are classed as
-  "not held by any trial" because T22 holds F1 only and T21 excludes the precious metals.
+1. **Primary-source metadata (A1).** FND is Norgate's `first_notice_date` where Norgate has one. LTD is Norgate's
+   final settlement for expired contracts and Norgate's `last_quoted_date` (scheduled expiry) for live contracts.
+   - **Lean hogs:** the final-settlement row is corrected, so LTD = the bar before the gap.
+   - **Contracts that stopped quoting more than 30 days early** (NG 2036X–2037U, ZM and ZL 2029N/V/Z) keep the
+     exchange-rule LTD and are flagged. None is ever used.
+2. **Amendment 3 scope.** The guard applies to every market whose notice date equals its LTD in the metadata: CL, B,
+   RB, HO, NG, G, SB, GF, HE, 6E, 6B, 6M, FGBL, FOAT, FBTP. This was approved, including financial futures the
+   metadata reveals.
+3. **A5 re-run.** The A5 comparison was re-planned on the amended roll tables. Contracts not already downloaded
+   were requested from Databento, each quoted first; cached contract-years were reused.
+4. **Unchanged from the first run** (`a2c85ae`, §7 there):
+   - trading calendar = union of settlement dates; execution on the first settlement on or after the 3rd;
+   - A3/A4 construction (A4 with the diagnostic's first-month fix);
+   - A9 thresholds (8 rolling MADs; a reversal is a two-day move within 10% of the first day's);
+   - A11 "used" = has a settlement on the decision date.
 
-**A11.** F2 and F13 are listed (first settlement ≤ t ≤ last settlement) on every decision date on which they have a
-settlement, and no such contract stopped quoting early (all ended within two months before their contract month, or
-are live). There are 0 violations.
+## 9. Extra checks (report only)
 
-**A2/A10 detail.** F1/F2 coverage from 2000-01 (RB from 2006-12) to 2026-09 is 100% for all 20 cross-sectional markets
-and for GC and SI. It is 95.95% for PL and 93.15% for PA. The uncovered PL/PA months are the unlisted-F2 months above.
+**Specification changes inside 2000–2026.** Each row shows the largest month-on-month change of ln(F2/F1) on
+decision dates within ±3 months of the change, as a multiple of the market's median absolute change, and its rank.
+Ranks differ from the first run because Amendment 3 changes some F1/F2 pairs.
 
-## 6. What blocks the trials, and what each blocker needs
-
-| blocker | rule in the pre-registration | what would resolve it (owner's decision; nothing here was changed) |
-|---|---|---|
-| A4 = 0.503 < 0.70 | §6: a failure stops the trials. There is no fallback for A4 | Investigate why the KMPV-style F1/F2 carry portfolio and AQR's factor diverge, for example AQR's universe, weights or carry definition. Lead/lag checks rule out a timing error: the correlation is −0.01 at −1 month, 0.50 at 0, 0.10 at +1. Any change to the A4 definition or threshold is an amendment, made before T20's data are used. |
-| A6 last-10-trading-days (G, HE, B, GF, CL) and F2 first-settlement (PL, PA) | §6: all assertions must hold. The roll rule is "one rule, never switched" | An amendment to the roll rule or to the A6 assertion, recorded before any signal is computed |
-| A1/A10 for 6E, 6B, 6M, FGBL, FOAT, FBTP, Long Gilt; FND from the primary source | A1: contract table and FND/LTD metadata from the primary source for all 34 markets | A Norgate export run with NDU running (one RDP session), adding these 7 markets and the per-contract `first_notice_date`/`last_quoted_date` fields. The export script does not export them yet. |
-
-## 7. Decisions taken under the task's rules
-
-1. **Where the data work ran.** The data work ran in this session's container: `em-macro-data` cloned with
-   `DATA_REPO_TOKEN`, which worked, so the server was not used and not started. The Databento key was stored as
-   SecureString `/horizons/databento/api-key` (ap-southeast-2, `alias/aws/ssm`, version 1) for later server use. It
-   was never printed.
-2. **FND/LTD.** The Norgate export has no FND/LTD fields, so the metadata was built as described in §2: LTD from
-   Norgate's final settlement for expired contracts (with the lean-hog and stopped-quoting corrections), the
-   exchange rule for live contracts, and FND from exchange rules (the commodities spec's Appendix B lists "exchange
-   calendars" as the source). The simplest reading consistent with A1; flagged in §6.
-3. **Trading calendar.** A market's trading days are the dates on which any of its contracts has a settlement. The
-   execution date is the first such date on or after the 3rd. The decision date is the one before it.
-4. **The 35-day test** is `notice(T) > execution + 35 calendar days`, applied to the designated contracts present in
-   Norgate. F2 is the next designated contract. F13 has the LTD closest to LTD(F1) + 365 days within ±45 days, with
-   ties going to the later contract.
-5. **A6 held days.** Every day from the entry settlement to the exit settlement inclusive. Excluding the exit day is
-   also reported; it does not change the result.
-6. **A2/A10 entry.** Entry is the first rebalance with ≥ 252 F1 daily returns and 12 months of F1 history. It is before
-   2000 for every market except RB (2006-12).
-7. **A3.** Each market's calendar-month return of its chained F1 index (§2.3), equally weighted over the markets with
-   a full-month return. Compared with AQR's "Excess return of equal-weight commodities portfolio" over all
-   overlapping months.
-8. **A4.** carry_log = (ln F1 − ln F2) × 365/(D2 − D1) at the decision date, with D from the decision date to each LTD.
-   Rank weights s = rank − (n+1)/2 scaled to Σ|s| = 2 over all markets with a value (24 less any missing). Each
-   market's F1 holding return runs from this execution to the next, and the portfolio return is labelled with the
-   rebalance month. Compared with AQR's "Commodities Carry" (*Century of Factor Premia*) over all overlapping months.
-   Sub-period correlations are 1990s 0.44, 2000s 0.45, 2010s 0.61, 2020-01..2026-02 0.52.
-9. **A5.** Settlements come from Databento's `statistics` schema (stat_type 3), taking the last record per contract and
-   trading date. OHLCV-1d closes are last trades on a UTC day, not settlements. Days compared are those on which
-   both sources have a settlement, for each month's F1 and F2 from that month's decision date up to the next one.
-   Ticks are in Norgate units, and Databento prices are rescaled by the median ratio (×100 for HG and SI, quoted in
-   US$ by Databento and in cents by Norgate). PA is compared at its 0.10 settlement tick. Only CME-group commodity
-   markets were checked, as instructed. ICE markets were not cross-checked: Databento's ICE data was not used, and
-   the pre-registration's Barchart spot checks are outside A5's pass rule and were not done.
-10. **A9.** The MAD and median are rolling over the prior 252 days, with the MAD floored at one tick. "Fully reverses"
-    means the two-day move is within 10% of the first day's. A spike is resolved when the adjacent designated
-    contract confirms it. F2 gaps of markets outside T21 are "not held by any trial".
-11. **A11.** A contract is "used" on a decision date when it has a settlement there. Otherwise the value is missing
-    (§2.1 rule 3) and nothing is used. "Not delisted" means it did not stop quoting early (§2).
-12. **A7 threshold.** The threshold is inclusive (≥ 90%), as written.
-
-## 8. Extra checks (report only; not pre-registered, not pass/fail)
-
-**Specification changes inside 2000–2026.** Same-contract returns never cross two contracts, so a respecified
-contract cannot create a jump in r_ex or in the chained index. Its only possible effect is on the curve (F1 against
-F2 or F13). For each change below, the largest month-on-month change of ln(F2/F1) on decision dates within ±3 months
-is shown as a multiple of the market's median absolute change 2000–2026, with its rank among that market's 320
-monthly changes. These are dates and multiples only, with no signal values.
-
-| market | change (first affected month) | largest ±3-month curve change | month | rank of 320 |
+| market | change (first affected month) | largest ±3-month curve change | month | rank |
 |---|---|---|---|---|
-| B | Brent last-trading-day rule changed from the Mar 2016 contract (2016-03) | 3.7× median | 2016-03 | 33 |
-| RB | RBOB listed from Oct 2005 (Jan 2006 contract); unleaded gasoline not in Norgate (2006-01) | 5.4× median | 2006-01 | 37 |
-| HO | No. 2 heating oil -> NY Harbor ULSD from the May 2013 contract (SER-6198) (2013-05) | 5.5× median | 2013-03 | 22 |
-| G | ICE gasoil 0.1% sulphur -> 10 ppm low sulphur gasoil from the Feb 2015 contract (2015-02) | 4.2× median | 2014-12 | 22 |
-| KE | KC HRW wheat moved from KCBT to CBOT (trade date 16 Dec 2013) (2013-12) | 3.7× median | 2014-02 | 31 |
-| LE | steer weight ceiling raised from the Feb 2021 contract (2021-02) | 6.2× median | 2021-01 | 14 |
-| LE | redelivery ban from the Feb 2022 contract (2022-02) | 5.6× median | 2022-01 | 19 |
-| GF | Feeder Cattle Index weight band 650-849 lb -> 700-899 lb from the Nov 2016 contract (2016-11) | 3.9× median | 2017-01 | 35 |
-| HE | CME Lean Hog Index redefined (negotiated formula purchases), effective 11 Oct 2016 (2016-10) | 5.8× median | 2016-10 | 2 |
+| B | Brent last-trading-day rule changed from the Mar 2016 contract (2016-03) | 3.9× median | 2016-03 | 22 of 320 |
+| RB | RBOB listed from Oct 2005 (Jan 2006 contract); unleaded gasoline not in Norgate (2006-01) | 5.4× median | 2006-01 | 37 of 250 |
+| HO | No. 2 heating oil -> NY Harbor ULSD from the May 2013 contract (SER-6198) (2013-05) | 5.5× median | 2013-03 | 22 of 320 |
+| G | ICE gasoil 0.1% sulphur -> 10 ppm low sulphur gasoil from the Feb 2015 contract (2015-02) | 5.6× median | 2014-11 | 18 of 320 |
+| KE | KC HRW wheat moved from KCBT to CBOT (trade date 16 Dec 2013) (2013-12) | 3.7× median | 2014-02 | 31 of 320 |
+| LE | steer weight ceiling raised from the Feb 2021 contract (2021-02) | 6.2× median | 2021-01 | 15 of 320 |
+| LE | redelivery ban from the Feb 2022 contract (2022-02) | 5.6× median | 2022-01 | 20 of 320 |
+| GF | Feeder Cattle Index weight band 650-849 lb -> 700-899 lb from the Nov 2016 contract (2016-11) | 3.9× median | 2017-01 | 36 of 320 |
+| HE | CME Lean Hog Index redefined (negotiated formula purchases), effective 11 Oct 2016 (2016-10) | 5.3× median | 2016-09 | 14 of 320 |
 
-- **HO around May 2013** (old heating oil Apr-2013 against the first ULSD May-2013 contract): the curve's largest
-  change near the switch is 5.5× the median (2013-03), ranked 22nd of 320. HO's biggest curve moves are in 2003 and
-  2026. There is no outsized jump at the ULSD switch.
-- **Gasoil around Feb 2015**: 4.2× (2014-12), ranked 22nd. No outsized jump.
-- **Lean hogs, October 2016 (index redefinition)**: 5.8× in 2016-10, **the second-largest curve change in HE's
-  2000–2026 history**. This is the one change that coincides with a visible curve break. It matters for T20/T21,
-  since HE is on Option B, which uses carry_log(F1, F2), and not for T22.
-- **LE in 2021-01 and 2022-01** (around the weight-ceiling and redelivery rule changes): 6.2× (ranked 14th) and 5.6×
-  (ranked 19th). Moderate.
-- **B, KE and GF changes** rank 31st–35th, so they are unremarkable.
-- **Unit breaks.** A unit break is a non-reversing same-contract daily move above 30%. There is one each in CL (21
-  April 2020, CLM20 at the negative-price episode) and SI (SI-2026H on 2026-01-30). Both are genuine. No price-unit
-  rescaling was found.
+Heating oil's switch to ULSD (May 2013) and gasoil's switch to 10 ppm (Feb 2015) both rank 22nd of 320, with no
+outsized jump. The lean-hog index redefinition (Oct 2016) now ranks 14th: under Amendment 3, HE's F1/F2 pairs
+differ, and in the first run it ranked 2nd. **No price-unit break.** The only non-reversing same-contract moves
+above 30% are CL on 2020-04-21 (CLM20) and SI on 2026-01-30 (SI-2026H), both genuine.
 
-**Data gaps from COVERAGE.md inside 2000–2026.** 56 contracts and 2,299 contract-days have no row on a market day
-inside their own range. They are in B, CL, CT, G, GC, HG, HO, KE, NG, PA, RB, SI, ZL, ZM and ZW. HE's apparent
-one-day gaps are the final-settlement artefact in §2 and are not counted.
-- **Large gaps.** The large ones (ZM-2007V 292 days, ZM-2019N/V/Z 216 each, NG-2036V 163, ZW-2007N 125, HG-2003N
-  124, KE-2009K 64) all fall in the contracts' early, far-deferred life, more than a year before they could become
-  F1 or F2.
-- **Gaps that touch the roll rule's contracts.** Only three are near a decision date on which the contract had a
-  role, all as F13 candidates: HO-2008G and HO-2008H on 2007-01-02, and GAS-2002N in July 2001. HO-2008H was F13 on
-  the 2007-01 decision date with no settlement, so it counts as one missing F13 date in HO's A7 share (98.75%, Option
-  A regardless).
-- **None affects F1 or F2,** so none affects the roll rule or the A2 coverage.
+**Data gaps from COVERAGE.md inside 2000–2026.** These are unchanged in substance from the first run (§8 there):
+- 56 contracts, 2,299 contract-days, nearly all in contracts' far-deferred early life.
+- Only F13 candidates are near a decision date (HO-2008G/H on 2007-01-02, GAS-2002N in July 2001).
+- None affects F1 or F2.
 
-## 9. Databento spend
+The financial futures add Long Gilt F2 gaps, which no trial holds.
 
-| item | US$ |
-|---|---|
-| quoted total for the 306 planned requests (303 downloaded; KE 2010–2012 have no GLBX symbols) | 5.1383 |
-| downloaded (sum of the quotes obtained immediately before each request) | 5.1383 |
-| one probe request (4 contracts, 3 days) before the run | 0.0003 |
-| one CL 2021 request interrupted when the run was restarted for parallel downloads (not in the ledger, at most its quote) | ≤ 0.04 |
-| **this session, total** | **≤ 5.18** |
+## 10. Server and Databento
 
-The session cap was US$40. Cumulative account spend cannot be read through Databento's API: it has cost quotes but no
-billing endpoint. This repository records no earlier Databento use. The cumulative cap of US$100 is therefore
-exceeded only if the account had already spent more than about US$94.8 before this session, which should be checked
-in the Databento portal. Every request was quoted with `metadata.get_cost` first, and the per-request ledger is in
-the private data repo (`norgate/derived/build0/databento/ledger.jsonl`).
+- **Auto-logon on horizons-norgate** (approved 2026-11-06) now starts NDU at boot. The setup, its reboot test and
+  how to undo it are in `docs/infra/aws_norgate_server.md`. The Administrator password was replaced by a random one
+  stored only as SecureString `/horizons/windows/administrator-password`.
+- **Databento spend:**
+  - **2026-11-06:** US$0.55 over 62 requests, each quoted first, plus at most a few cents for a stream cut by a
+    connection reset.
+  - **Session ledger total:** US$5.69 over 365 requests (including the 2026-11-05 run).
+  - **Earlier, outside the ledger:** a probe of US$0.0003 and one interrupted request of at most US$0.04.
+
+  Both caps (US$40 per session, US$100 cumulative) are far away.
