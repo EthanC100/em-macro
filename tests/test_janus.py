@@ -33,7 +33,9 @@ def pos(**over):
     p = {"instrument": "US10Y", "direction": "long", "risk_pct": 1.0, "stop": 5.10, "horizon": "2026-12-18",
          "probability": 60, "thesis": "Growth is slowing as oil falls. Yields should drift lower into December.",
          "change_mind": "Payrolls above 250k or core CPI above 0.4% m/m.",
-         "sources": [{"title": "Fed statement", "url": "https://www.federalreserve.gov/x"}], "opposition": OPP}
+         "sources": [{"title": "Fed statement", "url": "https://www.federalreserve.gov/x"}], "opposition": OPP,
+         "market_probability": 50, "market_basis": "none",
+         "market_source": "no market-implied probability for a 10y yield move to this level: coin flip (0.50)"}
     p.update(over)
     return p
 
@@ -198,3 +200,24 @@ def test_no_janus_trigger_workflows():
     assert not (wf / "janus-weekly.yml").exists() and not (wf / "janus-fire.yml").exists()
     for f in wf.glob("*.yml"):
         assert "JANUS_FIRE" not in f.read_text(), f.name
+
+
+@pytest.mark.parametrize("over, expect", [
+    (dict(market_probability=None), "market_probability is required"),
+    (dict(market_probability=0.5), "looks like a fraction"),
+    (dict(market_probability=100), "must be in (0, 100)"),
+    (dict(market_source=""), "market_source is required"),
+    (dict(market_basis="vibes"), "market_basis must be one of"),
+    (dict(market_basis="none", market_probability=55), "exactly 50"),
+])
+def test_market_probability_is_required(tmp_path, over, expect):
+    res = J.apply_proposal(review(new_positions=[pos(**over)]), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
+
+
+def test_market_probability_is_recorded(tmp_path):
+    path = tmp_path / "r.jsonl"
+    n = pos(market_probability=38, market_basis="prediction market", market_source="Kalshi, Fed December cut, 6 Nov 2026")
+    assert J.apply_proposal(review(new_positions=[n]), now=NOW, path=path, marks_rows=MARKS)["ok"]
+    o = J.positions(J.load(path))["J001"]["open"]
+    assert (o["market_probability"], o["market_basis"]) == (38.0, "prediction market") and "Kalshi" in o["market_source"]

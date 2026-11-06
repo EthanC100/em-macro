@@ -21,6 +21,9 @@ today's (UTC) spend plus its quote would exceed US$1.00. The cap is shared by ev
 marks and Janus's. Each quote, request and refusal is logged in ``ledger/databento_spend.jsonl`` in the private
 store. Without a private store nothing is fetched, because the spend could not be tracked.
 
+**Janus sessions** read the store through a read-only clone (``ensure_read_only_store``, token
+``DATA_REPO_READ_TOKEN`` of the Janus cloud environment) and never write to it: only ledger-daily fetches.
+
 **Availability.** Databento's historical GLBX data runs a few hours behind real time. A day's final settlement
 (sent by CME after about 00:30 UTC the next day) is usually available by about 09:00 UTC, so the 09:22 UTC backup
 run of ledger-daily picks it up when the 05:52 run is too early. Requests end at the dataset's available end.
@@ -138,9 +141,83 @@ def raw_symbols(product: str, month: str) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- private store
+DATA_REPO = "EthanC100/em-macro-data"
+TOKEN_ENV = "DATA_REPO_READ_TOKEN"          # fine-grained, read-only token of the Janus cloud environment
+READ_ONLY_MARK = ".ledger-read-only-clone"  # in a clone made by ensure_read_only_store: every write is refused
+
+
+class ReadOnlyStore(RuntimeError):
+    pass
+
+
 def store_dir(root: Path = ROOT) -> Path | None:
     p = Path(os.environ.get("EM_MACRO_DATA") or (root.parent / "em-macro-data"))
     return p if p.is_dir() else None
+
+
+def is_read_only(store: Path | None) -> bool:
+    return bool(store) and (store / READ_ONLY_MARK).exists()
+
+
+def _guard_write(store: Path) -> None:
+    if is_read_only(store):
+        raise ReadOnlyStore(f"{store} is a read-only clone of {DATA_REPO} (a Janus session): nothing is written to it")
+
+
+def _redact(text: str, secrets: list[str]) -> str:
+    for s in secrets:
+        if s:
+            text = text.replace(s, "***")
+    return text
+
+
+def ensure_read_only_store(root: Path = ROOT, run=None) -> tuple[Path | None, str]:
+    """For Janus sessions: make sure the private settlements are readable. Uses an existing store as it is.
+    Otherwise, when ``DATA_REPO_READ_TOKEN`` is set, it clones em-macro-data read-only (sparse: ``ledger/`` only,
+    depth 1) next to this repository, or at ``EM_MACRO_DATA``, or refreshes an earlier read-only clone.
+
+    The token never appears in a URL, in .git/config, on a command line or in any output. It is passed to git as
+    an HTTP header through GIT_CONFIG_* environment variables, and anything git prints is redacted. The clone's
+    push URL is disabled, and the marker file makes ST.write and the spend log refuse to write. Returns
+    (store or None, a one-line status without the token)."""
+    import base64
+    import subprocess
+    existing = store_dir(root)
+    if existing and not is_read_only(existing):
+        return existing, "private store present"
+    token = os.environ.get(TOKEN_ENV, "").strip()
+    if not token:
+        return existing, ("read-only clone present (not refreshed: no token)" if existing else
+                          f"no private store and no {TOKEN_ENV}: futures settlements unavailable in this session")
+    run = run or subprocess.run
+    target = Path(os.environ.get("EM_MACRO_DATA") or (root.parent / "em-macro-data"))
+    url = os.environ.get("DATA_REPO_URL") or f"https://github.com/{DATA_REPO}.git"
+    b64 = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1",
+           "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader", "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {b64}"}
+    env.pop(TOKEN_ENV, None)                            # git and its helpers never see the raw variable
+    secrets = [token, b64]
+
+    def git(*args, cwd=None):
+        r = run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True)
+        return r.returncode, _redact((r.stdout or "") + (r.stderr or ""), secrets).strip()
+
+    if existing:                                        # an earlier read-only clone: refresh it
+        code, out = git("fetch", "-q", "--depth", "1", "origin", "main", cwd=existing)
+        if code == 0:
+            code, out = git("reset", "-q", "--hard", "FETCH_HEAD", cwd=existing)
+        return existing, ("read-only clone refreshed" if code == 0 else f"read-only clone not refreshed: {out[:200]}")
+    code, out = git("clone", "-q", "--depth", "1", "--filter=blob:none", "--sparse", "--branch", "main", url, str(target))
+    if code != 0:
+        return None, f"could not clone {DATA_REPO} read-only: {out[:300]}"
+    git("sparse-checkout", "set", "ledger", cwd=target)
+    git("remote", "set-url", "--push", "origin", "DISABLED-read-only-clone", cwd=target)
+    (target / READ_ONLY_MARK).write_text("Read-only clone for a Janus session. Never commit or push from here.\n")
+    excl = target / ".git/info/exclude"
+    excl.parent.mkdir(parents=True, exist_ok=True)
+    with excl.open("a") as f:
+        f.write(f"\n{READ_ONLY_MARK}\n")
+    return target, f"read-only clone of {DATA_REPO} made at {target}"
 
 
 def _rows(path: Path) -> list[dict]:
@@ -155,6 +232,7 @@ def read(store: Path | None) -> list[dict]:
 
 
 def write(store: Path, new: list[dict]) -> int:
+    _guard_write(store)
     path = store / SETTLE_FILE
     keyed = {(r["product"], r["contract_month"], r["date"]): r for r in _rows(path)}
     n = 0
@@ -204,6 +282,7 @@ def spent_today(store: Path, today: date) -> float:
 
 
 def _log_spend(store: Path, rec: dict) -> None:
+    _guard_write(store)
     p = store / SPEND_FILE
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("a", encoding="utf-8") as f:
@@ -234,6 +313,9 @@ def fetch(needs: dict[tuple[str, str], date], today: date | None = None, store: 
     out = {"stored": 0, "quote_usd": 0.0, "log": [], "refused": False}
     if store is None:
         out["log"].append("no private store (EM_MACRO_DATA / ../em-macro-data): nothing fetched")
+        return out
+    if is_read_only(store):
+        out["log"].append("read-only clone (a Janus session): settlements are fetched only by ledger-daily")
         return out
     if not needs:
         out["log"].append("no contract months needed")

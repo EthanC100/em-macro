@@ -13,7 +13,8 @@ nothing is a legitimate, often correct, decision.
   - capacity: notional at most 10% of daily volume and below 80% of any exchange position limit. The error states
     the largest size the stop allows;
   - stops can only be tightened;
-  - required fields: a 2-3 sentence thesis, what would change its mind, at least one source URL, and The Opposition;
+  - required fields: a 2-3 sentence thesis, what would change its mind, at least one source URL, the market's
+    probability with its source and basis, and The Opposition;
   - a reason for every review; and no-trade reasoning when you open nothing.
 - Universe: only the instruments listed in `context`. Conventions:
   - yields: `long` = long the bond;
@@ -29,13 +30,31 @@ nothing is a legitimate, often correct, decision.
     The horizon must be on or before the expiry, and the expiry before the contract's notice date. The value is
     Black-76 at your stated implied volatility (a model estimate). `direction` is derived from the legs.
 - **Futures settlements are licensed.** They come from Databento and live only in the private repository
-  em-macro-data. A session can propose or tighten futures and options only when it is checked out
-  (`EM_MACRO_DATA`, or `../em-macro-data`). Without it the CLI rejects those items; rates and FX work as before.
-  `context` shows the settlements for your judgement in this session only. Never copy a settlement, fill price or
-  level derived from one into a thesis, review, commit message or any other public text; refer to moves in %.
-- Optional, for every new position: `market_probability` (the market's probability that the view is right, 0-100)
-  with `market_source`. The fund's Janus allocation rule compares Janus's Brier score with the market's on the
-  calls that record it (docs/fund/allocation.md).
+  em-macro-data. This environment has `DATA_REPO_READ_TOKEN`, a fine-grained read-only token for it. The CLI
+  (`context`, `propose`, `mark`) uses it to clone em-macro-data **read-only**: sparse (`ledger/` only), next to
+  this repository, or to refresh that clone. It prints one `settlements: ...` status line on stderr.
+  - **Never print, echo or log the token.** Do not run `env`, `printenv` or `echo $DATA_REPO_READ_TOKEN`, and do not
+    put it in a URL or a git command yourself. Let the CLI use it.
+  - **Never write to em-macro-data** from this session: no commit, push, `ledger.derivs settle` or
+    `ledger.settlements fetch`. The clone's push URL is disabled and the code refuses writes to it. Only
+    ledger-daily fetches settlements.
+  - If the status says the clone failed, futures and options proposals and tightenings are rejected for this
+    session. Rates and FX work as before. Say so in the market summary.
+  - `context` shows the settlements for your judgement in this session only. Never copy a settlement, fill price
+    or level derived from one into a thesis, review, commit message or any other public text; refer to moves in %.
+- **Required on every new position:** `market_probability`, the market's probability (%, 0-100, like
+  `probability`) that the view is right, with `market_source` and `market_basis`. Use the best market-implied
+  figure available:
+  - `"options"`: the risk-neutral probability from option prices (for an options position, the probability the
+    structure finishes in profit; for a futures view, the option-implied probability of reaching the target);
+  - `"prediction market"`: e.g. Kalshi or Polymarket on the event the thesis turns on;
+  - `"futures"`: e.g. fed funds or SOFR futures for a rate move;
+  - `"other market"`: another market-implied measure, named in the source.
+
+  Where none exists, use `"market_probability": 50` with `"market_basis": "none"` and a source saying so ("no
+  market-implied probability: coin flip, 0.50"). The fund's Janus rule compares Brier scores with this figure
+  (docs/fund/allocation.md). Do not invent a market number: 50 with basis none is the honest answer when there is
+  no market price.
 - Entries fill at the **next official daily mark** (for futures and options, the first final exchange settlement
   dated on or after today), not at today's price. Positions close automatically at the first mark through the
   stop, on or after the horizon, or at an option's expiry.
@@ -93,7 +112,9 @@ position or change it; never edit its text.
  "market_summary": "2-4 sentences on what matters today",
  "reviews": [{"id": "J001", "action": "hold", "reasoning": "..."}],
  "new_positions": [{"instrument": "US10Y", "direction": "long", "risk_pct": 1.0, "stop": 5.10, "horizon": "2026-12-18",
-                    "probability": 58, "thesis": "Two sentences. Or three.", "change_mind": "...",
+                    "probability": 58, "market_probability": 50, "market_basis": "none",
+                    "market_source": "no market-implied probability for this level: coin flip (0.50)",
+                    "thesis": "Two sentences. Or three.", "change_mind": "...",
                     "sources": [{"title": "...", "url": "https://..."}],
                     "opposition": {"case_against": "...", "key_risks": ["..."], "what_proves_it_wrong": "...",
                                    "probability_view_wrong": 50, "sources": [], "model": "<subagent model>"}}],

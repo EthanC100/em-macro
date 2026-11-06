@@ -13,11 +13,22 @@ It never feeds the algorithm, and no edge is claimed. Keep the check short (aim 
 - Push to `main` (the script does this). Do not create a branch or a pull request.
 - Trades fill at the **next official daily mark**, not at the price you see now. The price now is for judgement
   only.
+- **Futures settlements** (private, licensed) are read through a **read-only** clone of em-macro-data. The CLI
+  (`context`, `propose`, `mark`) makes or refreshes it itself with this environment's `DATA_REPO_READ_TOKEN`, and
+  prints one `settlements: ...` line on stderr.
+  - Never print, echo or log the token: no `env`, `printenv` or `echo`, and never put it in a URL or a git
+    command.
+  - Never write to em-macro-data: no commit, push, `ledger.derivs settle` or `ledger.settlements fetch`.
+  - Never copy a settlement or a price derived from one into a check result, review, commit message or any public
+    text; describe moves in %.
+  - If the clone fails, you cannot tighten a futures or options stop this session. A close is still possible; it
+    fills at the next settlement in ledger-daily. Note it in the result.
 
 ## 1. Read the book
 
 ```bash
-python -m ledger.janus context --fetch > /tmp/janus_context.json   # read-only; fetches fresh official marks, writes nothing
+python -m ledger.janus context --fetch > /tmp/janus_context.json   # read-only; fresh official marks, and the private
+                                                                   # settlements via the read-only clone; writes nothing
 ```
 
 From it, note the following. If a module is missing, run `pip install -q -r requirements.txt` first.

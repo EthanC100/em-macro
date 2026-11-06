@@ -13,7 +13,8 @@ P&L.
   the members' daily returns.
 - **Janus's risk share** changes only by the rule in docs/fund/allocation.md (config change C04), evaluated at each
   month start on data to the previous month end. It is 5% while Janus's drawdown from its peak exceeds 10%.
-  Otherwise it is 20% once Janus has at least 30 resolved calls that recorded a market probability, with positive
+  Otherwise it is 20% once Janus has at least 30 resolved calls (every position records a market probability, 50
+  where no market-implied one exists: amendment of 2026-11-06), with positive
   total net P&L (after costs) and a lower Brier score than the market on those same calls. Otherwise it is 10%.
   The algorithm takes the rest.
 - **Start.** The fund starts on the first date every member is live (v1.1: the 3 December 2026 rebalance, index
@@ -128,12 +129,12 @@ def janus_share(closed: list[dict], janus_series: list[list], upto: date) -> dic
         share, why = JANUS_DOWN, f"drawdown {dd:.1f}% exceeds {DRAWDOWN_LIMIT_PCT:g}%"
     elif (rec["calls_with_market_probability"] >= MIN_RESOLVED_CALLS and rec["net_pnl_pct_on_those_calls"] > 0
           and rec["brier_janus"] is not None and rec["brier_janus"] < rec["brier_market"]):
-        share, why = JANUS_UP, (f"{rec['calls_with_market_probability']} resolved calls with a market probability, net "
+        share, why = JANUS_UP, (f"{rec['calls_with_market_probability']} resolved calls, net "
                                 f"P&L {rec['net_pnl_pct_on_those_calls']:+.2f}%, Brier {rec['brier_janus']:.3f} vs "
                                 f"market {rec['brier_market']:.3f}")
     else:
         share, why = JANUS_BASE, (f"base share: {rec['calls_with_market_probability']} of {MIN_RESOLVED_CALLS} resolved "
-                                  "calls with a market probability needed for 20%" if rec["calls_with_market_probability"] < MIN_RESOLVED_CALLS
+                                  "calls needed for 20%" if rec["calls_with_market_probability"] < MIN_RESOLVED_CALLS
                                   else "base share: P&L or Brier condition for 20% not met")
     return {"share": share, "reason": why, "drawdown_pct": dd, **rec}
 

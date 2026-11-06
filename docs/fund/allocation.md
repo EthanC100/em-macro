@@ -38,16 +38,30 @@ rule gives today.
 Evaluated at each month start, on data to the previous month end. The rules are checked in this order:
 
 1. **5%** while Janus's drawdown exceeds **10%**. Drawdown is the fall of its equity index from its peak to date.
-2. **20%** once Janus has **at least 30 resolved calls** that recorded a market probability (`market_probability`
-   with `market_source` in the proposal), and on those same calls:
+2. **20%** once Janus has **at least 30 resolved calls**, and on those same calls:
    - total net P&L after costs is **positive**, and
    - Janus's **Brier score is lower than the market's**. A call is "right" when its gross P&L is positive. Janus's
-     Brier uses its stated probability; the market's uses the recorded market probability.
+     Brier uses its stated probability; the market's uses the market probability recorded with the call.
 3. Otherwise **10%**.
 
 The algorithm takes the rest (90%, 80% or 95%). The share moves back as soon as the condition that moved it no
 longer holds at a month start. The risk share only changes the fund's weights. Janus's own book, limits and
 records are unaffected.
+
+## The market's probability (required on every Janus position)
+
+Every new Janus position records the market's probability that the view is right (`market_probability`, in %
+like `probability`), with `market_source` and `market_basis`. The CLI rejects a position without them. Use the best
+market-implied figure available:
+- **options:** the risk-neutral probability implied by option prices or by the futures/option curve at the
+  position's levels;
+- **prediction market:** for example a Kalshi or Polymarket contract on the event the thesis turns on;
+- **futures:** for example the probability of a rate move implied by fed funds or SOFR futures;
+- **other market:** another market-implied measure, named in the source.
+
+Where no market-implied probability exists, record **50** (0.50) with `market_basis: "none"` and a source that says
+so. The comparison on that call is then against a coin flip. Calls recorded before this requirement would count
+only if they recorded a market probability, but there are none: Janus had opened no position when it was added.
 
 ## Correlation
 

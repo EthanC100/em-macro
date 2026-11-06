@@ -105,3 +105,74 @@ def test_calendar():
     assert ST.front_month("GOLD", date(2026, 11, 6)) == "2027-02"          # Dec notice 30 Nov is within 35 days
     assert ST.front_month("CORN", date(2026, 11, 6)) == "2027-03"
     assert ST.front_month("WTI", date(2026, 11, 6)) == "2027-01"
+
+
+# ----------------------------------------------------------------------------- Janus sessions: read-only clone
+import subprocess
+from pathlib import Path
+
+
+def _bare_data_repo(tmp_path):
+    src = tmp_path / "src"
+    (src / "ledger").mkdir(parents=True)
+    (src / "ledger/futures_settlements.csv").write_text(",".join(ST.SETTLE_COLUMNS) + "\n2026-11-05,BRENT,2027-03,92.5,x,,t,\n")
+    (src / "norgate").mkdir()
+    (src / "norgate/big.csv").write_text("not needed by Janus\n")
+    g = lambda *a, cwd=src: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)
+    g("init", "-q", "-b", "main")
+    g("-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    g("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
+    bare = tmp_path / "data.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(src), str(bare)], check=True)
+    subprocess.run(["git", "config", "uploadpack.allowFilter", "true"], cwd=bare, check=True)
+    return bare
+
+
+def test_read_only_clone_never_exposes_the_token_and_refuses_writes(tmp_path, monkeypatch):
+    bare = _bare_data_repo(tmp_path)
+    root = tmp_path / "work/em-macro"
+    root.mkdir(parents=True)
+    secret = "github_pat_SECRET_0123456789"
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.setenv("DATA_REPO_URL", f"file://{bare}")
+    monkeypatch.setenv(ST.TOKEN_ENV, secret)
+    seen = []
+
+    def run(cmd, **kw):
+        seen.append((cmd, kw["env"]))
+        return subprocess.run(cmd, **kw)
+    store, status = ST.ensure_read_only_store(root, run=run)
+    assert store == tmp_path / "work/em-macro-data" and "read-only clone" in status and secret not in status
+    assert ST.read(store)[0]["settle"] == "92.5" and not (store / "norgate").exists()        # sparse: ledger/ only
+    for cmd, env in seen:
+        assert not any(secret in c for c in cmd) and ST.TOKEN_ENV not in env                  # never on a command line
+    assert secret not in (store / ".git/config").read_text()
+    push = subprocess.run(["git", "remote", "get-url", "--push", "origin"], cwd=store, capture_output=True, text=True).stdout
+    assert "DISABLED" in push
+    with pytest.raises(ST.ReadOnlyStore):
+        ST.write(store, [{"date": "2026-11-06", "product": "BRENT", "contract_month": "2027-03", "settle": "1"}])
+    res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), store, c=FakeClient(ROWS))
+    assert res["stored"] == 0 and "read-only" in res["log"][0] and not (store / ST.SPEND_FILE).exists()
+    # a second call refreshes the clone; a failure message is redacted
+    store2, status2 = ST.ensure_read_only_store(root, run=run)
+    assert store2 == store and status2 == "read-only clone refreshed"
+
+
+def test_clone_failure_is_redacted(tmp_path, monkeypatch):
+    secret = "github_pat_SECRET_9"
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.setenv(ST.TOKEN_ENV, secret)
+
+    class R:
+        returncode, stdout = 128, ""
+        stderr = f"fatal: Authentication failed for https://x-access-token:{secret}@github.com/"
+    store, status = ST.ensure_read_only_store(tmp_path / "em-macro", run=lambda cmd, **kw: R())
+    assert store is None and "could not clone" in status and secret not in status and "***" in status
+
+
+def test_existing_writable_store_is_used_as_is(tmp_path, monkeypatch):
+    (tmp_path / "em-macro-data").mkdir()
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.setenv(ST.TOKEN_ENV, "x")
+    store, status = ST.ensure_read_only_store(tmp_path / "em-macro", run=lambda *a, **k: pytest.fail("no git call"))
+    assert store == tmp_path / "em-macro-data" and status == "private store present"

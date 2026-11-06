@@ -76,6 +76,12 @@ edited. A fill, a stop change, a close or a review is a new record.
   - Daily P&L in % is in `futures_pnl.csv`.
 - Fetching is in `ledger-daily` (one quoted Databento request a day, refused above US$1 of daily spend, shared
   with my decisions' marks).
+- Janus sessions read the settlements through a **read-only** clone of em-macro-data (sparse, `ledger/` only). The
+  CLI makes it with the Janus environment's `DATA_REPO_READ_TOKEN`, which is never printed, and refuses to write to
+  it. Only ledger-daily writes settlements.
+- **Every position records the market's probability** (`market_probability`, `market_source`, `market_basis`):
+  the best market-implied figure, or 50 with basis `none` where no market price exists
+  (docs/fund/allocation.md).
 
 **Dropped (listed, not substituted):** the Italy 10y spread (no free daily source); platinum, palladium, KC wheat,
 soybean products, livestock and softs (not added); Norgate (licence).

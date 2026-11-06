@@ -442,6 +442,7 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                "mark_flag": None if (last and mark_can_act(last[2])) else "no first-hand daily mark yet"}
         row["market_probability"] = o.get("market_probability")
         row["market_source"] = o.get("market_source")
+        row["market_basis"] = o.get("market_basis")
         if is_future(inst):
             # futures / options: P&L in % only (settlements are licensed and kept privately)
             row.update({"mark": None, "mark_date": None, "mark_history": [], "unit": UNIVERSE[inst].get("unit"),
@@ -809,16 +810,7 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
                         f"(room: {max(0.0, MAX_RISK_TOTAL - total):.2f}%)")
         if n_open + 1 > MAX_OPEN:
             errs.append(f"would be position {n_open + 1}; at most {MAX_OPEN} may be open")
-        mp = n.get("market_probability")
-        if mp not in (None, ""):
-            try:
-                mpv = float(mp)
-                if not (0 < mpv < 100):
-                    raise ValueError
-                if not str(n.get("market_source") or "").strip():
-                    errs.append("market_probability needs market_source (where the market's probability comes from)")
-            except (TypeError, ValueError):
-                errs.append(f"market_probability {mp!r} must be a number in (0, 100)")
+        errs += _check_market(n)
         if is_future(inst):
             fut, ferrs = _validate_future(n, inst, direction, risk, stop, hz, today, ref)
             errs += ferrs
@@ -855,6 +847,39 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
         new.append({**n, "instrument": inst, "direction": direction, "risk_pct": round(risk, 4), "stop": stop,
                     "probability": prob, "horizon": hz.isoformat()})
     return reviews, new, errors
+
+
+MARKET_BASES = ("options", "prediction market", "futures", "other market", "none")
+COIN_FLIP = 50.0
+
+
+def _check_market(n: dict) -> list[str]:
+    """Required on every new position (from 2026-11-06, before any Janus call resolved): the market's probability
+    that the view is right, in % like ``probability``; its source; and its basis. Use the best market-implied
+    figure available (option prices, a prediction market, futures pricing). Where none exists, basis "none" and
+    exactly 50 (0.50, a coin flip) with a source saying so."""
+    errs = []
+    mp, src, basis = n.get("market_probability"), " ".join(str(n.get("market_source") or "").split()), \
+        str(n.get("market_basis") or "").strip().lower()
+    try:
+        mpv = float(mp)
+    except (TypeError, ValueError):
+        return [f"market_probability is required: the market's probability (%, 0-100) that the view is right, from "
+                f"option prices, a prediction market or futures pricing; where none exists use {COIN_FLIP:g} with "
+                "market_basis 'none'"]
+    if 0 < mpv <= 1 and mpv != COIN_FLIP:
+        errs.append(f"market_probability {mpv:g} looks like a fraction: it is in % like probability (a coin flip is "
+                    f"{COIN_FLIP:g}, not 0.50)")
+    elif not (0 < mpv < 100):
+        errs.append(f"market_probability {mpv:g} must be in (0, 100)")
+    if basis not in MARKET_BASES:
+        errs.append(f"market_basis must be one of {', '.join(MARKET_BASES)} (got {basis!r})")
+    if not src:
+        errs.append("market_source is required: where the market probability comes from (or why there is none)")
+    if basis == "none" and abs(mpv - COIN_FLIP) > 1e-9:
+        errs.append(f"market_basis 'none' means no market-implied probability exists: record exactly {COIN_FLIP:g} "
+                    "(a coin flip)")
+    return errs
 
 
 def _validate_future(n: dict, inst: str, direction: str, risk: float, stop: float, hz: date | None, today: date,
@@ -980,8 +1005,9 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                         "next available first-hand daily mark dated on or after the decision date"),
                          **({"contract": n["contract"]} if n.get("contract") else {}),
                          **({"option": n["option"]} if n.get("option") else {}),
-                         **({"market_probability": float(n["market_probability"]), "market_source": n.get("market_source")}
-                            if n.get("market_probability") not in (None, "") else {}),
+                         "market_probability": float(n["market_probability"]),
+                         "market_source": " ".join(str(n["market_source"]).split()),
+                         "market_basis": str(n["market_basis"]).strip().lower(),
                          "provisional_capacity": n.get("provisional_capacity"), "run_seq": run_rec["seq"],
                          "session": session}, path)
         opp = n["opposition"]
@@ -1052,11 +1078,14 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                       "options": ("defined risk only: 'option': {legs, expiry, iv_pct, iv_source or 'estimate'} - a long "
                                   "call or put, or a vertical; risk_pct = maximum loss; stop = an underlying level; "
                                   "horizon on or before expiry; valued with Black-76 (model estimate)"),
-                      "market_probability": ("optional: the market's probability that the view is right, with "
-                                             "market_source; the fund's Janus allocation rule compares Brier scores "
-                                             "on calls that record it (docs/fund/allocation.md)"),
+                      "market_probability": ("required on every new position: the market's probability (%, "
+                                             "0-100) that the view is right, with market_source and market_basis "
+                                             "(options, prediction market, futures, other market, or none = exactly "
+                                             "50, a coin flip); the fund's Janus rule compares Brier scores with it "
+                                             "(docs/fund/allocation.md)"),
                       "required": ["instrument", "direction", "risk_pct", "stop", "horizon",
-                                                              "probability", "thesis", "change_mind", "sources",
+                                                              "probability", "market_probability", "market_source", "market_basis",
+                                                              "thesis", "change_mind", "sources",
                                                               "opposition.case_against"]},
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
             "open": [{k: p.get(k) for k in keep} | {"entry": (p.get("fill") or {}).get("entry_level"),
@@ -1078,6 +1107,10 @@ def main(argv=None) -> int:
     ap.add_argument("--today", default=None)
     a = ap.parse_args(argv)
     today = parse_date(a.today) if a.today else date.today()
+    if a.cmd in ("context", "propose", "mark"):
+        # futures settlements: an existing private store, or a read-only clone made with DATA_REPO_READ_TOKEN
+        _store, status = ST.ensure_read_only_store()
+        print(f"settlements: {status}", file=sys.stderr)
     if a.cmd == "verify":
         v = verify(load())
         print(json.dumps(v))
