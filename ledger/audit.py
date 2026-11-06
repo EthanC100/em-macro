@@ -39,6 +39,9 @@ FILES = {
     "decision": ("data/ledger/decisions.csv",
                  ["status", "outcome", "exit_price", "pnl_pct", "resolved_date", "resolution_note"]),
     "forecast": ("data/ledger/forecasts.csv", ["status", "outcome", "result", "resolved_date"]),
+    # futures/options terms of a decision (ledger/derivs.py) and implied-volatility updates: entry fields only
+    "derivative": ("data/ledger/derivatives.csv", []),
+    "iv_update": ("data/ledger/iv_updates.csv", []),
 }
 GENESIS = "0" * 64
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The only way session-written ledger records reach main: Janus's records, post-mortems, event-forecast
-# resolutions, investor letters, and the audit seals that cover them. GitHub Actions uses it too, for Janus's fills
+# resolutions, investor letters, decisions / forecasts / resolutions logged by the Ledger clerk
+# (python -m ledger.clerk log, docs/ledger/clerk.md), and the audit seals that cover them. GitHub Actions uses it too, for Janus's fills
 # and for the seals, so every writer of an append-only chain goes through the same path.
 #
 #   scripts/ledger_commit.sh "<commit message>" -- <command> [args...]
@@ -14,9 +15,15 @@
 # (`python -m ledger.audit seal`), verify both chains, commit the paths in PATHS and push to main. If the push is rejected (someone else pushed), start again from the new main and re-run the
 # command there, so two writers never append to the same chain position. A rejected proposal (exit 1) stops at once
 # with nothing committed.
+#
+# LEDGER_MSG_FILE: if the command writes a commit message to this file, that message is used (the clerk puts the new
+# id in it). LEDGER_BRANCH (testing only, default main): start from and push to that branch instead; Janus's
+# `mark` is skipped there, because Janus's chain lives on main and must never fork on a branch.
 set -euo pipefail
-PATHS=(data/janus data/ledger/postmortems data/ledger/forecasts.csv data/ledger/automation_log.csv
-       data/ledger/seals.jsonl data/ledger/reports)
+PATHS=(data/janus data/ledger/postmortems data/ledger/decisions.csv data/ledger/forecasts.csv
+       data/ledger/derivatives.csv data/ledger/iv_updates.csv data/ledger/derivative_pnl.csv
+       data/ledger/automation_log.csv data/ledger/seals.jsonl data/ledger/reports)
+BRANCH="${LEDGER_BRANCH:-main}"
 msg="${1:?commit message}"; shift
 [ "${1:-}" = "--" ] && shift
 [ "$#" -gt 0 ] || { echo "usage: $0 \"message\" -- command..." >&2; exit 2; }
@@ -27,9 +34,10 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 2
 fi
 for attempt in 1 2 3 4 5; do
-  git fetch -q origin main
-  git checkout -q --detach origin/main
-  python -m ledger.janus mark
+  git fetch -q origin "$BRANCH"
+  git checkout -q --detach "origin/$BRANCH"
+  [ "$BRANCH" = main ] && python -m ledger.janus mark
+  [ -n "${LEDGER_MSG_FILE:-}" ] && rm -f "$LEDGER_MSG_FILE"
   set +e
   "$@"
   code=$?
@@ -48,12 +56,16 @@ for attempt in 1 2 3 4 5; do
     echo "nothing to commit"
     exit 0
   fi
-  git commit -q -m "$msg"
-  if git push -q origin HEAD:main; then
-    echo "pushed $(git rev-parse --short HEAD) to main"
+  if [ -n "${LEDGER_MSG_FILE:-}" ] && [ -s "$LEDGER_MSG_FILE" ]; then
+    git commit -q -F "$LEDGER_MSG_FILE"
+  else
+    git commit -q -m "$msg"
+  fi
+  if git push -q origin "HEAD:$BRANCH"; then
+    echo "pushed $(git rev-parse --short HEAD) to $BRANCH"
     exit 0
   fi
-  echo "push rejected (attempt $attempt); retrying from the new main" >&2
+  echo "push rejected (attempt $attempt); retrying from the new $BRANCH" >&2
   sleep $((attempt * 4))
 done
 echo "could not push after 5 attempts" >&2

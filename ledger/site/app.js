@@ -228,7 +228,14 @@
 
   // ------------------------------------------------------------------ pages
   const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, Number.isInteger(Math.round(v * 10) / 10) ? 0 : 1)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
+  // futures / options (ledger/derivs.py): P&L in % only (settlements are licensed); options are a model estimate
+  const valuationText = (d) => (d.valuation === 'entry' ? 'at entry' : d.valuation || 'settlement');
+  function derivLive(d) {
+    const v = d.derivative;
+    return `${isNum(d.live_pnl_pct) ? `<b class="${signClass(d.live_pnl_pct)}">live P&L ${fmtPct(d.live_pnl_pct, 2, true)}</b>` : 'no settlement yet'} · ${pill(valuationText(d), d.valuation === 'model estimate' ? 'warn' : '')}${d.mark_date ? ` ${fmtDate(d.mark_date)}` : ''}${v && v.proxy === 'yes' ? ` ${pill('proxy', 'warn')}` : ''}`;
+  }
   function liveLabel(d) {
+    if (d.status === 'open' && d.derivative) return ` · ${derivLive(d)}`;
     if (d.status !== 'open' || !d.mark_instrument) return '';
     if (!isNum(d.mark)) return ' · no mark yet';
     const when = `${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ', monthly' : ''}`;
@@ -262,7 +269,7 @@
       <section class="section">
         <div class="filters">${sel('country', 'Country', dec.summary.countries, f.country)}${sel('status', 'Status', ['open', 'resolved'], f.status)}${sel('outcome', 'Outcome', dec.summary.outcomes, f.outcome)}</div>
         <div class="list">${items.length ? items.map(decisionRow).join('') : '<p class="empty">No decisions match these filters.</p>'}</div>
-        <div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.decision)}" target="_blank" rel="noopener">Log a decision</a><a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div>
+        <div class="btn-row">${clerkButton(meta)}<a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div>
       </section>`;
     ['country', 'status', 'outcome'].forEach((k) => { document.getElementById(`f-${k}`).onchange = (e) => { f[k] = e.target.value; pageDecisions(); }; });
   }
@@ -285,9 +292,11 @@
         <div class="stat"><span class="k">Status</span><span class="v sm">${badge('open')}</span><span class="s">horizon ${fmtDate(d.horizon)} (${daysLabel(d.days_to_horizon)})</span></div>
         <div class="stat"><span class="k">My probability</span><span class="v">${fmtProb(d.probability)}</span><span class="s">${isNum(d.claude_probability) ? `Claude ${fmtProb(d.claude_probability)}` : 'that the view is right'}</span></div>
         <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%) · ${d.position_type === 'event' ? 'event bet' : 'continuous'}</span></div>
-        <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
+        <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${d.derivative ? `${esc(valuationText(d))}${d.mark_date ? `, ${fmtDate(d.mark_date)}` : ''}` : isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
       </div>`;
-    const markNote = d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
+    const dv = d.derivative;
+    const derivNote = dv ? `${esc(dv.structure)} on ${esc(dv.product)} ${esc(dv.contract_month)} (${esc(dv.exchange)}${dv.legs ? `: ${esc(dv.legs.split('|').join(', '))}` : ''}${dv.option_expiry ? `, expiry ${fmtDate(dv.option_expiry)}` : ''}) · marked at the ${esc(dv.mark_source)}${dv.proxy === 'yes' ? ' <b>(proxy)</b>' : ''}${dv.structure !== 'future' ? ` · <b>model estimate</b>: Black-76 with implied vol ${esc(dv.iv_entry_pct)}% at entry (${esc(dv.iv_source)}); intrinsic value from expiry · maximum loss ${esc(dv.risk_per_unit)} per unit (the premium)` : ''} · <span class="muted">settlement prices are licensed and kept privately; only P&L in % is published</span>` : '';
+    const markNote = dv ? derivNote : d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
     view.innerHTML = `
       <a class="back" href="#/decisions">← Decisions</a>
       ${scoreBlock}
@@ -589,7 +598,8 @@
       </section>
       <section class="section">
         <h2>Log an entry</h2>
-        <p class="small muted">Each button opens a GitHub issue form; the GitHub app on your phone handles it. A workflow checks the entry, writes it to the ledger files and closes the issue with its new id, or comments with what to fix.</p>
+        <div class="btn-row">${clerkButton(m)}</div>
+        <p class="small muted">Backup: each link below opens a GitHub issue form; a workflow runs the same checks as the clerk, writes the entry and closes the issue with its new id, or comments with what to fix.</p>
         <div class="menu">
           <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener" style="--item:var(--c-decisions)"><span><span class="t">Decision record</span><br><span class="d">Trade or no-trade, with size, probability, stop and thesis</span></span><span class="chev">↗</span></a>
           <a href="${esc(m.issue_forms.forecast)}" target="_blank" rel="noopener" style="--item:var(--c-forecasts)"><span><span class="t">Forecast</span><br><span class="d">A question with my, the market's and Claude's probability</span></span><span class="chev">↗</span></a>
@@ -679,6 +689,27 @@
   const bookIcon = (b) => (b === 'janus' ? JANUS_ICON : `<span class="book-dot" style="background:var(${bookOf(b).v})"></span>`);
   const bookPill = (b, text) => `<span class="pill bk ${bookOf(b).cls}">${b === 'janus' ? JANUS_ICON : ''}${esc(text || bookOf(b).name)}</span>`;
   const pts = (x) => (isNum(x) ? `${x > 0 ? '+' : x < 0 ? '−' : ''}${fmtNum(Math.abs(x), 2)}` : '—');
+  // "Log a decision": instructions for the Ledger clerk (docs/ledger/clerk.md); the GitHub forms stay as a backup
+  const CLERK_TEMPLATE = ['DECISION RECORD', 'Date: ', 'Country: ', 'Instrument: ', 'Action: Buy / Sell / No trade', 'Size: ',
+    'Probability: ', 'Horizon: ', 'Entry trigger: ', 'Stop / exit if wrong: ', 'Thesis: ', 'Key factors: ',
+    'What would change my mind: ', 'How this differs from market consensus: '].join('\n');
+  function clerkButton(m) {
+    return `<details class="clerk"><summary class="btn primary">Log a decision</summary>
+      <div class="clerk-body card">
+        <ol class="small">
+          <li>Open a Claude Code session on <b>em-macro</b>.</li>
+          <li>Say <b>“Log this with the Ledger clerk”</b> and paste the <code>DECISION RECORD</code>, <code>FORECAST</code> or <code>RESOLVE</code> block.</li>
+          <li>The session follows <code>docs/ledger/clerk.md</code>: it shows you the Risk Manager result, then logs the entry (sealed in the audit chain) and gives you the new id, or lists every problem to fix.</li>
+        </ol>
+        <div class="btn-row"><button type="button" class="btn" data-copy-clerk>Copy a blank DECISION RECORD</button></div>
+        <p class="small muted">Backup: <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener">GitHub decision form</a> · <a href="${esc(m.issue_forms.quick)}" target="_blank" rel="noopener">GitHub paste form</a></p>
+      </div></details>`;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy-clerk]');
+    if (!b) return;
+    try { await navigator.clipboard.writeText(CLERK_TEMPLATE); b.textContent = 'Copied'; } catch (err) { b.textContent = 'Copy failed: select the text in docs/ledger/clerk.md'; }
+  });
   let infoSeq = 0;
   function info(text, label = 'About this') {
     if (!text) return '';
@@ -840,7 +871,7 @@
     const resolved = me.positions.filter((p) => p.status === 'resolved');
     const flag = (p) => (p.mark_flag ? ` ${pill(p.mark_frequency === 'monthly' ? 'monthly mark' : 'stale mark', 'warn')}` : '');
     const row = (p) => posRow('me', p, `${esc(p.instrument)} ${badge(p.action)}`,
-      `<b>${esc(p.id)}</b>${(p.corrections || []).length ? ` ${pill('corrected', 'warn')}` : ''} · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
+      `<b>${esc(p.id)}</b>${(p.corrections || []).length ? ` ${pill('corrected', 'warn')}` : ''} · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${p.derivative && p.status === 'open' ? ` · ${pill(valuationText(p), p.valuation === 'model estimate' ? 'warn' : '')}${p.derivative.proxy === 'yes' ? ` ${pill('proxy', 'warn')}` : ''}` : isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
       p.status === 'resolved' ? p.pnl_pct : p.live_pnl_pct, `#/position/me/${p.id}`);
     const live = me.series.length ? me.series[me.series.length - 1][1] - 100 : null;
     view.innerHTML = `
@@ -861,7 +892,7 @@
       <section class="section"><div class="section-head"><h2>Resolved</h2><span class="muted small">${resolved.length}</span></div>
         <div class="list">${resolved.map(row).join('') || '<p class="empty">Nothing resolved yet.</p>'}</div></section>
       ${attributionSection('me', me.attribution, 'Live P&L of open positions, % of account')}
-      <section class="section"><div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.decision)}" target="_blank" rel="noopener">Log a decision</a><a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
+      <section class="section"><div class="btn-row">${clerkButton(meta)}<a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
     dateChart('c-me', [{ label: 'Me', data: me.series, color: '--book-me', fill: true }], { fmt: (v) => fmtNum(v, 2) });
   }
 

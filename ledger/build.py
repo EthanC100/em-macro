@@ -30,11 +30,12 @@ from pathlib import Path
 from . import audit as AUD
 from . import books as BOOKS
 from . import capacity as CAP
+from . import derivs as DV
 from . import janus as JN
 from . import postmortem as PM
 from . import risk as RISK
 from .marks import latest_marks, live_mark, load_registry, read_marks
-from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct,
+from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct, stop_level,
                      parse_date, parse_number, parse_probability)
 from .scoring import (calibration_bins, cumulative, score_decision, score_forecast)
 
@@ -254,7 +255,9 @@ def build_decisions(today: date) -> dict:
         prob = parse_probability(r.get("probability"))
         horizon = parse_date(r.get("horizon"))
         d = {**r}
-        lm = live_mark(r, registry, latest) if (r.get("status") or "open").strip().lower() == "open" else {}
+        dv = DV.live(r)
+        is_open = (r.get("status") or "open").strip().lower() == "open"
+        lm = (dv if dv else live_mark(r, registry, latest)) if is_open else ({"derivative": dv["derivative"]} if dv else {})
         d.update(lm)
         d.update({
             "position_type": (r.get("position_type") or ("continuous" if r.get("action") in ("Buy", "Sell") else "")).strip().lower(),
@@ -267,7 +270,7 @@ def build_decisions(today: date) -> dict:
             "resolved_date": iso(parse_date(r.get("resolved_date"))),
             "entry_level": fnum(r.get("entry_level"), 4),
             "exit_price": fnum(r.get("exit_price"), 4),
-            "stop_level": fnum(r.get("stop"), 4),
+            "stop_level": stop_level(r.get("stop")),
             "status": (r.get("status") or "open").strip().lower(),
             "outcome": (r.get("outcome") or "").strip().lower(),
             "kind": "position" if r.get("action") in ("Buy", "Sell") else "no trade",
@@ -276,7 +279,7 @@ def build_decisions(today: date) -> dict:
             "brier": sc["brier"],
             "brier_claude": sc["brier_claude"],
             "pnl_pct": sc["pnl_pct"],
-            "issue_url": f"{REPO_URL}/issues/{r['issue']}" if r.get("issue") else None,
+            "issue_url": f"{REPO_URL}/issues/{r['issue']}" if str(r.get("issue") or "").isdigit() else None,
             "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == r["id"]],
         })
         out.append(d)
@@ -324,7 +327,7 @@ def build_forecasts(today: date) -> dict:
             "outcome01": sc["outcome01"],
             "brier_me": sc["brier_me"], "brier_market": sc["brier_market"],
             "brier_claude": sc["brier_claude"],
-            "issue_url": f"{REPO_URL}/issues/{r['issue']}" if r.get("issue") else None,
+            "issue_url": f"{REPO_URL}/issues/{r['issue']}" if str(r.get("issue") or "").isdigit() else None,
         })
         out.append(f)
     out.sort(key=lambda f: (f["date"] or "", f["id"]))
@@ -1117,7 +1120,9 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
             "forecast": f"{REPO_URL}/issues/new?template=forecast.yml",
             "resolve": f"{REPO_URL}/issues/new?template=resolve.yml",
             "report": f"{REPO_URL}/issues/new?template=report.yml",
+            "quick": f"{REPO_URL}/issues/new?template=quick.yml",
         },
+        "clerk_runbook": f"{REPO_URL}/blob/main/docs/ledger/clerk.md",
     }
     data = out_dir / "data"
     for name, obj in (("meta", meta), ("home", home), ("decisions", decisions), ("forecasts", forecasts),

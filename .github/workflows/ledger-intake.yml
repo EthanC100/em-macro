@@ -31,7 +31,8 @@ jobs:
        contains(join(github.event.issue.labels.*.name, ','), 'ledger:') ||
        (contains(github.event.issue.labels.*.name, 'ledger') &&
         (startsWith(github.event.issue.title, '[Paste]') || contains(github.event.issue.body, 'DECISION RECORD') ||
-         contains(github.event.issue.body, 'FORECAST'))))
+         contains(github.event.issue.body, 'FORECAST') ||
+         contains(github.event.issue.body, 'RESOLVE'))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

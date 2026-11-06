@@ -1,0 +1,2 @@
+id,structure,product,contract_month,exchange,mark_source,proxy,legs,option_expiry,multiplier,quantity,entry_date,entry_underlying,entry_premium,risk_per_unit,iv_entry_pct,iv_source,rate_pct,logged_at
+D003,call spread,BRENT,2027-03,ICE,CME Group NYMEX Brent Last Day Financial (BZ) settlement,yes,+1 call 110|-1 call 130,2027-01-26,1000,65,2026-11-06,94,3,3,56.4,"estimate: implied from the stated entry premium 3 with Black-76 (F 94, T 0.2219y to 2027-01-26, r 4.03%); not an observed market implied volatility",4.03,2026-11-06

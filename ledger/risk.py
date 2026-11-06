@@ -20,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from .marks import load_registry, match_instrument
-from .schema import (MAX_RISK_PCT, kelly_size_pct, parse_date, parse_number, parse_probability, position_type,
+from .schema import (MAX_RISK_PCT, kelly_size_pct, parse_date, parse_number, parse_probability, position_type, stop_level,
                      validate_decision)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -155,15 +155,21 @@ def catalysts_in_period(scope: dict, start: date, end: date, calendar: list[dict
 
 
 # ----------------------------------------------------------------------------- the check
-def risk_check(rec: dict, root: Path = ROOT, today: date | None = None, registry: list[dict] | None = None) -> dict:
+def risk_check(rec: dict, root: Path = ROOT, today: date | None = None, registry: list[dict] | None = None,
+               derivative: dict | None = None) -> dict:
+    """``derivative``: ledger.derivs.build_terms's (terms, errors, notes) for a futures or options position; its
+    errors reject the record and its terms add the maximum-loss check."""
     today = today or date.today()
     registry = registry if registry is not None else load_registry(root / "data/ledger/instruments.csv")
     errors, notes = validate_decision(rec)
+    if derivative:
+        errors += derivative.get("errors") or []
+        notes += derivative.get("notes") or []
     scope = decision_scope(rec, registry)
     flags: list[str] = []
     checks: list[tuple[bool, str]] = []
-    stop_level = parse_number(rec.get("stop"))
-    checks.append((stop_level is not None, "Stop has a numeric level" + (f": {stop_level:g}" if stop_level is not None else "")))
+    stop_lv = stop_level(rec.get("stop"))
+    checks.append((stop_lv is not None, "Stop has a numeric level" + (f": {stop_lv:g}" if stop_lv is not None else "")))
     size, prob = parse_number(rec.get("size_pct")), parse_probability(rec.get("probability"))
     ptype = position_type(rec)
     if rec.get("action") in ("Buy", "Sell"):
@@ -177,6 +183,16 @@ def risk_check(rec: dict, root: Path = ROOT, today: date | None = None, registry
             checks.append((ok, f"Continuous position risks at most {MAX_RISK_PCT:g}%: size {size if size is not None else '?'}%"))
     else:
         checks.append((size in (None, 0), "No trade has size 0"))
+    dt = (derivative or {}).get("terms")
+    if dt:
+        what = {"future": "Futures position", "call": "Long call", "put": "Long put"}.get(dt["structure"], dt["structure"].capitalize())
+        checks.append((True, f"{what} on {dt['product']} {dt['contract_month']}: maximum loss "
+                             f"{dt['risk_per_unit']} per unit" + (" (the premium)" if dt["entry_premium"] and float(dt["entry_premium"]) > 0 else "")
+                             + f", which is the size at risk ({size if size is not None else '?'}% of account)"))
+        if dt["structure"] != "future":
+            checks.append((True, f"Implied volatility at entry {dt['iv_entry_pct']}% ({dt['iv_source']})"))
+    elif derivative and derivative.get("errors"):
+        checks.append((False, "Futures/options terms complete"))
     overlap = []
     cats, n_other, n_reb = [], 0, 0
     if not errors:
@@ -196,7 +212,9 @@ def risk_check(rec: dict, root: Path = ROOT, today: date | None = None, registry
     lines = [f"### Risk Manager: {verdict}",
              f"{rec.get('action')} {rec.get('instrument')} ({rec.get('country')}), {ptype or 'no trade'}, "
              f"size {rec.get('size_pct')}%, p {rec.get('probability')}%, horizon {rec.get('horizon')}"
-             + (f"; registry instrument {scope['instrument']}" if scope.get("instrument") else "; instrument not in the registry (no marks, no overlap check by instrument)"),
+             + (f"; marked at the {dt['mark_source']} of {dt['contract_month']}{' (proxy)' if dt['proxy'] == 'yes' else ''}"
+                if dt else f"; registry instrument {scope['instrument']}" if scope.get("instrument")
+                else "; instrument not in the registry (no marks, no overlap check by instrument)"),
              ""]
     lines += [f"- {'✅' if ok else '❌'} {text}" for ok, text in checks]
     lines += [f"- ❌ {e}" for e in errors]
