@@ -146,6 +146,12 @@
   "v0": 0.9146,
   "v1": 1.0006
  },
+ "COPPER|covid": null,
+ "COPPER|gfc": null,
+ "COPPER|rates2022": null,
+ "CORN|covid": null,
+ "CORN|gfc": null,
+ "CORN|rates2022": null,
  "DE10Y|covid": {
   "d0": "2020-02-28",
   "d1": "2020-03-31",
@@ -296,6 +302,9 @@
   "v0": 1.35,
   "v1": 1.1515
  },
+ "GOLD|covid": null,
+ "GOLD|gfc": null,
+ "GOLD|rates2022": null,
  "HEATOIL|covid": {
   "d0": "2020-02-28",
   "d1": "2020-03-31",
@@ -539,6 +548,12 @@
   "v0": 2.274,
   "v1": 3.127
  },
+ "SILVER|covid": null,
+ "SILVER|gfc": null,
+ "SILVER|rates2022": null,
+ "SOYBEANS|covid": null,
+ "SOYBEANS|gfc": null,
+ "SOYBEANS|rates2022": null,
  "TR10Y|covid": {
   "d0": "2020-02-28",
   "d1": "2020-03-31",
@@ -604,6 +619,9 @@
   "v0": 1.52,
   "v1": 4.1
  },
+ "WHEAT|covid": null,
+ "WHEAT|gfc": null,
+ "WHEAT|rates2022": null,
  "WTI|covid": {
   "d0": "2020-02-28",
   "d1": "2020-03-31",
