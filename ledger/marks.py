@@ -439,13 +439,28 @@ def match_instrument(text: str, registry: list[dict]) -> dict | None:
 
 
 # ----------------------------------------------------------------------------- fetch all
-def _fetch_one(source: str, ident: str, get, today: date):
-    if source == "boe":
-        return fetch_boe(ident, get, today)
+_CAPTURE: list | None = None
+
+
+def _fetch_one(source: str, ident: str, get, today: date, capture: list | None = None):
+    """Latest (date, value, url). With ``capture`` (a list), also collects every observation the source
+    returned (each fetcher passes its points through ``_last``), so a daily run stores the recent history
+    and a missed run leaves no gap."""
+    global _CAPTURE, _last
     fn = FETCHERS.get(source)
-    if fn is None:
+    if fn is None and source != "boe":
         raise ValueError(f"unknown source {source!r}")
-    return fn(ident, get)
+    orig = _last
+    if capture is not None:
+        def _last(points):  # noqa: F811 - temporary wrapper, restored below
+            capture.extend(sorted((d, v) for d, v in points if d is not None and v is not None))
+            return orig(points)
+    try:
+        if source == "boe":
+            return fetch_boe(ident, get, today)
+        return fn(ident, get)
+    finally:
+        _last = orig
 
 
 def fetch_instrument(row: dict, by_id: dict[str, dict], results: dict[str, dict], today: date,
@@ -470,17 +485,30 @@ def fetch_instrument(row: dict, by_id: dict[str, dict], results: dict[str, dict]
                 url = f"{ra.get('source_url', '')} ; {rb.get('source_url', '')}"
                 freq = "monthly" if "monthly" in (ra.get("frequency"), rb.get("frequency")) else "daily"
                 note = f"{a} {ra['value']} ({ra['date']}) minus {b} {rb['value']} ({rb['date']})"
+                ha, hb = dict(ra.get("_history") or []), dict(rb.get("_history") or [])
+                hist = sorted((dd, round((ha[dd] - hb[dd]) * 100, 2)) for dd in ha if dd in hb) if freq == "daily" else []
             else:
-                d, v, url = _fetch_one(source, ident, get, today)
+                pts: list = []
+                d, v, url = _fetch_one(source, ident, get, today, pts)
                 note = ""
+                if freq == "daily":
+                    hist = sorted({pd_: pv for pd_, pv in pts if (today - pd_).days <= 31}.items())
+                else:
+                    hist = []
             if tag:
+                prev = (previous or {}).get(inst)
+                pd_ = parse_date(prev.get("date")) if prev else None
+                if prev and prev.get("value") and pd_ and pd_ >= d and (prev.get("frequency") or "daily") == "daily":
+                    # never replace a newer first-hand daily mark with an older (or monthly) fallback
+                    raise ValueError(f"fallback {source} {ident} is older ({d}) than the previous daily mark ({pd_})")
                 note = (f"fallback {source} {ident} after: " + "; ".join(errors) + ("; " + note if note else ""))[:300]
             age = (today - d).days
             if freq == "daily" and age > CONFIG["stale_mark_days"]:
                 note = (note + "; " if note else "") + f"stale: last observation {age} days old"
             return {"date": d.isoformat(), "instrument": inst, "value": f"{v:.6g}", "unit": row.get("unit", ""),
                     "frequency": freq, "source": f"{source} {ident}".strip(), "source_url": url,
-                    "fetched_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "note": note}
+                    "fetched_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "note": note,
+                    "_history": [(hd, hv) for hd, hv in hist if hd < d]}
         except Exception as e:  # noqa: BLE001 - try the next source
             errors.append(f"{source} {ident}: {str(e)[:160]}")
     prev = (previous or {}).get(inst)
@@ -649,7 +677,12 @@ def main(argv=None) -> int:
     if a.dry_run:
         print(json.dumps(marks, indent=1))
         return 0
-    n = write_marks(marks)
+    hist_rows = []
+    for m in marks:
+        for hd, hv in m.get("_history") or []:
+            hist_rows.append({**m, "date": hd.isoformat(), "value": f"{hv:.6g}", "note": "recent history returned by the source"})
+    existing = {(r["instrument"], r["date"]) for r in read_marks()}
+    n = write_marks([r for r in hist_rows if (r["instrument"], r["date"]) not in existing] + marks)
     print(f"{n} new or changed marks written to {MARKS.relative_to(ROOT)}; "
           f"{len(marks) - len(missing)} of {len(marks)} instruments marked"
           + (f"; no mark for {', '.join(missing)}" if missing else ""))

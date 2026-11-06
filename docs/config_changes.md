@@ -215,3 +215,19 @@ it is recorded as C03 and the existing record is not renumbered.
   line sits beside the official P&L, which keeps the frozen cost model. At the 3 Nov 2026 positions and US$500m,
   TR10Y (1,238% of the exchange-only ADV, a lower bound) and MX10Y (63%) are flagged.
 - **Classification:** configuration change, not a trial. Not counted in N.
+
+## 2026-11-06: Janus, an AI discretionary paper book (branch `build/ledger-v2`)
+
+- **What:** a third, separate paper book next to my decisions and the algorithm. It has its own US$500,000,000
+  account (reported in %), weekly runs (Mondays 06:00 UTC, `janus-weekly`) through the Anthropic API (`claude-opus-5-5`,
+  with web search), The Opposition, and an append-only hash-chained record in `data/janus/` (see its README).
+  Daily fills, stops and horizon closes run in `ledger-daily`.
+- **Separation:** Janus never feeds the algorithm. No file under `em_macro/` or `results/` reads `data/janus/`, and
+  v1.0/v1.1 are unchanged. It is not a trial and has no row in `trials.csv`. No edge is claimed.
+- **Data:** free public daily sources only. Never Norgate or em-macro-data (licence). Dropped: Italy's spread,
+  metals, grains. Energy is marked on official spot prices as an estimate.
+- **New registry rows (`data/ledger/instruments.csv`, book `janus`):** US10Y, JP10Y, JPY, CHF, AUD, CAD, WTI,
+  BRENT, NATGAS, HEATOIL and RBOB, plus USDCASH (3-month T-bill, the cash benchmark).
+- **Marks:** each daily run now stores every recent observation a source returns (up to 31 days), not only the
+  latest, so a missed run leaves no gap. A fallback is never used when it is older than the previous first-hand
+  daily mark.
