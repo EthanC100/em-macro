@@ -44,11 +44,13 @@ edited. A fill, a stop change, a close or a review is a new record.
 | `no_trade` | daily review | nothing opened, with the reasoning |
 | `check` | quick check | nothing changed: time, positions checked, one-line result |
 
-## Universe and data sources (free public daily data only)
+## Universe and data sources
 
 | code | market | daily mark |
 |---|---|---|
-| WTI, BRENT, NATGAS, HEATOIL, RBOB | NYMEX CL, ICE B, NYMEX NG, HO, RB front month | **estimate:** official spot prices (EIA via FRED: DCOILWTICO, DCOILBRENTEU, DHHNGSP, DHOILNYH, DGASNYH). EIA stopped publishing NYMEX futures in April 2024 |
+| WTI, BRENT, NATGAS, HEATOIL, RBOB | NYMEX CL, BZ (proxy for ICE Brent), NG, HO, RB, by contract month | Final exchange settlement of the held contract, Databento GLBX.MDP3, **stored privately** in em-macro-data |
+| GOLD, SILVER, COPPER | COMEX GC, SI, HG, by contract month | as above |
+| CORN, SOYBEANS, WHEAT | CBOT ZC, ZS, ZW, by contract month (US cents per bushel) | as above |
 | US10Y | US 10y Treasury | FRED DGS10 (Fed H.15); fallback Riksbank USGVB10Y |
 | DE10Y | German 10y Bund | Bundesbank daily (Svensson 10y) |
 | GB10Y | UK 10y gilt | Bank of England IUDMNPY |
@@ -56,16 +58,31 @@ edited. A fill, a stop change, a close or a review is a new record.
 | FR-DE | France 10y over the Bund | Riksbank SWEA FRGVB10Y − DEGVB10Y |
 | EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP: Bank of England) |
 
-**Dropped (listed, not substituted):** the Italy 10y spread (no free daily source); metals (gold, silver, copper,
-platinum, palladium: no free daily price); grains (no free daily futures settlement); Norgate and em-macro-data
-(licence).
+**Futures and options (from 2026-11-06; code `ledger/janus_fut.py`, settlements `ledger/settlements.py`).**
+- The spot-price estimates (EIA via FRED) are gone. Each position holds a real contract month, filled at the
+  first final settlement dated on or after the decision date.
+- Roll rule: hold the earliest listed contract whose notice date is more than 35 days after the trade date. Roll
+  at that day's settlements within 10 days of its notice date, keeping the notional. P&L includes roll yield, and
+  each roll is charged as two trades.
+- Stops are prices of the contract held when they were set. They act on the position's cumulative return, so a
+  roll does not move them.
+- Options: defined risk only (long calls and puts, debit and credit verticals). Valued with Black-76 at the
+  implied volatility Janus states at entry, with its source or "estimate" (a model estimate), and at intrinsic
+  value from expiry. The % at risk is the maximum loss.
+- **Licence:** settlements are licensed (CME terms, passed on by Databento).
+  - Records and public files never hold a settlement, fill or exit price, model value, notional or contract count.
+  - A fill, roll or close records its date, contract, % at risk, costs and P&L in %, and `entry_digest` /
+    `exit_digest` (SHA-256 of "code|date|price"). Anyone holding the private data can check the price used.
+  - Daily P&L in % is in `futures_pnl.csv`.
+- Fetching is in `ledger-daily` (one quoted Databento request a day, refused above US$1 of daily spend, shared
+  with my decisions' marks).
+
+**Dropped (listed, not substituted):** the Italy 10y spread (no free daily source); platinum, palladium, KC wheat,
+soybean products, livestock and softs (not added); Norgate (licence).
 
 **Bond P&L:** −duration × yield change (a 10-year par bond's modified duration at the entry yield).
-**Commodity roll rule:** hold the earliest contract whose notice date is more than 35 days after the trade date.
-Roll when within 10 days of its notice date (approximate notice dates per market in `NOTICE_RULES`). P&L is on the spot
-proxy, so roll yield is not captured, but each roll is charged as two trades.
-**Costs:** the algorithm's model (10bp one way for major FX and developed bonds, 20bp for the FR-DE spread). Commodities
-use the T20-T22 model, 2 × (US$3 + 1 tick) per contract per side. The square-root impact estimate is added on every
-trade.
+**Costs:** the algorithm's model (10bp one way for major FX and developed bonds, 20bp for the FR-DE spread). Futures
+and options use the T20-T22 model, 2 × (US$3 + 1 tick) per contract per side and leg. The square-root impact
+estimate is added on every futures trade.
 **Limits (enforced in code):** at most 2% at risk per position, 10% in total, 8 open. Notional at most 10% of ADV and
 below 80% of any exchange position limit (`ledger/capacity.py`), otherwise the size is cut.

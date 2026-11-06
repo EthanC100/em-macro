@@ -60,7 +60,7 @@ def test_valid_daily_review_opens_with_opposition_and_entry_at_next_mark(tmp_pat
 
 @pytest.mark.parametrize("bad, expect", [
     (dict(new_positions=[pos(risk_pct=2.5)]), "above the 2% per-position limit"),
-    (dict(new_positions=[pos(instrument="GOLD")]), "not in the universe"),
+    (dict(new_positions=[pos(instrument="PLATINUM")]), "not in the universe"),
     (dict(new_positions=[pos(stop=4.70)]), "not on the losing side"),
     (dict(new_positions=[pos(thesis="Yields fall.")]), "2-3 sentences"),
     (dict(new_positions=[pos(thesis="One. Two. Three. Four.")]), "2-3 sentences"),
@@ -70,7 +70,7 @@ def test_valid_daily_review_opens_with_opposition_and_entry_at_next_mark(tmp_pat
     (dict(new_positions=[pos(horizon="2026-11-08")]), "horizon"),
     (dict(new_positions=[pos(probability=0)]), "probability"),
     (dict(new_positions=[pos(direction="up")]), "direction"),
-    (dict(new_positions=[pos(instrument="NATGAS", stop=2.0, risk_pct=2.0)]), "capacity"),
+    (dict(new_positions=[pos(instrument="NATGAS", stop=2.0, risk_pct=2.0)]), "no private settlement"),   # see test_janus_futures
     (dict(new_positions=[], no_trade_reasoning=""), "no_trade_reasoning is required"),
     (dict(model=""), "model is required"),
     (dict(session="weekly"), "session must be one of"),

@@ -64,7 +64,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import capacity as CAP
+from . import janus_fut as JF
 from . import pricing as PX
+from . import settlements as ST
 from .marks import load_registry, mark_can_act, read_marks
 from .schema import parse_date
 
@@ -80,18 +82,6 @@ GENESIS = "0" * 64
 
 # instrument -> description; ``cost`` is the one-way cost per unit of notional (the algorithm's model)
 UNIVERSE = {
-    "WTI": dict(name="WTI crude oil, NYMEX CL front month", asset_class="commodity", sector="energy", country="United States",
-                currency="USD", contract="CL", exchange="NYMEX", multiplier=1000, tick_value=10.0, estimate=True),
-    "BRENT": dict(name="Brent crude oil, ICE B front month", asset_class="commodity", sector="energy", country="Global",
-                  currency="USD", contract="B", exchange="ICE Futures Europe", multiplier=1000, tick_value=10.0, estimate=True),
-    "NATGAS": dict(name="Henry Hub natural gas, NYMEX NG front month", asset_class="commodity", sector="energy",
-                   country="United States", currency="USD", contract="NG", exchange="NYMEX", multiplier=10000,
-                   tick_value=10.0, estimate=True),
-    "HEATOIL": dict(name="NY Harbor ULSD / heating oil, NYMEX HO front month", asset_class="commodity", sector="energy",
-                    country="United States", currency="USD", contract="HO", exchange="NYMEX", multiplier=42000,
-                    tick_value=4.2, estimate=True),
-    "RBOB": dict(name="RBOB gasoline, NYMEX RB front month", asset_class="commodity", sector="energy", country="United States",
-                 currency="USD", contract="RB", exchange="NYMEX", multiplier=42000, tick_value=4.2, estimate=True),
     "US10Y": dict(name="US 10-year Treasury (long = long the bond)", asset_class="rates", country="United States",
                   currency="USD", cost=0.001),
     "DE10Y": dict(name="German 10-year Bund (long = long the bond)", asset_class="rates", country="Germany", currency="EUR",
@@ -113,68 +103,42 @@ UNIVERSE = {
     "CAD": dict(name="CAD per USD (long = long Canadian dollar)", asset_class="fx", country="Canada", currency="CAD",
                 cost=0.001),
 }
+# CME-group futures by contract month (ledger/settlements.py, ledger/janus_fut.py): energy, COMEX metals, CBOT
+# grains, marked at Databento final settlements stored privately; options only as defined-risk structures
+COUNTRY_OF = {"BRENT": "Global", "GOLD": "Global", "SILVER": "Global", "COPPER": "Global"}
+UNIVERSE.update({
+    code: dict(name=c["name"] + " by contract month", asset_class="future", sector=c["sector"],
+               country=COUNTRY_OF.get(code, "United States"), currency="USD", product=code, contract=c["root"],
+               exchange=c["exchange"], multiplier=c["multiplier"], tick_value=c["tick_value"], unit=c["unit"],
+               proxy=bool(c.get("proxy")))
+    for code, c in ST.CONTRACTS.items()})
 DROPPED = [
     {"market": "Italy 10y spread over Germany (IT-DE)",
      "reason": "No free daily source: the ECB publishes country yields monthly only, Banca d'Italia's Infostat needs a "
                "session and the Riksbank publishes no Italian series. Only a monthly average is available, which can "
                "neither enter nor stop a position."},
-    {"market": "Metals (gold, silver, copper, platinum, palladium)",
-     "reason": "No free daily public price: LBMA, LME and COMEX data are licensed; FRED's LBMA gold series and the "
-               "Bundesbank's gold price are discontinued; Yahoo and Stooq are blocked or rate-limited from the runners."},
-    {"market": "Grains and oilseeds (corn, wheat, soybeans)",
-     "reason": "No free daily futures settlement (CME data are licensed); USDA cash bids are not the contracts."},
-    {"market": "Commodity futures settlements",
-     "reason": "EIA stopped publishing NYMEX futures prices in April 2024. The five energy markets kept are marked on "
-               "official spot prices (EIA via FRED) as an estimate of the front month; every page labels them so."},
-    {"market": "Norgate and em-macro-data",
-     "reason": "Licence: never used for Janus."},
+    {"market": "Platinum, palladium, KC wheat, soybean meal and oil, livestock, softs",
+     "reason": "Not added (2026-11-06): the universe is NYMEX energy, COMEX gold, silver and copper, and CBOT corn, "
+               "soybeans and Chicago wheat. ICE softs are not on Databento's CME feed."},
+    {"market": "Spot-price estimates for energy (EIA via FRED)",
+     "reason": "Replaced on 2026-11-06 by futures by contract month marked at final exchange settlements "
+               "(Databento GLBX.MDP3, stored privately); spot is never used for a contract month."},
+    {"market": "Norgate",
+     "reason": "Licence: never used for Janus. (Janus's futures settlements come from Databento and are kept in "
+               "em-macro-data, never in this repository.)"},
 ]
-# approximate notice/last-trade date of a contract for delivery month (y, m)
-NOTICE_RULES = {
-    "WTI": "20th of the month before delivery (CL last trade: 3 business days before the 25th)",
-    "BRENT": "last day of the second month before delivery (ICE Brent last trade)",
-    "NATGAS": "26th of the month before delivery (NG last trade: 3 business days before the 1st)",
-    "HEATOIL": "last day of the month before delivery (HO last trade)",
-    "RBOB": "last day of the month before delivery (RB last trade)",
-}
-
-
-def _add_months(y: int, m: int, k: int) -> tuple[int, int]:
-    n = y * 12 + (m - 1) + k
-    return n // 12, n % 12 + 1
-
-
-def notice_date(inst: str, y: int, m: int) -> date:
-    if inst == "WTI":
-        py, pm = _add_months(y, m, -1)
-        return date(py, pm, 20)
-    if inst == "NATGAS":
-        py, pm = _add_months(y, m, -1)
-        return date(py, pm, 26)
-    if inst == "BRENT":
-        py, pm = _add_months(y, m, -2)
-        return date(py, pm, calendar.monthrange(py, pm)[1])
-    py, pm = _add_months(y, m, -1)
-    return date(py, pm, calendar.monthrange(py, pm)[1])
+def is_future(inst: str) -> bool:
+    return UNIVERSE.get(inst, {}).get("asset_class") == "future"
 
 
 def front_contract(inst: str, d: date) -> dict:
-    """The earliest contract whose notice date is more than 35 days after ``d`` (T20-T22's buffer)."""
-    y, m = d.year, d.month
-    for k in range(0, 6):
-        cy, cm = _add_months(y, m, k)
-        nd = notice_date(inst, cy, cm)
-        if nd > d + timedelta(days=ROLL_BUFFER_DAYS):
-            code = f"{UNIVERSE[inst]['contract']}{MONTH_CODES[cm - 1]}{str(cy)[-2:]}"
-            return {"code": code, "delivery": f"{cy}-{cm:02d}", "notice": nd.isoformat()}
-    raise ValueError("no contract found")
+    """The earliest listed contract whose notice date is more than 35 days after ``d`` (T20-T22's buffer)."""
+    c = JF.front(inst, d)
+    return {**c, "delivery": c["month"]}
 
 
 def roll_rule_text(inst: str) -> str:
-    return (f"Hold the earliest {UNIVERSE[inst]['exchange']} {UNIVERSE[inst]['contract']} contract whose notice date is more "
-            f"than {ROLL_BUFFER_DAYS} days after the trade date; roll to the next one when the held contract is within "
-            f"{ROLL_BEFORE_NOTICE_DAYS} days of its notice date (approximated as the {NOTICE_RULES[inst]}). P&L is marked on "
-            "the spot proxy, so roll yield is not captured; each roll is charged as two trades.")
+    return JF.roll_rule_text(inst)
 
 
 # ----------------------------------------------------------------------------- records and chain
@@ -315,11 +279,9 @@ def open_risk(pos: dict[str, dict]) -> float:
 
 # ----------------------------------------------------------------------------- costs and sizing
 def one_way_cost(inst: str, level: float) -> float:
-    u = UNIVERSE[inst]
-    if u["asset_class"] == "commodity":
-        c_raw = (3.0 + u["tick_value"]) / (level * u["multiplier"])
-        return 2.0 * c_raw
-    return u["cost"]
+    if is_future(inst):
+        return JF.one_way_cost(inst, level)
+    return UNIVERSE[inst]["cost"]
 
 
 def size(inst: str, direction: str, risk_pct: float, entry: float, stop: float, reg: dict[str, dict],
@@ -331,7 +293,7 @@ def size(inst: str, direction: str, risk_pct: float, entry: float, stop: float, 
         raise ValueError("stop is not on the losing side of the entry")
     notional_frac = (risk_pct / 100.0) / abs(sr)
     notional = notional_frac * ACCOUNT_USD
-    price = entry if UNIVERSE[inst]["asset_class"] == "commodity" else None
+    price = entry if is_future(inst) else None
     cap = CAP.max_notional(inst, ref, price)
     note = ""
     if cap is not None and notional > cap:
@@ -348,14 +310,42 @@ def size(inst: str, direction: str, risk_pct: float, entry: float, stop: float, 
 
 
 # ----------------------------------------------------------------------------- daily processing
-def process(records: list[dict], marks_rows: list[dict], today: date, path: Path | None = RECORDS) -> list[str]:
-    """Fill pending orders, roll commodities, close on stop / horizon / close request. Returns log lines."""
+def settlement_rows() -> list[dict]:
+    """Janus's futures marks: the private settlement store (empty when em-macro-data is not checked out)."""
+    return ST.read(ST.store_dir())
+
+
+def pnl_path(path: Path | None) -> Path:
+    return (path.parent if path else DIR) / "futures_pnl.csv"
+
+
+def process(records: list[dict], marks_rows: list[dict], today: date, path: Path | None = RECORDS,
+            settle_rows: list[dict] | None = None) -> list[str]:
+    """Fill pending orders, roll futures, close on stop / horizon / close request. Returns log lines. Futures and
+    options are processed from the private settlements (``settle_rows``, default the store) by ledger/janus_fut.py;
+    without them they are left as they are."""
     reg = registry_rows()
     ref = CAP.load_reference()
     log = []
+    srows = settle_rows if settle_rows is not None else None
+    pnl_out: list[dict] = []
     for pid, p in sorted(positions(records).items()):
         o = p["open"]
         inst, direction = o["instrument"], o["direction"]
+        if is_future(inst):
+            if srows is None:
+                srows = settlement_rows()
+            if not srows:
+                if p["status"] in ("pending", "open"):
+                    log.append(f"{pid}: no private settlements in this run (em-macro-data); not processed")
+                continue
+            add = lambda rec: append(records, rec, path)
+            was_pending = p["status"] == "pending"
+            log += JF.process_position(p, inst, srows, today, ref, ACCOUNT_USD, add, pnl_out)
+            p = positions(records)[pid]
+            if was_pending and p["status"] == "open":       # filled now: mark, roll and close from the fill on
+                log += JF.process_position(p, inst, srows, today, ref, ACCOUNT_USD, add, pnl_out)
+            continue
         k = kind(inst, reg)
         ser = series(marks_rows, inst)
         if p["status"] == "pending":
@@ -379,9 +369,6 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
                     "capacity": {k2: sz["capacity"][k2] for k2 in ("pct_adv", "adv_usd", "adv_status", "pct_limit",
                                                                    "position_limit", "impact_bp_trade", "flags")},
                     "capacity_note": sz["capacity_note"]}
-            if UNIVERSE[inst]["asset_class"] == "commodity":
-                fill["contract"] = front_contract(inst, d)
-                fill["roll_rule"] = roll_rule_text(inst)
             append(records, fill, path)
             log.append(f"{pid} filled {direction} {inst} at {v:g} ({d}); notional US${sz['notional_usd'] / 1e6:,.1f}m")
             p = positions(records)[pid]
@@ -390,18 +377,6 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
         f = p["fill"]
         ed = parse_date(f["entry_date"])
         after = [x for x in ser if ed < x[0] <= today]
-        # commodity rolls (cost only; P&L is on the spot proxy)
-        if UNIVERSE[inst]["asset_class"] == "commodity":
-            held = (p["rolls"][-1]["to_contract"] if p["rolls"] else f["contract"])
-            for d, v, _m in after:
-                if d >= parse_date(held["notice"]) - timedelta(days=ROLL_BEFORE_NOTICE_DAYS):
-                    nxt_c = front_contract(inst, d)
-                    c = 2.0 * (one_way_cost(inst, v) + f.get("impact_frac", 0.0))
-                    append(records, {"type": "roll", "position_id": pid, "date": d.isoformat(), "level": v,
-                                     "from_contract": held, "to_contract": nxt_c,
-                                     "cost_pct": round(100 * f["notional_frac"] * c, 5)}, path)
-                    log.append(f"{pid} rolled {held['code']} -> {nxt_c['code']} on {d}")
-                    held = nxt_c
         reason, hit = None, None
         hz = parse_date(o["horizon"])
         cr = parse_date((p.get("close_request") or {}).get("date"))
@@ -428,13 +403,17 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
                              "outcome": "right" if gross > 0 else "wrong",
                              "days_held": (d - ed).days}, path)
             log.append(f"{pid} closed ({reason}) at {v:g} on {d}: gross {gross:+.3f}%, net {net:+.3f}%")
+    if pnl_out and path is not None:
+        JF.write_pnl(pnl_path(path), pnl_out)
     return log
 
 
 # ----------------------------------------------------------------------------- summary for the app
-def summarize(records: list[dict], marks_rows: list[dict], today: date | None = None) -> dict:
+def summarize(records: list[dict], marks_rows: list[dict], today: date | None = None,
+              pnl_rows: list[dict] | None = None) -> dict:
     today = today or date.today()
     reg = registry_rows()
+    pnl_rows = pnl_rows if pnl_rows is not None else JF.read_pnl(pnl_path(RECORDS))
     pos = positions(records)
     start = account_start(records)
     rows, closed = [], []
@@ -461,6 +440,27 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                "postmortem": (p["postmortem"] or {}).get("postmortem"),
                "mark": last[1] if last else None, "mark_date": last[0].isoformat() if last else None,
                "mark_flag": None if (last and mark_can_act(last[2])) else "no first-hand daily mark yet"}
+        row["market_probability"] = o.get("market_probability")
+        row["market_source"] = o.get("market_source")
+        if is_future(inst):
+            # futures / options: P&L in % only (settlements are licensed and kept privately)
+            row.update({"mark": None, "mark_date": None, "mark_history": [], "unit": UNIVERSE[inst].get("unit"),
+                        "contract": (p["rolls"][-1]["to_contract"] if p["rolls"] else (p["fill"] or o).get("contract")),
+                        "option": (p["fill"] or o).get("option"), "proxy": UNIVERSE[inst].get("proxy"),
+                        "valuation": JF.DV.MODEL_LABEL if o.get("option") else "settlement",
+                        "mark_flag": None if p["fill"] else "awaiting the first final settlement on or after the decision date"})
+            if p["close"]:
+                row.update({"gross_pnl_pct": p["close"]["gross_pnl_pct"], "net_pnl_pct": p["close"]["net_pnl_pct"],
+                            "valuation": p["close"].get("basis") or row["valuation"]})
+            elif p["fill"]:
+                last_p = JF.pnl_on(pnl_rows, pid, today)
+                if last_p:
+                    row.update({"gross_pnl_pct": float(last_p["gross_pct"]), "net_pnl_pct": float(last_p["net_pct"]),
+                                "mark_date": last_p["date"], "valuation": last_p["basis"]})
+            rows.append(row)
+            if p["close"]:
+                closed.append(row)
+            continue
         if p["fill"]:
             f = p["fill"]
             lvl = p["close"]["exit_level"] if p["close"] else (last[1] if last else None)
@@ -484,8 +484,8 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
     probs = [r["probability"] / 100.0 for r in rows if r["status"] in ("open", "closed", "pending")]
     pbar = sum(probs) / len(probs) if probs else 0.6
     need = calls_needed(pbar)
-    eq = equity(records, marks_rows, today)
-    bench = benchmark(records, marks_rows, today)
+    eq = equity(records, marks_rows, today, pnl_rows)
+    bench = benchmark(records, marks_rows, today, pnl_rows)
     open_rows = [r for r in rows if r["status"] in ("open", "pending")]
     return {
         "start": start, "account_usd": ACCOUNT_USD, "model": next((r["model"] for r in reversed(records) if r.get("model")), None),
@@ -511,10 +511,15 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                                 f"right when the gross P&L (before costs) is positive."),
         "equity": eq, "benchmark": bench,
         "universe": [{"instrument": k, **{kk: vv for kk, vv in v.items() if kk not in ("tick_value",)},
-                      "unit": reg.get(k, {}).get("unit"), "source": reg.get(k, {}).get("source"),
-                      "source_id": reg.get(k, {}).get("source_id"), "source_url": reg.get(k, {}).get("source_url"),
-                      "notes": reg.get(k, {}).get("notes"),
-                      "roll_rule": roll_rule_text(k) if v["asset_class"] == "commodity" else None}
+                      **({"unit": v["unit"], "source": "Databento GLBX.MDP3 final settlement (private)",
+                          "source_id": f"{v['contract']} by contract month", "source_url": "https://databento.com",
+                          "notes": ("Settlements are licensed and kept in em-macro-data; only P&L in % is published."
+                                    + (" Held and marked as NYMEX BZ, a proxy for ICE Brent." if v.get("proxy") else ""))}
+                         if v["asset_class"] == "future" else
+                         {"unit": reg.get(k, {}).get("unit"), "source": reg.get(k, {}).get("source"),
+                          "source_id": reg.get(k, {}).get("source_id"), "source_url": reg.get(k, {}).get("source_url"),
+                          "notes": reg.get(k, {}).get("notes")}),
+                      "roll_rule": roll_rule_text(k) if v["asset_class"] == "future" else None}
                      for k, v in UNIVERSE.items()],
         "dropped": DROPPED, "chain": verify(records),
         "disclaimer": ("Janus is an experiment in AI judgement. Its results do not feed the algorithm (v1.0 and v1.1 are "
@@ -561,7 +566,7 @@ def _level_on(ser: list[tuple], d: date):
     return best
 
 
-def equity(records: list[dict], marks_rows: list[dict], today: date) -> list[list]:
+def equity(records: list[dict], marks_rows: list[dict], today: date, pnl_rows: list[dict] | None = None) -> list[list]:
     """[[date, index]] daily from the account start: 100 + net P&L (% of the starting account), positions marked
     at the latest daily mark on or before each date (carried forward on days without one)."""
     start = account_start(records)
@@ -570,7 +575,9 @@ def equity(records: list[dict], marks_rows: list[dict], today: date) -> list[lis
     reg = registry_rows()
     sd = parse_date(start["date"])
     pos = positions(records)
-    sers = {p["open"]["instrument"]: series(marks_rows, p["open"]["instrument"]) for p in pos.values()}
+    sers = {p["open"]["instrument"]: series(marks_rows, p["open"]["instrument"]) for p in pos.values()
+            if not is_future(p["open"]["instrument"])}
+    pnl_rows = pnl_rows if pnl_rows is not None else JF.read_pnl(pnl_path(RECORDS))
     out = []
     for d in _dates(sd, today):
         total = 0.0
@@ -580,6 +587,10 @@ def equity(records: list[dict], marks_rows: list[dict], today: date) -> list[lis
                 continue
             if p["close"] and parse_date(p["close"]["date"]) <= d:
                 total += p["close"]["net_pnl_pct"]
+                continue
+            if is_future(p["open"]["instrument"]):
+                r = JF.pnl_on(pnl_rows, p["id"], d)
+                total += float(r["net_pct"]) if r else -f.get("cost_pct", 0.0)
                 continue
             lv = _level_on(sers[p["open"]["instrument"]], d)
             if lv is None:
@@ -591,12 +602,13 @@ def equity(records: list[dict], marks_rows: list[dict], today: date) -> list[lis
     return out
 
 
-def benchmark(records: list[dict], marks_rows: list[dict], today: date) -> dict:
+def benchmark(records: list[dict], marks_rows: list[dict], today: date, pnl_rows: list[dict] | None = None) -> dict:
     """Equal-weight benchmark of the same instruments: each instrument Janus traded, held LONG over the same dates,
     every position at the same notional (the average of Janus's notionals), no costs. Janus minus this isolates the
     value of its direction and sizing choices."""
     reg = registry_rows()
-    pos = [p for p in positions(records).values() if p["fill"]]
+    # futures and options have no public price (licensed settlements), so the benchmark covers the other instruments
+    pos = [p for p in positions(records).values() if p["fill"] and not is_future(p["open"]["instrument"])]
     if not pos:
         return {"pnl_pct": None, "janus_pnl_pct": None, "n": 0, "series": []}
     avg = sum(p["fill"]["notional_frac"] for p in pos) / len(pos)
@@ -608,17 +620,34 @@ def benchmark(records: list[dict], marks_rows: list[dict], today: date) -> dict:
         if exit_lv is None:
             continue
         tot += 100 * avg * PX.ret_long(kind(inst, reg), p["fill"]["entry_level"], exit_lv)
-    eq = equity(records, marks_rows, today)
+    eq = equity(records, marks_rows, today, pnl_rows)
     return {"pnl_pct": round(tot, 4), "janus_pnl_pct": round(eq[-1][1] - 100, 4) if eq else None, "n": len(pos),
             "method": "Equal-weight benchmark: the same instruments over the same dates, always long, each at Janus's "
-                      "average notional, before costs."}
+                      "average notional, before costs. Futures and options are left out (their prices are private)."}
 
 
 # ----------------------------------------------------------------------------- the weekly run
-def market_snapshot(marks_rows: list[dict], today: date) -> list[dict]:
+def market_snapshot(marks_rows: list[dict], today: date, settle_rows: list[dict] | None = None) -> list[dict]:
+    """The universe with marks, for a session's context only (never published: futures settlements are licensed)."""
     reg = registry_rows()
     out = []
+    srows = settle_rows if settle_rows is not None else None
     for inst, u in UNIVERSE.items():
+        if is_future(inst):
+            srows = settlement_rows() if srows is None else srows
+            fc = front_contract(inst, today)
+            ser_f = ST.series(srows, inst, fc["month"])
+            row = {"instrument": inst, "name": u["name"], "unit": u["unit"], "front_contract": fc["code"],
+                   "front_month": fc["month"], "notice": fc["notice"], "proxy": u.get("proxy", False),
+                   "private": "settlements are licensed: use them in this session only, never in a public file"}
+            if ser_f:
+                last = ser_f[-1]
+                row.update({"mark": last[1], "mark_date": last[0].isoformat(),
+                            "level_1w_ago": (ST.on_or_before(srows, inst, fc["month"], last[0] - timedelta(days=7)) or [None, None])[1]})
+            else:
+                row.update({"mark": None, "note": "no private settlements in this session (check out em-macro-data)"})
+            out.append(row)
+            continue
         ser = series(marks_rows, inst, actable_only=False)
         if not ser:
             out.append({"instrument": inst, "name": u["name"], "mark": None})
@@ -631,8 +660,6 @@ def market_snapshot(marks_rows: list[dict], today: date) -> list[dict]:
         row = {"instrument": inst, "name": u["name"], "unit": reg.get(inst, {}).get("unit"), "mark": last[1],
                "mark_date": last[0].isoformat(), "level_1w_ago": ago(7), "level_1m_ago": ago(30),
                "estimate": bool(u.get("estimate"))}
-        if u["asset_class"] == "commodity":
-            row["front_contract"] = front_contract(inst, today)["code"]
         out.append(row)
     return out
 
@@ -683,6 +710,31 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
         if not str(r.get("reasoning") or "").strip():
             errors.append(f"{pid}: a reason is required for every review")
             continue
+        if act == "tighten_stop" and is_future(p["open"]["instrument"]):
+            o = p["open"]
+            try:
+                ns = float(r.get("new_stop"))
+            except (TypeError, ValueError):
+                errors.append(f"{pid}: tighten_stop needs a numeric new_stop")
+                continue
+            srows = settlement_rows()
+            con = (p["rolls"][-1]["to_contract"] if p["rolls"] else (p["fill"] or o).get("contract"))
+            ser = ST.series(srows, o["instrument"], con["month"]) if con else []
+            if not ser:
+                errors.append(f"{pid}: tightening a futures stop needs the private settlements (em-macro-data)")
+                continue
+            cur = ser[-1][1]
+            up = (JF.option_delta_up(o["option"], cur, today) if o.get("option") else o["direction"] == "long")
+            old_s = p["stop"]
+            tighter = (ns > old_s) if up else (ns < old_s)
+            if not tighter:
+                errors.append(f"{pid}: new stop {ns:g} would widen or not move the stop {old_s:g} (stops can only be tightened)")
+                continue
+            if (up and ns >= cur) or (not up and ns <= cur):
+                errors.append(f"{pid}: new stop {ns:g} is already through the latest settlement; propose a close instead")
+                continue
+            reviews.append({**r, "id": pid, "action": act, "new_stop": ns})
+            continue
         if act == "tighten_stop":
             o = p["open"]
             ser = series(marks_rows, o["instrument"], actable_only=False)
@@ -725,7 +777,7 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
             errors.append(f"{tag}: not in the universe ({', '.join(UNIVERSE)})")
             continue
         direction = str(n.get("direction", "")).lower()
-        if direction not in ("long", "short"):
+        if direction not in ("long", "short") and not (is_future(inst) and n.get("option")):
             errs.append(f"direction must be long or short, got {direction!r}")
         try:
             risk, stop, prob = float(n.get("risk_pct")), float(n.get("stop")), float(n.get("probability"))
@@ -757,6 +809,30 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
                         f"(room: {max(0.0, MAX_RISK_TOTAL - total):.2f}%)")
         if n_open + 1 > MAX_OPEN:
             errs.append(f"would be position {n_open + 1}; at most {MAX_OPEN} may be open")
+        mp = n.get("market_probability")
+        if mp not in (None, ""):
+            try:
+                mpv = float(mp)
+                if not (0 < mpv < 100):
+                    raise ValueError
+                if not str(n.get("market_source") or "").strip():
+                    errs.append("market_probability needs market_source (where the market's probability comes from)")
+            except (TypeError, ValueError):
+                errs.append(f"market_probability {mp!r} must be a number in (0, 100)")
+        if is_future(inst):
+            fut, ferrs = _validate_future(n, inst, direction, risk, stop, hz, today, ref)
+            errs += ferrs
+            if not ferrs:
+                n = {**n, **fut}
+                direction = fut.get("direction", direction)
+            if errs:
+                errors += [f"{tag}: {e}" for e in errs]
+                continue
+            total += risk
+            n_open += 1
+            new.append({**n, "instrument": inst, "direction": direction, "risk_pct": round(risk, 4), "stop": stop,
+                        "probability": prob, "horizon": hz.isoformat()})
+            continue
         ser = series(marks_rows, inst, actable_only=False)
         if not ser:
             errs.append("no mark for this instrument")
@@ -779,6 +855,63 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
         new.append({**n, "instrument": inst, "direction": direction, "risk_pct": round(risk, 4), "stop": stop,
                     "probability": prob, "horizon": hz.isoformat()})
     return reviews, new, errors
+
+
+def _validate_future(n: dict, inst: str, direction: str, risk: float, stop: float, hz: date | None, today: date,
+                     ref: dict, settle_rows: list[dict] | None = None) -> tuple[dict, list[str]]:
+    """Futures / options checks on top of the common rules. Needs the private settlements (the latest final
+    settlement of the contract) for the stop side and the capacity check."""
+    errs: list[str] = []
+    srows = settle_rows if settle_rows is not None else settlement_rows()
+    month = str(n.get("contract") or "").strip() or front_contract(inst, today)["month"]
+    if len(month) != 7 or not ST.listed(inst, int(month[:4]), int(month[5:7])):
+        return {}, [f"contract {month!r} must be a listed month YYYY-MM of {UNIVERSE[inst]['contract']}"]
+    y, m = int(month[:4]), int(month[5:7])
+    if ST.notice_date(inst, y, m) <= today + timedelta(days=JF.ROLL_BEFORE_NOTICE_DAYS):
+        return {}, [f"contract {month} is within {JF.ROLL_BEFORE_NOTICE_DAYS} days of its notice date"]
+    con = JF.contract(inst, month)
+    ser = ST.series(srows, inst, month)
+    if not ser:
+        return {}, [f"no private settlement of {con['code']} in this session: the daily review needs em-macro-data "
+                    "(EM_MACRO_DATA) to propose futures or options"]
+    F = ser[-1][1]
+    out = {"contract": con}
+    if n.get("option"):
+        spec, oerrs = JF.check_option(n, inst, month, F, today, hz, stop, JF.DV.cash_rate(ROOT, today))
+        if oerrs:
+            return {}, oerrs
+        out["option"] = spec
+        out["direction"] = "long" if JF.option_delta_up(spec, F, today) else "short"
+        return out, errs
+    s = JF.sign(direction)
+    sr = s * (stop - F) / F
+    if sr >= 0:
+        return {}, [f"stop {stop:g} is not on the losing side of the latest {con['code']} settlement"]
+    nf = (risk / 100.0) / abs(sr)
+    cap = CAP.max_notional(inst, ref, F)
+    if cap is not None and nf * ACCOUNT_USD > cap:
+        errs.append(f"capacity: notional above 10% of daily volume or near the position limit; the most this stop "
+                    f"allows is {risk * cap / (nf * ACCOUNT_USD):.2f}% at risk")
+    return out, errs
+
+
+def futures_needs(records: list[dict], today: date) -> dict[tuple[str, str], date]:
+    """Contract months Janus's pending and open futures/options positions need, from the date each is needed."""
+    out: dict[tuple[str, str], date] = {}
+    for p in positions(records).values():
+        inst = p["open"]["instrument"]
+        if not is_future(inst) or p["status"] not in ("pending", "open"):
+            continue
+        if p["status"] == "pending":
+            con = p["open"].get("contract") or front_contract(inst, parse_date(p["open"]["decision_date"]))
+            out[(inst, con["month"])] = parse_date(p["open"]["decision_date"])
+            continue
+        for leg in JF.legs_of(p):
+            out[(inst, leg["month"])] = min(out.get((inst, leg["month"]), leg["start"]), leg["start"])
+        if not p["fill"].get("option"):
+            nxt = front_contract(inst, today)
+            out.setdefault((inst, nxt["month"]), today - timedelta(days=10))
+    return out
 
 
 def next_id(records: list[dict]) -> str:
@@ -842,7 +975,13 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                          "change_mind": " ".join(str(n.get("change_mind", "")).split()),
                          "sources": n.get("sources") or [], "sources_read": (ans.get("sources_read") or [])[:25],
                          "model": model, "decided_at": now.isoformat(), "decision_date": today.isoformat(),
-                         "entry_rule": "next available first-hand daily mark dated on or after the decision date",
+                         "entry_rule": ("first final exchange settlement of the contract dated on or after the decision date"
+                                        if is_future(n["instrument"]) else
+                                        "next available first-hand daily mark dated on or after the decision date"),
+                         **({"contract": n["contract"]} if n.get("contract") else {}),
+                         **({"option": n["option"]} if n.get("option") else {}),
+                         **({"market_probability": float(n["market_probability"]), "market_source": n.get("market_source")}
+                            if n.get("market_probability") not in (None, "") else {}),
                          "provisional_capacity": n.get("provisional_capacity"), "run_seq": run_rec["seq"],
                          "session": session}, path)
         opp = n["opposition"]
@@ -889,7 +1028,8 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
     today = today or date.today()
     if fetch:
         from .marks import fetch_all, latest_marks
-        reg_rows = [r for r in load_registry() if r["instrument"] in UNIVERSE or r["instrument"] in ("FR10Y", "DE10YBM")]
+        reg_rows = [r for r in load_registry() if (r["instrument"] in UNIVERSE and not is_future(r["instrument"]))
+                    or r["instrument"] in ("FR10Y", "DE10YBM")]
         fresh = fetch_all(reg_rows, today, previous=latest_marks())
         marks_rows = (marks_rows if marks_rows is not None else read_marks()) + [
             {k: v for k, v in m.items() if not k.startswith("_")} for m in fresh if m.get("value")]
@@ -904,7 +1044,18 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
             "rules": {"max_risk_position_pct": MAX_RISK_POS, "max_risk_total_pct": MAX_RISK_TOTAL, "max_open": MAX_OPEN,
                       "capacity": "notional at most 10% of ADV and below 80% of any position limit",
                       "stops": "tighten only", "entry": "next available official daily mark, not the price now",
-                      "thesis": "2-3 sentences", "required": ["instrument", "direction", "risk_pct", "stop", "horizon",
+                      "thesis": "2-3 sentences",
+                      "futures": ("futures by contract month (energy, COMEX metals, CBOT grains): optional 'contract' "
+                                  "YYYY-MM (default the front contract by the 35-day rule); stop = a price of that "
+                                  "contract; fill at the first final settlement on or after the decision date; prices "
+                                  "are private (em-macro-data), never put them in a public file"),
+                      "options": ("defined risk only: 'option': {legs, expiry, iv_pct, iv_source or 'estimate'} - a long "
+                                  "call or put, or a vertical; risk_pct = maximum loss; stop = an underlying level; "
+                                  "horizon on or before expiry; valued with Black-76 (model estimate)"),
+                      "market_probability": ("optional: the market's probability that the view is right, with "
+                                             "market_source; the fund's Janus allocation rule compares Brier scores "
+                                             "on calls that record it (docs/fund/allocation.md)"),
+                      "required": ["instrument", "direction", "risk_pct", "stop", "horizon",
                                                               "probability", "thesis", "change_mind", "sources",
                                                               "opposition.case_against"]},
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
