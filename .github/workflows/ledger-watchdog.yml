@@ -1,0 +1,31 @@
+# Independent check that the Ledger's daily marks are fresh. Opens "[ALERT] Ledger marks stale" when the newest
+# mark in data/ledger/marks.csv was fetched more than 2 days ago, and closes it once marks are fresh. Runs on its
+# own schedule so it still fires when ledger-daily itself never starts (a dropped schedule, a disabled workflow).
+name: ledger-watchdog
+
+on:
+  schedule:
+    - cron: "17 12 * * *"     # 12:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check marks and open or close the alert
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m ledger.watchdog --out "$RUNNER_TEMP/watchdog.json"
+          bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/watchdog.json"

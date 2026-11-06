@@ -1,0 +1,60 @@
+{
+ "algo_effective": {
+  "v1.0": "2026-11",
+  "v1.1": "2026-11"
+ },
+ "as_of": "2026-11-06",
+ "at": "2026-11-06T04:36:18+00:00",
+ "decisions": {
+  "D001": {
+   "action": "Sell",
+   "instrument": "FR-DE 10y OAT-Bund spread",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  },
+  "D002": {
+   "action": "No trade",
+   "instrument": "USD/BRL",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  }
+ },
+ "forecasts": {
+  "F001": {
+   "outcome": "",
+   "question": "Republicans keep control of the US Senate after the 3 Nov 2026 midterms",
+   "status": "open"
+  },
+  "F002": {
+   "outcome": "",
+   "question": "Mike Rogers (R) wins the Michigan US Senate race, 3 Nov 2026",
+   "status": "open"
+  },
+  "F003": {
+   "outcome": "",
+   "question": "Ken Paxton (R) wins the Texas US Senate race, 3 Nov 2026",
+   "status": "open"
+  },
+  "F004": {
+   "outcome": "",
+   "question": "Dan Sullivan (R) wins the Alaska US Senate race, 3 Nov 2026",
+   "status": "open"
+  },
+  "F005": {
+   "outcome": "",
+   "question": "Susan Collins (R) wins the Maine US Senate race, 3 Nov 2026",
+   "status": "open"
+  }
+ },
+ "index": {
+  "algorithm v1.0": 100.7413,
+  "algorithm v1.1": 100.0,
+  "janus": 100.0,
+  "me": 99.801
+ },
+ "janus": {},
+ "janus_no_trades": 1,
+ "latest_mark": "2026-11-06"
+}

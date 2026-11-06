@@ -180,6 +180,36 @@ def test_marks_before_the_decision_never_close_it():
     assert not changed and not issues and d["status"] == "open"
 
 
+def test_monthly_or_carried_marks_never_stop_or_close_a_position():
+    # D001's failure mode: a monthly average below the stop must not close the position
+    d = _decision(instrument="FR-DE 10y OAT-Bund spread", action="Sell", entry_level="159", stop="115",
+                  date="2026-10-30", horizon="2027-04-18")
+    monthly = _mark("FR-DE", "2026-10-31", 96.7, "bp", "monthly")
+    carried = {**_mark("FR-DE", "2026-11-03", 100.0, "bp"), "note": "kept previous mark; riksbank down"}
+    changed, issues, log = resolve.process_decisions([d], [monthly, carried], REGISTRY, date(2026, 11, 6))
+    assert not changed and not issues and d["status"] == "open" and any("ignored" in x for x in log)
+    # and past the horizon with only monthly marks: an issue, not a close
+    d2 = _decision(instrument="FR-DE spread", action="Sell", entry_level="159", stop="115", date="2026-10-30",
+                   horizon="2026-11-05")
+    changed, issues, _ = resolve.process_decisions([d2], [monthly], REGISTRY, date(2026, 11, 6))
+    assert not changed and issues and d2["status"] == "open"
+    # a first-hand daily mark through the stop does close it
+    changed, _, _ = resolve.process_decisions([d], [_mark("FR-DE", "2026-11-05", 114.0, "bp")], REGISTRY, date(2026, 11, 6))
+    assert changed and d["outcome"] == "wrong"
+    assert not marks.mark_can_act(monthly) and not marks.mark_can_act(carried)
+    assert marks.mark_can_act(_mark("FR-DE", "2026-11-05", 150.0, "bp"))
+
+
+def test_riksbank_and_jgb_parsers():
+    rb = json.dumps([{"date": "2026-11-03", "value": 4.9509}, {"date": "2026-11-04", "value": 4.7823}]).encode()
+    assert marks.fetch_riksbank("FRGVB10Y", get=lambda u, **k: rb)[:2] == (date(2026, 11, 4), 4.7823)
+    jgb = ("Interest Rate,,\nDate,1Y,10Y\n2026/11/4,1.6,2.81\n2026/11/5,1.658,2.806\n,,\n").encode()
+    assert marks.fetch_mof_jgb("10Y", get=lambda u, **k: jgb)[:2] == (date(2026, 11, 5), 2.806)
+    reg = {r["instrument"]: r for r in REGISTRY}
+    assert reg["FR-DE"]["frequency"] == "daily" and reg["FR-DE"]["source_id"] == "FR10Y-DE10YBM"
+    assert not reg["FR-DE"]["fallback_source"]       # never falls back to a monthly average
+
+
 def test_horizon_close_scores_by_pnl_sign():
     d = _decision()
     mk = [_mark("BRL", "2026-11-20", 5.30), _mark("BRL", "2026-12-01", 5.20)]
@@ -535,6 +565,27 @@ def test_todo_parsing_and_build(tmp_path):
         assert (out / f"data/{name}.json").exists()
     dec = json.loads((out / "data/decisions.json").read_text())
     d1 = next(d for d in dec["items"] if d["id"] == "D001")
-    assert d1["mark_instrument"] == "FR-DE" and d1["mark_frequency"] == "monthly" and d1["position_type"] == "continuous"
+    # FR-DE is marked daily from the Riksbank since 2026-11-06 (it was a monthly ECB IRS average before)
+    assert d1["mark_instrument"] == "FR-DE" and d1["mark_frequency"] == "daily" and d1["position_type"] == "continuous"
+    assert d1["mark"] > 120 and d1["mark_can_act"]
     fc = json.loads((out / "data/forecasts.json").read_text())
     assert all(f["resolution_source"] == "AP race call" for f in fc["items"][:5])
+
+
+def test_marks_watchdog_flags_marks_older_than_two_days(tmp_path):
+    from datetime import datetime, timezone
+    from ledger import watchdog
+    p = tmp_path / "marks.csv"
+    marks.write_marks([{**_mark("BRL", "2026-11-03", 5.4), "fetched_at": "2026-11-04T10:10:03+00:00"}], p)
+    old = watchdog.check(datetime(2026, 11, 6, 12, tzinfo=timezone.utc), 2, p)
+    assert old["stale"] and old["age_days"] > 2 and old["title"] == "[ALERT] Ledger marks stale"
+    new = watchdog.check(datetime(2026, 11, 5, 9, tzinfo=timezone.utc), 2, p)
+    assert not new["stale"]
+    assert watchdog.check(datetime(2026, 11, 5, tzinfo=timezone.utc), 2, tmp_path / "none.csv")["stale"]
+
+
+def test_daily_workflow_stages_only_existing_paths_and_fails_loudly():
+    wf = (ROOT / ".github/workflows/ledger-daily.yml").read_text()
+    step = wf[wf.index("- name: Commit and push"):wf.index("- name: Open or update [RESOLVE?] issues")]
+    assert "2>/dev/null || true" not in step and '[ -e "$p" ]' in step and "push failed" in step
+    assert "ledger.watchdog" in wf and (ROOT / ".github/workflows/ledger-watchdog.yml").exists()

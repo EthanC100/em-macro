@@ -111,9 +111,9 @@ def test_build_writes_site_and_json(tmp_path):
     assert home["account_index"] == pytest.approx(100 * prod, abs=1e-3)
     assert home["account_change_pct"] == pytest.approx(home["account_index"] - 100, abs=1e-3)
     if (alg_["rebalance"]["effective_from"] or "") >= "2026-12":
-        assert home["usd_switched"] and home["usd_capital"] == 10_000_000.0
+        assert home["usd_switched"] and home["usd_capital"] == 500_000_000.0
         assert home["account_usd"] == pytest.approx(
-            10_000_000.0 * home["account_index"] / home["index_at_switch"], abs=0.01)
+            500_000_000.0 * home["account_index"] / home["index_at_switch"], abs=0.01)
     else:
         assert not home["usd_switched"] and home["usd_capital"] == 100_000.0 and home["usd_switch_note"] is None
         assert home["account_usd"] == pytest.approx(100_000.0 * home["account_index"] / 100, abs=0.01)
@@ -429,14 +429,14 @@ def test_usd_value_before_switch():
 
 
 def test_usd_value_new_capital_enters_at_switch_index():
-    # positions effective December 2026 published: November is booked, US$ starts at exactly 10,000,000
+    # positions effective December 2026 published: November is booked, US$ starts at exactly 500,000,000 (C03)
     months = _live_months({"2026-11": 0.02})
     u = build.usd_account(months, "2026-12")
     assert u["usd_switched"] and u["index_at_switch"] == pytest.approx(102.0) and u["usd_switch_month"] == "2026-11"
-    assert u["account_usd"] == pytest.approx(10_000_000.0)
-    assert u["usd_switch_note"] == "Paper capital raised to US$10,000,000 (configuration change, not performance)"
+    assert u["account_usd"] == pytest.approx(500_000_000.0)
+    assert u["usd_switch_note"] == "Paper capital raised to US$500,000,000 (configuration change C03, not performance)"
     # a month later the dollar figure moves with the index only; the note is gone
     months = _live_months({"2026-11": 0.02, "2026-12": -0.01})
     u = build.usd_account(months, "2027-01")
     assert u["index_at_switch"] == pytest.approx(102.0) and u["usd_switch_note"] is None
-    assert u["account_usd"] == pytest.approx(10_000_000 * 0.99, abs=1)
+    assert u["account_usd"] == pytest.approx(500_000_000 * 0.99, abs=1)

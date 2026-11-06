@@ -10,6 +10,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 |---|---|---|---|---|---|
 | C01 | 2026-11-03 | the 3 December 2026 rebalance | Paper capital raised from US$100,000 to US$10,000,000. | Contract-size granularity for the planned commodity futures: at US$100,000 the smallest tradeable position in a standard futures contract is a large fraction of capital, so positions could not be sized to the model's weights. | None. v1.0 sizes positions by weights (per cent of capital), and all of its performance is reported in percentages, so its frozen results (`results/systematic/test/`, `docs/v1.0_freeze.md`) are unaffected. |
 | C02 | 2026-11-04 | the 3 December 2026 rebalance (positions effective 2026-12) | **v1.1 added**, run live in parallel with v1.0: v1.1 = frozen v1.0 + exactly the T18 rule (risk-unit no-trade band 0.1 × the position's risk budget and partial rebalancing w + 0.5 (w* − w), replacing v1.0's 25% relative band). v1.0 remains the frozen control. | T18 passed its pre-registered rule (4 of 4 criteria at 1x costs; `results/T16-T19_risk_batch.md`). | None. No v1.0 file, parameter, input snapshot or result changed; `python -m em_macro.verify_v1` reproduces v1.0 exactly. v1.1 has its own code, outputs and freeze record (`docs/v1.1_freeze.md`). |
+| C03 | 2026-11-06 | the 3 December 2026 rebalance (positions effective 2026-12) | Paper capital for the algorithm (v1.0 and v1.1) set to US$500,000,000, replacing C01's US$10,000,000. Recorded before any live month is booked (no live month has been booked yet; November 2026 is booked on 3 December). | Capacity: to see the strategy at an institutional size, with capacity checks and a market-impact estimate shown beside the official P&L (diagnostic only). | None. All results stay in percentages of capital; only notional amounts change. `python -m em_macro.verify_v1` and `python -m em_macro.systematic_v11 verify` reproduce v1.0 and v1.1 byte for byte (2026-11-06). |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -125,3 +126,113 @@ test and before the freeze, is a pre-live gap month, not a live month. Nothing e
   the BCCh API needs a login); Turkey and Indonesia FX from the ECB reference rates (the CBRT API needs a key,
   Bank Indonesia has no open API); Yahoo and Stooq not used (rate-limited or blocked). No strategy code,
   parameter or hashed file changed.
+
+## 2026-11-06: D001 marked at a stale monthly average; FR-DE now daily (branch `build/ledger-v2`)
+
+- **Symptom:** the app showed D001 (short OAT / long Bund, entered 30 Oct 2026 at 159bp, stop 115bp) at
+  **96.7bp, dated 30 Sep 2026, monthly**, while the French 10y OAT-Bund spread traded at about 150-166bp.
+- **Wrong source:** `data/ledger/instruments.csv` row `FR-DE` was marked from `panel_monthly
+  spread_vs_de_bp:FRA`. That column of `data/processed/country_month_panel.csv` is the ECB IRS (EMU convergence)
+  10-year yield of France minus Germany's, as a **monthly average**. The mark took the September 2026 average
+  (FR 4.44% minus DE 3.473% = 96.7bp) and dated it at the month end. The figure is correct as a September average:
+  the Riksbank's daily benchmarks average 98.5bp over September. But it is not a price, and it was five weeks old.
+  The spread widened from about 100bp in late September to 143bp on 1 Oct and 166bp on 30 Oct. No free daily
+  French yield was reachable when the registry was built: Banque de France Webstat refused connections, its daily
+  ECOFI series is archived (2025-03), Eurostat's daily convergence yields are no longer disseminated, and the
+  ECB and OECD publish monthly only.
+- **Fix:** `FR10Y` and `FR-DE` are now daily. `FR10Y` uses the Sveriges Riksbank SWEA API, series `FRGVB10Y`
+  (benchmark 10-year OAT, keyless, one value per business day). `FR-DE` is `FRGVB10Y` minus a new leg `DE10YBM`
+  (`DEGVB10Y`, the benchmark Bund from the same source and close). Neither falls back to a monthly average: if
+  the Riksbank is down, the previous daily mark is carried and flagged. Daily history from 30 Oct was backfilled
+  (`python -m ledger.marks --backfill 2026-10-30 --only FR-DE,FR10Y,DE10YBM`): 30 Oct 165.7bp, 2 Nov 161.4bp,
+  3 Nov 161.5bp, 4 Nov 150.2bp.
+- **Did anything act on the wrong mark? No.** `ledger/resolve.py` only lets marks dated on or after the
+  decision date close a position (`mark_is_current`), and the 30 Sep mark predates D001's 30 Oct entry. Both
+  ledger-daily runs (4 and 5 Nov) logged "0 decision(s) closed". `decisions.csv` has not changed since D001's
+  entry level was added (b227651). The Risk Manager reads no mark values.
+- **Could it act later? Not any more.** Once October's panel average (about 148bp, dated 31 Oct) arrived with the
+  3 Dec refresh, it would have passed that date check. New rule (`mark_can_act` in `ledger/marks.py`): only a
+  first-hand **daily** mark can trigger a stop or a horizon close. A monthly average, a monthly fallback, a mark
+  flagged stale when fetched, or a carried-forward mark never acts. A horizon that passes with only such marks
+  opens a `[RESOLVE?]` issue instead. Monthly-only instruments (IT-DE, IT10Y, ID10Y, CO10Y, CL10Y) are shown
+  carried at their last mark and flagged. Tests: `test_monthly_or_carried_marks_never_stop_or_close_a_position`,
+  `test_riksbank_and_jgb_parsers`.
+- **IT-DE stays monthly:** the Riksbank publishes no Italian series, and no keyless daily BTP yield was found.
+  Italy is therefore excluded from Janus's universe (see the Janus section).
+
+## 2026-11-06: ledger-daily ran but committed no marks
+
+- **Symptom:** marks were last fetched on 4 Nov 2026 at 10:10 UTC by the build session. ledger-daily showed green
+  on 4 Nov (manual run, 12:42 UTC) and on 5 Nov (scheduled 05:52, started 13:31 UTC), but neither run committed.
+- **Cause:** the commit step ran `git add data/ledger/marks.csv ... data/ledger/automation_log.csv
+  data/ledger/api_log.csv ... 2>/dev/null || true`. The two log files are created only when the resolver first
+  acts or calls the API, so neither existed. Git rejects the whole `add` when any pathspec matches nothing
+  (`fatal: pathspec ... did not match any files`, exit 128), so `marks.csv` was not staged either.
+  `2>/dev/null || true` hid the error, and the step printed "nothing to commit" after the marks step had
+  logged "20 new or changed marks written". A failed push after four attempts would also have passed silently.
+  Separately, GitHub started the 5 Nov scheduled run 7.5 hours late; scheduled runs can be delayed or dropped.
+- **Fix:**
+  - The commit step stages only paths that exist and fails if a changed ledger file is left unstaged or the push
+    fails.
+  - The two log files are committed with their headers.
+  - A 09:22 UTC backup schedule was added (re-running is idempotent: marks merge per instrument and date).
+  - `ledger/watchdog.py` opens **"[ALERT] Ledger marks stale"** when the newest mark is more than 2 days old and
+    closes it once fresh marks are committed. It runs at the end of every ledger-daily run and from its own
+    `ledger-watchdog` workflow (12:17 UTC daily), so it fires even if ledger-daily never starts.
+
+## C03 — paper capital US$10,000,000 → US$500,000,000 (algorithm, v1.0 and v1.1)
+
+The request that set this change called it "C02". That number was already used for v1.1 (recorded 2026-11-04), so
+it is recorded as C03 and the existing record is not renumbered.
+
+- **What changes:** the notional capital against which v1.0 and v1.1 positions are expressed in currency units. From
+  the 3 December 2026 rebalance (positions effective 2026-12), both versions are sized against US$500,000,000. This
+  replaces C01's US$10,000,000 at the same rebalance. C01's figure is never used for a booked month: the October and
+  November 2026 months stay on the US$100,000 basis, and December 2026 onward is on US$500,000,000.
+- **Recorded before any live month is booked:** v1.0's live record starts with November 2026, which is booked by the
+  3 December run. v1.1's live record starts with December 2026.
+- **What does not change:**
+  - every frozen file: v1.0's design, code and results; v1.1's code (`em_macro/systematic_v11.py`) and freeze record;
+  - the signals, sizing rules, volatility targets, leverage cap, no-trade bands and cost models;
+  - `positions.csv` (in % of capital) and `paper_pnl.csv` (decimal returns). Neither depends on the capital level.
+- **Reproduction check (2026-11-06, branch `build/ledger-v2`):**
+  - `python -m em_macro.verify_v1`: "v1.0 REPRODUCED EXACTLY". Both result tables are IDENTICAL byte for byte
+    (`performance_2005_2019.csv` 00bae5baaa1bf053…, `performance_2020_on.csv` 1f8828109a6ab741…).
+  - `python -m em_macro.systematic_v11 verify`: "v1.1 REPRODUCES T18 EXACTLY". Every table is IDENTICAL; Sharpe
+    0.9163 against v1.0's 0.6536, max drawdown −15.422%, turnover 11.60x a year. The verify step rewrites the
+    timestamp in `results/systematic_v1.1/freeze/reproduction.json`, so that file was restored from git
+    afterwards and left unmodified.
+  - The only code changes are in the Ledger app (`ledger/build.py`: `USD_SWITCH_CAPITAL` and the note) and the new
+    diagnostic `ledger/capacity.py`. No file under `em_macro/` or `results/` changed.
+- **Capacity diagnostics added with it (never change positions):** `ledger/capacity.py` and
+  `data/ledger/capacity_reference.csv`. For each position the Algorithm page shows:
+  - notional at US$500m against average daily volume (BIS Triennial 2022 for FX; Borsa Istanbul's bulletin for
+    Turkish bonds, computed; documented estimates, marked as such, elsewhere);
+  - exchange position limits for futures (CFTC federal spot-month limits);
+  - a square-root impact estimate (Y × daily vol × √(notional/ADV), Y = 1).
+
+  It flags any position above 10% of ADV or at 80% or more of a position limit. An "estimated P&L with impact"
+  line sits beside the official P&L, which keeps the frozen cost model. At the 3 Nov 2026 positions and US$500m,
+  TR10Y (1,238% of the exchange-only ADV, a lower bound) and MX10Y (63%) are flagged.
+- **Classification:** configuration change, not a trial. Not counted in N.
+
+## 2026-11-06: Janus, an AI discretionary paper book (branch `build/ledger-v2`)
+
+- **What:** a third, separate paper book next to my decisions and the algorithm. It has its own US$500,000,000
+  account (reported in %), weekly runs (Mondays 06:00 UTC, `janus-weekly`) through the Anthropic API (`claude-opus-5-5`,
+  with web search), The Opposition, and an append-only hash-chained record in `data/janus/` (see its README).
+  Daily fills, stops and horizon closes run in `ledger-daily`.
+- **Separation:** Janus never feeds the algorithm. No file under `em_macro/` or `results/` reads `data/janus/`, and
+  v1.0/v1.1 are unchanged. It is not a trial and has no row in `trials.csv`. No edge is claimed.
+- **Data:** free public daily sources only. Never Norgate or em-macro-data (licence). Dropped: Italy's spread,
+  metals, grains. Energy is marked on official spot prices as an estimate.
+- **New registry rows (`data/ledger/instruments.csv`, book `janus`):** US10Y, JP10Y, JPY, CHF, AUD, CAD, WTI,
+  BRENT, NATGAS, HEATOIL and RBOB, plus USDCASH (3-month T-bill, the cash benchmark).
+- **Marks:** each daily run now stores every recent observation a source returns (up to 31 days), not only the
+  latest, so a missed run leaves no gap. A fallback is never used when it is older than the previous first-hand
+  daily mark.
+- **First run (2026-11-06, run 42163218263 on `build/ledger-v2`):** the API key was accepted; `claude-opus-5-5`
+  made 12 web searches. It opened nothing and logged a `no_trade` record with its reasoning (records 1-3 of
+  `data/janus/records.jsonl`). It said it ran out of searches before checking the BoE, payrolls, the BoJ and the
+  ECB, so the search budget was raised from 12 to 25 (8 for The Opposition) for the next runs. The run was not
+  repeated the same day: asking again until it trades would bias the record.

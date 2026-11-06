@@ -227,64 +227,6 @@
   }
 
   // ------------------------------------------------------------------ pages
-  async function pageHome() {
-    const [home, alg] = await Promise.all([load('home'), load('algorithm')]);
-    setHead('Home', `Paper P&L to ${fmtMonth(home.last_month)} · positions as of ${fmtMonth(home.rebalance.as_of)}`);
-    const live = home.live || {};
-    const months = alg.months.filter((m) => m.month >= '2020-01');
-    const posRows = home.positions.map((p) => `
-      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.country)}</td><td>${badge(p.side)}</td>
-      <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td></tr>`).join('');
-    const CAT_CLASS = { election: 'c-elections', 'decision horizon': 'c-decisions', 'forecast resolves': 'c-forecasts', 'algorithm rebalance': 'c-algorithm' };
-    const cats = home.catalysts.length ? home.catalysts.map((c) => `
-      <a class="row-link ${CAT_CLASS[c.kind] || ''}" href="${esc(c.link)}"><div class="row-top"><span class="row-title">${esc(c.label)}</span><span class="muted small">${fmtDate(c.date)}</span></div>
-      <div class="row-meta">${pill(c.kind, CAT_CLASS[c.kind] || '')} ${c.country ? esc(c.country) : ''}</div></a>`).join('') : '<p class="empty">Nothing scheduled in the next 30 days.</p>';
-    const rep = home.latest_report;
-    view.innerHTML = `
-      <section class="section">
-        <div class="card hero rule">
-          <span class="k">${esc(home.account_index_label || ACCOUNT_LABEL)}</span>
-          <span class="v">${fmtNum(home.account_index, 1)}</span>
-          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; ${home.usd_switched ? `paper capital ${fmtUsd(home.usd_capital)} from the ${fmtDate(home.usd_switch_rebalance)} rebalance, at index ${fmtNum(home.index_at_switch, 1)}` : `paper capital ${fmtUsd(home.usd_capital)}, raised to US$10,000,000 at the ${fmtDate(home.usd_switch_rebalance)} rebalance`})</span>
-          ${home.usd_switch_note ? `<span class="s"><strong>${esc(home.usd_switch_note)}</strong></span>` : ''}
-          <span class="s">Latest month ${fmtMonth(home.last_month)} ${fmtPct(home.last_month_net_pct, 2, true)}${home.live.months ? '' : ' (pre-live, not counted)'}</span>
-        </div>
-        <div class="stats">
-          <div class="stat"><span class="k">Live months</span><span class="v">${live.months || 0}</span><span class="s">since the ${fmtDate(home.rebalance.live_since)} rebalance</span></div>
-          <div class="stat"><span class="k">Live return</span><span class="v ${signClass(live.total_return_pct)}">${fmtPct(live.total_return_pct, 1, true)}</span><span class="s">net of costs</span></div>
-          <div class="stat"><span class="k">Open decisions</span><span class="v">${home.open_decisions.length}</span><span class="s">${home.open_forecasts} open forecasts${isNum(home.live_pnl_pct_total) ? ` · live P&L <b class="${signClass(home.live_pnl_pct_total)}">${fmtPct(home.live_pnl_pct_total, 2, true)}</b>` : ''}</span></div>
-          <div class="stat"><span class="k">Last rebalance</span><span class="v sm">${fmtDate(home.rebalance.date)}</span><span class="s">positions as of ${fmtMonth(home.rebalance.as_of)}</span></div>
-        </div>
-      </section>
-      <section class="section">
-        <a class="row-link c-evidence" href="#/evidence"><div class="row-top"><span class="row-title" style="color:var(--c-evidence)">Evidence status</span><span class="muted small">${fmtDate(meta.today)}</span></div>
-        <div class="row-meta" style="color:var(--fg)">${esc(home.evidence_status)}</div></a>
-      </section>
-      <section class="section">
-        <div class="section-head"><h2>Equity curve</h2><a class="more" href="#/algorithm">Algorithm detail</a></div>
-        <div class="card"><div class="chart"><canvas id="c-equity"></canvas></div>
-        ${legend([['Backtest 2020 to freeze (left axis)', '--series-backtest'], [`${PRE_LIVE_LABEL} (left axis)`, '--series-prelive'], [`${ACCOUNT_LABEL} (right axis)`, '--series-live']])}
-        <p class="chart-note">Left axis: ${esc(historyLabel(home.history_index_base_month))}, figures unchanged. Right axis: ${esc(ACCOUNT_LABEL)}, 100 at the end of ${fmtMonth(home.account_base_month)}.</p></div>
-      </section>
-      <section class="section">
-        <div class="section-head"><h2>Open positions</h2><span class="muted small">held through ${fmtMonth(home.rebalance.effective_from)}</span></div>
-        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Country</th><th>Side</th><th class="num">Size</th><th class="num">Risk share</th></tr></thead><tbody>${posRows}</tbody></table></div>
-      </section>
-      <section class="section">
-        <div class="section-head"><h2>Open decisions</h2><a class="more" href="#/decisions">All decisions</a></div>
-        <div class="list">${home.open_decisions.length ? home.open_decisions.map(decisionRow).join('') : '<p class="empty">No open decisions.</p>'}</div>
-      </section>
-      <section class="section">
-        <div class="section-head"><h2>Catalysts, next 30 days</h2><a class="more" href="#/elections">Elections</a></div>
-        <div class="list">${cats}</div>
-      </section>
-      <section class="section">
-        <div class="section-head"><h2>Latest report</h2><a class="more" href="#/reports">Archive</a></div>
-        ${rep ? reportRow(rep) : '<p class="empty">No reports yet.</p>'}
-      </section>`;
-    equityChart('c-equity', months, { historyBase: home.history_index_base_month });
-  }
-
   const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, 0)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
   function liveLabel(d) {
     if (d.status !== 'open' || !d.mark_instrument) return '';
@@ -375,130 +317,18 @@
       ${d.status === 'open' ? `<div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve ${esc(d.id)}</a></div>` : ''}`;
   }
 
-  async function pageAlgorithm() {
-    const alg = await load('algorithm');
-    const months = alg.months;
-    const live = alg.live, bt = alg.frozen.test_2020_on || {}, design = alg.frozen.design_2005_2019 || {};
-    setHead('Algorithm', `v1.0 and v1.1 systematic macro · paper P&L to ${fmtMonth(months.length ? months[months.length - 1].month : null)} · frozen ${fmtMonth(alg.frozen.freeze_month)}`);
-    const cmp = (label, l, b, d, f = (x) => fmtNum(x, 2)) => `<tr><td>${esc(label)}</td><td class="num">${f(l)}</td><td class="num">${f(b)}</td><td class="num">${f(d)}</td></tr>`;
-    const pctS = (x) => fmtPct(x, 1, true), pct = (x) => fmtPct(x, 1);
-    const liveMonths = months.filter((m) => m.live);
-    const liveNote = live.months ? `${live.months} live month${live.months === 1 ? '' : 's'} since the ${fmtDate(alg.rebalance.live_since)} rebalance` : `No live month has closed yet. The first live month is ${fmtMonth(alg.rebalance.live_start_month || nextMonth(alg.frozen.freeze_month))}, booked by the monthly run on the 3rd of the following month.`;
-    const preLive = alg.rebalance.pre_live_months || [];
-    const preNote = preLive.length ? ` ${preLive.map(fmtMonth).join(', ')}: pre-live (not counted), after the test period and before the first live rebalance.` : '';
-    const posRows = alg.positions.map((p) => `
-      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${badge(p.side)}</td>
-      <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td><td class="num">${fmtPct(p.instrument_vol_pct, 1)}</td>
-      <td class="num">${fmtNum(p.carry_z, 2)}</td><td class="num">${fmtNum(p.trend_z, 2)}</td><td class="num">${fmtNum(p.value_z, 2)}</td></tr>`).join('');
-    const maxRisk = Math.max(...alg.by_country.map((c) => c.risk_share_pct), 1);
-    const countryRows = alg.by_country.map((c) => `<tr><td>${esc(c.country)}</td><td class="wrap small muted">${esc(c.positions.join(', '))}</td><td class="num">${fmtPct(c.risk_share_pct, 1)}</td><td><div class="bar"><i style="width:${(100 * c.risk_share_pct / maxRisk).toFixed(1)}%"></i></div></td><td class="num">${fmtPct(c.gross_pct, 0)}</td></tr>`).join('');
-    const sleeveRows = alg.by_sleeve.map((s) => `<tr><td>${esc(s.sleeve)}</td><td class="num">${s.n}</td><td class="num">${fmtPct(s.risk_share_pct, 1)}</td><td class="num">${fmtPct(s.gross_pct, 0)}</td></tr>`).join('');
-    // v1.0 and v1.1 side by side (v1.1 = v1.0 + the T18 rule; v1.0 stays the frozen control)
-    const sbs = alg.side_by_side, v11 = alg.v11;
-    const [s10, s11] = sbs ? sbs.versions : [null, null];
-    const cw = sbs ? sbs.common_window : null;
-    const two = (label, a, b, f) => `<tr><td>${esc(label)}</td><td class="num">${f(a)}</td><td class="num">${f(b)}</td></tr>`;
-    const nOr = (x) => (x == null ? '—' : x);
-    const xTurn = (x) => (isNum(x) ? `${fmtNum(x, 1)}×` : '—');
-    const liveSince = (v) => fmtDate(v.live_since);
-    const sbsSection = sbs ? `
-      <section class="section">
-        <h2>v1.0 and v1.1 side by side</h2>
-        <div class="card rule">
-          <p class="small muted">${esc(s10.label)} and ${esc(s11.label)}. v1.0 is the frozen control. v1.1 is v1.0 plus exactly the T18 rule (risk-unit no-trade band and partial rebalancing, replacing v1.0's 25% band); it passed its pre-registered test. Both run live in parallel on the same inputs every month. Live figures are net of costs over each version's own live record; v1.0's are its model P&L, before manual overrides. The backtest rows are the T16–T19 batch, evaluated once. No live month has closed until the monthly run books it.</p>
-          <div class="table-wrap"><table><thead><tr><th>Measure</th><th class="num">${esc(s10.id)}</th><th class="num">${esc(s11.id)}</th></tr></thead><tbody>
-            ${two('Live from rebalance', s10, s11, liveSince)}
-            ${two('Months live', s10.live.months_live, s11.live.months_live, nOr)}
-            ${two('Live P&L, cumulative', s10.live.live_pnl_pct, s11.live.live_pnl_pct, (x) => fmtPct(x, 2, true))}
-            ${two('Last live month', s10.live, s11.live, (l) => (l.last_month ? `${fmtPct(l.last_month_pct, 2, true)} (${fmtMonth(l.last_month)})` : '—'))}
-            ${two('Live Sharpe', s10.live.sharpe, s11.live.sharpe, (x) => fmtNum(x, 2))}
-            ${two('Live max drawdown', s10.live.max_drawdown_pct, s11.live.max_drawdown_pct, (x) => fmtPct(x, 1))}
-            ${two('Live turnover, ×/yr', s10.live.turnover_x_pa, s11.live.turnover_x_pa, xTurn)}
-            <tr><td colspan="3" class="small muted wrap">Common window, from ${fmtMonth(cw.start)}</td></tr>
-            ${two('Months', cw['v1.0'].months_live, cw['v1.1'].months_live, nOr)}
-            ${two('P&L, cumulative', cw['v1.0'].live_pnl_pct, cw['v1.1'].live_pnl_pct, (x) => fmtPct(x, 2, true))}
-            ${two('Sharpe', cw['v1.0'].sharpe, cw['v1.1'].sharpe, (x) => fmtNum(x, 2))}
-            ${two('Max drawdown', cw['v1.0'].max_drawdown_pct, cw['v1.1'].max_drawdown_pct, (x) => fmtPct(x, 1))}
-            ${two('Turnover, ×/yr', cw['v1.0'].turnover_x_pa, cw['v1.1'].turnover_x_pa, xTurn)}
-            <tr><td colspan="3" class="small muted wrap">Backtest ${esc(sbs.backtest_period)}, 1× costs</td></tr>
-            ${two('Sharpe', s10.backtest.sharpe, s11.backtest.sharpe, (x) => fmtNum(x, 2))}
-            ${two('Return, % a year', s10.backtest.ann_return_pct, s11.backtest.ann_return_pct, (x) => fmtPct(x, 1, true))}
-            ${two('Max drawdown', s10.backtest.max_drawdown_pct, s11.backtest.max_drawdown_pct, (x) => fmtPct(x, 1))}
-            ${two('Turnover, ×/yr', s10.backtest.turnover_x_pa, s11.backtest.turnover_x_pa, xTurn)}
-          </tbody></table></div>
-          <p class="small muted">Sources: results/systematic/paper_pnl.csv, ${esc(v11.source)}/paper_pnl.csv, ${esc(sbs.turnover_source)}, ${esc(sbs.backtest_source)}. <a href="${esc(s10.freeze_doc_url)}" target="_blank" rel="noopener">v1.0 freeze record</a> · <a href="${esc(s11.freeze_doc_url)}" target="_blank" rel="noopener">v1.1 freeze record</a></p>
-        </div>
-        <div class="stats">
-          <div class="stat"><span class="k">v1.1 last rebalance</span><span class="v sm">${fmtDate(v11.rebalance_date)}</span><span class="s">positions as of ${fmtMonth(v11.as_of)}, held through ${fmtMonth(v11.effective_from)}${v11.effective_from && v11.effective_from < v11.live_start_month ? ' (pre-live)' : ''}</span></div>
-          <div class="stat"><span class="k">v1.1 gross</span><span class="v">${fmtPct(v11.positions.reduce((a, p) => a + Math.abs(p.size_pct_of_capital || 0), 0), 0)}</span><span class="s">of capital, ${v11.positions.length} positions</span></div>
-        </div>
-      </section>` : '';
-    const v11PosRows = v11 ? v11.positions.map((p) => `
-      <tr><td>${esc(p.instrument)}</td><td class="wrap">${esc(p.description)}</td><td>${badge(p.side)}</td>
-      <td class="num">${fmtPct(p.size_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.target_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.trade_pct_of_capital, 1, true)}</td><td class="num">${fmtPct(p.risk_share_pct, 1)}</td></tr>`).join('') : '';
-    const v11PosSection = v11 ? `
-      <section class="section">
-        <h2>v1.1 positions</h2>
-        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">v1.0 target</th><th class="num">Trade</th><th class="num">Risk</th></tr></thead><tbody>${v11PosRows}</tbody></table></div>
-        <p class="small muted">Size is v1.1's held position in % of capital; v1.0 target is the pre-band target both versions share; trade is this rebalance's change. A position with a zero target is a residual being closed by partial rebalancing. Source: ${esc(v11.source)}/positions.csv.</p>
-      </section>` : '';
-    const liveRows = liveMonths.length ? liveMonths.map((m) => `<tr><td>${fmtMonth(m.month)}</td><td class="num ${signClass(m.net)}">${fmtPct(m.net * 100, 2, true)}</td><td class="num">${fmtPct(m.model_net * 100, 2, true)}</td><td class="num">${fmtPct((m.override_pnl || 0) * 100, 2, true)}</td><td class="num">${fmtPct(m.carry_basket * 100, 2, true)}</td><td class="num">${fmtPct(m.sp500_tr * 100, 2, true)}</td><td class="num">${fmtNum(m.account_index, 1)}</td></tr>`).join('') : '';
-    view.innerHTML = `
-      <section class="section">
-        <div class="card rule">
-          <h2>Live vs the frozen backtest</h2>
-          <p class="small muted">${esc(liveNote)}${esc(preNote)} Backtest: 2020-01 to ${fmtMonth(alg.frozen.freeze_month)}, evaluated once at the freeze. Design: 2005 to 2019, in sample.</p>
-          <div class="table-wrap"><table><thead><tr><th>Measure</th><th class="num">Live</th><th class="num">Backtest</th><th class="num">Design</th></tr></thead><tbody>
-            ${cmp('Months', live.months, bt.months, design.months, (x) => (x == null ? '—' : x))}
-            ${cmp('Return, % a year', live.ann_return_pct, bt['ann_return_%'], design['ann_return_%'], pctS)}
-            ${cmp('Volatility, % a year', live.ann_vol_pct, bt['ann_vol_%'], design['ann_vol_%'], pct)}
-            ${cmp('Sharpe', live.sharpe, bt.sharpe, design.sharpe)}
-            ${cmp('Max drawdown', live.max_drawdown_pct, bt['max_drawdown_%'], design['max_drawdown_%'], pct)}
-            ${cmp('Hit rate (months up)', live.hit_rate_pct, null, null, pct)}
-            ${cmp('S&P 500 correlation', null, bt.corr_sp500, design.corr_sp500)}
-            ${cmp('Gross leverage (avg)', null, bt.avg_gross_leverage, design.avg_gross_leverage, (x) => (isNum(x) ? `${fmtNum(x, 1)}×` : '—'))}
-          </tbody></table></div>
-        </div>
-        <div class="stats">
-          <div class="stat"><span class="k">Last rebalance</span><span class="v sm">${fmtDate(alg.rebalance.date)}</span><span class="s">positions as of ${fmtMonth(alg.rebalance.as_of)}, held through ${fmtMonth(alg.rebalance.effective_from)}</span></div>
-          <div class="stat"><span class="k">Gross leverage</span><span class="v">${isNum(alg.gross_leverage) ? `${fmtNum(alg.gross_leverage, 1)}×` : '—'}</span><span class="s">latest month</span></div>
-          <div class="stat"><span class="k">Frozen at</span><span class="v sm mono">${esc(alg.freeze_commit)}</span><span class="s"><a href="${esc(alg.release_url)}" target="_blank" rel="noopener">v1.0-frozen release</a> · <a href="${esc(alg.freeze_doc_url)}" target="_blank" rel="noopener">freeze record</a></span></div>
-          <div class="stat"><span class="k">Overrides</span><span class="v">${alg.overrides.length}</span><span class="s">manual overrides logged</span></div>
-        </div>
-      </section>
-      ${sbsSection}
-      ${liveMonths.length ? `<section class="section"><h2>Live months</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Net</th><th class="num">Model</th><th class="num">Override</th><th class="num">Carry basket</th><th class="num">S&P 500</th><th class="num">${esc(ACCOUNT_LABEL)}</th></tr></thead><tbody>${liveRows}</tbody></table></div></section>` : ''}
-      <section class="section">
-        <h2>Equity: ${esc(ACCOUNT_LABEL)}</h2>
-        <div class="card"><div class="chart tall"><canvas id="c-alg-equity"></canvas></div>${legend([['Backtest (left axis)', '--series-backtest'], [`${PRE_LIVE_LABEL} (left axis)`, '--series-prelive'], [`${ACCOUNT_LABEL} (right axis)`, '--series-live']])}
-        <p class="chart-note">Left axis: ${esc(historyLabel(alg.frozen.freeze_month))}, figures unchanged. Right axis: ${esc(ACCOUNT_LABEL)}, 100 at the end of ${fmtMonth(alg.rebalance.live_base_month)}; it moves only with live months.</p></div>
-      </section>
-      <section class="section">
-        <h2>Monthly net P&L</h2>
-        <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div>${legend([['Up month', '--series-up'], ['Down month', '--series-down'], [PRE_LIVE_LABEL, '--series-prelive'], ['Live month', '--series-live']])}</div>
-      </section>
-      <section class="section">
-        <h2>Drawdown</h2>
-        <div class="card"><div class="chart"><canvas id="c-alg-dd"></canvas></div><p class="chart-note">From the running peak of cumulative net value since Jan 2020. Backtest max drawdown ${fmtPct(bt['max_drawdown_%'], 1)}.</p></div>
-      </section>
-      <section class="section">
-        <h2>Positions by country</h2>
-        <div class="table-wrap"><table><thead><tr><th>Country</th><th>Positions</th><th class="num">Risk share</th><th></th><th class="num">Gross</th></tr></thead><tbody>${countryRows}</tbody></table></div>
-      </section>
-      <section class="section">
-        <h2>Positions by sleeve</h2>
-        <div class="table-wrap"><table><thead><tr><th>Sleeve</th><th class="num">Positions</th><th class="num">Risk share</th><th class="num">Gross</th></tr></thead><tbody>${sleeveRows}</tbody></table></div>
-      </section>
-      <section class="section">
-        <h2>All positions</h2>
-        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">Risk</th><th class="num">Vol</th><th class="num">Carry z</th><th class="num">Trend z</th><th class="num">Value z</th></tr></thead><tbody>${posRows}</tbody></table></div>
-        <p class="small muted">Size is signed notional in % of capital; risk share is the position's share of portfolio risk. Source: results/systematic/positions.csv.</p>
-      </section>
-      ${v11PosSection}`;
-    equityChart('c-alg-equity', months, { historyBase: alg.frozen.freeze_month });
-    monthlyBarChart('c-alg-monthly', months);
-    drawdownChart('c-alg-dd', months);
+  function capacitySection(c, label) {
+    if (!c || !c.rows) return '';
+    const rows = c.rows.map((r) => `<tr class="${r.flags.length ? 'flag' : ''}"><td>${esc(r.instrument)}</td><td class="num">${fmtUsd(r.notional_usd)}</td>
+      <td class="num">${r.adv_usd ? fmtUsd(r.adv_usd) : '—'}</td><td class="num ${r.flags.includes('adv') ? 'bad' : ''}">${fmtPct(r.pct_adv, 1)}</td>
+      <td class="num ${r.flags.includes('limit') ? 'bad' : ''}">${isNum(r.pct_limit) ? fmtPct(r.pct_limit, 0) : '—'}</td><td class="num">${fmtNum(r.impact_bp_full, 1)}bp</td>
+      <td class="wrap small">${esc(r.adv_status || '')}</td></tr>`).join('');
+    return `<section class="section"><h2>Capacity, ${esc(label)} at ${fmtUsd(c.capital_usd)}</h2>
+      <p class="small">${c.flagged.length ? `<b class="bad">Flagged: ${esc(c.flagged.join(', '))}</b>` : 'No position above 10% of ADV or near a position limit.'}</p>
+      <div class="table-wrap"><table><thead><tr><th>Instrument</th><th class="num">Notional</th><th class="num">ADV</th><th class="num">% ADV</th><th class="num">% limit</th><th class="num">Impact</th><th>ADV source</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small muted">${esc(c.method)} ${esc(c.impact_note || '')}</p></section>`;
   }
+
   function nextMonth(m) { if (!m) return null; const [y, mm] = m.split('-').map(Number); return mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, '0')}`; }
 
   function probTrack(f) {
@@ -508,7 +338,7 @@
 
   async function pageForecasts() {
     const fc = await load('forecasts');
-    setHead('Forecasts', `${fc.summary.n} calls · ${fc.summary.open} open · ${fc.summary.resolved} resolved`);
+    setHead('Forecasts', `${fc.summary.n} calls · ${fc.summary.open} open · ${fc.summary.resolved} resolved · scored by Brier only`);
     const cum = fc.cumulative;
     const rows = fc.items.slice().reverse().map((f) => `
       <div class="card fcard">
@@ -528,6 +358,7 @@
         .probs { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.86rem; color: var(--fg-2); } .probs i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; } .probs b { color: var(--fg); }
         .fcard { display: grid; gap: 4px; border-left: 5px solid var(--c-forecasts); }
       </style>
+      <section class="section"><div class="card notice"><b>Forecasts are scored by Brier only.</b> They are not positions: they never enter any book's P&L and never appear on the Home charts.</div></section>
       <section class="section">
         <div class="stats">
           <div class="stat"><span class="k">Brier, me</span><span class="v">${fmtNum(cum.me.mean, 3)}</span><span class="s">${cum.me.n} resolved</span></div>
@@ -611,7 +442,7 @@
         <div class="table-wrap"><table><thead><tr><th>Vote</th><th>Country</th><th>Election</th><th class="num">Poll margin</th><th class="num">Actual</th><th class="num">Surprise</th><th>Winner</th><th class="num">Odds fav.</th></tr></thead><tbody>${pastRows || '<tr><td colspan="8" class="muted">No elections for this filter.</td></tr>'}</tbody></table></div>
         <p class="small muted">Margins in percentage points for the leading candidate (cand_a); surprise = actual − final poll. Showing the latest ${el.past.length}.</p>
       </section>
-      ${older.length ? `<section class="section"><h2>Earlier signal series</h2><div class="table-wrap"><table><thead><tr><th>Country</th><th>Election</th><th>Signal</th><th class="num">Last value</th><th>Last date</th><th class="num">Obs.</th></tr></thead><tbody>${older.map((s) => `<tr><td>${esc(s.country)}</td><td>${fmtDate(s.election_date)}</td><td class="wrap">${esc(s.label)}</td><td class="num">${fmtNum(s.last_value, 1)}</td><td>${fmtDate(s.last)}</td><td class="num">${s.n}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
+      ${older.length ? `<section class="section"><h2>Earlier signal series</h2><div class="table-wrap"><table class="compact"><thead><tr><th>Country</th><th>Election</th><th>Signal</th><th class="num">Last value</th><th>Last date</th><th class="num">Obs.</th></tr></thead><tbody>${older.map((s) => `<tr><td>${esc(s.country)}</td><td>${fmtDate(s.election_date)}</td><td class="wrap">${esc(s.label)}</td><td class="num">${fmtNum(s.last_value, 1)}</td><td>${fmtDate(s.last)}</td><td class="num">${s.n}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
     document.getElementById('f-ecountry').onchange = (e) => { f.country = e.target.value; pageElections(); };
     active.forEach((s, i) => sparkChart(`c-sig-${i}`, s.series, cssVar(s.kind === 'odds' ? '--series-claude' : '--series-me')));
   }
@@ -690,7 +521,7 @@
     const rk = (r) => (isNum(r) ? r : '—');
     const table = (book) => {
       const rows = sc.rows.filter((r) => r.book === book).sort((a, b) => (a.rank_composite == null) - (b.rank_composite == null) || (a.rank_composite || 0) - (b.rank_composite || 0));
-      return `<div class="table-wrap"><table><thead><tr><th>Country</th><th>Instr.</th><th class="num">Carry</th><th class="num">Real</th><th class="num">Value</th><th class="num">Trend</th><th class="num">Rk C</th><th class="num">Rk V</th><th class="num">Rk T</th><th class="num">Rk comp.</th><th>Position</th><th class="num">Month</th><th>Election</th><th>Rating</th></tr></thead><tbody>${rows.map((r) => `
+      return `<div class="table-wrap"><table class="compact"><thead><tr><th>Country</th><th>Instr.</th><th class="num">Carry</th><th class="num">Real</th><th class="num">Value</th><th class="num">Trend</th><th class="num">Rk C</th><th class="num">Rk V</th><th class="num">Rk T</th><th class="num">Rk comp.</th><th>Position</th><th class="num">Month</th><th>Election</th><th>Rating</th></tr></thead><tbody>${rows.map((r) => `
         <tr><td class="wrap">${esc(r.country)}</td><td><span class="mono">${esc(r.instrument)}</span>${r.stale || !r.data_month ? ` <span class="muted small" title="latest data ${esc(r.data_month || 'none')}">*${esc(r.data_month ? fmtMonth(r.data_month) : 'no data')}</span>` : ''}</td>
         <td class="num">${fmtNum(r.carry, 2)}</td><td class="num">${fmtNum(r.real_carry, 2)}</td><td class="num">${fmtNum(r.value, book === 'fx' ? 3 : 0)}</td><td class="num">${fmtNum(r.trend, 2)}</td>
         <td class="num">${rk(r.rank_carry)}</td><td class="num">${rk(r.rank_value)}</td><td class="num">${rk(r.rank_trend)}</td><td class="num"><b>${rk(r.rank_composite)}</b></td>
@@ -737,12 +568,16 @@
   }
 
   async function pageMore() {
-    setHead('More', 'Trials, elections, reports, marks, screener, to do and logging');
+    setHead('More', 'Forecasts, calendar, risk, post-mortems, reports, trials and logging');
     const m = meta;
     const src = m.sources;
     view.innerHTML = `
       <section class="section">
         <div class="menu">
+          <a href="#/forecasts" style="--item:var(--c-forecasts)"><span><span class="t">Forecasts</span><br><span class="d">Scored by Brier only; never in any P&L</span></span><span class="chev">›</span></a>
+          <a href="#/calendar" style="--item:var(--c-home)"><span><span class="t">Calendar</span><br><span class="d">Catalysts, horizons, rebalances and Janus review days</span></span><span class="chev">›</span></a>
+          <a href="#/risk" style="--item:var(--c-trials)"><span><span class="t">Risk and stress tests</span><br><span class="d">2008, March 2020 and 2022 replays; P&L attribution</span></span><span class="chev">›</span></a>
+          <a href="#/postmortems" style="--item:var(--c-more)"><span><span class="t">Post-mortems</span><br><span class="d">Every closed position: thesis right? skill or luck?</span></span><span class="chev">›</span></a>
           <a href="#/evidence" style="--item:var(--c-evidence)"><span><span class="t">Evidence</span><br><span class="d">Status of every idea the programme has tested</span></span><span class="chev">›</span></a>
           <a href="#/trials" style="--item:var(--c-trials)"><span><span class="t">Trials</span><br><span class="d">The trial ledger with pass/fail</span></span><span class="chev">›</span></a>
           <a href="#/elections" style="--item:var(--c-elections)"><span><span class="t">Elections</span><br><span class="d">Calendar and live signals</span></span><span class="chev">›</span></a>
@@ -767,8 +602,9 @@
         <div class="card"><dl class="kv">
           <dt>Built</dt><dd>${fmtDateTime(m.built_at)}</dd>
           <dt>Commit</dt><dd class="mono">${esc(m.commit || '—')}</dd>
-          <dt>Paper P&L</dt><dd>to ${fmtMonth(src.paper_pnl_last_month)}</dd>
-          <dt>Positions</dt><dd>as of ${fmtMonth(src.positions_as_of)}</dd>
+          <dt>Algorithm positions</dt><dd>set ${fmtDate((src.positions_set || {})['v1.0'])} (v1.0)${(src.positions_set || {})['v1.1'] ? `, ${fmtDate(src.positions_set['v1.1'])} (v1.1)` : ''}</dd>
+          <dt>Latest mark</dt><dd>${fmtDate(src.latest_mark)}${src.latest_fetch ? ` (fetched ${fmtDateTime(src.latest_fetch)})` : ''}</dd>
+          <dt>Record</dt><dd>${m.audit ? `${m.audit.ok ? '<span class="good">verified</span>' : '<span class="bad">FAILED</span>'}: ${esc(m.audit.detail)}` : '—'}</dd>
           <dt>Decisions file</dt><dd>${fmtDate(src.decisions_updated)}</dd>
           <dt>Forecasts file</dt><dd>${fmtDate(src.forecasts_updated)}</dd>
           <dt>Marks</dt><dd>${src.marks_last_fetch ? `fetched ${fmtDateTime(src.marks_last_fetch)}` : 'none yet'}</dd>
@@ -832,27 +668,472 @@
       </section>`).join('')}`;
   }
 
+  // ================================================================== v2: three books
+  const BOOK = {
+    me: { name: 'Me', cls: 'b-me', v: '--book-me', link: '#/me', kind: 'My decisions' },
+    algorithm: { name: 'Algorithm', cls: 'b-algorithm', v: '--book-algo', link: '#/algorithm', kind: 'Mechanical rules, not AI' },
+    janus: { name: 'Janus', cls: 'b-janus', v: '--book-janus', link: '#/janus', kind: 'AI book (experiment)' },
+  };
+  const bookOf = (b) => BOOK[String(b || '').split(' ')[0]] || { name: b, cls: 'b-none', v: '--muted', link: '#/home', kind: '' };
+  const JANUS_ICON = '<svg class="janus-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4c-3.6 0-6.2 2.3-7 5.6L6 13.2l2.6 1.1-.4 2.3 1.4 1-.6 2.8c-.3 1.6.9 3.1 2.5 3.1H14v3.5h4V23.5h2.5c1.6 0 2.8-1.5 2.5-3.1l-.6-2.8 1.4-1-.4-2.3 2.6-1.1-3-3.6C22.2 6.3 19.6 4 16 4Z" fill="currentColor"/><path d="M16 5v22" stroke="var(--surface)" stroke-width="1.6"/><circle cx="12.4" cy="11.6" r="1.1" fill="var(--surface)"/><circle cx="19.6" cy="11.6" r="1.1" fill="var(--surface)"/></svg>';
+  const bookIcon = (b) => (b === 'janus' ? JANUS_ICON : `<span class="book-dot" style="background:var(${bookOf(b).v})"></span>`);
+  const bookPill = (b, text) => `<span class="pill bk ${bookOf(b).cls}">${b === 'janus' ? JANUS_ICON : ''}${esc(text || bookOf(b).name)}</span>`;
+  const pts = (x) => (isNum(x) ? `${x > 0 ? '+' : x < 0 ? '−' : ''}${fmtNum(Math.abs(x), 2)}` : '—');
+  let infoSeq = 0;
+  function info(text, label = 'About this') {
+    if (!text) return '';
+    const id = `info-${++infoSeq}`;
+    return `<button type="button" class="info-btn" aria-expanded="false" aria-controls="${id}" title="${esc(label)}">i<span class="sr">${esc(label)}</span></button><div class="info-text" id="${id}" hidden>${esc(text)}</div>`;
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.info-btn');
+    if (!b) return;
+    const t = document.getElementById(b.getAttribute('aria-controls'));
+    if (!t) return;
+    const open = b.getAttribute('aria-expanded') === 'true';
+    b.setAttribute('aria-expanded', String(!open));
+    t.hidden = open;
+  });
+  // explanatory paragraphs of the older pages collapse behind an info button; every table gets labels so it
+  // can turn into stacked cards on a phone
+  function polish(root) {
+    root.querySelectorAll('p.small.muted, p.chart-note, p.note').forEach((p) => {
+      if (p.dataset.kept || p.closest('.info-text') || (p.textContent || '').trim().length < 90) return;
+      const id = `info-${++infoSeq}`;
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'info-btn'; btn.textContent = 'i';
+      btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', id); btn.title = 'About this';
+      const box = document.createElement('div');
+      box.className = 'info-text'; box.id = id; box.hidden = true; box.innerHTML = p.innerHTML;
+      p.replaceWith(btn); btn.after(box);
+    });
+    root.querySelectorAll('table').forEach((t) => {
+      const heads = [...t.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+      if (!t.classList.contains('compact')) t.classList.add('stack');
+      t.querySelectorAll('tbody tr').forEach((tr) => [...tr.children].forEach((td, i) => { if (heads[i] && !td.dataset.label) td.dataset.label = heads[i]; }));
+    });
+  }
+
+  function gauge(used, limit, label) {
+    const f = isNum(used) && isNum(limit) && limit > 0 ? Math.max(0, Math.min(1, used / limit)) : 0;
+    const a = Math.PI * (1 - f), x = 50 + 40 * Math.cos(a), y = 50 - 40 * Math.sin(a);
+    const cls = f >= 0.9 ? 'bad' : f >= 0.7 ? 'warn' : 'good';
+    return `<div class="gauge" role="img" aria-label="${esc(label)}: ${fmtNum(used, 2)} of ${fmtNum(limit, 1)}">
+      <svg viewBox="0 0 100 56"><path d="M10 50 A40 40 0 0 1 90 50" class="g-track"/>${f > 0 ? `<path d="M10 50 A40 40 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}" class="g-fill ${cls}"/>` : ''}</svg>
+      <span class="g-v">${fmtNum(used, 1)}<small> / ${fmtNum(limit, 0)}</small></span><span class="g-k">${esc(label)}</span></div>`;
+  }
+
+  // a dated line chart: datasets [{label, data: [[date, value]], color, dash, fill, width}]; tap or hover shows the
+  // date and every value on that date
+  function dateChart(id, datasets, opts = {}) {
+    const labels = [...new Set(datasets.flatMap((d) => d.data.map((p) => p[0])))].sort();
+    const fmtV = opts.fmt || ((v) => fmtNum(v, 2));
+    return mkChart(id, {
+      type: 'line',
+      data: { labels, datasets: datasets.map((d) => {
+        const m = new Map(d.data.map((p) => [p[0], p[1]]));
+        const c = d.color.startsWith('--') ? cssVar(d.color) : d.color;
+        return { label: d.label, data: labels.map((l) => (m.has(l) ? m.get(l) : null)), borderColor: c, backgroundColor: withAlpha(c, 0.12),
+          fill: !!d.fill, borderDash: d.dash || [], borderWidth: d.width || 2, pointRadius: (ctx) => (labels.length < 25 && ctx.raw != null ? 2.5 : 0),
+          pointHitRadius: 12, pointBackgroundColor: c, tension: 0.15, spanGaps: true };
+      }) },
+      options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
+        scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6, callback: (v, i) => fmtDate(labels[i]).replace(/ \d{4}$/, '') } },
+                  y: { grid: { color: cssVar('--grid') }, ticks: { maxTicksLimit: 5, callback: (v) => fmtV(v) }, title: { display: !!opts.yLabel, text: opts.yLabel || '' } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => fmtDate(it[0].label), label: (it) => `${it.dataset.label}: ${fmtV(it.parsed.y)}` } } } },
+    });
+  }
+  function sparkline(id, data, colorVar) {
+    const c = cssVar(colorVar);
+    return mkChart(id, {
+      type: 'line',
+      data: { labels: data.map((p) => p[0]), datasets: [{ data: data.map((p) => p[1]), borderColor: c, backgroundColor: withAlpha(c, 0.14), fill: true, borderWidth: 1.8, pointRadius: 0, pointHitRadius: 10, tension: 0.2 }] },
+      options: { maintainAspectRatio: false, events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
+        scales: { x: { display: false }, y: { display: false } }, interaction: { mode: 'index', intersect: false },
+        plugins: { tooltip: { displayColors: false, callbacks: { title: (it) => fmtDate(it[0].label), label: (it) => `index ${fmtNum(it.parsed.y, 2)}` } } } },
+    });
+  }
+  const legendRow = (items) => `<div class="legend">${items.map(([l, v, dash]) => `<span><i class="${dash ? 'dash' : ''}" style="--c:var(${v})"></i>${esc(l)}</span>`).join('')}</div>`;
+  const mtdHtml = (x, est) => `<span class="${signClass(x)}">${isNum(x) ? fmtPct(x, 2, true) : '—'}</span>${est ? '<span class="est">estimate</span>' : ''}`;
+  function positionsHead(set, mark) { return `Positions set ${fmtDate(set)} · latest mark ${fmtDate(mark)}`; }
+
+  async function homeHead() {
+    const b = await load('books');
+    const v = b.algorithm.versions[0];
+    setHead('Home', positionsHead(v.positions_set || (meta.sources.positions_set || {})['v1.0'], b.latest_mark));
+    return b;
+  }
+
+  // ------------------------------------------------------------------ Home: the cockpit
+  async function pageHome() {
+    const [b, jn, ch] = await Promise.all([homeHead(), load('janus'), load('changes')]);
+    const v10 = b.algorithm.versions[0], v11 = b.algorithm.versions[1];
+    const card = (id, title, sub, mtd, est, open, gauge_, extra) => `
+      <a class="card book-card ${bookOf(id).cls}" href="${bookOf(id).link}">
+        <div class="bc-head"><span class="bc-name">${bookIcon(id)}${esc(title)}</span><span class="bc-kind">${esc(sub)}</span></div>
+        <div class="bc-body"><div class="bc-spark"><canvas id="spark-${id}"></canvas></div>
+          <div class="bc-stats"><span class="k">Month to date</span><span class="v">${mtdHtml(mtd, est)}</span>
+          <span class="k">Open positions</span><span class="v sm">${open}</span></div>${gauge_}</div>${extra || ''}</a>`;
+    const items = (ch.items || []);
+    const changed = items.length ? items.map((it) => `<li class="chg ${bookOf(it.book).cls}">${it.book in BOOK ? bookPill(it.book) : pill(it.book)} ${it.link ? `<a href="${esc(it.link)}">${esc(it.text)}</a>` : esc(it.text)}</li>`).join('')
+      : '<li class="muted">Nothing new since the previous update.</li>';
+    const ex = b.exposures;
+    const cols = ['me', 'algorithm v1.0', 'algorithm v1.1', 'janus'];
+    const exRows = (rows) => rows.map((r) => `<tr class="${r.shared ? 'flag' : ''}"><td><b>${esc(r.key)}</b>${r.shared ? ` <span class="pill warn">${r.opposed ? 'held by 2+ books, opposite' : 'held by 2+ books'}</span>` : ''}</td>
+      ${cols.map((c) => `<td class="num ${bookOf(c).cls}-t">${isNum(r.books[c]) ? fmtNum(r.books[c], r.books[c] && Math.abs(r.books[c]) < 10 ? 2 : 1) : '—'}</td>`).join('')}</tr>`).join('');
+    const cmp = b.comparison;
+    view.innerHTML = `
+      <section class="section cockpit">
+        ${card('me', 'Me', 'my decisions', b.me.mtd_pct, false, b.me.open_count, gauge(b.me.risk_used_pct, b.me.risk_limit_pct, '% at risk'))}
+        ${card('algorithm', 'Algorithm', 'mechanical rules, not AI', v10.mtd_pct, true, `${v10.n_positions} (v1.0) · ${v11.n_positions} (v1.1)`, gauge(v10.gross_leverage, v10.leverage_cap, 'gross leverage, x'),
+          `<div class="bc-foot">v1.0 live since ${fmtDate(v10.live_start)}; v1.1 live from the ${fmtDate('2026-12-03')} rebalance${isNum(v11.pre_live_estimate_pct) ? ` (pre-live estimate ${fmtPct(v11.pre_live_estimate_pct, 2, true)}, not counted)` : ''}</div>`)}
+        ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, `${b.janus.open_count} of ${jn.max_open}`, gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
+          jn.start ? '' : '<div class="bc-foot">Not started yet: the first weekly run opens the account.</div>')}
+      </section>
+      <section class="section">
+        <div class="card changes"><div class="section-head"><h2>What changed</h2><span class="muted small">${ch.since ? `since ${fmtDateTime(ch.since)}` : ''}</span></div>
+        <ul class="chg-list">${changed}</ul></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><h2>Three books and cash</h2>${info(cmp.note + ' Forecasts are not books: they are scored by Brier only and appear only on the Forecasts page.')}</div>
+        <div class="card"><div class="chart"><canvas id="c-compare"></canvas></div>
+        ${legendRow([['Me', '--book-me'], ['Algorithm v1.0', '--book-algo'], ['Janus', '--book-janus'], ['Cash (3m T-bill)', '--muted', true]])}
+        <div class="vs-cash">${Object.entries(cmp.vs_cash).map(([k, v]) => `<span class="${bookOf(k).cls}-t">${esc(bookOf(k).name)} ${fmtPct(v.book_pct, 2, true)} vs cash ${fmtPct(v.cash_pct, 2, true)}</span>`).join('')}</div></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><h2>Combined risk</h2><a class="more" href="#/risk">Risk and stress tests</a></div>
+        <div class="card">${info(ex.note)}
+          <h3>By country</h3>
+          <div class="table-wrap"><table class="compact"><thead><tr><th>Country</th><th class="num">Me</th><th class="num">v1.0</th><th class="num">v1.1</th><th class="num">Janus</th></tr></thead><tbody>${exRows(ex.by_country) || '<tr><td colspan="5" class="muted">No positions.</td></tr>'}</tbody></table></div>
+          <h3>By currency (FX positions)</h3>
+          <div class="table-wrap"><table class="compact"><thead><tr><th>Currency</th><th class="num">Me</th><th class="num">v1.0</th><th class="num">v1.1</th><th class="num">Janus</th></tr></thead><tbody>${exRows(ex.by_currency) || '<tr><td colspan="5" class="muted">No FX positions.</td></tr>'}</tbody></table></div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="menu">
+          <a href="#/calendar" style="--item:var(--c-home)"><span><span class="t">Calendar</span><br><span class="d">Catalysts, horizons, rebalances, Janus review days</span></span><span class="chev">›</span></a>
+          <a href="#/forecasts" style="--item:var(--c-forecasts)"><span><span class="t">Forecasts</span><br><span class="d">Scored by Brier only; never in any P&L</span></span><span class="chev">›</span></a>
+        </div>
+      </section>`;
+    sparkline('spark-me', b.me.series, '--book-me');
+    sparkline('spark-algorithm', v10.series, '--book-algo');
+    sparkline('spark-janus', b.janus.series.length ? b.janus.series : [[meta.today, 100]], '--book-janus');
+    dateChart('c-compare', [
+      { label: 'Me', data: b.me.series, color: '--book-me' },
+      { label: 'Algorithm v1.0', data: v10.series, color: '--book-algo' },
+      ...(v11.series.length ? [{ label: 'Algorithm v1.1', data: v11.series, color: '--book-algo', dash: [2, 2], width: 1.5 }] : []),
+      { label: 'Janus', data: b.janus.series, color: '--book-janus' },
+      { label: 'Cash', data: cmp.cash, color: '--muted', dash: [5, 4], width: 1.4 },
+    ], { fmt: (v) => fmtNum(v, 1) });
+  }
+
+  // ------------------------------------------------------------------ Me
+  function posRow(book, p, title, meta_, pnl, href) {
+    return `<a class="row-link pos ${bookOf(book).cls}" href="${esc(href)}"><div class="row-top"><span class="row-title">${title}</span><span class="row-pnl ${signClass(pnl)}">${isNum(pnl) ? fmtPct(pnl, 2, true) : ''}</span></div><div class="row-meta">${meta_}</div></a>`;
+  }
+  async function pageMe() {
+    const [b, dec] = await Promise.all([load('books'), load('decisions')]);
+    const me = b.me;
+    setHead('Me', `My decisions · latest mark ${fmtDate(b.latest_mark)}`);
+    const open = me.positions.filter((p) => p.status === 'open');
+    const resolved = me.positions.filter((p) => p.status === 'resolved');
+    const flag = (p) => (p.mark_flag ? ` ${pill(p.mark_frequency === 'monthly' ? 'monthly mark' : 'stale mark', 'warn')}` : '');
+    const row = (p) => posRow('me', p, `${esc(p.instrument)} ${badge(p.action)}`,
+      `<b>${esc(p.id)}</b> · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
+      p.status === 'resolved' ? p.pnl_pct : p.live_pnl_pct, `#/position/me/${p.id}`);
+    const live = me.series.length ? me.series[me.series.length - 1][1] - 100 : null;
+    view.innerHTML = `
+      <section class="section">
+        <div class="stats b-me-stats">
+          <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(live)}">${fmtPct(live, 2, true)}</span><span class="s">% of account since ${fmtDate(me.live_start)}</span></div>
+          <div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(me.mtd_pct)}</span><span class="s">open and closed</span></div>
+          <div class="stat"><span class="k">Brier</span><span class="v">${fmtNum(me.brier, 3)}</span><span class="s">${me.brier_n ? `${me.brier_n} resolved` : 'none resolved yet'}</span></div>
+          <div class="stat">${gauge(me.risk_used_pct, me.risk_limit_pct, '% at risk')}</div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="section-head"><h2>Account, from my first decision</h2>${info('Index = 100 + live P&L in % of my account. Open positions are marked at first-hand daily marks dated on or after the decision; a monthly or stale mark is shown but never prices or closes a position.')}</div>
+        <div class="card"><div class="chart"><canvas id="c-me"></canvas></div></div>
+      </section>
+      <section class="section"><div class="section-head"><h2>Open</h2><span class="muted small">${open.length}</span></div>
+        <div class="list">${open.map(row).join('') || '<p class="empty">No open decisions.</p>'}</div></section>
+      <section class="section"><div class="section-head"><h2>Resolved</h2><span class="muted small">${resolved.length}</span></div>
+        <div class="list">${resolved.map(row).join('') || '<p class="empty">Nothing resolved yet.</p>'}</div></section>
+      ${attributionSection('me', me.attribution, 'Live P&L of open positions, % of account')}
+      <section class="section"><div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.decision)}" target="_blank" rel="noopener">Log a decision</a><a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
+    dateChart('c-me', [{ label: 'Me', data: me.series, color: '--book-me', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+  }
+
+  function attributionSection(book, att, note) {
+    if (!att) return '';
+    const block = (title, rows) => (rows && rows.length ? `<h3>${esc(title)}</h3><div class="bars">${rows.map((r) => {
+      const max = Math.max(...rows.map((x) => Math.abs(x.pnl_pct)), 0.0001);
+      return `<div class="bar-row"><span class="bl">${esc(r.key)}</span><span class="bt"><i class="${r.pnl_pct >= 0 ? 'up' : 'down'}" style="width:${(50 * Math.abs(r.pnl_pct) / max).toFixed(1)}%"></i></span><span class="bv ${signClass(r.pnl_pct)}">${fmtPct(r.pnl_pct, 2, true)}</span></div>`;
+    }).join('')}</div>` : '');
+    const body = block('By country', att.country) + block('By asset class', att.asset_class) + block('By signal (approximate)', att.signal) + block('Booked live months, by book', att.official_books);
+    return body ? `<section class="section"><div class="section-head"><h2>P&L attribution</h2>${info(note)}</div><div class="card ${bookOf(book).cls}">${body}</div></section>` : '';
+  }
+
+  // ------------------------------------------------------------------ Algorithm
+  async function pageAlgorithm() {
+    const [b, alg] = await Promise.all([load('books'), load('algorithm')]);
+    const [v10, v11] = b.algorithm.versions;
+    setHead('Algorithm', positionsHead(v10.positions_set, b.latest_mark));
+    const verBlock = (v, cap, positions) => {
+      const est = v.estimate || {};
+      const rows = (est.positions || []).map((p) => `<tr><td><a href="#/position/algorithm/${esc(v.id)}:${esc(p.instrument)}">${esc(p.instrument)}</a></td><td class="wrap">${esc(p.country)}</td><td>${badge(p.side)}</td>
+        <td class="num">${fmtPct(p.size_pct, 1, true)}</td><td class="num">${isNum(p.mark) ? fmtLevel(p.mark, p.unit) : '—'} <span class="muted small">${fmtDate(p.mark_date).replace(/ \d{4}$/, '')}</span></td>
+        <td class="num ${signClass(p.mtd_pct)}">${fmtPct(p.mtd_pct, 2, true)}${p.carried ? ` ${pill('carried', 'warn')}` : ''}</td></tr>`).join('');
+      const liveTxt = v.is_live ? `live since ${fmtDate(v.live_start)} (index 100)` : `live from the ${fmtDate('2026-12-03')} rebalance; this month is pre-live (not counted)`;
+      return `
+      <section class="section ver">
+        <div class="section-head"><h2>${esc(v.label)}</h2>${bookPill('algorithm', 'mechanical rules')}</div>
+        <div class="stats">
+          <div class="stat"><span class="k">Index</span><span class="v">${fmtNum(v.index, 2)}</span><span class="s">${esc(liveTxt)}</span></div>
+          <div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(v.is_live ? v.mtd_pct : v.pre_live_estimate_pct, true)}</span><span class="s">${v.is_live ? 'estimate, month to date' : 'pre-live estimate, not counted'}</span></div>
+          <div class="stat"><span class="k">With impact (MTD)</span><span class="v ${signClass(v.mtd_pct)}">${v.is_live && isNum(v.mtd_pct) ? fmtPct(v.mtd_pct - (v.mtd_impact_pct || 0), 2, true) : '—'}</span><span class="s">minus ${fmtPct(v.mtd_impact_pct, 3)} square-root impact</span></div>
+          <div class="stat">${gauge(v.gross_leverage, v.leverage_cap, 'gross leverage, x')}</div>
+        </div>
+        ${v.series.length ? `<div class="card"><div class="chart"><canvas id="c-${v.id.replace('.', '')}"></canvas></div>
+          ${legendRow([['Official monthly P&L, then estimate', '--book-algo'], ['Estimated P&L with impact', '--book-algo-2', true]])}
+          ${info(`${(est.note || '')} The official P&L keeps the frozen cost model; the dashed line subtracts the square-root market-impact estimate of each rebalance's trades at that month's paper capital (US$100,000 to Nov 2026, US$500,000,000 from Dec 2026).`)}</div>` : `<div class="card"><p class="empty">${esc(liveTxt)}. The chart starts at 100 then.</p></div>`}
+        <h3 class="sub">Positions (effective ${fmtMonth(v.effective_from)}, set ${fmtDate(v.positions_set)})</h3>
+        <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Country</th><th>Side</th><th class="num">Size</th><th class="num">Mark</th><th class="num">MTD</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${est.carried && est.carried.length ? `<p class="small"><span class="pill warn">carried</span> no free daily source or no current mark, carried at the last mark: ${esc(est.carried.join(', '))}</p>` : ''}
+        ${capacitySection(cap, v.id)}
+        ${attributionSection('algorithm', v.attribution, 'Estimate, month to date, by country, asset class and signal. Signal split: each position\'s P&L is shared between carry, trend and value in proportion to the z-scores that point the same way as the position (approximate). Booked months are split by the official FX and bond books.')}
+      </section>`;
+    };
+    const live = alg.live, bt = alg.frozen.test_2020_on || {};
+    const months = alg.months;
+    view.innerHTML = `
+      <section class="section"><div class="card b-algorithm notice"><b>Mechanical rules, not AI.</b> v1.0 is the frozen control (carry, trend and value; FX and bonds); v1.1 is v1.0 plus the pre-registered T18 turnover rule. Both run on the same inputs every month on the 3rd; neither reads my decisions or Janus. ${info('Live records: v1.0 from the November 2026 positions (index 100 at the end of October 2026), v1.1 from the 3 December 2026 rebalance. Paper capital US$500,000,000 from that rebalance (C03); results are in % of capital. Positions are set by the monthly run; daily figures for the month in progress are estimates, replaced by the official figure on the 3rd.')}</div></section>
+      ${verBlock(v10, alg.capacity)}
+      ${verBlock(v11, alg.v11 && alg.v11.capacity)}
+      <section class="section">
+        <details class="collapsible"><summary><h2>Backtest (not counted)</h2><span class="muted small">2020-01 to the freeze, evaluated once; pre-live months</span></summary>
+          <div class="stats">
+            <div class="stat"><span class="k">Sharpe 2020+</span><span class="v">${fmtNum(bt.sharpe, 2)}</span><span class="s">test, evaluated once</span></div>
+            <div class="stat"><span class="k">Ann. return</span><span class="v">${fmtPct(bt.ann_return_pct, 1, true)}</span><span class="s">2020-01 to ${fmtMonth(alg.frozen.freeze_month)}</span></div>
+            <div class="stat"><span class="k">Max drawdown</span><span class="v bad">${fmtPct(bt.max_drawdown_pct, 1)}</span><span class="s">test period</span></div>
+            <div class="stat"><span class="k">Live months</span><span class="v">${live.months || 0}</span><span class="s">booked</span></div>
+          </div>
+          <div class="card"><div class="chart"><canvas id="c-alg-equity"></canvas></div>
+            ${legend([['Backtest (left axis)', '--series-backtest'], [PRE_LIVE_LABEL, '--series-prelive'], [ACCOUNT_LABEL, '--series-live']])}</div>
+          <div class="card"><div class="chart"><canvas id="c-alg-monthly"></canvas></div></div>
+          <div class="card"><div class="chart"><canvas id="c-alg-dd"></canvas></div></div>
+          <p class="small muted">Backtest figures come from results/systematic/test/ (frozen; reproduced byte for byte by em_macro.verify_v1). They are not part of any live record.</p>
+        </details>
+      </section>
+      <section class="section"><div class="menu"><a href="#/screener" style="--item:var(--c-algorithm)"><span><span class="t">Screener</span><br><span class="d">Signals, ranks and catalysts after the rebalance</span></span><span class="chev">›</span></a>
+      <a href="#/risk" style="--item:var(--c-algorithm)"><span><span class="t">Stress tests</span><br><span class="d">Current positions through 2008, March 2020 and 2022</span></span><span class="chev">›</span></a></div></section>`;
+    for (const v of [v10, v11]) {
+      if (!v.series.length) continue;
+      dateChart(`c-${v.id.replace('.', '')}`, [
+        { label: `${v.id} (official, then estimate)`, data: v.series.map((p) => [p[0], p[1]]), color: '--book-algo', fill: true },
+        { label: `${v.id} with impact`, data: v.impact_series, color: '--book-algo-2', dash: [5, 4], width: 1.6 },
+      ], { fmt: (x) => fmtNum(x, 2) });
+    }
+    const details = view.querySelector('details.collapsible');
+    let drawn = false;
+    details.addEventListener('toggle', () => {
+      if (!details.open || drawn) return;
+      drawn = true;
+      equityChart('c-alg-equity', months, { historyBase: alg.frozen.freeze_month });
+      monthlyBarChart('c-alg-monthly', months);
+      drawdownChart('c-alg-dd', months);
+    });
+  }
+
+  // ------------------------------------------------------------------ Janus
+  async function pageJanus() {
+    const [b, jn] = await Promise.all([load('books'), load('janus')]);
+    setHead('Janus', jn.start ? `AI paper book since ${fmtDate(jn.start.date)} · latest mark ${fmtDate(b.latest_mark)}` : 'AI paper book · not started');
+    const eq = jn.equity || [];
+    const idx = eq.length ? eq[eq.length - 1][1] : 100;
+    const oppHtml = (o) => (o ? `<details class="opp"><summary>The Opposition</summary><p>${esc(o.case_against)}</p>${(o.key_risks || []).length ? `<ul>${o.key_risks.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}${o.what_proves_it_wrong ? `<p><b>What would prove Janus wrong:</b> ${esc(o.what_proves_it_wrong)}</p>` : ''}${isNum(o.probability_view_wrong) ? `<p class="small">Opposition's probability that Janus is wrong: ${fmtProb(o.probability_view_wrong)}</p>` : ''}</details>` : '');
+    const posCard = (p) => `
+      <div class="card pos-card b-janus">
+        <div class="row-top"><a class="row-title" href="#/position/janus/${esc(p.id)}">${esc(p.id)} ${badge(p.direction)} ${esc(p.instrument)}</a><span class="row-pnl ${signClass(p.net_pnl_pct)}">${isNum(p.net_pnl_pct) ? fmtPct(p.net_pnl_pct, 2, true) : (p.status === 'pending' ? pill('awaiting entry', 'warn') : '')}</span></div>
+        <div class="row-meta">${fmtPct(p.risk_pct, 2)} at risk · stop ${fmtLevel(p.stop, p.unit)} · horizon ${fmtDate(p.horizon)} · p ${fmtProb(p.probability)}${p.fill ? ` · entry ${fmtLevel(p.fill.entry_level, p.unit)} (${fmtDate(p.fill.entry_date)})` : ''}${p.estimate ? ` ${pill('spot-proxy estimate', 'warn')}` : ''}${p.close ? ` · ${badge(p.close.outcome)} ${esc(p.close.reason)}` : ''}</div>
+        <p class="thesis">${esc(p.thesis)}</p>
+        <p class="small"><b>Would change its mind:</b> ${esc(p.change_mind)}</p>
+        ${oppHtml(p.opposition)}
+      </div>`;
+    const counter = jn.calls_needed ? Math.min(100, 100 * jn.n_closed / jn.calls_needed) : 0;
+    view.innerHTML = `
+      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start); weekly review on Mondays by ${esc(jn.model || 'the current Claude Opus model')} with web search; The Opposition argues against every new position.</div></section>
+      <section class="section">
+        <div class="stats">
+          <div class="stat"><span class="k">Index</span><span class="v ${signClass(idx - 100)}">${fmtNum(idx, 2)}</span><span class="s">month to date ${isNum(b.janus.mtd_pct) ? fmtPct(b.janus.mtd_pct, 2, true) : '—'}</span></div>
+          <div class="stat"><span class="k">Hit rate</span><span class="v">${isNum(jn.hit_rate) ? fmtPct(jn.hit_rate, 0) : '—'}</span><span class="s">${jn.n_right} of ${jn.n_closed} closed</span></div>
+          <div class="stat"><span class="k">Brier</span><span class="v">${fmtNum(jn.brier, 3)}</span><span class="s">stated probability vs outcome</span></div>
+          <div class="stat">${gauge(jn.risk_used_pct, jn.risk_limit_pct, '% at risk')}</div>
+        </div>
+        <div class="card"><div class="row-top"><b>Resolved calls: ${jn.n_closed} of ${jn.calls_needed || '—'} needed</b>${info(jn.significance_method)}</div><div class="progress"><i style="width:${counter.toFixed(1)}%"></i></div></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><h2>Equity</h2>${info((jn.benchmark && jn.benchmark.method) || '')}</div>
+        <div class="card">${eq.length ? '<div class="chart"><canvas id="c-janus"></canvas></div>' : '<p class="empty">The equity curve starts with the first run.</p>'}
+          <div class="vs-cash"><span>Janus ${isNum(jn.benchmark.janus_pnl_pct) ? fmtPct(jn.benchmark.janus_pnl_pct, 2, true) : '—'}</span><span>Equal-weight benchmark of the same instruments ${isNum(jn.benchmark.pnl_pct) ? fmtPct(jn.benchmark.pnl_pct, 2, true) : '—'}</span>${b.comparison.vs_cash.janus ? `<span>Cash ${fmtPct(b.comparison.vs_cash.janus.cash_pct, 2, true)}</span>` : ''}</div></div>
+      </section>
+      <section class="section"><div class="section-head"><h2>Open positions</h2><span class="muted small">${jn.n_open} of ${jn.max_open}</span></div>
+        ${jn.open.map(posCard).join('') || '<p class="empty">No open positions.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>Closed positions</h2><span class="muted small">${jn.n_closed}</span></div>
+        ${jn.closed.map(posCard).join('') || '<p class="empty">None closed yet.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>No-trade records</h2></div>
+        ${(jn.no_trades || []).slice().reverse().map((n) => `<div class="card b-janus"><div class="row-meta">${fmtDate(n.date)} · ${esc(n.model || '')}</div><p>${esc(n.reasoning)}</p></div>`).join('') || '<p class="empty">None.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>Weekly runs</h2></div>
+        ${(jn.runs || []).slice().reverse().map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews · ${r.searches || 0} searches</div><p>${esc(r.market_summary || r.status || '')}</p></div>`).join('') || '<p class="empty">No run yet.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>Universe and data</h2>${info('Only instruments with a free public daily mark. Commodity futures are marked on official spot prices (an estimate; EIA stopped publishing NYMEX futures in 2024). Never Norgate or em-macro-data (licence).')}</div>
+        <div class="table-wrap"><table><thead><tr><th>Code</th><th>Market</th><th>Daily source</th></tr></thead><tbody>${jn.universe.map((u) => `<tr><td><b>${esc(u.instrument)}</b>${u.estimate ? ` ${pill('estimate', 'warn')}` : ''}</td><td class="wrap">${esc(u.name)}</td><td class="wrap small">${esc(u.source)} ${esc(u.source_id)}</td></tr>`).join('')}</tbody></table></div>
+        <h3 class="sub">Dropped</h3><ul class="plain">${jn.dropped.map((d) => `<li><b>${esc(d.market)}</b>: ${esc(d.reason)}</li>`).join('')}</ul>
+        <p class="small">Record chain: ${jn.chain.ok ? `<span class="good">verified</span> (${jn.chain.n} records)` : `<span class="bad">FAILED: ${esc(jn.chain.error)}</span>`}</p></section>`;
+    if (eq.length) dateChart('c-janus', [{ label: 'Janus', data: eq, color: '--book-janus', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+  }
+
+  // ------------------------------------------------------------------ position detail (any book)
+  async function pagePosition(arg) {
+    const [book, ...rest] = String(arg || '').split('/');
+    const id = rest.join('/');
+    const [b, jn, pmAll] = await Promise.all([load('books'), load('janus'), load('postmortems')]);
+    let p, title, rows = [], hist = [], unit, thesis = '', opp = null, entry = null, stop = null, sub = '';
+    const pm = (pmAll.items || []).find((x) => x.book === book && x.id === id);
+    if (book === 'me') {
+      p = b.me.positions.find((x) => x.id === id);
+      if (!p) throw new Error(`No decision ${id}`);
+      title = `${p.id} · ${p.instrument}`; unit = p.mark_unit || p.unit; hist = p.mark_history || []; thesis = p.thesis;
+      entry = p.entry_level; stop = p.stop; sub = `Me · ${p.action} · ${p.status}`;
+      rows = [['Action', badge(p.action)], ['Size', `${fmtPct(p.size_pct, 2)} of account at risk`], ['Probability', fmtProb(p.probability)],
+        ['Entry', isNum(entry) ? `${fmtLevel(entry, unit)} (${fmtDate(p.date)})` : '—'], ['Stop', isNum(stop) ? fmtLevel(stop, unit) : '—'],
+        ['Mark', isNum(p.mark) ? `${fmtLevel(p.mark, unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})${p.mark_flag ? ` ${pill(p.mark_flag, 'warn')}` : ''}` : '—'],
+        ['P&L', p.status === 'resolved' ? fmtPct(p.pnl_pct, 2, true) : `<span class="${signClass(p.live_pnl_pct)}">${fmtPct(p.live_pnl_pct, 2, true)}</span> of account`],
+        ['Distance to stop', isNum(p.stop_distance) ? fmtLevel(Math.abs(p.stop_distance), unit) : '—'], ['Horizon', fmtDate(p.horizon)],
+        ['Would change my mind', esc(p.change_mind || '')], ['Source', p.mark_source_url ? `<a href="${esc(p.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">${esc(p.mark_source || 'source')}</a>` : '—']];
+    } else if (book === 'janus') {
+      p = jn.positions.find((x) => x.id === id);
+      if (!p) throw new Error(`No Janus position ${id}`);
+      title = `${p.id} · ${p.direction} ${p.instrument}`; unit = p.unit; hist = (p.mark_history || []).map((x) => [x[0], x[1]]);
+      thesis = p.thesis; opp = p.opposition; entry = p.fill && p.fill.entry_level; stop = p.stop; sub = `Janus · ${p.status} · ${p.model}`;
+      rows = [['Market', esc(p.name)], ['Size', `${fmtPct(p.risk_pct, 2)} of account at risk${p.requested_risk_pct !== p.risk_pct ? ` (asked ${fmtPct(p.requested_risk_pct, 2)})` : ''}`],
+        ['Notional', p.fill ? `${fmtUsd(p.fill.notional_usd)}${p.fill.contracts ? ` · ${p.fill.contracts} contracts ${esc((p.fill.contract || {}).code || '')}` : ''}` : 'at the entry mark'],
+        ['Probability its view is right', fmtProb(p.probability)], ['Entry', p.fill ? `${fmtLevel(entry, unit)} (${fmtDate(p.fill.entry_date)})` : 'next available daily mark'],
+        ['Stop', `${fmtLevel(stop, unit)}${p.initial_stop !== p.stop ? ` (initial ${fmtLevel(p.initial_stop, unit)})` : ''}`],
+        ['Mark', isNum(p.mark) ? `${fmtLevel(p.mark, unit)} (${fmtDate(p.mark_date)})` : '—'],
+        ['P&L', isNum(p.net_pnl_pct) ? `<span class="${signClass(p.net_pnl_pct)}">${fmtPct(p.net_pnl_pct, 3, true)}</span> net (${fmtPct(p.gross_pnl_pct, 3, true)} gross)` : '—'],
+        ['Distance to stop', isNum(p.distance_to_stop_pct_account) ? `${fmtPct(p.distance_to_stop_pct_account, 2)} of account` : '—'], ['Horizon', fmtDate(p.horizon)],
+        ['Capacity', p.fill ? `${fmtPct(p.fill.capacity.pct_adv, 2)} of ADV${isNum(p.fill.capacity.pct_limit) ? ` · ${fmtPct(p.fill.capacity.pct_limit, 0)} of the position limit` : ''}${p.fill.capacity_note ? ` · ${esc(p.fill.capacity_note)}` : ''}` : '—'],
+        ['Costs', p.fill ? `${fmtPct(p.fill.cost_pct, 3)} of account at entry (cost model + impact)` : '—'],
+        ['Would change its mind', esc(p.change_mind)], ['Decided', `${fmtDateTime(p.decided_at)} by ${esc(p.model)}`],
+        ['Sources cited', (p.sources || []).map((s) => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>`).join('<br>') || '—'],
+        ['Sources read', `${(p.sources_read || []).length} pages returned by web search`]];
+      if (p.fill && p.fill.roll_rule) rows.push(['Roll rule', esc(p.fill.roll_rule)]);
+    } else if (book === 'algorithm') {
+      const [vid, inst] = id.split(':');
+      const v = b.algorithm.versions.find((x) => x.id === vid);
+      p = v && (v.estimate.positions || []).find((x) => x.instrument === inst);
+      if (!p) throw new Error(`No ${vid} position in ${inst}`);
+      title = `${vid} · ${p.instrument}`; unit = p.unit; hist = (p.mark_history || []).map((x) => [x[0], x[1]]);
+      sub = `Algorithm · mechanical rules · effective ${fmtMonth(v.effective_from)}`;
+      thesis = `${p.description || ''}. Rule-based: carry z ${fmtNum(p.carry_z, 2)}, trend z ${fmtNum(p.trend_z, 2)}, value z ${fmtNum(p.value_z, 2)}; sized for equal risk (vol ${fmtNum(p.instrument_vol_pct, 1)}%).`;
+      rows = [['Side', badge(p.side)], ['Size', `${fmtPct(p.size_pct, 2, true)} of capital`], ['Month start mark', `${fmtLevel(p.base_mark, unit)} (${fmtDate(p.base_date)})`],
+        ['Mark', `${fmtLevel(p.mark, unit)} (${fmtDate(p.mark_date)}, ${esc(p.frequency)})${p.carried ? ` ${pill('carried', 'warn')}` : ''}`],
+        ['P&L', `<span class="${signClass(p.mtd_pct)}">${fmtPct(p.mtd_pct, 3, true)}</span> of capital, estimate, month to date`],
+        ['Stop', 'none (monthly rebalance)'], ['Risk share', fmtPct(p.risk_share_pct, 1)]];
+    } else throw new Error('Unknown book');
+    setHead(title, sub);
+    document.body.dataset.page = book === 'algorithm' ? 'algorithm' : book;
+    view.innerHTML = `
+      <section class="section"><div class="card ${bookOf(book).cls}">${bookPill(book)}<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl></div></section>
+      <section class="section"><h2>Mark history</h2><div class="card">${hist.length ? '<div class="chart"><canvas id="c-pos"></canvas></div>' : '<p class="empty">No marks yet.</p>'}
+        ${legendRow([['Mark', bookOf(book).v], ...(isNum(entry) ? [['Entry', '--muted', true]] : []), ...(isNum(stop) ? [['Stop', '--bad', true]] : [])])}</div></section>
+      ${thesis ? `<section class="section"><h2>${book === 'algorithm' ? 'Why the rules hold it' : 'Thesis'}</h2><div class="card"><p>${esc(thesis)}</p></div></section>` : ''}
+      ${opp ? `<section class="section"><h2>The Opposition</h2><div class="card b-janus"><p>${esc(opp.case_against)}</p>${(opp.key_risks || []).length ? `<ul>${opp.key_risks.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}${opp.what_proves_it_wrong ? `<p><b>What would prove Janus wrong:</b> ${esc(opp.what_proves_it_wrong)}</p>` : ''}</div></section>` : ''}
+      <section class="section"><h2>Post-mortem</h2>${pm ? postmortemCard(pm) : '<p class="empty">Written automatically when the position closes.</p>'}</section>`;
+    if (hist.length) {
+      const ds = [{ label: 'Mark', data: hist.map((x) => [x[0], x[1]]), color: bookOf(book).v, width: 2.2 }];
+      if (isNum(entry)) ds.push({ label: 'Entry', data: hist.map((x) => [x[0], entry]), color: '--muted', dash: [4, 3], width: 1.2 });
+      if (isNum(stop)) ds.push({ label: 'Stop', data: hist.map((x) => [x[0], stop]), color: '--bad', dash: [4, 3], width: 1.2 });
+      dateChart('c-pos', ds, { fmt: (v) => fmtLevel(v, unit) });
+    }
+  }
+  function postmortemCard(x) {
+    const p = x.postmortem || {};
+    return `<div class="card ${bookOf(x.book).cls}"><div class="row-top">${bookPill(x.book)} <a href="#/position/${esc(x.book)}/${esc(x.id)}">${esc(x.id)}</a><span class="muted small">${fmtDate(x.generated_at)}</span></div>
+      <div class="row-meta">Thesis right: <b>${esc(p.thesis_right || '—')}</b> · ${esc(p.skill_or_luck || '—')}</div>
+      ${p.what_happened ? `<p>${esc(p.what_happened)}</p>` : ''}<p>${esc(p.assessment || '')}</p>${p.do_differently ? `<p><b>Do differently:</b> ${esc(p.do_differently)}</p>` : ''}<p class="small">${esc(x.model || '')}</p></div>`;
+  }
+  async function pagePostmortems() {
+    const pm = await load('postmortems');
+    setHead('Post-mortems', 'Every closed position in every book, written automatically');
+    view.innerHTML = `<section class="section">${(pm.items || []).map(postmortemCard).join('') || '<p class="empty">No position has closed yet. A post-mortem (was the thesis right, skill or luck, what to do differently) is written by the daily run for each one.</p>'}</section>`;
+  }
+
+  // ------------------------------------------------------------------ calendar
+  async function pageCalendar() {
+    const cal = await load('calendar');
+    setHead('Calendar', `Next 180 days from ${fmtDate(cal.from)}`);
+    const byMonth = {};
+    cal.items.forEach((c) => { (byMonth[c.date.slice(0, 7)] = byMonth[c.date.slice(0, 7)] || []).push(c); });
+    const chip = (c) => (c.book in BOOK ? bookPill(c.book, c.kind) : pill(c.kind, c.book === 'all' ? 'purple' : ''));
+    view.innerHTML = `<section class="section">${legendRow([['Me', '--book-me'], ['Algorithm', '--book-algo'], ['Janus', '--book-janus'], ['Catalysts', '--muted']])}</section>` +
+      Object.entries(byMonth).map(([m, items]) => `<section class="section"><h2>${fmtMonth(m)}</h2><div class="list">${items.map((c) =>
+        `<a class="row-link cal ${c.book in BOOK ? bookOf(c.book).cls : 'b-none'}" href="${esc(c.link || '#/calendar')}"><div class="row-top"><span class="row-title">${esc(c.label)}</span><span class="muted small">${fmtDate(c.date)}</span></div><div class="row-meta">${chip(c)} ${esc(c.country || '')}</div></a>`).join('')}</div></section>`).join('');
+  }
+
+  // ------------------------------------------------------------------ risk: exposures, stress tests, attribution
+  async function pageRisk() {
+    const [b, st] = await Promise.all([load('books'), load('stress')]);
+    setHead('Risk', `Combined exposure and stress tests · latest mark ${fmtDate(b.latest_mark)}`);
+    const books_ = ['me', 'algorithm v1.0', 'algorithm v1.1', 'janus'];
+    const scen = (st.scenarios || []).map((s) => `
+      <div class="card"><div class="row-top"><b>${esc(s.name)}</b><span class="muted small">${fmtDate(s.start)} to ${fmtDate(s.end)}</span></div>
+        <div class="bars">${books_.map((k) => `<div class="bar-row"><span class="bl ${bookOf(k).cls}-t">${esc(k === 'me' ? 'Me' : k === 'janus' ? 'Janus' : k.replace('algorithm ', 'Algorithm '))}</span><span class="bt"><i class="${(s.by_book[k] || 0) >= 0 ? 'up' : 'down'}" style="width:${Math.min(50, Math.abs(s.by_book[k] || 0)).toFixed(1)}%"></i></span><span class="bv ${signClass(s.by_book[k])}">${k in s.by_book ? fmtPct(s.by_book[k], 1, true) : '—'}</span></div>`).join('')}</div>
+        <details><summary class="small">Positions (${s.positions.length}) and instruments without history (${s.missing.length})</summary>
+          <div class="table-wrap"><table><thead><tr><th>Book</th><th>Position</th><th>Move</th><th class="num">P&L</th></tr></thead><tbody>${s.positions.map((r) => `<tr><td>${bookPill(r.book, r.book)}</td><td>${esc(r.instrument)}</td><td class="wrap small">${esc(r.move)}${r.monthly ? ' (monthly averages)' : ''}</td><td class="num ${signClass(r.pnl_pct)}">${fmtPct(r.pnl_pct, 2, true)}</td></tr>`).join('')}</tbody></table></div>
+          ${s.missing.length ? `<p class="small"><b>No history (listed, not guessed):</b> ${s.missing.map((m) => `${esc(m.book)} ${esc(m.instrument)}`).join(', ')}</p>` : ''}</details></div>`).join('');
+    view.innerHTML = `
+      <section class="section"><div class="section-head"><h2>Stress tests</h2>${info(`${st.method || ''} Each book in % of its own capital. Positions are held unchanged through the whole episode; the algorithm would have rebalanced monthly, so long episodes overstate it.`)}</div>${scen || '<p class="empty">Not computed yet.</p>'}</section>
+      ${attributionSection('me', b.me.attribution, 'Me: live P&L of open positions by country and asset class, % of account.')}
+      ${attributionSection('algorithm', b.algorithm.versions[0].attribution, 'Algorithm v1.0: estimate, month to date.')}
+      ${attributionSection('janus', b.janus.attribution, 'Janus: net P&L by country and asset class, % of account.')}`;
+  }
+
   // ------------------------------------------------------------------ router
   const routes = {
-    home: pageHome, decisions: pageDecisions, algorithm: pageAlgorithm, forecasts: pageForecasts,
-    trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore, evidence: pageEvidence,
-    marks: pageMarks, screener: pageScreener, todo: pageTodo,
+    home: pageHome, me: pageMe, decisions: (id) => (id ? pageDecisions(id) : pageMe()), algorithm: pageAlgorithm,
+    janus: pageJanus, position: pagePosition, calendar: pageCalendar, risk: pageRisk, postmortems: pagePostmortems,
+    forecasts: pageForecasts, trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
+    evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo,
   };
-  const TAB_OF = { trials: 'more', elections: 'more', reports: 'more', evidence: 'more', marks: 'more', screener: 'more', todo: 'more' };
+  const TAB_OF = { decisions: 'me', position: '', trials: 'more', elections: 'more', reports: 'more', evidence: 'more',
+                   marks: 'more', screener: 'algorithm', todo: 'more', forecasts: 'more', calendar: 'more', risk: 'more',
+                   postmortems: 'more' };
 
   async function render() {
     const hash = location.hash.replace(/^#\/?/, '');
-    const [page, id] = hash.split('/').map(decodeURIComponent);
+    const parts = hash.split('/').map(decodeURIComponent);
+    const page = parts[0];
+    const id = page === 'position' ? parts.slice(1).join('/') : parts[1];
     const fn = routes[page] || routes.home;
     const key = routes[page] ? page : 'home';
-    setTab(TAB_OF[key] || key);
+    setTab(key in TAB_OF ? TAB_OF[key] : key);
     document.body.dataset.page = key;
     destroyCharts();
     window.scrollTo(0, 0);
     try {
       if (!meta) meta = await load('meta');
       updatedEl.textContent = `Updated ${fmtDateTime(meta.built_at)}`;
+      const au = document.getElementById('audit');
+      if (au && meta.audit) {
+        au.hidden = false;
+        au.className = `audit ${meta.audit.ok ? 'ok' : 'fail'}`;
+        au.textContent = meta.audit.ok ? '✓ record verified' : '✗ record check failed';
+        au.title = meta.audit.detail || '';
+      }
       await fn(id);
+      polish(view);
     } catch (e) {
       view.innerHTML = `<div class="card"><p class="bad">Could not load this page: ${esc(e.message)}</p><p class="muted small">If you are offline, the last build may not have been cached yet. Open the app once with a connection.</p></div>`;
     }

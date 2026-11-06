@@ -34,7 +34,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .intake import read_rows, write_rows
-from .marks import CONFIG, http_get, latest_marks, load_registry, mark_is_current, match_instrument, read_marks
+from .marks import (CONFIG, http_get, latest_marks, load_registry, mark_can_act, mark_is_current,
+                    match_instrument, read_marks)
 from .resolver_api import resolve_event
 from .schema import (AUTO_PREFIX, DECISION_COLUMNS, FORECAST_COLUMNS, parse_date, parse_number)
 from .scoring import pnl_at_level, score_decision, score_forecast
@@ -138,9 +139,16 @@ def process_decisions(rows: list[dict], marks_rows: list[dict], registry: list[d
                                             f"\"{d.get('instrument')}\" matches nothing in data/ledger/instruments.csv, "
                                             "so there is no mark to close it with. Add an alias to the registry or resolve by hand."))
             continue
-        marks = sorted((m for m in marks_rows if m.get("instrument") == reg["instrument"] and m.get("value")
-                        and mark_is_current(d, m) and parse_date(m["date"]) <= today),
-                       key=lambda m: m["date"])
+        # only daily, fresh, first-hand marks may stop or close a position (mark_can_act): a monthly average
+        # (dated at its month end) or a carried-forward mark never acts (D001 / FR-DE, 2026-11-06)
+        current = [m for m in marks_rows if m.get("instrument") == reg["instrument"] and m.get("value")
+                   and mark_is_current(d, m) and parse_date(m["date"]) <= today]
+        marks = sorted((m for m in current if mark_can_act(m)), key=lambda m: m["date"])
+        skipped = [m for m in current if m not in marks]
+        if skipped:
+            log.append(f"{d['id']}: {len(skipped)} mark(s) of {reg['instrument']} ignored for stops and closes "
+                       f"(monthly average, stale or carried forward; latest {skipped[-1].get('date')} "
+                       f"{skipped[-1].get('frequency')})")
         if not marks:
             if horizon_passed:
                 issues.append(resolve_issue(d["id"], "decision", d,
