@@ -14,8 +14,10 @@ It never feeds the algorithm, and no edge is claimed. Keep the check short (aim 
 - Trades fill at the **next official daily mark**, not at the price you see now. The price now is for judgement
   only.
 - **Futures settlements** (private, licensed) are read through a **read-only** clone of em-macro-data. The CLI
-  (`context`, `propose`, `mark`) makes or refreshes it itself with this environment's `DATA_REPO_READ_TOKEN`, and
-  prints one `settlements: ...` line on stderr.
+  (`context`, `propose`, `mark`) makes or refreshes it itself, through the environment's own GitHub access, and
+  prints one `settlements: ...` line on stderr. If that line says it could not clone, attach the repository with
+  `add_repo` (owner `EthanC100`, repo `em-macro-data`, access `read`) and run `context` again. If that is refused
+  too, carry on without futures settlements.
   - Never print, echo or log the token: no `env`, `printenv` or `echo`, and never put it in a URL or a git
     command.
   - Never write to em-macro-data: no commit, push, `ledger.derivs settle` or `ledger.settlements fetch`.

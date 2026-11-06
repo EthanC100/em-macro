@@ -451,9 +451,95 @@ def comparison(me: dict, algo: dict, janus: dict, mb: MarkBook, today: date) -> 
     for b in (me, algo, janus):
         if b.get("live_start") and b.get("series"):
             c = cash_index(mb, parse_date(b["live_start"]), today)
-            vs_cash[b["id"]] = {"book_pct": round(b["series"][-1][1] - 100, 4), "cash_pct": round(c[-1][1] - 100, 4)}
+            tot = total_return(b["series"], mb)
+            vs_cash[b["id"]] = {"book_pct": round(b["series"][-1][1] - 100, 4), "cash_pct": round(c[-1][1] - 100, 4),
+                                "total_pct": round(tot[-1][1] - 100, 4) if tot else None}
     return {"cash": cash, "vs_cash": vs_cash,
             "note": "Each book starts at 100 on its own live start; cash (3-month US T-bill, FRED DTB3) at 100 on the earliest."}
+
+
+# ----------------------------------------------------------------------------- collateral interest (display only)
+TBILL_NOTE = ("Total return = excess return + collateral interest: the book's capital is assumed to earn the 3-month "
+              "US T-bill rate (FRED DTB3) on its full account value, as a fully collateralised futures and FX fund "
+              "would. Interest accrues daily (actual/365) at the latest daily T-bill rate and compounds with the "
+              "book's daily excess return. Display only: every evaluation (trials, Sharpe ratios, drawdown tests, the "
+              "Fund's allocation rule, live-versus-backtest comparisons) uses excess returns, and no recorded P&L "
+              "row changes.")
+
+
+def _cash_factors(mb: MarkBook, start: date, end: date) -> dict[date, float]:
+    """Cumulative T-bill accrual factor on each business day from ``start`` (1.0 at start)."""
+    out, f = {}, 1.0
+    days = bdays(start, end)
+    if not days:
+        return {start: 1.0}
+    out[days[0]] = 1.0
+    for a, b in zip(days, days[1:]):
+        lv = mb.on("USDCASH", a) or next(iter(mb.series("USDCASH")), None)
+        if lv:
+            f *= 1 + lv[1] / 100.0 * (b - a).days / 365.0
+        out[b] = f
+    return out
+
+
+def _factor_on(fac: dict[date, float], d: date) -> float:
+    best = 1.0
+    for k in sorted(fac):
+        if k <= d:
+            best = fac[k]
+        else:
+            break
+    return best
+
+
+def total_return(series: list[list], mb: MarkBook) -> list[list]:
+    """[[date, total-return index]] from an excess-return index [[date, index, ...]]: on each step the excess return
+    of the index plus the T-bill interest accrued over the same days on the full account value, compounded."""
+    pts = [(parse_date(p[0]), float(p[1])) for p in series if parse_date(p[0]) and p[1] is not None]
+    if not pts:
+        return []
+    fac = _cash_factors(mb, pts[0][0], pts[-1][0])
+    tr, out = pts[0][1], [[pts[0][0].isoformat(), round(pts[0][1], 4)]]
+    for (a, ea), (b, eb) in zip(pts, pts[1:]):
+        r = eb / ea - 1 if ea else 0.0
+        i = _factor_on(fac, b) / _factor_on(fac, a) - 1
+        tr *= 1 + r + i
+        out.append([b.isoformat(), round(tr, 4)])
+    return out
+
+
+def monthly_with_tbill(series: list[list], total: list[list]) -> list[dict]:
+    """Per calendar month: excess return, T-bill interest and total return, in %, from the two indices (each month
+    measured from the previous month's last point, the first from the index start)."""
+    def month_ends(ser):
+        out = {}
+        for p in ser:
+            out[str(p[0])[:7]] = float(p[1])
+        return out
+    ex, tt = month_ends(series), month_ends(total)
+    rows, pe, pt = [], (float(series[0][1]) if series else None), (float(total[0][1]) if total else None)
+    for m in sorted(ex):
+        if m not in tt or not pe or not pt:
+            continue
+        e, t = ex[m] / pe - 1, tt[m] / pt - 1
+        rows.append({"month": m, "excess_pct": round(100 * e, 4), "total_pct": round(100 * t, 4),
+                     "tbill_pct": round(100 * ((1 + t) / (1 + e) - 1) if e > -1 else 0.0, 4)})
+        pe, pt = ex[m], tt[m]
+    return rows
+
+
+def add_total_return(obj: dict, mb: MarkBook, today: date, series_key: str = "series") -> dict:
+    """Adds total_series, total_mtd_pct, total_since_start_pct, monthly (excess, T-bill, total) and the note to a
+    book-like dict with an excess index ``series_key``. Nothing else in ``obj`` changes."""
+    ser = obj.get(series_key) or []
+    tot = total_return(ser, mb)
+    obj["total_series"] = tot
+    obj["total_mtd_pct"] = mtd(tot, today) if tot else None
+    obj["total_since_start_pct"] = round(tot[-1][1] - tot[0][1], 4) if tot else None
+    obj["excess_since_start_pct"] = round(float(ser[-1][1]) - float(ser[0][1]), 4) if ser else None
+    obj["monthly_tbill"] = monthly_with_tbill(ser, tot) if tot else []
+    obj["tbill_note"] = TBILL_NOTE
+    return obj
 
 
 def build_books(today: date, alg: dict) -> dict:
@@ -461,6 +547,11 @@ def build_books(today: date, alg: dict) -> dict:
     me, algo, janus = me_book(today, mb), algo_book(alg, mb, today), janus_book(today, mb)
     for b in (me, janus):
         b["mtd_pct"] = mtd(b["series"], today)
+    # collateral interest, display only: computed from each book's excess index and never fed back into it
+    for b in (me, janus, algo):
+        add_total_return(b, mb, today)
+    for v in algo["versions"]:
+        add_total_return(v, mb, today)
     me["attribution"] = {"country": group([p for p in me["positions"] if p.get("live_pnl_pct") is not None],
                                           "country", "live_pnl_pct"),
                          "asset_class": group([p for p in me["positions"] if p.get("live_pnl_pct") is not None],

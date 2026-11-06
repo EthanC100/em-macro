@@ -1101,6 +1101,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     home = build_home(today, decisions, forecasts, algorithm, elections, reports, evidence)
     books = BOOKS.build_books(today, algorithm)
     fund = FUND.build_fund(books, today)          # read only: built from the books, never written back into them
+    BOOKS.add_total_return(fund, BOOKS.MarkBook(), today)   # collateral interest, display only (fund.py unchanged)
     janus = books["janus"].pop("summary")
     books["janus"]["summary_file"] = "janus.json"
     calendar = build_calendar(today, {**books, "janus": {**books["janus"], "summary": janus}})

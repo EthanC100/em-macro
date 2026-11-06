@@ -143,6 +143,8 @@ def test_read_only_clone_never_exposes_the_token_and_refuses_writes(tmp_path, mo
         return subprocess.run(cmd, **kw)
     store, status = ST.ensure_read_only_store(root, run=run)
     assert store == tmp_path / "work/em-macro-data" and "read-only clone" in status and secret not in status
+    assert status.endswith("(environment credentials)")          # route 1: no header sent at all
+    assert all("extraheader" not in " ".join(v for k, v in env.items() if k.startswith("GIT_CONFIG_KEY")) for _cmd, env in seen)
     assert ST.read(store)[0]["settle"] == "92.5" and not (store / "norgate").exists()        # sparse: ledger/ only
     for cmd, env in seen:
         assert not any(secret in c for c in cmd) and ST.TOKEN_ENV not in env                  # never on a command line
@@ -155,7 +157,7 @@ def test_read_only_clone_never_exposes_the_token_and_refuses_writes(tmp_path, mo
     assert res["stored"] == 0 and "read-only" in res["log"][0] and not (store / ST.SPEND_FILE).exists()
     # a second call refreshes the clone; a failure message is redacted
     store2, status2 = ST.ensure_read_only_store(root, run=run)
-    assert store2 == store and status2 == "read-only clone refreshed"
+    assert store2 == store and status2 == "read-only clone refreshed (environment credentials)"
 
 
 def test_clone_failure_is_redacted(tmp_path, monkeypatch):
@@ -176,3 +178,70 @@ def test_existing_writable_store_is_used_as_is(tmp_path, monkeypatch):
     monkeypatch.setenv(ST.TOKEN_ENV, "x")
     store, status = ST.ensure_read_only_store(tmp_path / "em-macro", run=lambda *a, **k: pytest.fail("no git call"))
     assert store == tmp_path / "em-macro-data" and status == "private store present"
+
+
+def test_token_route_is_the_fallback_when_environment_credentials_fail(tmp_path, monkeypatch):
+    bare = _bare_data_repo(tmp_path)
+    root = tmp_path / "work/em-macro"
+    root.mkdir(parents=True)
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.setenv("DATA_REPO_URL", f"file://{bare}")
+    monkeypatch.setenv(ST.TOKEN_ENV, "github_pat_SECRET_X")
+    calls = []
+
+    def header(env):
+        return next((env[k.replace("KEY", "VALUE")] for k, v in env.items()
+                     if k.startswith("GIT_CONFIG_KEY") and v.endswith(".extraheader")), "")
+
+    def run(cmd, **kw):
+        calls.append(header(kw["env"]))
+        if cmd[1] == "clone" and not header(kw["env"]):
+            class R:
+                returncode, stdout, stderr = 128, "", "remote: Repository not found. fatal: 403"
+            return R()
+        return subprocess.run(cmd, **kw)
+    store, status = ST.ensure_read_only_store(root, run=run)
+    assert store is not None and status.endswith(f"({ST.TOKEN_ENV})")
+    assert calls[0] == "" and calls[1].startswith("AUTHORIZATION: basic ")
+    assert "github_pat_SECRET_X" not in status
+
+
+def test_failure_names_the_github_app_fix(tmp_path, monkeypatch):
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.delenv(ST.TOKEN_ENV, raising=False)
+
+    class R:
+        returncode, stdout, stderr = 128, "", "fatal: unable to access: The requested URL returned error: 403"
+    store, status = ST.ensure_read_only_store(tmp_path / "em-macro", run=lambda cmd, **kw: R())
+    assert store is None and "github.com/settings/installations" in status and "environment credentials" in status
+
+
+def test_process_read_only_refuses_writes_to_any_store(tmp_path, monkeypatch):
+    monkeypatch.setattr(ST, "_PROCESS_READ_ONLY", False)
+    ST.write(tmp_path, [{"date": "2026-11-06", "product": "BRENT", "contract_month": "2027-03", "settle": "1"}])
+    ST.set_read_only()
+    with pytest.raises(ST.ReadOnlyStore):
+        ST.write(tmp_path, [{"date": "2026-11-09", "product": "BRENT", "contract_month": "2027-03", "settle": "1"}])
+    res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), tmp_path, c=FakeClient(ROWS))
+    assert res["stored"] == 0 and "read-only" in res["log"][0]
+
+
+def test_token_route_keeps_the_environments_git_config(tmp_path, monkeypatch):
+    monkeypatch.delenv("EM_MACRO_DATA", raising=False)
+    monkeypatch.setenv(ST.TOKEN_ENV, "t")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "credential.interactive")
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "url.https://github.com/.insteadOf")
+    envs = []
+
+    class R:
+        returncode, stdout, stderr = 128, "", "fatal: 403"
+
+    def run(cmd, **kw):
+        envs.append(kw["env"])
+        return R()
+    ST.ensure_read_only_store(tmp_path / "em-macro", run=run)
+    tok = envs[-1]
+    assert tok["GIT_CONFIG_COUNT"] == "3" and tok["GIT_CONFIG_KEY_0"] == "credential.interactive"
+    assert tok["GIT_CONFIG_KEY_1"] == "url.https://github.com/.insteadOf"
+    assert tok["GIT_CONFIG_KEY_2"] == "http.https://github.com/.extraheader"

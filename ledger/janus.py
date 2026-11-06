@@ -1107,8 +1107,9 @@ def main(argv=None) -> int:
     ap.add_argument("--today", default=None)
     a = ap.parse_args(argv)
     today = parse_date(a.today) if a.today else date.today()
+    ST.set_read_only()          # Janus only reads the private store: every write from this process is refused
     if a.cmd in ("context", "propose", "mark"):
-        # futures settlements: an existing private store, or a read-only clone made with DATA_REPO_READ_TOKEN
+        # futures settlements: an existing private store, or a read-only clone (ledger/settlements.py)
         _store, status = ST.ensure_read_only_store()
         print(f"settlements: {status}", file=sys.stderr)
     if a.cmd == "verify":
