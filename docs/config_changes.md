@@ -236,3 +236,48 @@ it is recorded as C03 and the existing record is not renumbered.
   `data/janus/records.jsonl`). It said it ran out of searches before checking the BoE, payrolls, the BoJ and the
   ECB, so the search budget was raised from 12 to 25 (8 for The Opposition) for the next runs. The run was not
   repeated the same day: asking again until it trades would bias the record.
+
+## 2026-11-06: correction K001, D001's entry level rebased to the marks' source
+
+- **What:** D001's `entry_level` changed from 159bp to **165.74bp**. 159bp was the 30 Oct 2026 closing spread
+  "by convention" (OAT 4.93%, Bund 3.34%, a different source and close). 165.74bp is the Riksbank SWEA 30 Oct close
+  (FRGVB10Y 4.984% minus DEGVB10Y 3.3266%), the source and close of every FR-DE mark since the Part A fix. (The
+  request said 165.7bp; 165.74bp is the exact stored mark, so the entry equals the mark on the entry date.) The stop
+  (115bp) and every other field are unchanged.
+- **Why:** entry and marks now come from the same source. Measured against Riksbank marks, the 159bp entry booked
+  about +0.15% of account on the entry day from a source mismatch, not a market move.
+- **How it is recorded:** a new mechanism, `python -m ledger.audit correct`. It changes one logged field and appends
+  a hash-chained `correction` record to `data/ledger/seals.jsonl` (K001, seal 15). The record holds the old and new
+  value, the reason, and the entry's digest before and after. Verification accepts a changed entry only through such
+  a record, and checks that the record changed that field and nothing else. Any other edit still shows "record check
+  failed". D001's page shows the correction under "Corrections" and marks the entry "corrected".
+- **Effect:** D001's live P&L at the 4 Nov mark (150.23bp) is −0.31% of account (it was −0.20% from 159bp).
+  The Me index starts at exactly 100 on 30 Oct. Because the stop stays at 115bp, the distance from entry to stop
+  widens from 44bp to 50.74bp. The loss at the stop is still the 1% size, but each basis point is now worth
+  1/50.74% of account instead of 1/44%.
+
+## 2026-11-06: Janus moves to Claude Code sessions; no Anthropic API calls for Janus from GitHub Actions
+
+- **Removed:** the `janus-weekly` workflow and the API call in `ledger/janus.py` (`run`). Post-mortems are no longer
+  written by `ledger-daily` and `systematic-monthly` through the API; the daily review session writes them.
+- **Added:**
+  - **CLI** (`ledger/janus.py`):
+    - `context` (read-only);
+    - `propose --file` (validates against every rule, then appends; atomic: a proposal that breaks any rule is
+      rejected whole);
+    - `check` (a one-line record when nothing changed).
+  - **Post-mortems** (`ledger/postmortem.py`): `due`, `show`, `write`.
+  - **`scripts/janus_commit.sh`:** every write, from a session or from `ledger-daily`'s fills, runs on a fresh
+    `origin/main` and retries from the new `main` when a push is rejected (tested with a simulated race).
+  - **Runbooks:** `docs/janus/quick_check.md` and `docs/janus/daily_review.md`.
+  - **`janus-fire`:** a workflow that POSTs to the quick-check task's API trigger every 30 minutes on weekdays,
+    06:00-21:30 UTC (secrets `JANUS_FIRE_URL`, `JANUS_FIRE_TOKEN`).
+- **Rule changes in code:**
+  - A size above a limit is now rejected instead of cut, so the session resubmits a valid size.
+  - New required fields: a 2-3 sentence thesis, at least one source URL, The Opposition on every new position, a
+    reason on every review. A daily review must review every open position.
+  - A quick check cannot open positions.
+  - The only automatic cut left is at the fill, when the entry mark changes the capacity limit (logged).
+- **Ledger:** the Janus page shows "last checked" and states that trades fill at the next official daily mark.
+- **Still calling the API from Actions (not Janus):** the event-forecast resolver in `ledger-daily` and the
+  investor letters' narrative in `systematic-monthly`, both via the `ANTHROPIC_API_KEY` secret.

@@ -412,3 +412,10 @@ table.compact th, table.compact td { padding: 6px 4px !important; white-space: n
 table.compact th:first-child, table.compact td:first-child { width: 38%; }
 table.compact td .pill { white-space: normal; font-size: 0.66rem; }
 .book-card { align-content: start; } .bc-body { align-items: center; }
+
+.card.correction { border-left: 5px solid var(--warn-fill); }
+.card.correction .kv dd { white-space: normal; }
+
+.last-check .fill-rule { margin: 6px 0 0; font-size: 0.88rem; color: var(--fg-2); }
+ul.checks { list-style: none; padding-left: 0; }
+ul.checks li { padding: 3px 0; border-bottom: 1px solid var(--line); }

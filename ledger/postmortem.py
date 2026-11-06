@@ -1,20 +1,20 @@
-"""Automatic post-mortems of closed positions in every book (Anthropic API).
+"""Post-mortems of closed positions in every book, written in the Janus daily review session (no API call).
 
-    python -m ledger.postmortem [--max N] [--dry-run]
+    python -m ledger.postmortem due                          # closed positions without a post-mortem (JSON)
+    python -m ledger.postmortem show <book> <id>             # the position record to judge (JSON)
+    python -m ledger.postmortem write <book> <id> --file PM.json [--model M]
 
-For every closed position without one: my resolved positions (decisions.csv), Janus's closes (data/janus) and the
-algorithm's positions closed at a live rebalance (an instrument dropped or flipped between two committed positions
-files). The model gets the record (thesis, levels, dates, outcome, P&L, the marks over the holding period) and answers:
-was the thesis right, was the result skill or luck, and what to do differently. Written to
-data/ledger/postmortems/<book>-<id>.json; for Janus also appended to its hash chain as a ``postmortem`` record.
-Without ANTHROPIC_API_KEY nothing is written and nothing fails.
+Candidates: my resolved positions (decisions.csv), Janus's closes (data/janus) and the algorithm's positions closed
+at a live rebalance (an instrument dropped or flipped between two committed positions files). The session judges:
+was the thesis right, was the result skill or luck, and what to do differently. ``write`` checks the required fields
+(thesis_right, skill_or_luck, assessment, do_differently) and writes data/ledger/postmortems/<book>-<id>.json; for
+Janus it also appends a ``postmortem`` record to its hash chain. A post-mortem is written once and never edited.
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import json
-import os
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -28,10 +28,8 @@ DIR = ROOT / "data/ledger/postmortems"
 LIVE_START = {"v1.0": "2026-11", "v1.1": "2026-12"}
 POS_FILES = {"v1.0": "results/systematic/positions.csv", "v1.1": "results/systematic_v1.1/positions.csv"}
 
-SYSTEM = """You write short, honest post-mortems of closed paper-trading positions. Judge the decision, not just the outcome: a losing trade can be a good decision and a winning one lucky. Use web search only to check what actually drove the move over the holding period.
-
-Reply with ONLY one JSON object:
-{"thesis_right": "yes" | "no" | "partly" | "untested", "skill_or_luck": "skill" | "luck" | "mixed" | "unclear", "what_happened": "2-3 sentences on what moved the instrument", "assessment": "2-4 sentences: was the thesis right, and was the result skill or luck, with the reason", "do_differently": "1-3 concrete things to do differently next time", "sources": [{"title": "...", "url": "https://..."}]}"""
+REQUIRED = {"thesis_right": ("yes", "no", "partly", "untested"), "skill_or_luck": ("skill", "luck", "mixed", "unclear"),
+            "assessment": None, "do_differently": None}
 
 
 def _rows(rel):
@@ -72,31 +70,37 @@ def candidates(marks_rows: list[dict]) -> list[dict]:
     return out
 
 
-def run(max_n: int = 6, dry_run: bool = False) -> list[str]:
-    from . import llm
+def due(marks_rows: list[dict] | None = None) -> list[dict]:
     DIR.mkdir(parents=True, exist_ok=True)
-    done, log = {p.stem for p in DIR.glob("*.json")}, []
-    todo = [c for c in candidates(read_marks()) if f"{c['book']}-{c['id']}" not in done]
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return [f"{len(todo)} post-mortem(s) waiting; ANTHROPIC_API_KEY not set"]
-    for c in todo[:max_n]:
-        prompt = (f"BOOK: {c['book']} ({'my discretionary decisions' if c['book'] == 'me' else 'Janus, an AI paper book' if c['book'] == 'janus' else 'a frozen mechanical algorithm: judge the rule, not a person'})\n"
-                  f"POSITION {c['id']}:\n{json.dumps(c['record'], indent=1, default=str)[:12000]}\n\nWrite the post-mortem. JSON only.")
-        if dry_run:
-            log.append(f"would write {c['book']}-{c['id']}")
-            continue
-        res = llm.call(SYSTEM, prompt, purpose="post-mortem", ref=f"{c['book']}-{c['id']}", effort="medium", web_search=3)
-        pm = llm.parse_json(res.get("text", ""), "assessment") or {"assessment": (res.get("text") or "")[:2000]}
-        out = {"book": c["book"], "id": c["id"], "model": res.get("model"), "generated_at":
-               datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "postmortem": pm,
-               "sources_read": res.get("sources_read", [])[:10]}
-        (DIR / f"{c['book']}-{c['id']}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
-        if c["book"] == "janus":
-            recs = JN.load()
-            JN.append(recs, {"type": "postmortem", "position_id": c["id"], "date": date.today().isoformat(),
-                             "model": res.get("model"), "postmortem": pm})
-        log.append(f"post-mortem written: {c['book']}-{c['id']}")
-    return log
+    done = {p.stem for p in DIR.glob("*.json")}
+    return [c for c in candidates(marks_rows if marks_rows is not None else read_marks())
+            if f"{c['book']}-{c['id']}" not in done]
+
+
+def write(book: str, pid: str, pm: dict, model: str, now: str | None = None) -> Path:
+    c = next((x for x in due() if x["book"] == book and x["id"] == pid), None)
+    if c is None:
+        raise ValueError(f"{book}-{pid} is not a closed position awaiting a post-mortem (see `due`)")
+    errs = []
+    for k, allowed in REQUIRED.items():
+        v = str(pm.get(k) or "").strip()
+        if not v:
+            errs.append(f"{k} is required")
+        elif allowed and v.lower() not in allowed:
+            errs.append(f"{k} must be one of {allowed}")
+    if not str(model or "").strip():
+        errs.append("model is required")
+    if errs:
+        raise ValueError("; ".join(errs))
+    out = {"book": book, "id": pid, "model": model.strip(),
+           "generated_at": now or datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "postmortem": pm}
+    path = DIR / f"{book}-{pid}.json"
+    path.write_text(json.dumps(out, indent=1), encoding="utf-8")
+    if book == "janus":
+        recs = JN.load()
+        JN.append(recs, {"type": "postmortem", "position_id": pid, "date": date.today().isoformat(), "model": model.strip(),
+                         "postmortem": pm})
+    return path
 
 
 def load_all() -> list[dict]:
@@ -107,16 +111,27 @@ def load_all() -> list[dict]:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--max", type=int, default=int(json.loads((ROOT / "ledger/automation.json").read_text()).get("postmortems_per_day", 6)))
-    ap.add_argument("--dry-run", action="store_true")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", choices=["due", "show", "write"])
+    ap.add_argument("book", nargs="?")
+    ap.add_argument("id", nargs="?")
+    ap.add_argument("--file")
+    ap.add_argument("--model", default="")
     a = ap.parse_args(argv)
-    from .llm import KeyRejected
+    if a.cmd == "due":
+        print(json.dumps([{"book": c["book"], "id": c["id"]} for c in due()], indent=1))
+        return 0
+    if a.cmd == "show":
+        c = next((x for x in candidates(read_marks()) if x["book"] == a.book and x["id"] == a.id), None)
+        print(json.dumps(c, indent=1, default=str) if c else "not found")
+        return 0 if c else 1
     try:
-        for line in run(a.max, a.dry_run):
-            print(line)
-    except KeyRejected as e:
-        print(f"post-mortems skipped: {e}")
+        pm = json.loads(Path(a.file).read_text(encoding="utf-8"))
+        model = a.model or pm.pop("model", "")
+        print(write(a.book, a.id, pm, model))
+    except (OSError, ValueError, TypeError) as e:
+        print(f"REJECTED: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

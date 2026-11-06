@@ -227,7 +227,7 @@
   }
 
   // ------------------------------------------------------------------ pages
-  const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, 0)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
+  const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, Number.isInteger(Math.round(v * 10) / 10) ? 0 : 1)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
   function liveLabel(d) {
     if (d.status !== 'open' || !d.mark_instrument) return '';
     if (!isNum(d.mark)) return ' · no mark yet';
@@ -789,7 +789,7 @@
         ${card('algorithm', 'Algorithm', 'mechanical rules, not AI', v10.mtd_pct, true, `${v10.n_positions} (v1.0) · ${v11.n_positions} (v1.1)`, gauge(v10.gross_leverage, v10.leverage_cap, 'gross leverage, x'),
           `<div class="bc-foot">v1.0 live since ${fmtDate(v10.live_start)}; v1.1 live from the ${fmtDate('2026-12-03')} rebalance${isNum(v11.pre_live_estimate_pct) ? ` (pre-live estimate ${fmtPct(v11.pre_live_estimate_pct, 2, true)}, not counted)` : ''}</div>`)}
         ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, `${b.janus.open_count} of ${jn.max_open}`, gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
-          jn.start ? '' : '<div class="bc-foot">Not started yet: the first weekly run opens the account.</div>')}
+          `<div class="bc-foot">${jn.last_check ? `Last checked ${fmtDateTime(jn.last_check.time)} · ${esc(jn.last_check.result || '')}` : 'Not checked yet'} · fills at the next official daily mark</div>`)}
       </section>
       <section class="section">
         <div class="card changes"><div class="section-head"><h2>What changed</h2><span class="muted small">${ch.since ? `since ${fmtDateTime(ch.since)}` : ''}</span></div>
@@ -840,7 +840,7 @@
     const resolved = me.positions.filter((p) => p.status === 'resolved');
     const flag = (p) => (p.mark_flag ? ` ${pill(p.mark_frequency === 'monthly' ? 'monthly mark' : 'stale mark', 'warn')}` : '');
     const row = (p) => posRow('me', p, `${esc(p.instrument)} ${badge(p.action)}`,
-      `<b>${esc(p.id)}</b> · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
+      `<b>${esc(p.id)}</b>${(p.corrections || []).length ? ` ${pill('corrected', 'warn')}` : ''} · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
       p.status === 'resolved' ? p.pnl_pct : p.live_pnl_pct, `#/position/me/${p.id}`);
     const live = me.series.length ? me.series[me.series.length - 1][1] - 100 : null;
     view.innerHTML = `
@@ -963,7 +963,11 @@
       </div>`;
     const counter = jn.calls_needed ? Math.min(100, 100 * jn.n_closed / jn.calls_needed) : 0;
     view.innerHTML = `
-      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start); weekly review on Mondays by ${esc(jn.model || 'the current Claude Opus model')} with web search; The Opposition argues against every new position.</div></section>
+      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start). Janus works in Claude Code sessions: a quick check every 30 minutes on weekdays (06:00 to 21:30 UTC) and a full review after the US close; The Opposition argues against every new position. Every rule is enforced in code and the record is append-only.</div></section>
+      <section class="section"><div class="card b-janus last-check">
+        <div class="row-top"><b>Last checked ${jn.last_check ? fmtDateTime(jn.last_check.time) : '—'}</b>${jn.last_check ? `<span class="muted small">${esc(String(jn.last_check.session || '').replace('_', ' '))}</span>` : ''}</div>
+        ${jn.last_check ? `<div class="row-meta">${esc(jn.last_check.result || '')}${jn.last_check.positions ? ` · positions: ${esc(jn.last_check.positions.join(', ') || 'none open')}` : ''}</div>` : ''}
+        <p class="fill-rule"><b>Trades fill at the next official daily mark</b>, the first daily mark dated on or after the decision, not at the price when Janus decides.</p></div></section>
       <section class="section">
         <div class="stats">
           <div class="stat"><span class="k">Index</span><span class="v ${signClass(idx - 100)}">${fmtNum(idx, 2)}</span><span class="s">month to date ${isNum(b.janus.mtd_pct) ? fmtPct(b.janus.mtd_pct, 2, true) : '—'}</span></div>
@@ -984,8 +988,9 @@
         ${jn.closed.map(posCard).join('') || '<p class="empty">None closed yet.</p>'}</section>
       <section class="section"><div class="section-head"><h2>No-trade records</h2></div>
         ${(jn.no_trades || []).slice().reverse().map((n) => `<div class="card b-janus"><div class="row-meta">${fmtDate(n.date)} · ${esc(n.model || '')}</div><p>${esc(n.reasoning)}</p></div>`).join('') || '<p class="empty">None.</p>'}</section>
-      <section class="section"><div class="section-head"><h2>Weekly runs</h2></div>
-        ${(jn.runs || []).slice().reverse().map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews · ${r.searches || 0} searches</div><p>${esc(r.market_summary || r.status || '')}</p></div>`).join('') || '<p class="empty">No run yet.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>Sessions</h2><span class="muted small">reviews and quick checks</span></div>
+        ${(jn.runs || []).slice().reverse().slice(0, 15).map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc((r.session || 'weekly run (API)').replace('_', ' '))} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews${r.session_url ? ` · <a href="${esc(r.session_url)}" target="_blank" rel="noopener">session</a>` : ''}</div>${r.market_summary ? `<p>${esc(r.market_summary)}</p>` : ''}</div>`).join('') || '<p class="empty">No session yet.</p>'}
+        ${(jn.checks || []).length ? `<h3 class="sub">Recent quick checks</h3><ul class="plain checks">${jn.checks.slice().reverse().slice(0, 12).map((c) => `<li><span class="mono small">${fmtDateTime(c.time)}</span> · ${esc(c.result)}${c.positions && c.positions.length ? ` <span class="muted small">(${esc(c.positions.join(', '))})</span>` : ''}</li>`).join('')}</ul>` : ''}</section>
       <section class="section"><div class="section-head"><h2>Universe and data</h2>${info('Only instruments with a free public daily mark. Commodity futures are marked on official spot prices (an estimate; EIA stopped publishing NYMEX futures in 2024). Never Norgate or em-macro-data (licence).')}</div>
         <div class="table-wrap"><table><thead><tr><th>Code</th><th>Market</th><th>Daily source</th></tr></thead><tbody>${jn.universe.map((u) => `<tr><td><b>${esc(u.instrument)}</b>${u.estimate ? ` ${pill('estimate', 'warn')}` : ''}</td><td class="wrap">${esc(u.name)}</td><td class="wrap small">${esc(u.source)} ${esc(u.source_id)}</td></tr>`).join('')}</tbody></table></div>
         <h3 class="sub">Dropped</h3><ul class="plain">${jn.dropped.map((d) => `<li><b>${esc(d.market)}</b>: ${esc(d.reason)}</li>`).join('')}</ul>
@@ -1006,7 +1011,7 @@
       title = `${p.id} · ${p.instrument}`; unit = p.mark_unit || p.unit; hist = p.mark_history || []; thesis = p.thesis;
       entry = p.entry_level; stop = p.stop; sub = `Me · ${p.action} · ${p.status}`;
       rows = [['Action', badge(p.action)], ['Size', `${fmtPct(p.size_pct, 2)} of account at risk`], ['Probability', fmtProb(p.probability)],
-        ['Entry', isNum(entry) ? `${fmtLevel(entry, unit)} (${fmtDate(p.date)})` : '—'], ['Stop', isNum(stop) ? fmtLevel(stop, unit) : '—'],
+        ['Entry', isNum(entry) ? `${fmtLevel(entry, unit)} (${fmtDate(p.date)})${(p.corrections || []).some((c) => c.field === 'entry_level') ? ` ${pill('corrected', 'warn')}` : ''}` : '—'], ['Stop', isNum(stop) ? fmtLevel(stop, unit) : '—'],
         ['Mark', isNum(p.mark) ? `${fmtLevel(p.mark, unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})${p.mark_flag ? ` ${pill(p.mark_flag, 'warn')}` : ''}` : '—'],
         ['P&L', p.status === 'resolved' ? fmtPct(p.pnl_pct, 2, true) : `<span class="${signClass(p.live_pnl_pct)}">${fmtPct(p.live_pnl_pct, 2, true)}</span> of account`],
         ['Distance to stop', isNum(p.stop_distance) ? fmtLevel(Math.abs(p.stop_distance), unit) : '—'], ['Horizon', fmtDate(p.horizon)],
@@ -1042,12 +1047,19 @@
         ['P&L', `<span class="${signClass(p.mtd_pct)}">${fmtPct(p.mtd_pct, 3, true)}</span> of capital, estimate, month to date`],
         ['Stop', 'none (monthly rebalance)'], ['Risk share', fmtPct(p.risk_share_pct, 1)]];
     } else throw new Error('Unknown book');
+    const corr = (book === 'me' && p.corrections) || [];
+    const FIELD = { entry_level: 'Entry level' };
+    const corrHtml = corr.length ? `<section class="section"><h2>Corrections</h2>${corr.map((c) => `
+      <div class="card correction"><div class="row-top"><b>${esc(c.correction_id)} · ${esc(FIELD[c.field] || c.field)}</b><span class="muted small">${fmtDateTime(c.sealed_at)}</span></div>
+        <dl class="kv"><dt>Was</dt><dd>${esc(c.old_value)}</dd><dt>Now</dt><dd>${esc(c.new_value)}</dd><dt>Reason</dt><dd>${esc(c.reason)}</dd>
+        <dt>Record</dt><dd class="small">appended to the audit chain (seal ${c.seq}, hash <span class="mono">${esc(String(c.hash).slice(0, 12))}…</span>); every other field unchanged</dd></dl></div>`).join('')}</section>` : '';
     setHead(title, sub);
     document.body.dataset.page = book === 'algorithm' ? 'algorithm' : book;
     view.innerHTML = `
       <section class="section"><div class="card ${bookOf(book).cls}">${bookPill(book)}<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl></div></section>
       <section class="section"><h2>Mark history</h2><div class="card">${hist.length ? '<div class="chart"><canvas id="c-pos"></canvas></div>' : '<p class="empty">No marks yet.</p>'}
         ${legendRow([['Mark', bookOf(book).v], ...(isNum(entry) ? [['Entry', '--muted', true]] : []), ...(isNum(stop) ? [['Stop', '--bad', true]] : [])])}</div></section>
+      ${corrHtml}
       ${thesis ? `<section class="section"><h2>${book === 'algorithm' ? 'Why the rules hold it' : 'Thesis'}</h2><div class="card"><p>${esc(thesis)}</p></div></section>` : ''}
       ${opp ? `<section class="section"><h2>The Opposition</h2><div class="card b-janus"><p>${esc(opp.case_against)}</p>${(opp.key_risks || []).length ? `<ul>${opp.key_risks.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}${opp.what_proves_it_wrong ? `<p><b>What would prove Janus wrong:</b> ${esc(opp.what_proves_it_wrong)}</p>` : ''}</div></section>` : ''}
       <section class="section"><h2>Post-mortem</h2>${pm ? postmortemCard(pm) : '<p class="empty">Written automatically when the position closes.</p>'}</section>`;

@@ -245,6 +245,7 @@ def build_todo() -> dict:
 
 def build_decisions(today: date) -> dict:
     rows = read_csv(ROOT / "data/ledger/decisions.csv")
+    corr = AUD.corrections()
     registry = load_registry() if (ROOT / "data/ledger/instruments.csv").exists() else []
     latest = latest_marks()
     out = []
@@ -276,6 +277,7 @@ def build_decisions(today: date) -> dict:
             "brier_claude": sc["brier_claude"],
             "pnl_pct": sc["pnl_pct"],
             "issue_url": f"{REPO_URL}/issues/{r['issue']}" if r.get("issue") else None,
+            "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == r["id"]],
         })
         out.append(d)
     out.sort(key=lambda d: (d["date"] or "", d["id"]), reverse=True)
