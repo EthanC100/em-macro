@@ -20,7 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from .marks import load_registry, match_instrument
-from .schema import (MAX_RISK_PCT, kelly_size_pct, parse_date, parse_number, parse_probability, position_type,
+from .schema import (MAX_RISK_PCT, kelly_size_pct, parse_date, parse_number, parse_probability, position_type, stop_level,
                      validate_decision)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,8 +162,8 @@ def risk_check(rec: dict, root: Path = ROOT, today: date | None = None, registry
     scope = decision_scope(rec, registry)
     flags: list[str] = []
     checks: list[tuple[bool, str]] = []
-    stop_level = parse_number(rec.get("stop"))
-    checks.append((stop_level is not None, "Stop has a numeric level" + (f": {stop_level:g}" if stop_level is not None else "")))
+    stop_lv = stop_level(rec.get("stop"))
+    checks.append((stop_lv is not None, "Stop has a numeric level" + (f": {stop_lv:g}" if stop_lv is not None else "")))
     size, prob = parse_number(rec.get("size_pct")), parse_probability(rec.get("probability"))
     ptype = position_type(rec)
     if rec.get("action") in ("Buy", "Sell"):

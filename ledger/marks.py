@@ -42,7 +42,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from .schema import parse_date, parse_number
+from .schema import parse_date, parse_number, stop_level
 from .scoring import pnl_at_level
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -641,7 +641,7 @@ def live_mark(decision: dict, registry: list[dict], latest: dict[str, dict]) -> 
         return out
     if v is not None and decision.get("action") in ("Buy", "Sell"):
         out["live_pnl_pct"] = pnl_at_level(decision, v)
-    stop = parse_number(decision.get("stop"))
+    stop = stop_level(decision.get("stop"))
     if v is not None and stop is not None:
         out["stop_distance"] = round(v - stop, 4)
     return out

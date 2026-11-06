@@ -4,7 +4,7 @@ Run by .github/workflows/ledger-intake.yml with the issue in environment variabl
 (ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY, ISSUE_LABELS, ISSUE_USER, GITHUB_TOKEN). Writes a
 result JSON (--out) with ok, kind, id, comment and the changed files. The workflow then
 commits the files, comments with the id and closes the issue, or comments with the errors
-and leaves it open. An issue labelled `ledger` whose body is a pasted DECISION RECORD or FORECAST block
+and leaves it open. An issue labelled `ledger` whose body is a pasted DECISION RECORD, FORECAST or RESOLVE block
 ("Field: value" lines) is read into the same fields as the forms and handled the same way. Everything here is
 also importable for tests: parse_issue_body(), classify(), process(), parse_paste() and process_paste().
 """
@@ -364,8 +364,9 @@ def _strip_front_matter(text: str) -> tuple[dict, str]:
 # form, or a blank issue) is read as one "Field: value" line per field and turned into the same fields the
 # Decision record / Forecast forms produce, then handled exactly like those forms.
 PASTE_TITLE_PREFIX = "[Paste]"
-PASTE_HEADER_RE = re.compile(r"^[\s#*_>]*(DECISION RECORD|FORECAST)[\s*_:]*$", re.I)   # the header alone on its line
-PASTE_LINE_RE = re.compile(r"^\s*(?:[-*]\s+)?[*_]*\s*([A-Za-z][A-Za-z /%()'?-]*?)\s*[*_]*\s*:\s*[*_]*\s*(.*?)\s*$")
+PASTE_HEADER_RE = re.compile(r"^[\s#*_>]*(DECISION RECORD|FORECAST|RESOLVE)[\s*_:]*$", re.I)   # the header alone on its line
+PASTE_LINE_RE = re.compile(r"^\s*(?:[-*]\s+)?[*_]*\s*([A-Za-z][A-Za-z /%()'?&,-]*?)\s*[*_]*\s*:\s*[*_]*\s*(.*?)\s*$")
+PASTE_KINDS = {"DECISION RECORD": "decision", "FORECAST": "forecast", "RESOLVE": "resolve"}
 # pasted label -> issue-form label (required lines); labels are matched case-insensitively via _paste_label()
 DECISION_PASTE_FIELDS = {
     "Date": "Date", "Country": "Country", "Instrument": "Instrument", "Action": "Action",
@@ -381,18 +382,23 @@ FORECAST_PASTE_OPTIONAL = {
     "Claude probability": "Claude probability (optional)", "Resolution source": "Resolution source",
     "Country": "Country (optional)",
 }
+# a RESOLVE block (the clerk, docs/ledger/clerk.md): the Resolve form's fields
+RESOLVE_PASTE_FIELDS = {"Id": "Decision or forecast id", "Outcome": "Outcome", "Exit price or result": "Exit price or result"}
+RESOLVE_PASTE_OPTIONAL = {"P&L": "P&L, % of account (optional)", "Note": "Note (optional)"}
 # the forms' own wording is accepted too (keys and values in _paste_label() form)
 PASTE_ALIASES = {
     "size (% of account at risk)": "size", "size (%)": "size", "probability my view is right": "probability",
     "horizon (date)": "horizon", "stop": "stop/exit if wrong", "my probability": "probability",
-    "resolution date": "resolves by",
+    "resolution date": "resolves by", "decision or forecast id": "id", "exit price": "exit price or result",
+    "exit": "exit price or result", "result": "exit price or result", "p&l, % of account": "p&l", "pnl": "p&l",
+    "p&l (% of account)": "p&l",
 }
 PASTE_ACTIONS = {"buy": "Buy", "sell": "Sell", "no trade": "No trade", "no-trade": "No trade", "notrade": "No trade"}
 PASTE_DATE_KEYS = ("Date", "Horizon (date)", "Resolution date")
 # the forms' textareas: their value may run over several lines; any other field is one line (its value may sit
 # on the line after the label), so stray text after the block cannot spill into a date or a number
 PASTE_MULTILINE = {"Entry trigger", "Stop / exit if wrong", "Thesis", "Key factors", "What would change my mind",
-                   "How this differs from market consensus", "Question"}
+                   "How this differs from market consensus", "Question", "Note (optional)"}
 
 
 def _paste_label(label: str) -> str:
@@ -408,14 +414,14 @@ def _paste_lines(body: str) -> tuple[str | None, list[str]]:
     for i, line in enumerate(lines):
         m = PASTE_HEADER_RE.match(line)
         if m:
-            return ("decision" if m.group(1).upper() == "DECISION RECORD" else "forecast"), lines[i + 1:]
+            return PASTE_KINDS[" ".join(m.group(1).upper().split())], lines[i + 1:]
         if line.strip() and not line.lstrip().startswith("#"):
             return None, []
     return None, []
 
 
 def paste_kind(body: str) -> str | None:
-    """'decision' or 'forecast' when the issue body is a pasted DECISION RECORD or FORECAST block."""
+    """'decision', 'forecast' or 'resolve' when the body is a pasted DECISION RECORD, FORECAST or RESOLVE block."""
     return _paste_lines(body)[0]
 
 
@@ -439,8 +445,9 @@ def parse_paste(body: str) -> tuple[str | None, dict[str, str], list[str]]:
     kind, lines = _paste_lines(body)
     if kind is None:
         return None, {}, []
-    required = DECISION_PASTE_FIELDS if kind == "decision" else FORECAST_PASTE_FIELDS
-    optional = DECISION_PASTE_OPTIONAL if kind == "decision" else FORECAST_PASTE_OPTIONAL
+    required, optional = {"decision": (DECISION_PASTE_FIELDS, DECISION_PASTE_OPTIONAL),
+                          "forecast": (FORECAST_PASTE_FIELDS, FORECAST_PASTE_OPTIONAL),
+                          "resolve": (RESOLVE_PASTE_FIELDS, RESOLVE_PASTE_OPTIONAL)}[kind]
     known = {_paste_label(k): v for k, v in {**required, **optional}.items()}
     values: dict[str, list[str]] = {}
     current = None
@@ -467,14 +474,14 @@ def parse_paste(body: str) -> tuple[str | None, dict[str, str], list[str]]:
 
 
 def process_paste(body: str, issue: int, today: date, root: Path = ROOT) -> dict:
-    """Handle a pasted DECISION RECORD or FORECAST block with the same handlers (and, for a decision, the same
-    Risk Manager check) as the forms."""
+    """Handle a pasted DECISION RECORD, FORECAST or RESOLVE block with the same handlers (and, for a decision, the
+    same Risk Manager check) as the forms."""
     kind, fields, missing = parse_paste(body)
     if kind is None:
         return {"ok": False, "kind": None,
-                "comment": "Nothing was logged: the issue body must start with a `DECISION RECORD` or `FORECAST` "
-                           "line, followed by one `Field: value` line per field. Edit the issue to fix it."}
-    header = "DECISION RECORD" if kind == "decision" else "FORECAST"
+                "comment": "Nothing was logged: the issue body must start with a `DECISION RECORD`, `FORECAST` or "
+                           "`RESOLVE` line, followed by one `Field: value` line per field. Edit the issue to fix it."}
+    header = {"decision": "DECISION RECORD", "forecast": "FORECAST", "resolve": "RESOLVE"}[kind]
     if missing:
         return {"ok": False, "kind": kind,
                 "comment": f"This {header} block was **not** logged. These lines are missing or empty:\n\n"
@@ -483,6 +490,8 @@ def process_paste(body: str, issue: int, today: date, root: Path = ROOT) -> dict
                              "following lines). The workflow re-runs when the issue is edited."}
     if kind == "decision":
         res = handle_decision(fields, issue, today, root)
+    elif kind == "resolve":
+        res = handle_resolve(fields, issue, today, root)
     else:
         res = handle_forecast(fields, issue, today, root, require_market=False)
     res["comment"] = f"_Read from a pasted {header} block._\n\n" + res["comment"]

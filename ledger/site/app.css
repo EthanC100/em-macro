@@ -419,3 +419,13 @@ table.compact td .pill { white-space: normal; font-size: 0.66rem; }
 .last-check .fill-rule { margin: 6px 0 0; font-size: 0.88rem; color: var(--fg-2); }
 ul.checks { list-style: none; padding-left: 0; }
 ul.checks li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+
+/* Log a decision: the clerk instructions (docs/ledger/clerk.md) */
+details.clerk { flex: 1 1 100%; }
+details.clerk > summary { list-style: none; cursor: pointer; display: inline-flex; }
+details.clerk > summary::-webkit-details-marker { display: none; }
+details.clerk[open] > summary { margin-bottom: 8px; }
+details.clerk .clerk-body { padding: 12px 14px; }
+details.clerk .clerk-body ol { margin: 0 0 10px; padding-left: 20px; }
+details.clerk .clerk-body li { margin: 4px 0; }
+details.clerk .clerk-body code { overflow-wrap: anywhere; }

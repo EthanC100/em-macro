@@ -262,7 +262,7 @@
       <section class="section">
         <div class="filters">${sel('country', 'Country', dec.summary.countries, f.country)}${sel('status', 'Status', ['open', 'resolved'], f.status)}${sel('outcome', 'Outcome', dec.summary.outcomes, f.outcome)}</div>
         <div class="list">${items.length ? items.map(decisionRow).join('') : '<p class="empty">No decisions match these filters.</p>'}</div>
-        <div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.decision)}" target="_blank" rel="noopener">Log a decision</a><a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div>
+        <div class="btn-row">${clerkButton(meta)}<a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div>
       </section>`;
     ['country', 'status', 'outcome'].forEach((k) => { document.getElementById(`f-${k}`).onchange = (e) => { f[k] = e.target.value; pageDecisions(); }; });
   }
@@ -589,7 +589,8 @@
       </section>
       <section class="section">
         <h2>Log an entry</h2>
-        <p class="small muted">Each button opens a GitHub issue form; the GitHub app on your phone handles it. A workflow checks the entry, writes it to the ledger files and closes the issue with its new id, or comments with what to fix.</p>
+        <div class="btn-row">${clerkButton(m)}</div>
+        <p class="small muted">Backup: each link below opens a GitHub issue form; a workflow runs the same checks as the clerk, writes the entry and closes the issue with its new id, or comments with what to fix.</p>
         <div class="menu">
           <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener" style="--item:var(--c-decisions)"><span><span class="t">Decision record</span><br><span class="d">Trade or no-trade, with size, probability, stop and thesis</span></span><span class="chev">↗</span></a>
           <a href="${esc(m.issue_forms.forecast)}" target="_blank" rel="noopener" style="--item:var(--c-forecasts)"><span><span class="t">Forecast</span><br><span class="d">A question with my, the market's and Claude's probability</span></span><span class="chev">↗</span></a>
@@ -679,6 +680,27 @@
   const bookIcon = (b) => (b === 'janus' ? JANUS_ICON : `<span class="book-dot" style="background:var(${bookOf(b).v})"></span>`);
   const bookPill = (b, text) => `<span class="pill bk ${bookOf(b).cls}">${b === 'janus' ? JANUS_ICON : ''}${esc(text || bookOf(b).name)}</span>`;
   const pts = (x) => (isNum(x) ? `${x > 0 ? '+' : x < 0 ? '−' : ''}${fmtNum(Math.abs(x), 2)}` : '—');
+  // "Log a decision": instructions for the Ledger clerk (docs/ledger/clerk.md); the GitHub forms stay as a backup
+  const CLERK_TEMPLATE = ['DECISION RECORD', 'Date: ', 'Country: ', 'Instrument: ', 'Action: Buy / Sell / No trade', 'Size: ',
+    'Probability: ', 'Horizon: ', 'Entry trigger: ', 'Stop / exit if wrong: ', 'Thesis: ', 'Key factors: ',
+    'What would change my mind: ', 'How this differs from market consensus: '].join('\n');
+  function clerkButton(m) {
+    return `<details class="clerk"><summary class="btn primary">Log a decision</summary>
+      <div class="clerk-body card">
+        <ol class="small">
+          <li>Open a Claude Code session on <b>em-macro</b>.</li>
+          <li>Say <b>“Log this with the Ledger clerk”</b> and paste the <code>DECISION RECORD</code>, <code>FORECAST</code> or <code>RESOLVE</code> block.</li>
+          <li>The session follows <code>docs/ledger/clerk.md</code>: it shows you the Risk Manager result, then logs the entry (sealed in the audit chain) and gives you the new id, or lists every problem to fix.</li>
+        </ol>
+        <div class="btn-row"><button type="button" class="btn" data-copy-clerk>Copy a blank DECISION RECORD</button></div>
+        <p class="small muted">Backup: <a href="${esc(m.issue_forms.decision)}" target="_blank" rel="noopener">GitHub decision form</a> · <a href="${esc(m.issue_forms.quick)}" target="_blank" rel="noopener">GitHub paste form</a></p>
+      </div></details>`;
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy-clerk]');
+    if (!b) return;
+    try { await navigator.clipboard.writeText(CLERK_TEMPLATE); b.textContent = 'Copied'; } catch (err) { b.textContent = 'Copy failed: select the text in docs/ledger/clerk.md'; }
+  });
   let infoSeq = 0;
   function info(text, label = 'About this') {
     if (!text) return '';
@@ -861,7 +883,7 @@
       <section class="section"><div class="section-head"><h2>Resolved</h2><span class="muted small">${resolved.length}</span></div>
         <div class="list">${resolved.map(row).join('') || '<p class="empty">Nothing resolved yet.</p>'}</div></section>
       ${attributionSection('me', me.attribution, 'Live P&L of open positions, % of account')}
-      <section class="section"><div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.decision)}" target="_blank" rel="noopener">Log a decision</a><a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
+      <section class="section"><div class="btn-row">${clerkButton(meta)}<a class="btn" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve</a></div></section>`;
     dateChart('c-me', [{ label: 'Me', data: me.series, color: '--book-me', fill: true }], { fmt: (v) => fmtNum(v, 2) });
   }
 

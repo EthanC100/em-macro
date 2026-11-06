@@ -76,6 +76,25 @@ def parse_number(text: str | None) -> float | None:
     return None
 
 
+_STOP_LEVEL = re.compile(r"\b(?:below|above|under|over|through|to|at)\s+(?:\$|US\$)?(?P<n>[-+]?\d+(?:[.,]\d+)?)"
+                         r"(?P<suffix>[A-Za-z%]*)", re.I)
+
+
+def stop_level(text: str | None) -> float | None:
+    """The stop level of a 'Stop / exit if wrong' text: the first number after below/above/under/over/through/to/at
+    ('Max loss is the premium (2% of account). Exit if March 2027 Brent closes below 85.00' gives 85.0, not 2);
+    otherwise the first price-like number (parse_number)."""
+    if text is None:
+        return None
+    t = str(text).replace("\u2212", "-")
+    for m in _STOP_LEVEL.finditer(t):
+        if m.group("suffix") and (_TENOR_SUFFIX.match(m.group("suffix")) or m.group("suffix") == "%"
+                                  and re.search(r"of\s+(?:the\s+)?(?:account|book)", t[m.end():m.end() + 20], re.I)):
+            continue
+        return float(m.group("n").replace(",", "."))
+    return parse_number(t)
+
+
 def parse_probability(text: str | None) -> float | None:
     """Probability as a percentage 0-100 from '65', '65%', '0.65'."""
     v = parse_number(text)
@@ -113,7 +132,7 @@ def validate_decision(d: dict) -> tuple[list[str], list[str]]:
     prob = parse_probability(d.get("probability"))
     if prob is None:
         errors.append("Probability my view is right must be a percentage between 0 and 100.")
-    if parse_number(d.get("stop")) is None:
+    if stop_level(d.get("stop")) is None:
         errors.append("Stop / exit if wrong must contain a numeric price or yield level "
                       "(for example '5.70' or '115bp').")
     ptype = position_type(d)
