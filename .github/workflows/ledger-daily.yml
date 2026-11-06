@@ -9,9 +9,15 @@
 # ANTHROPIC_API_KEY (without it event forecasts get a [RESOLVE?] issue instead; nothing fails).
 name: ledger-daily
 
+# 2026-11-06: runs on 4 and 5 Nov were green but committed nothing: `git add` listed automation_log.csv and
+# api_log.csv, which did not exist yet, so git refused the whole add (exit 128) and `2>/dev/null || true` hid it;
+# the step then printed "nothing to commit". The commit step now stages only paths that exist, fails if a
+# changed ledger file is left unstaged or the push fails, and a marks watchdog (here and in ledger-watchdog)
+# opens "[ALERT] Ledger marks stale" when the newest mark is more than 2 days old.
 on:
   schedule:
     - cron: "52 5 * * *"      # 05:52 UTC daily, before the 06:41 app build
+    - cron: "22 9 * * *"      # 09:22 UTC backup: GitHub delays or drops scheduled runs (5 Nov ran at 13:31); re-running is idempotent
   workflow_dispatch:
     inputs:
       skip_api:
@@ -69,16 +75,26 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv \
-                  data/ledger/automation_log.csv data/ledger/api_log.csv data/raw/bist data/raw/bondspot 2>/dev/null || true
+          paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv
+                 data/ledger/automation_log.csv data/ledger/api_log.csv data/janus data/ledger/postmortems
+                 data/ledger/reports data/raw/bist data/raw/bondspot)
+          existing=()
+          for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
+          git add -- "${existing[@]}"
+          # nothing the jobs changed may be left behind (this is what failed silently on 4 and 5 Nov)
+          if ! git diff --quiet -- "${existing[@]}"; then
+            echo "::error::ledger files changed but were not staged"; git status --short; exit 1
+          fi
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else
             git commit -m "Ledger daily $(date -u +%Y-%m-%d): marks, closes and resolutions"
+            pushed=false
             for i in 1 2 3 4; do
-              if git push origin HEAD:main; then break; fi
+              if git push origin HEAD:main; then pushed=true; break; fi
               sleep $((i * 3)); git pull --rebase origin main
             done
+            [ "$pushed" = true ] || { echo "::error::push failed after 4 attempts"; exit 1; }
           fi
           echo "summary<<EOF" >> "$GITHUB_OUTPUT"
           python -c "import json;print(json.load(open('$RUNNER_TEMP/resolve.json')).get('summary',''))" >> "$GITHUB_OUTPUT"
@@ -136,6 +152,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || true
+
+      - name: Marks watchdog (alert when the newest mark is more than 2 days old)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch -q origin main && git checkout -q FETCH_HEAD -- data/ledger/marks.csv || true
+          python -m ledger.watchdog --out "$RUNNER_TEMP/watchdog.json"
+          bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/watchdog.json"
 
       - name: Job summary
         if: always()

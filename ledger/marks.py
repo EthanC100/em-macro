@@ -13,8 +13,18 @@ replaced by its fallback, and if that fails too the previous mark is kept with a
 source never stops the run.
 
 Sources (``source`` column): fred, ecb_exr, bcb_sgs, banxico, sarb, nbp, boe, bde, bundesbank,
-mindicador, datos_gov_co, em_macro (a loader of this repository), panel_daily, panel_monthly
-(the project's own panels, refreshed monthly) and spread (leg minus leg, in bp).
+riksbank (Sveriges Riksbank SWEA API: daily benchmark 10-year yields of FR, DE, US, GB, JP and others),
+mof_jgb (Japan Ministry of Finance JGB curve), mindicador, datos_gov_co, em_macro (a loader of this
+repository), panel_daily, panel_monthly (the project's own panels, refreshed monthly) and spread (leg
+minus leg, in bp).
+
+Which marks may act on a position (2026-11-06, after D001 was shown at a 30 Sep monthly average):
+only a ``daily`` mark that is not stale and is not a carried-forward previous mark can trigger a stop
+or a horizon close (``mark_can_act``). A monthly mark is a monthly *average* dated at the month end;
+it is shown, flagged, and never prices or closes anything.
+
+    python -m ledger.marks --backfill 2026-10-30 --only FR-DE   # daily history from a start date
+                                                                 # (sources with a date-range API)
 
 Only the standard library is needed for every source except ``em_macro``.
 """
@@ -196,6 +206,47 @@ def fetch_bundesbank(key: str, get=http_get):
     return d, v, url
 
 
+def riksbank_history(series: str, start: date, get=http_get, end: date | None = None):
+    """Sveriges Riksbank SWEA API (keyless): daily observations of ``series`` from ``start``.
+    The international government bond series (FRGVB10Y, DEGVB10Y, USGVB10Y, GBGVB10Y, JPGVB10Y, ...)
+    are benchmark 10-year yields, one value per business day."""
+    end = end or (date.today() + timedelta(days=1))
+    url = f"https://api.riksbank.se/swea/v1/Observations/{series}/{start.isoformat()}/{end.isoformat()}"
+    rows = json.loads(get(url).decode("utf-8", "replace"))
+    pts = sorted((parse_date(r.get("date")), _num(r.get("value"))) for r in rows if r.get("value") is not None)
+    return [(d, v) for d, v in pts if d and v is not None], url
+
+
+def fetch_riksbank(series: str, get=http_get):
+    pts, url = riksbank_history(series, date.today() - timedelta(days=21), get)
+    d, v = _last(pts)
+    return d, v, url
+
+
+def mof_jgb_history(tenor: str = "10Y", get=http_get):
+    """Japan Ministry of Finance JGB constant-maturity yields (keyless CSV, one row per business day)."""
+    url = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv"
+    rows = list(csv.reader(get(url, browser=True).decode("utf-8", "replace").splitlines()))
+    head = next((i for i, r in enumerate(rows) if r and r[0].strip().lower() == "date"), None)
+    if head is None:
+        raise ValueError("JGB csv: no header row")
+    col = [c.strip() for c in rows[head]].index(tenor)
+    pts = []
+    for r in rows[head + 1:]:
+        if len(r) > col and re.match(r"^\d{4}/\d{1,2}/\d{1,2}$", r[0].strip()):
+            y, m, d = (int(x) for x in r[0].strip().split("/"))
+            v = _num(r[col])
+            if v is not None:
+                pts.append((date(y, m, d), v))
+    return pts, url
+
+
+def fetch_mof_jgb(tenor: str, get=http_get):
+    pts, url = mof_jgb_history(tenor or "10Y", get)
+    d, v = _last(pts)
+    return d, v, url
+
+
 def fetch_mindicador(indicator: str, get=http_get):
     url = f"https://mindicador.cl/api/{indicator}"
     d = json.loads(get(url).decode("utf-8", "replace"))
@@ -260,7 +311,99 @@ FETCHERS = {
     "sarb": fetch_sarb, "nbp": fetch_nbp, "boe": fetch_boe, "bde": fetch_bde, "bundesbank": fetch_bundesbank,
     "mindicador": fetch_mindicador, "datos_gov_co": fetch_datos_gov_co, "em_macro": fetch_em_macro,
     "panel_daily": fetch_panel_daily, "panel_monthly": fetch_panel_monthly,
+    "riksbank": fetch_riksbank, "mof_jgb": fetch_mof_jgb,
 }
+
+
+def fred_history(series: str, start: date, get=http_get):
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={start.isoformat()}"
+    rows = list(csv.reader(get(url).decode("utf-8", "replace").splitlines()))
+    pts = [(parse_date(r[0]), _num(r[1])) for r in rows[1:] if len(r) >= 2]
+    return [(d, v) for d, v in pts if d and v is not None and d >= start], url
+
+
+def bundesbank_history(key: str, start: date, get=http_get):
+    url = f"https://api.statistiken.bundesbank.de/rest/data/BBSIS/{key}?format=csv&lang=en&startPeriod={start.isoformat()}"
+    rows = list(csv.reader(get(url).decode("utf-8-sig", "replace").splitlines()))
+    pts = [(parse_date(r[0]), _num(r[1])) for r in rows if r and re.match(r"^\d{4}-\d{2}-\d{2}$", r[0])]
+    return [(d, v) for d, v in pts if d and v is not None], url
+
+
+def ecb_exr_history(ccy: str, start: date, get=http_get):
+    """Local currency per USD (USD per EUR for ``USD``) from the ECB reference rates since ``start``."""
+    def series(c):
+        url = (f"https://data-api.ecb.europa.eu/service/data/EXR/D.{c}.EUR.SP00.A?format=csvdata"
+               f"&startPeriod={start.isoformat()}")
+        out = {}
+        for r in csv.DictReader(get(url).decode("utf-8", "replace").splitlines()):
+            d, v = parse_date(r.get("TIME_PERIOD")), _num(r.get("OBS_VALUE"))
+            if d and v is not None:
+                out[d] = v
+        return out, url
+    usd, url = series("USD")
+    if ccy == "USD":
+        return sorted(usd.items()), url
+    loc, url = series(ccy)
+    return sorted((d, round(loc[d] / usd[d], 6)) for d in loc if d in usd and usd[d]), url
+
+
+HISTORY = {"riksbank": riksbank_history, "fred": fred_history, "bundesbank": bundesbank_history,
+           "ecb_exr": ecb_exr_history,
+           "mof_jgb": lambda ident, start, get=http_get: (lambda r: ([p for p in r[0] if p[0] >= start], r[1]))(
+               mof_jgb_history(ident or "10Y", get))}
+
+
+def history_for(row: dict, start: date, get=http_get, cache: dict | None = None) -> tuple[list[tuple[date, float]], str]:
+    """Daily history of a registry row from ``start`` (primary source only; spreads from their legs,
+    on the dates both legs have). Raises if the source has no date-range API."""
+    cache = cache if cache is not None else {}
+    src, ident = row.get("source", ""), row.get("source_id", "")
+    key = (src, ident, start)
+    if key in cache:
+        return cache[key]
+    if src == "spread":
+        raise ValueError("spread history needs the registry; use spread_history")
+    fn = HISTORY.get(src)
+    if fn is None:
+        raise ValueError(f"no history API for source {src!r}")
+    out = fn(ident, start, get)
+    cache[key] = out
+    return out
+
+
+def spread_history(row: dict, by_id: dict[str, dict], start: date, get=http_get, cache: dict | None = None):
+    a, b = row["source_id"].split("-", 1) if row.get("source") == "spread" else (None, None)
+    if a is None:
+        return history_for(row, start, get, cache)
+    pa, ua = history_for(by_id[a], start, get, cache)
+    pb, ub = history_for(by_id[b], start, get, cache)
+    db = dict(pb)
+    return [(d, round((v - db[d]) * 100, 2)) for d, v in pa if d in db], f"{ua} ; {ub}"
+
+
+def backfill(registry: list[dict], start: date, only: set[str] | None = None, get=http_get) -> list[dict]:
+    """Daily marks from ``start`` for every (selected) instrument whose source has a date-range API."""
+    by_id = registry_index(registry)
+    cache: dict = {}
+    out = []
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    for row in registry:
+        if only and row["instrument"] not in only:
+            continue
+        if (row.get("frequency") or "daily") != "daily":
+            continue
+        try:
+            pts, url = spread_history(row, by_id, start, get, cache)
+        except Exception as e:  # noqa: BLE001 - report and carry on
+            print(f"{row['instrument']:8s} no history: {str(e)[:120]}")
+            continue
+        src = f"{row.get('source', '')} {row.get('source_id', '')}".strip()
+        for d, v in pts:
+            out.append({"date": d.isoformat(), "instrument": row["instrument"], "value": f"{v:.6g}",
+                        "unit": row.get("unit", ""), "frequency": "daily", "source": src, "source_url": url,
+                        "fetched_at": now, "note": "backfilled history"})
+        print(f"{row['instrument']:8s} {len(pts)} daily marks from {start}")
+    return out
 
 
 # ----------------------------------------------------------------------------- registry
@@ -424,6 +567,18 @@ def write_marks(new: list[dict], path: Path = MARKS) -> int:
 
 
 # ----------------------------------------------------------------------------- live P&L
+def mark_can_act(mark: dict | None) -> bool:
+    """True if a mark may trigger a stop or a horizon close: a first-hand daily observation. A monthly
+    average (dated at its month end), a monthly fallback, a mark flagged stale when fetched (its
+    observation older than ``stale_mark_days``) and a carried-forward previous mark never act."""
+    if not mark or mark.get("value") in (None, ""):
+        return False
+    if (mark.get("frequency") or "").strip().lower() != "daily":
+        return False
+    note = (mark.get("note") or "").lower()
+    return not ("kept previous mark" in note or "stale" in note or "panel_monthly" in note)
+
+
 def mark_is_current(decision: dict, mark: dict | None) -> bool:
     """A mark can price or close a decision only if it is dated on or after the decision date
     (a monthly average from before the decision says nothing about the position)."""
@@ -447,7 +602,11 @@ def live_mark(decision: dict, registry: list[dict], latest: dict[str, dict]) -> 
         return out
     v = _num(m.get("value"))
     out.update({"mark": v, "mark_date": m.get("date"), "mark_frequency": m.get("frequency") or row.get("frequency"),
-                "mark_source": m.get("source"), "mark_source_url": m.get("source_url"), "mark_note": m.get("note")})
+                "mark_source": m.get("source"), "mark_source_url": m.get("source_url"), "mark_note": m.get("note"),
+                "mark_can_act": mark_can_act(m),
+                "mark_flag": None if mark_can_act(m) else
+                ("monthly average carried at its month end; estimate only, never used for stops or closes"
+                 if (m.get("frequency") or "") == "monthly" else "stale or carried-forward mark; never used for stops or closes")})
     if not mark_is_current(decision, m):
         out["mark_note"] = ((out["mark_note"] + "; ") if out["mark_note"] else "") + \
             f"mark dated {m.get('date')} predates the decision ({decision.get('date')}); no live P&L until a newer mark"
@@ -465,10 +624,19 @@ def main(argv=None) -> int:
     ap.add_argument("--only", default="", help="comma-separated instrument codes")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--today", default=None)
+    ap.add_argument("--backfill", default=None, help="YYYY-MM-DD: write daily history from this date")
     a = ap.parse_args(argv)
     today = parse_date(a.today) if a.today else date.today()
     registry = load_registry()
     only = {s.strip() for s in a.only.split(",") if s.strip()} or None
+    if a.backfill:
+        rows = backfill(registry, parse_date(a.backfill), only)
+        if a.dry_run:
+            print(json.dumps(rows[:20], indent=1))
+            return 0
+        n = write_marks(rows)
+        print(f"{n} backfilled marks written to {MARKS.relative_to(ROOT)}")
+        return 0
     if only:
         # a spread needs its legs
         for r in registry:

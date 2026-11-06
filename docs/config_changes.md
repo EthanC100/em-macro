@@ -125,3 +125,56 @@ test and before the freeze, is a pre-live gap month, not a live month. Nothing e
   the BCCh API needs a login); Turkey and Indonesia FX from the ECB reference rates (the CBRT API needs a key,
   Bank Indonesia has no open API); Yahoo and Stooq not used (rate-limited or blocked). No strategy code,
   parameter or hashed file changed.
+
+## 2026-11-06: D001 marked at a stale monthly average; FR-DE now daily (branch `build/ledger-v2`)
+
+- **Symptom:** the app showed D001 (short OAT / long Bund, entered 30 Oct 2026 at 159bp, stop 115bp) at
+  **96.7bp, dated 30 Sep 2026, monthly**, while the French 10y OAT-Bund spread traded at about 150-166bp.
+- **Wrong source:** `data/ledger/instruments.csv` row `FR-DE` was marked from `panel_monthly
+  spread_vs_de_bp:FRA`. That column of `data/processed/country_month_panel.csv` is the ECB IRS (EMU convergence)
+  10-year yield of France minus Germany's, as a **monthly average**. The mark took the September 2026 average
+  (FR 4.44% minus DE 3.473% = 96.7bp) and dated it at the month end. The figure is correct as a September average:
+  the Riksbank's daily benchmarks average 98.5bp over September. But it is not a price, and it was five weeks old.
+  The spread widened from about 100bp in late September to 143bp on 1 Oct and 166bp on 30 Oct. No free daily
+  French yield was reachable when the registry was built: Banque de France Webstat refused connections, its daily
+  ECOFI series is archived (2025-03), Eurostat's daily convergence yields are no longer disseminated, and the
+  ECB and OECD publish monthly only.
+- **Fix:** `FR10Y` and `FR-DE` are now daily. `FR10Y` uses the Sveriges Riksbank SWEA API, series `FRGVB10Y`
+  (benchmark 10-year OAT, keyless, one value per business day). `FR-DE` is `FRGVB10Y` minus a new leg `DE10YBM`
+  (`DEGVB10Y`, the benchmark Bund from the same source and close). Neither falls back to a monthly average: if
+  the Riksbank is down, the previous daily mark is carried and flagged. Daily history from 30 Oct was backfilled
+  (`python -m ledger.marks --backfill 2026-10-30 --only FR-DE,FR10Y,DE10YBM`): 30 Oct 165.7bp, 2 Nov 161.4bp,
+  3 Nov 161.5bp, 4 Nov 150.2bp.
+- **Did anything act on the wrong mark? No.** `ledger/resolve.py` only lets marks dated on or after the
+  decision date close a position (`mark_is_current`), and the 30 Sep mark predates D001's 30 Oct entry. Both
+  ledger-daily runs (4 and 5 Nov) logged "0 decision(s) closed". `decisions.csv` has not changed since D001's
+  entry level was added (b227651). The Risk Manager reads no mark values.
+- **Could it act later? Not any more.** Once October's panel average (about 148bp, dated 31 Oct) arrived with the
+  3 Dec refresh, it would have passed that date check. New rule (`mark_can_act` in `ledger/marks.py`): only a
+  first-hand **daily** mark can trigger a stop or a horizon close. A monthly average, a monthly fallback, a mark
+  flagged stale when fetched, or a carried-forward mark never acts. A horizon that passes with only such marks
+  opens a `[RESOLVE?]` issue instead. Monthly-only instruments (IT-DE, IT10Y, ID10Y, CO10Y, CL10Y) are shown
+  carried at their last mark and flagged. Tests: `test_monthly_or_carried_marks_never_stop_or_close_a_position`,
+  `test_riksbank_and_jgb_parsers`.
+- **IT-DE stays monthly:** the Riksbank publishes no Italian series, and no keyless daily BTP yield was found.
+  Italy is therefore excluded from Janus's universe (see the Janus section).
+
+## 2026-11-06: ledger-daily ran but committed no marks
+
+- **Symptom:** marks were last fetched on 4 Nov 2026 at 10:10 UTC by the build session. ledger-daily showed green
+  on 4 Nov (manual run, 12:42 UTC) and on 5 Nov (scheduled 05:52, started 13:31 UTC), but neither run committed.
+- **Cause:** the commit step ran `git add data/ledger/marks.csv ... data/ledger/automation_log.csv
+  data/ledger/api_log.csv ... 2>/dev/null || true`. The two log files are created only when the resolver first
+  acts or calls the API, so neither existed. Git rejects the whole `add` when any pathspec matches nothing
+  (`fatal: pathspec ... did not match any files`, exit 128), so `marks.csv` was not staged either.
+  `2>/dev/null || true` hid the error, and the step printed "nothing to commit" after the marks step had
+  logged "20 new or changed marks written". A failed push after four attempts would also have passed silently.
+  Separately, GitHub started the 5 Nov scheduled run 7.5 hours late; scheduled runs can be delayed or dropped.
+- **Fix:**
+  - The commit step stages only paths that exist and fails if a changed ledger file is left unstaged or the push
+    fails.
+  - The two log files are committed with their headers.
+  - A 09:22 UTC backup schedule was added (re-running is idempotent: marks merge per instrument and date).
+  - `ledger/watchdog.py` opens **"[ALERT] Ledger marks stale"** when the newest mark is more than 2 days old and
+    closes it once fresh marks are committed. It runs at the end of every ledger-daily run and from its own
+    `ledger-watchdog` workflow (12:17 UTC daily), so it fires even if ledger-daily never starts.
