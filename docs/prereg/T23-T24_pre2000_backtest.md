@@ -218,3 +218,33 @@ None of these can change a decision.
 - `trials.csv` gets rows **T23** (group `G20_basis_momentum`) and **T24** (group `G21_diversified_futures_trend`), marked **pending**, in the same commit as this document, with no other row changed. `tests/test_ledger.py`'s row counts are updated to expect them as pending.
 - **Distinct trial groups do not increase**, because these are re-tests of T21's and T22's hypotheses on a new sample. The ledger's row count rises from 22 to 24.
 - No deflated-Sharpe gate is part of T23 or T24 (C4 needed v1.1). The spec-convention N used by T20–T22 (N = 16) is not incremented. Should a later shadow pre-registration need a DSR, it will count T23 and T24 as two further trials.
+
+## Amendment 1 — 2026-11-06, approved by the owner before the run
+
+Recorded after the pre-registration commit `215b3c4` and the owner's approval, and **before any return, signal, sleeve
+or statistic over 1978–1999 was computed** (Phase 2 has not started). The text above is left as written; where this
+section and the text above differ, this section governs. Only the pass rule changes.
+
+### A1.1 A gate on the never-computed sub-window (a)
+
+**Reason.** §5 records that the a160bfd run computed, and committed without reporting, sleeve returns for
+1991-02..1999-12: 107 of T23's 248 months and 107 of T24's 249. The months before 1991-02 have never been computed by
+any run. The added gate requires each sleeve to show a positive return on the never-computed part on its own, so the
+already-computed 1991–1999 months cannot decide the result by themselves.
+
+**Change.** Each trial gets one more gate, at decisive costs (`Sleeve.monthly(2.0)`), full window universe:
+
+| trial | # | gate | passes if |
+|---|---|---|---|
+| T23 | A | mean monthly net return of the stand-alone sleeve over sub-window (a), **1979-05..1991-01** (141 months) | mean > 0 |
+| T24 | A | mean monthly net return of the stand-alone sleeve over sub-window (a), **1979-04..1991-01** (142 months) | mean > 0 |
+
+- The gate is a point estimate (no test statistic) and is not part of the Holm family (§4.3), which is unchanged.
+- **Decision rule, restated.** A trial passes only if all of its gates hold: **T23: S1 (with Holm), S2, S3 and A;
+  T24: S1, S3 and A.**
+- Sub-window (a) is the same sleeve run (one run per trial, §6), read over its first months; nothing is re-run.
+
+**Not changed.** Everything else: the windows, S1–S3, the Holm rule and the decision that T24's p-value does not gate
+T24 (§4.3), the T20 control, the treatment of T22's S2 (§4.1), the data rules (§7), the Phase 2 procedure (§6) and
+the meaning of the result (§1). The ledger rows T23 and T24 are updated to reference this amendment, changing no
+other row.
