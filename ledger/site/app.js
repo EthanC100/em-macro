@@ -228,7 +228,14 @@
 
   // ------------------------------------------------------------------ pages
   const fmtLevel = (v, unit) => (!isNum(v) ? '—' : (unit === 'bp' ? `${fmtNum(v, Number.isInteger(Math.round(v * 10) / 10) ? 0 : 1)}bp` : unit && unit.startsWith('%') ? `${fmtNum(v, 2)}%` : fmtNum(v, Math.abs(v) >= 100 ? 1 : 4)));
+  // futures / options (ledger/derivs.py): P&L in % only (settlements are licensed); options are a model estimate
+  const valuationText = (d) => (d.valuation === 'entry' ? 'at entry' : d.valuation || 'settlement');
+  function derivLive(d) {
+    const v = d.derivative;
+    return `${isNum(d.live_pnl_pct) ? `<b class="${signClass(d.live_pnl_pct)}">live P&L ${fmtPct(d.live_pnl_pct, 2, true)}</b>` : 'no settlement yet'} · ${pill(valuationText(d), d.valuation === 'model estimate' ? 'warn' : '')}${d.mark_date ? ` ${fmtDate(d.mark_date)}` : ''}${v && v.proxy === 'yes' ? ` ${pill('proxy', 'warn')}` : ''}`;
+  }
   function liveLabel(d) {
+    if (d.status === 'open' && d.derivative) return ` · ${derivLive(d)}`;
     if (d.status !== 'open' || !d.mark_instrument) return '';
     if (!isNum(d.mark)) return ' · no mark yet';
     const when = `${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ', monthly' : ''}`;
@@ -285,9 +292,11 @@
         <div class="stat"><span class="k">Status</span><span class="v sm">${badge('open')}</span><span class="s">horizon ${fmtDate(d.horizon)} (${daysLabel(d.days_to_horizon)})</span></div>
         <div class="stat"><span class="k">My probability</span><span class="v">${fmtProb(d.probability)}</span><span class="s">${isNum(d.claude_probability) ? `Claude ${fmtProb(d.claude_probability)}` : 'that the view is right'}</span></div>
         <div class="stat"><span class="k">At risk</span><span class="v">${fmtPct(d.size_pct, 2)}</span><span class="s">of account (cap 2%) · ${d.position_type === 'event' ? 'event bet' : 'continuous'}</span></div>
-        <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
+        <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${d.derivative ? `${esc(valuationText(d))}${d.mark_date ? `, ${fmtDate(d.mark_date)}` : ''}` : isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
       </div>`;
-    const markNote = d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
+    const dv = d.derivative;
+    const derivNote = dv ? `${esc(dv.structure)} on ${esc(dv.product)} ${esc(dv.contract_month)} (${esc(dv.exchange)}${dv.legs ? `: ${esc(dv.legs.split('|').join(', '))}` : ''}${dv.option_expiry ? `, expiry ${fmtDate(dv.option_expiry)}` : ''}) · marked at the ${esc(dv.mark_source)}${dv.proxy === 'yes' ? ' <b>(proxy)</b>' : ''}${dv.structure !== 'future' ? ` · <b>model estimate</b>: Black-76 with implied vol ${esc(dv.iv_entry_pct)}% at entry (${esc(dv.iv_source)}); intrinsic value from expiry · maximum loss ${esc(dv.risk_per_unit)} per unit (the premium)` : ''} · <span class="muted">settlement prices are licensed and kept privately; only P&L in % is published</span>` : '';
+    const markNote = dv ? derivNote : d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
     view.innerHTML = `
       <a class="back" href="#/decisions">← Decisions</a>
       ${scoreBlock}
@@ -862,7 +871,7 @@
     const resolved = me.positions.filter((p) => p.status === 'resolved');
     const flag = (p) => (p.mark_flag ? ` ${pill(p.mark_frequency === 'monthly' ? 'monthly mark' : 'stale mark', 'warn')}` : '');
     const row = (p) => posRow('me', p, `${esc(p.instrument)} ${badge(p.action)}`,
-      `<b>${esc(p.id)}</b>${(p.corrections || []).length ? ` ${pill('corrected', 'warn')}` : ''} · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
+      `<b>${esc(p.id)}</b>${(p.corrections || []).length ? ` ${pill('corrected', 'warn')}` : ''} · ${esc(p.country)} · ${p.action === 'No trade' ? 'no position' : `${fmtPct(p.size_pct, 1)} at risk`} · p ${fmtProb(p.probability)}${p.derivative && p.status === 'open' ? ` · ${pill(valuationText(p), p.valuation === 'model estimate' ? 'warn' : '')}${p.derivative.proxy === 'yes' ? ` ${pill('proxy', 'warn')}` : ''}` : isNum(p.mark) ? ` · mark ${fmtLevel(p.mark, p.mark_unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})` : ''}${flag(p)}${p.status === 'resolved' ? ` · ${badge(p.outcome)}` : ` · horizon ${fmtDate(p.horizon)}`}`,
       p.status === 'resolved' ? p.pnl_pct : p.live_pnl_pct, `#/position/me/${p.id}`);
     const live = me.series.length ? me.series[me.series.length - 1][1] - 100 : null;
     view.innerHTML = `

@@ -30,6 +30,7 @@ from pathlib import Path
 from . import audit as AUD
 from . import books as BOOKS
 from . import capacity as CAP
+from . import derivs as DV
 from . import janus as JN
 from . import postmortem as PM
 from . import risk as RISK
@@ -254,7 +255,9 @@ def build_decisions(today: date) -> dict:
         prob = parse_probability(r.get("probability"))
         horizon = parse_date(r.get("horizon"))
         d = {**r}
-        lm = live_mark(r, registry, latest) if (r.get("status") or "open").strip().lower() == "open" else {}
+        dv = DV.live(r)
+        is_open = (r.get("status") or "open").strip().lower() == "open"
+        lm = (dv if dv else live_mark(r, registry, latest)) if is_open else ({"derivative": dv["derivative"]} if dv else {})
         d.update(lm)
         d.update({
             "position_type": (r.get("position_type") or ("continuous" if r.get("action") in ("Buy", "Sell") else "")).strip().lower(),

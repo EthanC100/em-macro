@@ -114,8 +114,12 @@ def handle_decision(fields: dict, issue: int, today: date, root: Path) -> dict:
     rec.update(d)
     rec["date"] = (parse_date(d["date"]) or today).isoformat() if parse_date(d["date"]) else d["date"]
     rec["position_type"] = position_type(rec) if rec.get("action") in ("Buy", "Sell") else ""
+    from .derivs import append_terms, build_terms
     from .risk import risk_check   # local import: risk reads the registry and the calendars
-    rm = risk_check(rec, root, today)
+    terms, d_errors, d_notes = (build_terms(fields, rec, root, today) if rec.get("action") in ("Buy", "Sell")
+                                else (None, [], []))
+    rm = risk_check(rec, root, today, derivative={"terms": terms, "errors": d_errors, "notes": d_notes}
+                    if (terms or d_errors) else None)
     if not rm["ok"]:
         return {"ok": False, "kind": "decision", "risk_comment": rm["comment"],
                 "comment": "This decision record was **not** logged (Risk Manager). Please edit the issue to fix:\n\n"
@@ -132,6 +136,11 @@ def handle_decision(fields: dict, issue: int, today: date, root: Path) -> dict:
     rec["logged_at"] = today.isoformat()
     rows.append(rec)
     write_rows(path, rows, DECISION_COLUMNS)
+    files = ["data/ledger/decisions.csv"]
+    if terms:
+        terms["id"] = rec["id"]
+        append_terms(terms, root)
+        files.append("data/ledger/derivatives.csv")
     comment = (f"Logged as **{rec['id']}**: {rec['action']} {rec['instrument']} ({rec['country']}), "
                f"{rec['size_pct']}% at risk, p {rec['probability']}%, horizon {rec['horizon']}"
                f"{' (' + rec['position_type'] + ')' if rec['position_type'] else ''}.\n\n"
@@ -144,8 +153,13 @@ def handle_decision(fields: dict, issue: int, today: date, root: Path) -> dict:
                + (f"\n- Risk Manager flags: {len(rm['flags'])} (see its comment)." if rm["flags"] else "")
                + "\n\nThe daily resolver closes it when the stop is hit or the horizon passes; resolve it earlier with the "
                  "*Resolve* form using this id. It appears in the app after the next build.")
+    if terms:
+        comment += (f"\n\n{terms['structure'].capitalize()} on {terms['product']} {terms['contract_month']}, marked daily "
+                    f"from the {terms['mark_source']}{' (proxy)' if terms['proxy'] == 'yes' else ''}"
+                    + (", valued with Black-76 (shown as a model estimate)" if terms["structure"] != "future" else "")
+                    + "; the daily `ledger.derivs mark` closes it on the stop, the horizon or the option expiry.")
     return {"ok": True, "kind": "decision", "id": rec["id"], "comment": comment, "risk_comment": rm["comment"],
-            "files": ["data/ledger/decisions.csv"]}
+            "files": files, "terms": terms}
 
 
 def _entry_level_from_trigger(trigger: str, rec: dict) -> str:
@@ -241,6 +255,12 @@ def handle_resolve(fields: dict, issue: int, today: date, root: Path) -> dict:
     if kind == "decision":
         row["exit_price"] = r["result"]
         row["pnl_pct"] = f"{parse_number(r['pnl']):g}" if r["pnl"] else ""
+        from .derivs import exit_value, load_terms, pnl_pct as _deriv_pnl
+        terms = load_terms(root).get(ref)
+        if terms and not r["pnl"] and parse_number(r["result"]) is not None and parse_number(row.get("size_pct")) is not None:
+            # a futures/options exit: the exit is the structure's price per unit (the spread's or option's price, or
+            # the future's level); P&L = size x (exit - entry value) / maximum loss per unit
+            row["pnl_pct"] = f"{_deriv_pnl(terms, parse_number(row['size_pct']), exit_value(terms, parse_number(r['result']))):g}"
         note = " ".join(r["note"].split()) if r["note"] else ""
         row["resolution_note"] = (note + " " + override.strip()).strip() if override else note
         row["issue"] = f"{row.get('issue') or ''}{'; ' if row.get('issue') else ''}{issue}"
@@ -376,6 +396,10 @@ DECISION_PASTE_FIELDS = {
     "How this differs from market consensus": "How this differs from market consensus",
 }
 DECISION_PASTE_OPTIONAL = {"Position type": "Position type"}   # absent: continuous for a Buy/Sell, as in the form
+# futures and options lines (ledger/derivs.py): Structure, Contract, Legs, Option expiry, Underlying at entry, Premium,
+# Implied volatility, IV source, Quantity
+from .derivs import FIELDS as _DERIV_FIELDS  # noqa: E402
+DECISION_PASTE_OPTIONAL.update({k: k for k in _DERIV_FIELDS})
 FORECAST_PASTE_FIELDS = {"Question": "Question", "Probability": "My probability", "Resolves by": "Resolution date"}
 FORECAST_PASTE_OPTIONAL = {
     "Market probability": "Market probability", "Market source": "Market source",

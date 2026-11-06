@@ -22,6 +22,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import capacity as CAP
+from . import derivs as DV
 from . import janus as JN
 from . import pricing as PX
 from .marks import latest_marks, live_mark, load_registry, mark_can_act, match_instrument, read_marks
@@ -108,7 +109,10 @@ def me_book(today: date, mb: MarkBook) -> dict:
     for d in decisions:
         reg = match_instrument(d.get("instrument", ""), registry)
         status = (d.get("status") or "open").strip().lower()
-        lm = live_mark(d, registry, latest) if status == "open" else {}
+        dv = DV.live(d)                     # futures/options: P&L in % from contract-month settlements, no prices
+        if dv:
+            reg = None
+        lm = (dv if dv else live_mark(d, registry, latest)) if status == "open" else ({"derivative": dv["derivative"]} if dv else {})
         inst = reg["instrument"] if reg else None
         hist = []
         if inst:
@@ -127,9 +131,10 @@ def me_book(today: date, mb: MarkBook) -> dict:
                      "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == d["id"]],
                      "thesis": d.get("thesis"), "change_mind": d.get("change_mind"), "outcome": d.get("outcome"),
                      "pnl_pct": sc["pnl_pct"], "brier": sc["brier"], "unit": (reg or {}).get("unit"),
-                     "asset_class": asset_class((reg or {}).get("kind"), (reg or {}).get("book")),
+                     "asset_class": "Commodities" if dv else asset_class((reg or {}).get("kind"), (reg or {}).get("book")),
                      "currency": currency_of(inst, reg), "mark_history": hist, **lm})
     series = []
+    dterms = DV.load_terms()
     for day in bdays(start, today):
         tot = 0.0
         for d in positions:
@@ -140,6 +145,9 @@ def me_book(today: date, mb: MarkBook) -> dict:
             rd = parse_date(d.get("resolved_date"))
             if st == "resolved" and rd and rd <= day:
                 tot += score_decision(d)["pnl_pct"] or 0.0
+                continue
+            if d["id"] in dterms:
+                tot += DV.pnl_on(d["id"], day) or 0.0
                 continue
             reg = match_instrument(d.get("instrument", ""), registry)
             if not reg:

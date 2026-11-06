@@ -121,12 +121,17 @@ def close_decision(d: dict, mark: dict, today: date, reason: str, outcome: str, 
                             + " A Resolve form with this id overrides this.")
 
 
-def process_decisions(rows: list[dict], marks_rows: list[dict], registry: list[dict], today: date) -> tuple[list[dict], list[dict], list[str]]:
+def process_decisions(rows: list[dict], marks_rows: list[dict], registry: list[dict], today: date,
+                      root: Path | None = None) -> tuple[list[dict], list[dict], list[str]]:
     """Close open decisions in place. Returns (changed rows, issues, log lines)."""
     changed, issues, log = [], [], []
+    from .derivs import load_terms
+    derivs = load_terms(ROOT if root is None else root)
     for d in rows:
         if (d.get("status") or "open").strip().lower() != "open":
             continue
+        if d.get("id") in derivs:
+            continue          # futures/options: marked and closed on contract-month settlements by ledger.derivs mark
         horizon = parse_date(d.get("horizon"))
         dd = parse_date(d.get("date"))
         horizon_passed = bool(horizon and today >= horizon)
@@ -417,7 +422,7 @@ def run(today: date | None = None, root: Path = ROOT, dry_run: bool = False, get
     marks_rows = read_marks(root / "data/ledger/marks.csv")
     dec_path, fc_path = root / "data/ledger/decisions.csv", root / "data/ledger/forecasts.csv"
     decisions, forecasts = read_rows(dec_path), read_rows(fc_path)
-    d_changed, d_issues, d_log = process_decisions(decisions, marks_rows, registry, today)
+    d_changed, d_issues, d_log = process_decisions(decisions, marks_rows, registry, today, root)
     f_changed, f_issues, f_log = process_forecasts(forecasts, marks_rows, registry, today, get=get,
                                                    auto_log=read_rows(root / "data/ledger/automation_log.csv"))
     entries = []

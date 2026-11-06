@@ -34,6 +34,8 @@ jobs:
   daily:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      HAS_DATA_TOKEN: ${{ secrets.EM_MACRO_DATA_TOKEN != '' }}
     defaults:
       run:
         shell: bash
@@ -61,6 +63,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -m ledger.resolve --out "$RUNNER_TEMP/resolve.json" 2>&1 | tee "$RUNNER_TEMP/resolve.log"
 
+      # Futures and options in the Me book (ledger/derivs.py): exchange settlements by contract month are licensed
+      # (CME website terms: no redistribution), so they go only to the private em-macro-data repository; this
+      # repository gets P&L in % (data/ledger/derivative_pnl.csv) and any closes. Needs the secret
+      # EM_MACRO_DATA_TOKEN (contents: read and write on EthanC100/em-macro-data); without it only entry rows are
+      # written and nothing is marked or closed.
+      - name: Private data store for licensed settlements
+        if: env.HAS_DATA_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: EthanC100/em-macro-data
+          token: ${{ secrets.EM_MACRO_DATA_TOKEN }}
+          path: .em-macro-data
+          sparse-checkout: ledger
+      - name: Futures settlements and futures/options P&L
+        id: derivs
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: |
+          python -m ledger.derivs mark 2>&1 | tee "$RUNNER_TEMP/derivs.log"
+          if [ -d .em-macro-data/ledger ]; then
+            cd .em-macro-data
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ledger
+            git diff --cached --quiet || { git commit -q -m "Ledger futures settlements $(date -u +%Y-%m-%d)"; git push -q; }
+          fi
+
       # Post-mortems are written in the Janus daily review session (docs/janus/daily_review.md), not here.
       - name: Stress tests and what changed
         id: analytics
@@ -78,7 +107,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv
+          paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv data/ledger/derivative_pnl.csv
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/ledger/postmortems
                  data/ledger/reports data/ledger/changes.json data/ledger/state.json
                  data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot)

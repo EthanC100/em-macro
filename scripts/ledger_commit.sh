@@ -21,6 +21,7 @@
 # `mark` is skipped there, because Janus's chain lives on main and must never fork on a branch.
 set -euo pipefail
 PATHS=(data/janus data/ledger/postmortems data/ledger/decisions.csv data/ledger/forecasts.csv
+       data/ledger/derivatives.csv data/ledger/iv_updates.csv data/ledger/derivative_pnl.csv
        data/ledger/automation_log.csv data/ledger/seals.jsonl data/ledger/reports)
 BRANCH="${LEDGER_BRANCH:-main}"
 msg="${1:?commit message}"; shift

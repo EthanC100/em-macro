@@ -69,6 +69,14 @@ event bet must be sized at half of quarter-Kelly on its probability at even odds
 2.5% and 62% gives 3%. Flags: the algorithm holds the same country or currency, or a catalyst falls in the holding
 period.
 
+**Futures and options** (ledger/derivs.py, docs/ledger/derivatives.md): add these lines to the DECISION RECORD.
+Contract (e.g. `ICE Brent March 2027`), Legs (`long 110 call, short 130 call`), Option expiry (a date), Underlying
+at entry (the future's price), Premium (per unit), and Implied volatility (a number with its source, or `estimate`,
+or `implied from premium`). Optional: Structure, IV source, Quantity. The Risk Manager then checks the maximum loss:
+the premium for a long option or debit spread, width − credit for a credit spread, and it refuses a naked short
+option. The stop must be a level of the underlying future on the losing side. Settlement prices are licensed and are
+kept in em-macro-data. The Ledger publishes P&L in % only, and labels options a "model estimate".
+
 **FORECAST:** Question, Probability, Resolves by. Optional: Market probability, Market source, Claude probability,
 Resolution source, Country.
 
