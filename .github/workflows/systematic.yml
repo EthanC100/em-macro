@@ -113,6 +113,7 @@ jobs:
 
       # Monthly investor letters (ledger/letters.py): one per book (Me, Algorithm, Janus) for the month just booked,
       # figures from the data, narrative via the Anthropic API when the secret exists. Never blocks the rebalance.
+      # (Post-mortems are written in the Janus daily review session, not here.)
       - name: Investor letters and what changed
         id: letters
         continue-on-error: true
@@ -121,7 +122,6 @@ jobs:
         run: |
           pip install anthropic >/dev/null 2>&1 || true
           python -m ledger.letters 2>&1 | tee "$RUNNER_TEMP/letters.log"
-          python -m ledger.postmortem 2>&1 | tee -a "$RUNNER_TEMP/letters.log"
           python -m ledger.changes 2>&1 | tee -a "$RUNNER_TEMP/letters.log"
 
       - name: Tests
@@ -140,7 +140,7 @@ jobs:
                     data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
                     results/coverage_report.md results/panel_coverage.md \
                     results/screener data/ledger/reports
-            for f in data/ledger/changes.json data/ledger/state.json data/ledger/postmortems data/janus; do
+            for f in data/ledger/changes.json data/ledger/state.json; do
               [ -e "$f" ] && git add -- "$f"     # one path at a time: a missing path must not unstage the others
             done
             # v1.1 (its own folder) and the v1.0/v1.1 turnover comparison; absent only if v1.1 never ran

@@ -1,35 +1,54 @@
 """Janus: an AI discretionary paper book (an experiment in AI judgement; no edge is claimed).
 
-    python -m ledger.janus run [--dry-run]     # weekly review + new positions (Anthropic API, web search)
-    python -m ledger.janus mark [--today D]    # daily: fill pending entries, close on stop/horizon/close request
-    python -m ledger.janus verify              # check the hash chain (exit 1 on failure)
-    python -m ledger.janus status              # print the book
+Janus decides in Claude Code sessions (docs/janus/quick_check.md every 30 minutes on weekdays, docs/janus/daily_review.md
+after the US close). No Anthropic API call is made from GitHub Actions. The session never edits data/janus/; every
+change goes through this CLI, which enforces every rule in code:
+
+    python -m ledger.janus context [--fetch]         # read-only: rules, open positions, marks, last check, due post-mortems
+    python -m ledger.janus propose --file P.json [--dry-run]
+                                                     # validate a proposal; if it passes EVERY rule, append it (atomic)
+    python -m ledger.janus check --positions J001,J002 --result "no change" --model M
+                                                     # a quick check that changed nothing: one record
+    python -m ledger.janus mark                      # fills at the next official daily mark; stop / horizon / close fills
+    python -m ledger.janus verify                    # the hash chain (exit 1 on failure)
+    python -m ledger.janus status
+
+Writes go through scripts/janus_commit.sh, which applies the command on a fresh checkout of origin/main, commits and
+pushes, and on a rejected push starts again from the new main, so concurrent writers never break the chain.
+
+Proposal (JSON): {"session": "daily_review" | "quick_check", "model": "...", "session_url": "...", "market_summary": "...",
+"reviews": [{"id", "action": "hold" | "close" | "tighten_stop", "new_stop", "reasoning"}],
+"new_positions": [{"instrument", "direction", "risk_pct", "stop", "horizon", "probability", "thesis" (2-3 sentences),
+"change_mind", "sources": [{"title", "url"}], "opposition": {"case_against", "key_risks", "what_proves_it_wrong",
+"probability_view_wrong", "sources", "model"}}], "no_trade_reasoning": "...", "sources_read": [...]}
 
 Account: separate paper account of US$500,000,000, reported in % (index 100 at its start). Its results never feed
 the algorithm (v1.0/v1.1) and the algorithm never reads data/janus/.
 
 Records (data/janus/records.jsonl) are append-only and hash-chained: each line carries ``seq``, ``prev_hash`` and
-``hash`` = SHA-256 of the previous hash and the canonical JSON of the record without ``hash``. Nothing is edited:
-a fill, a stop change, a close or a review is a new record. ``verify`` re-computes the chain.
+``hash`` = SHA-256 of the previous hash and the canonical JSON of the record without ``hash``. Nothing is edited.
 
-Rules (enforced in code, not left to the model):
+Rules (enforced in code; a proposal that breaks any of them is rejected whole and nothing is appended):
   * universe: only instruments with a free public daily mark (``UNIVERSE``; dropped markets in ``DROPPED``);
   * size = % of account at risk to the stop; at most 2% per position, 10% in total, 8 open positions;
   * capacity (ledger/capacity.py): notional at most 10% of the instrument's ADV and below 80% of any exchange
-    position limit, else the size is cut to fit (logged);
-  * entry at the next available daily mark: the first first-hand daily mark dated on or after the decision's UTC
-    date (a mark dated before the decision cannot be traded on); if that mark is already through the stop the
-    order is cancelled;
+    position limit (the error states the largest size the stop allows);
+  * required: instrument, direction, size, stop on the losing side of the current mark, horizon 1 week to 6 months,
+    probability, a 2-3 sentence thesis, what would change its mind, at least one source URL, and The Opposition;
+    a reason for every review; a daily review reviews every open position and gives no-trade reasoning when it opens
+    nothing; a quick check cannot open positions;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
+  * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
+    If that mark is already through the stop the order is cancelled; if it changes the capacity limit, the size is
+    cut to fit and the cut is logged with the fill;
   * costs: the algorithm's cost model (10bp of notional per one-way trade for major FX and developed bonds, 20bp
     for a spread, two legs) and, for commodity futures, the T20-T22 model (2 x (US$3 commission + 1 tick) per
     contract per side, a roll counted as two trades), plus the square-root impact estimate on every trade;
   * commodity roll rule (logged with each fill and roll): hold the earliest contract whose notice date is more
-    than 35 calendar days after the trade date (T20-T22's buffer); roll when the held contract is within 10
-    calendar days of its notice date. Notice dates are calendar approximations (``NOTICE_RULES``). Because no free
-    futures settlement exists, commodity P&L is marked on the official spot price (an estimate; roll yield is not
-    captured, roll costs are charged).
+    than 35 calendar days after the trade date; roll when the held contract is within 10 calendar days of its notice
+    date (calendar approximations, ``NOTICE_RULES``). Commodity P&L is marked on the official spot price (an
+    estimate; roll yield is not captured, roll costs are charged).
 """
 from __future__ import annotations
 
@@ -38,6 +57,7 @@ import calendar
 import hashlib
 import json
 import math
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -471,8 +491,13 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
         "positions": rows, "open": open_rows, "closed": closed,
         "no_trades": [{"date": r["date"], "reasoning": r["reasoning"], "model": r.get("model"), "decided_at": r.get("decided_at")}
                       for r in records if r["type"] == "no_trade"],
-        "runs": [{k: r.get(k) for k in ("date", "decided_at", "model", "market_summary", "n_new", "n_reviews", "usage",
-                                          "searches", "status")} for r in records if r["type"] == "run"],
+        "runs": [{k: r.get(k) for k in ("session", "date", "decided_at", "model", "market_summary", "n_new", "n_reviews",
+                                          "usage", "searches", "status", "session_url")} for r in records if r["type"] == "run"],
+        "checks": [{k: r.get(k) for k in ("time", "positions", "result", "model", "session_url")}
+                   for r in records if r["type"] == "check"][-20:],
+        "last_check": _last_check(records),
+        "fill_rule": "Trades fill at the next official daily mark (the first first-hand daily mark dated on or after the "
+                     "decision date), not at the price when Janus decides.",
         "risk_used_pct": round(open_risk(positions(records)), 3), "risk_limit_pct": MAX_RISK_TOTAL,
         "max_risk_pos_pct": MAX_RISK_POS, "max_open": MAX_OPEN, "n_open": len(open_rows),
         "hit_rate": round(100 * right / n_closed, 1) if n_closed else None, "n_closed": n_closed, "n_right": right,
@@ -494,6 +519,20 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
         "disclaimer": ("Janus is an experiment in AI judgement. Its results do not feed the algorithm (v1.0 and v1.1 are "
                        "mechanical rules and never read Janus's records), and no edge is claimed."),
     }
+
+
+def _last_check(records: list[dict]) -> dict | None:
+    """The latest session that looked at the book: a check record, or a run (quick check or daily review)."""
+    best = None
+    for r in records:
+        if r["type"] == "check":
+            best = {"time": r["time"], "session": "quick_check", "result": r["result"], "positions": r["positions"]}
+        elif r["type"] == "run":
+            what = (f"{r.get('n_reviews', 0)} review(s), {r.get('n_new', 0)} new position(s)" if r.get("session")
+                    else "weekly run (API, before sessions)")
+            best = {"time": r.get("decided_at"), "session": r.get("session") or "weekly run", "result": what,
+                    "positions": None}
+    return best
 
 
 def calls_needed(p: float, z_a: float = 1.645, z_b: float = 0.842) -> int | None:
@@ -575,31 +614,6 @@ def benchmark(records: list[dict], marks_rows: list[dict], today: date) -> dict:
 
 
 # ----------------------------------------------------------------------------- the weekly run
-SYSTEM = """You are Janus, a discretionary macro portfolio manager running a PAPER account of US$500,000,000 for an experiment in AI judgement. Nothing you do feeds any other strategy. No edge is assumed: opening nothing is a legitimate, often correct, decision.
-
-Each week you (1) review every open position and (2) may open new ones. Use the web_search tool to read current news, data releases, central-bank communication and prices before deciding. Cite the pages you relied on.
-
-Hard rules (the code enforces them and will reject or cut anything that breaks them):
-- Universe: ONLY the instruments listed in the request, by their exact code. Direction conventions are given per instrument ("long" = long the bond for yields; long the peripheral bond / short the Bund for FR-DE; long the named currency for FX; long the front-month future for commodities).
-- Size is the % of the account lost if the stop is hit: at most 2.0 per position, at most 10.0 in total across open and new positions, at most 8 open positions.
-- The stop is a level in the instrument's own unit (price, % yield, or bp), on the losing side of the current mark.
-- For an open position you may only HOLD, CLOSE, or TIGHTEN its stop (move it closer to the current mark). Never widen a stop.
-- Horizon: a date between 1 week and 6 months from today.
-- Probability: your honest probability (0-100) that the position closes with a gain before costs. Calibrate: 50 means no view; above 70 is rare.
-- Entry is at the next available daily official mark, not now; capacity limits (10% of daily volume) may cut size.
-
-Reply with ONLY one JSON object, no prose before or after:
-{"market_summary": "2-4 sentences on what matters this week",
- "reviews": [{"id": "J001", "action": "hold" | "close" | "tighten_stop", "new_stop": number or null, "reasoning": "1-3 sentences"}],
- "new_positions": [{"instrument": "CODE", "direction": "long" | "short", "risk_pct": number, "stop": number, "horizon": "YYYY-MM-DD", "probability": number, "thesis": "2-3 sentences", "change_mind": "what would change your mind, 1-2 sentences", "sources": [{"title": "...", "url": "https://..."}]}],
- "no_trade_reasoning": "required when new_positions is empty: why nothing meets the bar this week"}"""
-
-OPPOSITION_SYSTEM = """You are The Opposition: an independent risk reviewer whose only job is to write the strongest honest case AGAINST a paper trade proposed by another model (Janus). Use the web_search tool to find evidence. Do not hedge or balance; argue against the position as well as it can be argued, with facts, and say what would prove the trade wrong quickly.
-
-Reply with ONLY one JSON object:
-{"case_against": "4-6 sentences", "key_risks": ["...", "..."], "what_proves_it_wrong": "1-2 sentences: the observable that would show Janus is wrong", "probability_view_wrong": number (0-100), "sources": [{"title": "...", "url": "https://..."}]}"""
-
-
 def market_snapshot(marks_rows: list[dict], today: date) -> list[dict]:
     reg = registry_rows()
     out = []
@@ -622,129 +636,148 @@ def market_snapshot(marks_rows: list[dict], today: date) -> list[dict]:
     return out
 
 
-def build_prompt(records: list[dict], marks_rows: list[dict], today: date) -> str:
-    reg = registry_rows()
-    pos = positions(records)
-    snap = market_snapshot(marks_rows, today)
-    open_rows = []
-    for pid, p in sorted(pos.items()):
-        if p["status"] not in ("open", "pending"):
-            continue
-        o = p["open"]
-        ser = series(marks_rows, o["instrument"], actable_only=False)
-        row = {"id": pid, "instrument": o["instrument"], "direction": o["direction"], "risk_pct": o["risk_pct"],
-               "stop": p["stop"], "horizon": o["horizon"], "probability": o["probability"], "thesis": o["thesis"],
-               "status": p["status"], "latest_mark": ser[-1][1] if ser else None}
-        if p["fill"]:
-            row.update(entry=p["fill"]["entry_level"], entry_date=p["fill"]["entry_date"],
-                       pnl_pct_of_account=pnl_at(p, ser[-1][1], reg)["net_pct"] if ser else None)
-        open_rows.append(row)
-    closed = [{"id": pid, "instrument": p["open"]["instrument"], "direction": p["open"]["direction"],
-               "outcome": p["close"]["outcome"], "net_pnl_pct": p["close"]["net_pnl_pct"], "reason": p["close"]["reason"]}
-              for pid, p in sorted(pos.items()) if p["close"]][-10:]
-    eq = equity(records, marks_rows, today)
-    return (f"TODAY: {today.isoformat()} (weekly review)\n"
-            f"ACCOUNT INDEX: {eq[-1][1] if eq else 100.0} (100 at the start); open risk {open_risk(pos):.2f}% of 10% allowed; "
-            f"{sum(1 for p in pos.values() if p['status'] in ('open', 'pending'))} of 8 positions open.\n\n"
-            f"UNIVERSE (latest official daily marks; 'estimate' = commodity marked on the official spot price):\n"
-            f"{json.dumps(snap, indent=1)}\n\n"
-            f"OPEN POSITIONS:\n{json.dumps(open_rows, indent=1) if open_rows else 'none'}\n\n"
-            f"RECENTLY CLOSED:\n{json.dumps(closed, indent=1) if closed else 'none'}\n\n"
-            "Review each open position, then decide whether to open new ones. Reply with the JSON object only.")
+THESIS_SENTENCES = (2, 3)
+SESSIONS = ("daily_review", "quick_check")
+
+
+def _sentences(text: str) -> int:
+    t = " ".join(str(text or "").split())
+    if not t:
+        return 0
+    return len([m for m in re.finditer(r"[.!?](?=\s+[A-Z(\"'0-9]|\s*$)", t)]) or 1
+
+
+def _url_ok(u) -> bool:
+    return isinstance(u, str) and re.match(r"^https?://\S+\.\S+", u) is not None
 
 
 def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date) -> tuple[list[dict], list[dict], list[str]]:
-    """Returns (reviews, new positions, rejections) after applying the hard rules."""
+    """Check a proposal against every rule. Returns (reviews, new positions, errors); any error rejects the whole
+    proposal (nothing is appended), so the session fixes it and proposes again."""
     reg = registry_rows()
+    ref = CAP.load_reference()
     pos = positions(records)
-    notes, reviews, new = [], [], []
+    errors, reviews, new = [], [], []
+    session = ans.get("session")
+    if session not in SESSIONS:
+        errors.append(f"session must be one of {SESSIONS}, got {session!r}")
+    if not str(ans.get("model") or "").strip():
+        errors.append("model is required (the model string of the session that decided)")
+    open_ids = sorted(pid for pid, p in pos.items() if p["status"] in ("open", "pending"))
+    seen = set()
     for r in ans.get("reviews") or []:
         pid = str(r.get("id", "")).strip()
         p = pos.get(pid)
         if not p or p["status"] not in ("open", "pending"):
-            notes.append(f"review of {pid!r} ignored: not an open position")
+            errors.append(f"review of {pid!r}: not an open position")
             continue
-        act = str(r.get("action", "hold")).lower()
+        if pid in seen:
+            errors.append(f"{pid}: reviewed twice")
+            continue
+        seen.add(pid)
+        act = str(r.get("action", "")).lower()
+        if act not in ("hold", "close", "tighten_stop"):
+            errors.append(f"{pid}: action must be hold, close or tighten_stop (got {act!r})")
+            continue
+        if not str(r.get("reasoning") or "").strip():
+            errors.append(f"{pid}: a reason is required for every review")
+            continue
         if act == "tighten_stop":
             o = p["open"]
-            ref_level = p["fill"]["entry_level"] if p["fill"] else None
             ser = series(marks_rows, o["instrument"], actable_only=False)
             k = kind(o["instrument"], reg)
             try:
                 ns = float(r.get("new_stop"))
             except (TypeError, ValueError):
-                notes.append(f"{pid}: tighten_stop without a numeric new stop; held")
-                act = "hold"
-            else:
-                base = ref_level if ref_level is not None else (ser[-1][1] if ser else None)
-                old_r = PX.stop_return(k, o["direction"], base, p["stop"])
-                new_r = PX.stop_return(k, o["direction"], base, ns)
-                cur = ser[-1][1] if ser else None
-                if new_r is None or old_r is None or new_r <= old_r + 1e-12:
-                    notes.append(f"{pid}: new stop {ns} would widen (or not move) the stop {p['stop']}; rejected, held")
-                    act = "hold"
-                elif cur is not None and not PX.valid_stop(k, o["direction"], cur, ns):
-                    notes.append(f"{pid}: new stop {ns} is already through the current mark {cur}; treated as a close")
-                    act = "close"
-                else:
-                    r = {**r, "new_stop": ns}
+                errors.append(f"{pid}: tighten_stop needs a numeric new_stop")
+                continue
+            base = p["fill"]["entry_level"] if p["fill"] else (ser[-1][1] if ser else None)
+            old_r = PX.stop_return(k, o["direction"], base, p["stop"])
+            new_r = PX.stop_return(k, o["direction"], base, ns)
+            cur = ser[-1][1] if ser else None
+            if new_r is None or old_r is None or new_r <= old_r + 1e-12:
+                errors.append(f"{pid}: new stop {ns:g} would widen or not move the stop {p['stop']:g} (stops can only be tightened)")
+                continue
+            if cur is not None and not PX.valid_stop(k, o["direction"], cur, ns):
+                errors.append(f"{pid}: new stop {ns:g} is already through the current mark {cur:g}; propose a close instead")
+                continue
+            r = {**r, "new_stop": ns}
         reviews.append({**r, "id": pid, "action": act})
-    total = open_risk(pos)
-    n_open = sum(1 for p in pos.values() if p["status"] in ("open", "pending"))
-    closing = {r["id"] for r in reviews if r["action"] == "close"}
-    for p in pos.values():
-        if p["id"] in closing:
-            total -= p["open"]["risk_pct"]
-            n_open -= 1
-    for n in ans.get("new_positions") or []:
+    if session == "daily_review":
+        missing = [i for i in open_ids if i not in seen]
+        if missing:
+            errors.append(f"daily review must review every open position with a reason; missing {', '.join(missing)}")
+        if not (ans.get("new_positions") or []) and not str(ans.get("no_trade_reasoning") or "").strip():
+            errors.append("no new positions: no_trade_reasoning is required")
+    if session == "quick_check":
+        if ans.get("new_positions"):
+            errors.append("a quick check cannot open positions (new positions need the daily review and The Opposition)")
+        if not reviews and not errors:
+            errors.append("nothing to apply: when nothing changed, record a check (python -m ledger.janus check) instead")
+    total = open_risk(pos) - sum(pos[r["id"]]["open"]["risk_pct"] for r in reviews if r["action"] == "close")
+    n_open = len(open_ids) - sum(1 for r in reviews if r["action"] == "close")
+    for i, n in enumerate(ans.get("new_positions") or [], 1):
         inst = str(n.get("instrument", "")).strip().upper()
+        tag = f"new position {i} ({inst or '?'})"
+        errs = []
         if inst not in UNIVERSE:
-            notes.append(f"new position in {inst!r} rejected: not in the universe")
+            errors.append(f"{tag}: not in the universe ({', '.join(UNIVERSE)})")
             continue
         direction = str(n.get("direction", "")).lower()
         if direction not in ("long", "short"):
-            notes.append(f"{inst}: direction {direction!r} rejected")
-            continue
+            errs.append(f"direction must be long or short, got {direction!r}")
         try:
             risk, stop, prob = float(n.get("risk_pct")), float(n.get("stop")), float(n.get("probability"))
         except (TypeError, ValueError):
-            notes.append(f"{inst}: risk, stop or probability not numeric; rejected")
+            errors.append(f"{tag}: risk_pct, stop and probability must be numbers")
             continue
         hz = parse_date(n.get("horizon"))
         if not hz or not (today + timedelta(days=MIN_HORIZON_DAYS) <= hz <= today + timedelta(days=MAX_HORIZON_DAYS)):
-            notes.append(f"{inst}: horizon {n.get('horizon')} outside 1 week to 6 months; rejected")
-            continue
+            errs.append(f"horizon {n.get('horizon')!r} must be a date between {MIN_HORIZON_DAYS} days and 6 months ahead")
         if not (0 < prob <= 100):
-            notes.append(f"{inst}: probability {prob} rejected")
-            continue
+            errs.append(f"probability {prob:g} must be in (0, 100]")
+        ns = _sentences(n.get("thesis"))
+        if not (THESIS_SENTENCES[0] <= ns <= THESIS_SENTENCES[1]):
+            errs.append(f"thesis must be 2-3 sentences (found {ns})")
+        if not str(n.get("change_mind") or "").strip():
+            errs.append("change_mind (what would change its mind) is required")
+        srcs = [x for x in (n.get("sources") or []) if isinstance(x, dict) and _url_ok(x.get("url"))]
+        if not srcs:
+            errs.append("at least one source with a URL is required")
+        opp = n.get("opposition") or {}
+        if not str(opp.get("case_against") or "").strip():
+            errs.append("The Opposition is required: opposition.case_against (written by a separate reviewer)")
+        if risk <= 0:
+            errs.append(f"risk_pct {risk:g} must be positive")
+        if risk > MAX_RISK_POS + 1e-9:
+            errs.append(f"risk_pct {risk:g}% is above the {MAX_RISK_POS:g}% per-position limit")
+        if total + risk > MAX_RISK_TOTAL + 1e-9:
+            errs.append(f"risk_pct {risk:g}% would take open risk to {total + risk:.2f}%, above the {MAX_RISK_TOTAL:g}% limit "
+                        f"(room: {max(0.0, MAX_RISK_TOTAL - total):.2f}%)")
+        if n_open + 1 > MAX_OPEN:
+            errs.append(f"would be position {n_open + 1}; at most {MAX_OPEN} may be open")
         ser = series(marks_rows, inst, actable_only=False)
         if not ser:
-            notes.append(f"{inst}: no mark; rejected")
+            errs.append("no mark for this instrument")
+        elif direction in ("long", "short"):
+            cur = ser[-1][1]
+            if not PX.valid_stop(kind(inst, reg), direction, cur, stop):
+                errs.append(f"stop {stop:g} is not on the losing side of the current mark {cur:g}")
+            elif risk > 0:
+                sz = size(inst, direction, risk, cur, stop, reg, ref)
+                if sz["capacity_note"]:
+                    errs.append(f"capacity: notional above 10% of daily volume or near the position limit; the most "
+                                f"this stop allows is {sz['risk_pct']:.2f}% at risk")
+                else:
+                    n = {**n, "provisional_capacity": sz["capacity"]}
+        if errs:
+            errors += [f"{tag}: {e}" for e in errs]
             continue
-        cur = ser[-1][1]
-        if not PX.valid_stop(kind(inst, reg), direction, cur, stop):
-            notes.append(f"{inst}: stop {stop} is not on the losing side of the current mark {cur}; rejected")
-            continue
-        if n_open >= MAX_OPEN:
-            notes.append(f"{inst}: already {MAX_OPEN} positions; rejected")
-            continue
-        risk = min(risk, MAX_RISK_POS)
-        if total + risk > MAX_RISK_TOTAL + 1e-9:
-            if MAX_RISK_TOTAL - total < 0.1:
-                notes.append(f"{inst}: total risk limit {MAX_RISK_TOTAL}% reached; rejected")
-                continue
-            notes.append(f"{inst}: risk cut from {risk}% to {MAX_RISK_TOTAL - total:.2f}% (10% total limit)")
-            risk = round(MAX_RISK_TOTAL - total, 2)
-        # provisional capacity check at the current mark (the fill re-checks at the entry mark)
-        sz = size(inst, direction, risk, cur, stop, reg, CAP.load_reference())
-        if sz["capacity_note"]:
-            notes.append(f"{inst}: {sz['capacity_note']}")
-            risk = sz["risk_pct"]
         total += risk
         n_open += 1
         new.append({**n, "instrument": inst, "direction": direction, "risk_pct": round(risk, 4), "stop": stop,
-                    "probability": prob, "horizon": hz.isoformat(), "provisional_capacity": sz["capacity"]})
-    return reviews, new, notes
+                    "probability": prob, "horizon": hz.isoformat()})
+    return reviews, new, errors
 
 
 def next_id(records: list[dict]) -> str:
@@ -752,14 +785,7 @@ def next_id(records: list[dict]) -> str:
     return f"J{n + 1:03d}"
 
 
-def run(today: date | None = None, now: datetime | None = None, ask=None, oppose=None, path: Path | None = RECORDS,
-        marks_rows: list[dict] | None = None) -> dict:
-    """The weekly review. ``ask``/``oppose`` (tests) replace the API calls: f(system, prompt) -> llm.call dict."""
-    from . import llm
-    now = now or datetime.now(timezone.utc).replace(microsecond=0)
-    today = today or now.date()
-    marks_rows = marks_rows if marks_rows is not None else read_marks()
-    records = load(path) if path else []
+def _ensure_account(records: list[dict], today: date, path) -> None:
     if not account_start(records):
         append(records, {"type": "account_open", "date": today.isoformat(), "account_usd": ACCOUNT_USD, "index": 100.0,
                          "rules": {"max_risk_position_pct": MAX_RISK_POS, "max_risk_total_pct": MAX_RISK_TOTAL,
@@ -767,30 +793,36 @@ def run(today: date | None = None, now: datetime | None = None, ask=None, oppose
                                    "stops": "tighten only", "entry": "next available first-hand daily mark"},
                          "universe": sorted(UNIVERSE), "dropped": [d["market"] for d in DROPPED],
                          "note": "Janus paper account opened: US$500,000,000, reported in % (index 100)."}, path)
-    process(records, marks_rows, today, path)       # bring fills and closes up to date first
-    call = ask or (lambda s, p: llm.call(s, p, purpose="janus run", ref=today.isoformat(), effort="high",
-                                         web_search=int(llm.CONFIG.get("janus_web_searches", 12))))
-    prompt = build_prompt(records, marks_rows, today)
-    res = call(SYSTEM, prompt)
-    ans = llm.parse_json(res.get("text", ""), "reviews") or llm.parse_json(res.get("text", ""), "new_positions")
-    if ans is None:
-        append(records, {"type": "run", "date": today.isoformat(), "decided_at": now.isoformat(), "model": res.get("model"),
-                         "status": f"no usable answer ({res.get('status')})", "raw": (res.get("text") or "")[:4000],
-                         "usage": res.get("usage"), "searches": res.get("searches"), "n_new": 0, "n_reviews": 0}, path)
-        return {"ok": False, "reason": "no JSON answer", "records": records}
-    reviews, new, notes = validate(ans, records, marks_rows, today)
-    run_rec = append(records, {"type": "run", "date": today.isoformat(), "decided_at": now.isoformat(),
-                               "model": res.get("model"), "status": res.get("status"),
-                               "market_summary": ans.get("market_summary"), "usage": res.get("usage"),
-                               "searches": res.get("searches"), "request_id": res.get("request_id"),
-                               "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-                               "n_new": len(new), "n_reviews": len(reviews), "rule_notes": notes,
-                               "sources_read": res.get("sources_read", [])[:40]}, path)
+
+
+def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = RECORDS,
+                   marks_rows: list[dict] | None = None, dry_run: bool = False) -> dict:
+    """Validate a session's proposal and, if it passes every rule, append its records (atomically: all or nothing).
+    Fills happen later, at the next official daily mark (``process``)."""
+    now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    today = now.date()
+    marks_rows = marks_rows if marks_rows is not None else read_marks()
+    records = load(path) if path else []
+    v = verify(records)
+    if not v["ok"]:
+        return {"ok": False, "errors": [f"the Janus chain does not verify: {v['error']}"], "appended": []}
+    reviews, new, errors = validate(ans, records, marks_rows, today)
+    if errors or dry_run:
+        return {"ok": not errors, "errors": errors, "dry_run": dry_run, "appended": [],
+                "would_open": [n["instrument"] for n in new], "would_review": [(r["id"], r["action"]) for r in reviews]}
+    n0 = len(records)
+    _ensure_account(records, today, path)
+    model, session = str(ans["model"]).strip(), ans["session"]
+    run_rec = append(records, {"type": "run", "session": session, "date": today.isoformat(), "decided_at": now.isoformat(),
+                               "model": model, "session_url": ans.get("session_url"), "status": "ok",
+                               "market_summary": " ".join(str(ans.get("market_summary") or "").split()),
+                               "n_new": len(new), "n_reviews": len(reviews),
+                               "sources_read": (ans.get("sources_read") or [])[:40]}, path)
     pos = positions(records)
     for r in reviews:
         p = pos[r["id"]]
-        base = {"position_id": r["id"], "date": today.isoformat(), "decided_at": now.isoformat(),
-                "model": res.get("model"), "reasoning": r.get("reasoning", ""), "run_seq": run_rec["seq"]}
+        base = {"position_id": r["id"], "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
+                "reasoning": " ".join(str(r.get("reasoning")).split()), "run_seq": run_rec["seq"], "session": session}
         append(records, {"type": "review", "action": r["action"], **base}, path)
         if r["action"] == "tighten_stop":
             append(records, {"type": "stop_change", "old_stop": p["stop"], "new_stop": r["new_stop"], **base}, path)
@@ -800,46 +832,97 @@ def run(today: date | None = None, now: datetime | None = None, ask=None, oppose
                                  "reason": "Janus closed the order before it was filled"}, path)
             else:
                 append(records, {"type": "close_request", **base}, path)
-    opened = []
     for n in new:
         pid = next_id(records)
-        rec = append(records, {"type": "open", "position_id": pid, "instrument": n["instrument"], "direction": n["direction"],
-                               "risk_pct": n["risk_pct"], "requested_risk_pct": n.get("risk_pct"), "stop": n["stop"],
-                               "horizon": n["horizon"], "probability": n["probability"],
-                               "thesis": " ".join(str(n.get("thesis", "")).split()),
-                               "change_mind": " ".join(str(n.get("change_mind", "")).split()),
-                               "sources": n.get("sources") or [], "sources_read": res.get("sources_read", [])[:25],
-                               "model": res.get("model"), "decided_at": now.isoformat(), "decision_date": today.isoformat(),
-                               "entry_rule": "next available first-hand daily mark dated on or after the decision date",
-                               "provisional_capacity": n.get("provisional_capacity"), "run_seq": run_rec["seq"]}, path)
-        opened.append(rec)
-    if not opened:
-        append(records, {"type": "no_trade", "date": today.isoformat(), "decided_at": now.isoformat(),
-                         "model": res.get("model"), "run_seq": run_rec["seq"],
-                         "reasoning": " ".join(str(ans.get("no_trade_reasoning") or ans.get("market_summary") or
-                                                   "No reasoning given.").split()),
-                         "rule_notes": notes}, path)
-    # The Opposition: a second, independent call per new position
-    opp = oppose or (lambda s, p: llm.call(s, p, purpose="janus opposition", ref=p[:40], effort="high",
-                                           web_search=int(llm.CONFIG.get("opposition_web_searches", 6))))
-    for rec in opened:
-        prompt = (f"TODAY: {today.isoformat()}\nPROPOSED PAPER POSITION ({rec['position_id']}):\n"
-                  + json.dumps({k: rec[k] for k in ("instrument", "direction", "risk_pct", "stop", "horizon", "probability",
-                                                     "thesis", "change_mind")}, indent=1)
-                  + f"\nINSTRUMENT: {UNIVERSE[rec['instrument']]['name']}\n\nWrite the strongest case against it. JSON only.")
-        o = opp(OPPOSITION_SYSTEM, prompt)
-        oj = llm.parse_json(o.get("text", ""), "case_against") or {"case_against": (o.get("text") or "").strip()[:3000]}
-        oj.setdefault("sources_read", o.get("sources_read", [])[:15])
-        append(records, {"type": "opposition", "position_id": rec["position_id"], "date": today.isoformat(),
-                         "model": o.get("model"), "decided_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-                         "opposition": oj, "usage": o.get("usage")}, path)
-    return {"ok": True, "opened": [r["position_id"] for r in opened], "reviews": reviews, "notes": notes,
-            "records": records}
+        append(records, {"type": "open", "position_id": pid, "instrument": n["instrument"], "direction": n["direction"],
+                         "risk_pct": n["risk_pct"], "requested_risk_pct": n["risk_pct"], "stop": n["stop"],
+                         "horizon": n["horizon"], "probability": n["probability"],
+                         "thesis": " ".join(str(n.get("thesis", "")).split()),
+                         "change_mind": " ".join(str(n.get("change_mind", "")).split()),
+                         "sources": n.get("sources") or [], "sources_read": (ans.get("sources_read") or [])[:25],
+                         "model": model, "decided_at": now.isoformat(), "decision_date": today.isoformat(),
+                         "entry_rule": "next available first-hand daily mark dated on or after the decision date",
+                         "provisional_capacity": n.get("provisional_capacity"), "run_seq": run_rec["seq"],
+                         "session": session}, path)
+        opp = n["opposition"]
+        append(records, {"type": "opposition", "position_id": pid, "date": today.isoformat(),
+                         "model": opp.get("model") or model, "decided_at": now.isoformat(),
+                         "opposition": {k: opp.get(k) for k in ("case_against", "key_risks", "what_proves_it_wrong",
+                                                                 "probability_view_wrong", "sources") if k in opp}}, path)
+    if session == "daily_review" and not new:
+        append(records, {"type": "no_trade", "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
+                         "run_seq": run_rec["seq"], "reasoning": " ".join(str(ans["no_trade_reasoning"]).split())}, path)
+    return {"ok": True, "errors": [], "appended": [r["seq"] for r in records[n0:]],
+            "opened": [r["position_id"] for r in records[n0:] if r["type"] == "open"]}
+
+
+def record_check(checked: list[str], result: str, model: str, now: datetime | None = None, path: Path | None = RECORDS,
+                 session_url: str | None = None) -> dict:
+    """A quick check that changed nothing (or a short note of what it saw): one line in the chain."""
+    now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    records = load(path) if path else []
+    v = verify(records)
+    if not v["ok"]:
+        raise ValueError(f"the Janus chain does not verify: {v['error']}")
+    pos = positions(records)
+    open_ids = sorted(pid for pid, p in pos.items() if p["status"] in ("open", "pending"))
+    checked = sorted({c.strip() for c in checked if c.strip() and c.strip().lower() != "none"})
+    unknown = [c for c in checked if c not in open_ids]
+    if unknown:
+        raise ValueError(f"not open positions: {', '.join(unknown)}")
+    if checked != open_ids:
+        raise ValueError(f"a check covers every open position: expected {', '.join(open_ids) or 'none'}")
+    result = " ".join(str(result or "").split())
+    if not result or len(result) > 240:
+        raise ValueError("result is required, one line of at most 240 characters (e.g. 'no change')")
+    if not str(model or "").strip():
+        raise ValueError("model is required")
+    _ensure_account(records, now.date(), path)
+    return append(records, {"type": "check", "session": "quick_check", "time": now.isoformat(), "date": now.date().isoformat(),
+                            "positions": checked, "result": result, "model": model.strip(), "session_url": session_url}, path)
+
+
+def context(marks_rows: list[dict] | None = None, today: date | None = None, fetch: bool = False) -> dict:
+    """Everything a session needs to start (read-only): rules, open positions with entry, stop, latest mark, P&L and
+    distance to stop, the universe with marks, the last check and the post-mortems that are due."""
+    today = today or date.today()
+    if fetch:
+        from .marks import fetch_all, latest_marks
+        reg_rows = [r for r in load_registry() if r["instrument"] in UNIVERSE or r["instrument"] in ("FR10Y", "DE10YBM")]
+        fresh = fetch_all(reg_rows, today, previous=latest_marks())
+        marks_rows = (marks_rows if marks_rows is not None else read_marks()) + [
+            {k: v for k, v in m.items() if not k.startswith("_")} for m in fresh if m.get("value")]
+    marks_rows = marks_rows if marks_rows is not None else read_marks()
+    records = load()
+    s = summarize(records, marks_rows, today)
+    keep = ("id", "status", "instrument", "name", "direction", "risk_pct", "stop", "initial_stop", "horizon",
+            "probability", "thesis", "change_mind", "mark", "mark_date", "net_pnl_pct", "distance_to_stop_pct_account",
+            "unit", "estimate", "decided_at")
+    from . import postmortem as PMm
+    return {"today": today.isoformat(), "chain": s["chain"],
+            "rules": {"max_risk_position_pct": MAX_RISK_POS, "max_risk_total_pct": MAX_RISK_TOTAL, "max_open": MAX_OPEN,
+                      "capacity": "notional at most 10% of ADV and below 80% of any position limit",
+                      "stops": "tighten only", "entry": "next available official daily mark, not the price now",
+                      "thesis": "2-3 sentences", "required": ["instrument", "direction", "risk_pct", "stop", "horizon",
+                                                              "probability", "thesis", "change_mind", "sources",
+                                                              "opposition.case_against"]},
+            "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
+            "open": [{k: p.get(k) for k in keep} | {"entry": (p.get("fill") or {}).get("entry_level"),
+                                                     "entry_date": (p.get("fill") or {}).get("entry_date")} for p in s["open"]],
+            "universe": market_snapshot(marks_rows, today), "last_check": s["last_check"],
+            "postmortems_due": [f"{c['book']}-{c['id']}" for c in PMm.due()]}
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["run", "mark", "verify", "status"])
+    ap.add_argument("cmd", choices=["context", "propose", "check", "mark", "verify", "status"])
+    ap.add_argument("--file", help="propose: the proposal JSON (outside the repository, e.g. /tmp/proposal.json)")
+    ap.add_argument("--dry-run", action="store_true", help="propose: validate only")
+    ap.add_argument("--positions", default="", help="check: comma-separated open ids checked, or 'none'")
+    ap.add_argument("--result", default="", help="check: one line, e.g. 'no change'")
+    ap.add_argument("--model", default="", help="check: the session's model string")
+    ap.add_argument("--session-url", default=None)
+    ap.add_argument("--fetch", action="store_true", help="context: fetch fresh official marks (not written)")
     ap.add_argument("--today", default=None)
     a = ap.parse_args(argv)
     today = parse_date(a.today) if a.today else date.today()
@@ -847,6 +930,9 @@ def main(argv=None) -> int:
         v = verify(load())
         print(json.dumps(v))
         return 0 if v["ok"] else 1
+    if a.cmd == "context":
+        print(json.dumps(context(today=today, fetch=a.fetch), indent=1, default=str))
+        return 0
     if a.cmd == "mark":
         recs = load()
         if not recs:
@@ -858,18 +944,33 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "status":
         s = summarize(load(), read_marks(), today)
-        print(json.dumps({k: s[k] for k in ("risk_used_pct", "n_open", "n_closed", "hit_rate", "brier", "calls_needed")}))
+        print(json.dumps({k: s[k] for k in ("risk_used_pct", "n_open", "n_closed", "hit_rate", "brier", "calls_needed",
+                                            "last_check")}, default=str))
         for p in s["positions"]:
             print(p["id"], p["status"], p["direction"], p["instrument"], p["risk_pct"], p.get("net_pnl_pct"))
         return 0
-    from .llm import KeyRejected
-    try:
-        res = run(today=today if a.today else None)
-    except KeyRejected as e:
-        print(f"STOP: {e}", file=sys.stderr)
+    if a.cmd == "check":
+        try:
+            rec = record_check(a.positions.split(","), a.result, a.model, session_url=a.session_url)
+        except ValueError as e:
+            print(f"REJECTED: {e}", file=sys.stderr)
+            return 1
+        print(json.dumps({k: rec[k] for k in ("seq", "time", "positions", "result")}))
+        return 0
+    if not a.file:
+        print("propose needs --file", file=sys.stderr)
         return 2
-    print(json.dumps({k: v for k, v in res.items() if k != "records"}, indent=1, default=str))
-    return 0 if res.get("ok") else 1
+    try:
+        ans = json.loads(Path(a.file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"REJECTED: cannot read the proposal: {e}", file=sys.stderr)
+        return 1
+    res = apply_proposal(ans, dry_run=a.dry_run)
+    print(json.dumps(res, indent=1, default=str))
+    if not res["ok"]:
+        print("REJECTED: nothing was appended. Fix every error above and propose again.", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

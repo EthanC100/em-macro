@@ -789,7 +789,7 @@
         ${card('algorithm', 'Algorithm', 'mechanical rules, not AI', v10.mtd_pct, true, `${v10.n_positions} (v1.0) · ${v11.n_positions} (v1.1)`, gauge(v10.gross_leverage, v10.leverage_cap, 'gross leverage, x'),
           `<div class="bc-foot">v1.0 live since ${fmtDate(v10.live_start)}; v1.1 live from the ${fmtDate('2026-12-03')} rebalance${isNum(v11.pre_live_estimate_pct) ? ` (pre-live estimate ${fmtPct(v11.pre_live_estimate_pct, 2, true)}, not counted)` : ''}</div>`)}
         ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, `${b.janus.open_count} of ${jn.max_open}`, gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
-          jn.start ? '' : '<div class="bc-foot">Not started yet: the first weekly run opens the account.</div>')}
+          `<div class="bc-foot">${jn.last_check ? `Last checked ${fmtDateTime(jn.last_check.time)} · ${esc(jn.last_check.result || '')}` : 'Not checked yet'} · fills at the next official daily mark</div>`)}
       </section>
       <section class="section">
         <div class="card changes"><div class="section-head"><h2>What changed</h2><span class="muted small">${ch.since ? `since ${fmtDateTime(ch.since)}` : ''}</span></div>
@@ -963,7 +963,11 @@
       </div>`;
     const counter = jn.calls_needed ? Math.min(100, 100 * jn.n_closed / jn.calls_needed) : 0;
     view.innerHTML = `
-      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start); weekly review on Mondays by ${esc(jn.model || 'the current Claude Opus model')} with web search; The Opposition argues against every new position.</div></section>
+      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start). Janus works in Claude Code sessions: a quick check every 30 minutes on weekdays (06:00 to 21:30 UTC) and a full review after the US close; The Opposition argues against every new position. Every rule is enforced in code and the record is append-only.</div></section>
+      <section class="section"><div class="card b-janus last-check">
+        <div class="row-top"><b>Last checked ${jn.last_check ? fmtDateTime(jn.last_check.time) : '—'}</b>${jn.last_check ? `<span class="muted small">${esc(String(jn.last_check.session || '').replace('_', ' '))}</span>` : ''}</div>
+        ${jn.last_check ? `<div class="row-meta">${esc(jn.last_check.result || '')}${jn.last_check.positions ? ` · positions: ${esc(jn.last_check.positions.join(', ') || 'none open')}` : ''}</div>` : ''}
+        <p class="fill-rule"><b>Trades fill at the next official daily mark</b>, the first daily mark dated on or after the decision, not at the price when Janus decides.</p></div></section>
       <section class="section">
         <div class="stats">
           <div class="stat"><span class="k">Index</span><span class="v ${signClass(idx - 100)}">${fmtNum(idx, 2)}</span><span class="s">month to date ${isNum(b.janus.mtd_pct) ? fmtPct(b.janus.mtd_pct, 2, true) : '—'}</span></div>
@@ -984,8 +988,9 @@
         ${jn.closed.map(posCard).join('') || '<p class="empty">None closed yet.</p>'}</section>
       <section class="section"><div class="section-head"><h2>No-trade records</h2></div>
         ${(jn.no_trades || []).slice().reverse().map((n) => `<div class="card b-janus"><div class="row-meta">${fmtDate(n.date)} · ${esc(n.model || '')}</div><p>${esc(n.reasoning)}</p></div>`).join('') || '<p class="empty">None.</p>'}</section>
-      <section class="section"><div class="section-head"><h2>Weekly runs</h2></div>
-        ${(jn.runs || []).slice().reverse().map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews · ${r.searches || 0} searches</div><p>${esc(r.market_summary || r.status || '')}</p></div>`).join('') || '<p class="empty">No run yet.</p>'}</section>
+      <section class="section"><div class="section-head"><h2>Sessions</h2><span class="muted small">reviews and quick checks</span></div>
+        ${(jn.runs || []).slice().reverse().slice(0, 15).map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc((r.session || 'weekly run (API)').replace('_', ' '))} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews${r.session_url ? ` · <a href="${esc(r.session_url)}" target="_blank" rel="noopener">session</a>` : ''}</div>${r.market_summary ? `<p>${esc(r.market_summary)}</p>` : ''}</div>`).join('') || '<p class="empty">No session yet.</p>'}
+        ${(jn.checks || []).length ? `<h3 class="sub">Recent quick checks</h3><ul class="plain checks">${jn.checks.slice().reverse().slice(0, 12).map((c) => `<li><span class="mono small">${fmtDateTime(c.time)}</span> · ${esc(c.result)}${c.positions && c.positions.length ? ` <span class="muted small">(${esc(c.positions.join(', '))})</span>` : ''}</li>`).join('')}</ul>` : ''}</section>
       <section class="section"><div class="section-head"><h2>Universe and data</h2>${info('Only instruments with a free public daily mark. Commodity futures are marked on official spot prices (an estimate; EIA stopped publishing NYMEX futures in 2024). Never Norgate or em-macro-data (licence).')}</div>
         <div class="table-wrap"><table><thead><tr><th>Code</th><th>Market</th><th>Daily source</th></tr></thead><tbody>${jn.universe.map((u) => `<tr><td><b>${esc(u.instrument)}</b>${u.estimate ? ` ${pill('estimate', 'warn')}` : ''}</td><td class="wrap">${esc(u.name)}</td><td class="wrap small">${esc(u.source)} ${esc(u.source_id)}</td></tr>`).join('')}</tbody></table></div>
         <h3 class="sub">Dropped</h3><ul class="plain">${jn.dropped.map((d) => `<li><b>${esc(d.market)}</b>: ${esc(d.reason)}</li>`).join('')}</ul>

@@ -1,35 +1,48 @@
 # Janus — AI discretionary paper book
 
 Janus is an experiment in AI judgement. Its results never feed the algorithm: v1.0 and v1.1 are mechanical rules
-and never read this folder. No edge is claimed. Code: `ledger/janus.py`; schedule: `.github/workflows/janus-weekly.yml`
-(Mondays 06:00 UTC, and by hand); daily fills, stops and closes run in `ledger-daily`.
+and never read this folder. No edge is claimed. Code: `ledger/janus.py`.
+
+**How Janus runs (from 2026-11-06):** entirely in Claude Code sessions on the account's plan. No Anthropic API
+call is made from GitHub Actions.
+- **Quick check** (`docs/janus/quick_check.md`): every 30 minutes on weekdays, 06:00 to 21:30 UTC, started by the
+  `janus-fire` workflow through the task's API trigger.
+- **Daily review** (`docs/janus/daily_review.md`): weekdays at 18:07 New York time, after the US close.
+
+A session never edits this folder. It reads `python -m ledger.janus context`, then writes through
+`scripts/janus_commit.sh` with the CLI (`propose`, `check`, `postmortem write`), which enforces every rule in code
+and pushes to `main`. Fills at the next official daily mark, stops and horizon closes are applied by
+`python -m ledger.janus mark`, which the script runs on every write and `ledger-daily` runs each morning.
 
 - **Account:** US$500,000,000 paper, reported in % (index 100 at its start).
-- **Model:** `janus_model` in `ledger/automation.json` (the current Claude Opus, `claude-opus-5-5`), with web search.
-  The Opposition (the strongest case against each new position) is a second, independent call with the same model.
+- **The Opposition:** for every new position, a separate subagent in the daily review writes the strongest case
+  against it; the CLI refuses a new position without one.
+- **Records 1-3** come from the first run (6 Nov 2026), made through the API before the switch to sessions.
 
 ## `records.jsonl` — append-only, hash-chained
 
 One JSON object per line. `seq` counts from 1; `prev_hash` is the previous record's `hash` (64 zeros for the first);
-`hash` = SHA-256 of `prev_hash` followed by the record's canonical JSON (sorted keys, no spaces) without `hash`.
+`hash` = SHA-256 of `prev_hash` followed by the record's canonical JSON (sorted keys, no spaces) without `hash`. All writers go through `scripts/janus_commit.sh`, which re-applies a
+command on the new `main` when a push is rejected, so concurrent sessions never break the chain.
 `python -m ledger.janus verify` recomputes the chain, as does every app build (the header badge). Nothing is
 edited. A fill, a stop change, a close or a review is a new record.
 
 | type | written by | meaning |
 |---|---|---|
 | `account_open` | first run | account size, rules, universe |
-| `run` | weekly run | model, timestamp, market summary, token use, rule notes, the URLs web search returned |
-| `open` | weekly run | new position: instrument, direction, % of account at risk, stop, horizon, probability its view is right, thesis, what would change its mind, sources, model, timestamp. The entry is not yet filled |
-| `opposition` | weekly run | The Opposition's case against an `open` |
-| `fill` | daily / weekly | entry at the first first-hand daily mark dated on or after the decision date: notional, contracts, costs, capacity check, roll contract |
-| `cancel` | daily / weekly | the entry mark was already through the stop, or Janus withdrew the order before the fill |
-| `review` | weekly run | hold / close / tighten_stop for an open position, with reasoning |
-| `stop_change` | weekly run | a tightened stop (widening is rejected in code) |
-| `close_request` | weekly run | Janus decided to close; filled at the next daily mark |
+| `run` | session | session (daily_review / quick_check), model, timestamp, market summary, session URL, sources read |
+| `open` | daily review | new position: instrument, direction, % of account at risk, stop, horizon, probability its view is right, thesis, what would change its mind, sources, model, timestamp. The entry is not yet filled |
+| `opposition` | daily review | The Opposition's case against an `open` |
+| `fill` | `mark` | entry at the first first-hand daily mark dated on or after the decision date: notional, contracts, costs, capacity check, roll contract |
+| `cancel` | `mark` / session | the entry mark was already through the stop, or Janus withdrew the order before the fill |
+| `review` | session | hold / close / tighten_stop for an open position, with reasoning |
+| `stop_change` | session | a tightened stop (widening is rejected in code) |
+| `close_request` | session | Janus decided to close; filled at the next daily mark |
 | `roll` | daily | commodity roll to the next contract (cost charged as two trades) |
-| `close` | daily / weekly | exit on stop, horizon or close decision: gross and net P&L (% of the starting account), outcome |
-| `postmortem` | daily | the automatic post-mortem of a closed position |
-| `no_trade` | weekly run | nothing opened this week, with the reasoning |
+| `close` | `mark` | exit on stop, horizon or close decision: gross and net P&L (% of the starting account), outcome |
+| `postmortem` | daily review | the automatic post-mortem of a closed position |
+| `no_trade` | daily review | nothing opened, with the reasoning |
+| `check` | quick check | nothing changed: time, positions checked, one-line result |
 
 ## Universe and data sources (free public daily data only)
 
