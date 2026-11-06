@@ -346,3 +346,57 @@ None of these can change an outcome:
 - `trials.csv` gets rows **T25** (group `G20_basis_momentum`) and **T26** (group `G21_diversified_futures_trend`), marked **pending**, in this commit, with no other row changed. The ledger's row count rises from 24 to 26, and the distinct trial groups do not increase.
 - `tests/test_ledger.py` is updated to expect the two rows as pending. The app's evidence page lists the shadows as pre-registered and pending.
 - No deflated-Sharpe gate is part of T25–T26, so the spec-convention N (16) is not incremented. A later v1.2 pre-registration that uses a DSR will count T23, T24, T25 and T26.
+
+## Amendment 1 — 2026-11-06, decided by the owner with the approval, before Phase 2
+
+Recorded after the owner replied "approved" to this document (commit `208edd1`), and **before any Phase 2 code was
+written or any shadow position, signal or return was computed**. The text above is left as written; where this
+section and the text above differ, this section governs.
+
+### A1.1 "Confirmed" adds nothing by itself
+
+A confirmation (§1, §5.3) makes a sleeve eligible for a v1.2 pre-registration and nothing more.
+- **The v1.2 pre-registration's combination test must be judged on live data after the evaluation date that
+  produced the confirmation:** from the month after M60 (or after M96 for a sleeve confirmed at the second
+  evaluation). It must not use the shadow period that produced the confirmation.
+- So that such data exist, **a confirmed shadow keeps running at zero size, unchanged,** after its evaluation date.
+  Its later months are recorded like the earlier ones. No new decision is taken from them under this document; the
+  v1.2 pre-registration fixes its own window, test and dates before it uses them.
+- A decayed sleeve stops at its evaluation date. Its positions are closed on paper at the next rebalance.
+
+### A1.2 No result depends on Norgate data (licence ends about 5 May 2027)
+
+All Norgate data must be deleted when the subscription ends, about 5 May 2027. The shadows therefore never depend
+on Norgate:
+1. **Warm-up from Databento, not Norgate.** §2.2 D2 and §8's splice are replaced. Before go-live, the history every
+   universe market needs is fetched from **Databento GLBX.MDP3** (`statistics` schema, final settlements, as for
+   the live data), for every designated contract of the market whose life overlaps the history window. The window
+   starts on **1 January 2023**, at least 40 months before the first decision date. That covers the 36-month
+   pro-forma scaler, T21's 12 holding months, the 252 daily returns of every σ, and the entry rule's 12 months of
+   settlements. If go-live slips, the window still starts at least 40 months before M1's decision date.
+   - The settlements are written in the per-contract layout the unchanged a160bfd code reads (`commod_data.
+     MarketData`), in the price units Norgate used, so tick values and multipliers keep their a160bfd meaning. The
+     unit factor of each market is the power of ten that the check below measures, recorded per market.
+   - **Contract dates:** first notice and last trade dates come from `commod_data`'s exchange rules, with the
+     Amendment 3 guard, not from Norgate's metadata.
+2. **Cost:** the one-off history request is quoted first and refused above **US$20.00** in total. It does not
+   count against the US$1 daily cap of the live fetches.
+3. **Check against the Norgate snapshot, once, before go-live** (replacing §8 P2):
+   - **Prices:** for each universe market, every contract present in both sources, on their common days
+     2023-01-01 .. the snapshot's last date: the Databento final settlement, in Norgate units, equals the Norgate
+     close within **one tick** on **at least 99%** of common days (Build 0 A5's tolerance). Counts only are
+     reported.
+   - **Contract chain:** the F1 and F2 chosen by the roll rule at every month of the history window, with the
+     exchange-rule dates, equal those chosen with Norgate's dates. Otherwise the history would differ from what
+     Norgate gives.
+   - **A market that fails either check is excluded under §3.1 before go-live.** N, and so SR_pred (§5.2), is the
+     count at go-live, as §5.2 already says.
+4. **From go-live, the shadow code reads only the Databento history and the live Databento settlements.** The
+   Norgate snapshot is opened only by the one-off check, which runs before go-live and, in any case, before
+   5 May 2027. Its result (counts only) is committed in `results/shadows/prelive.json`.
+5. **If the check cannot run before 5 May 2027**, no market can qualify. The shadows do not go live and are recorded
+   as not evaluable (§7.6).
+
+**Not changed.** Everything else: the rules and code of T21 and T22 at a160bfd, the universe rule and its check, the
+three outcomes, the prediction, the margins, Holm, the dates, the operation and the disclosures. The ledger rows T25
+and T26 are updated to reference this amendment, changing no other row.
