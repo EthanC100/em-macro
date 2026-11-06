@@ -108,3 +108,36 @@ def test_site_has_three_books_audit_badge_offline_and_no_stale_labels(tmp_path):
     assert meta["sources"]["positions_set"]["v1.0"] == "2026-11-04"
     css = (site / "app.css").read_text()
     assert "--book-janus" in css and "table.stack" in css and 'data-theme="light"' in html
+
+
+def test_documented_correction_keeps_the_chain_verified_and_anything_else_fails(tmp_path, monkeypatch):
+    root = tmp_path
+    (root / "data/ledger").mkdir(parents=True)
+    for f in ("decisions.csv", "forecasts.csv"):
+        shutil.copy(audit.ROOT / "data/ledger" / f, root / "data/ledger" / f)
+    monkeypatch.setattr(audit, "ROOT", root)
+    seals = root / "data/ledger/seals.jsonl"
+    audit.seal(seals, now="2026-11-06T00:00:00+00:00")
+    p = root / "data/ledger/decisions.csv"
+    before = p.read_text().splitlines()
+    d1 = next(r for r in audit._rows("data/ledger/decisions.csv") if r["id"] == "D001")
+    rec = audit.correct("decision", "D001", "entry_level", "165.74bp (Riksbank close)", "same source as the marks", seals)
+    assert rec["correction_id"] == "K001" and rec["old_value"] == d1["entry_level"]
+    v = audit.verify_seals(seals)
+    assert v["ok"] and len(v["corrections"]) == 1
+    after = p.read_text().splitlines()
+    changed = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
+    assert len(before) == len(after) and len(changed) == 1                     # only D001's line changed
+    d1b = next(r for r in audit._rows("data/ledger/decisions.csv") if r["id"] == "D001")
+    assert {k for k in d1 if d1[k] != d1b[k]} == {"entry_level"} and d1b["stop"] == d1["stop"]
+    # an unrecorded edit still fails, and so does a correction record that hides a second change
+    p.write_text(p.read_text().replace("Exit if the OAT-Bund spread tightens to 115bp", "Exit at 100bp"))
+    assert not audit.verify_seals(seals)["ok"]
+    with pytest.raises(ValueError):
+        audit.correct("decision", "D001", "stop", "x", "r", seals)               # refused: the chain no longer verifies
+    p.write_text("\n".join(after) + "\n")
+    assert audit.verify_seals(seals)["ok"]
+    with pytest.raises(ValueError):
+        audit.correct("decision", "D001", "status", "resolved", "no", seals)      # resolutions use the Resolve form
+    with pytest.raises(ValueError):
+        audit.correct("decision", "D001", "thesis", "new", " ", seals)            # a reason is required

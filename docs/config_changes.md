@@ -236,3 +236,22 @@ it is recorded as C03 and the existing record is not renumbered.
   `data/janus/records.jsonl`). It said it ran out of searches before checking the BoE, payrolls, the BoJ and the
   ECB, so the search budget was raised from 12 to 25 (8 for The Opposition) for the next runs. The run was not
   repeated the same day: asking again until it trades would bias the record.
+
+## 2026-11-06: correction K001, D001's entry level rebased to the marks' source
+
+- **What:** D001's `entry_level` changed from 159bp to **165.74bp**. 159bp was the 30 Oct 2026 closing spread
+  "by convention" (OAT 4.93%, Bund 3.34%, a different source and close). 165.74bp is the Riksbank SWEA 30 Oct close
+  (FRGVB10Y 4.984% minus DEGVB10Y 3.3266%), the source and close of every FR-DE mark since the Part A fix. (The
+  request said 165.7bp; 165.74bp is the exact stored mark, so the entry equals the mark on the entry date.) The stop
+  (115bp) and every other field are unchanged.
+- **Why:** entry and marks now come from the same source. Measured against Riksbank marks, the 159bp entry booked
+  about +0.15% of account on the entry day from a source mismatch, not a market move.
+- **How it is recorded:** a new mechanism, `python -m ledger.audit correct`. It changes one logged field and appends
+  a hash-chained `correction` record to `data/ledger/seals.jsonl` (K001, seal 15). The record holds the old and new
+  value, the reason, and the entry's digest before and after. Verification accepts a changed entry only through such
+  a record, and checks that the record changed that field and nothing else. Any other edit still shows "record check
+  failed". D001's page shows the correction under "Corrections" and marks the entry "corrected".
+- **Effect:** D001's live P&L at the 4 Nov mark (150.23bp) is −0.31% of account (it was −0.20% from 159bp).
+  The Me index starts at exactly 100 on 30 Oct. Because the stop stays at 115bp, the distance from entry to stop
+  widens from 44bp to 50.74bp. The loss at the stop is still the 1% size, but each basis point is now worth
+  1/50.74% of account instead of 1/44%.
