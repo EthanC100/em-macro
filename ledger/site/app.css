@@ -317,6 +317,9 @@ td.wrap { white-space: normal; min-width: 180px; }
 .tabbar a.t-algorithm[aria-current="page"] { color: var(--book-algo); }
 .tabbar a.t-janus[aria-current="page"] { color: var(--book-janus); }
 .tabbar a.t-janus svg { fill: currentColor; }
+.tabbar a.t-fund[aria-current="page"] { color: var(--book-fund); }
+.tabbar a[data-tab="fund"] { --tab: var(--book-fund); }
+body[data-page="fund"] { --page: var(--book-fund); }
 .tabbar a.t-me svg { fill: currentColor; }
 
 /* header audit badge */

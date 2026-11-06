@@ -683,7 +683,7 @@
     me: { name: 'Me', cls: 'b-me', v: '--book-me', link: '#/me', kind: 'My decisions' },
     algorithm: { name: 'Algorithm', cls: 'b-algorithm', v: '--book-algo', link: '#/algorithm', kind: 'Mechanical rules, not AI' },
     janus: { name: 'Janus', cls: 'b-janus', v: '--book-janus', link: '#/janus', kind: 'AI book (experiment)' },
-    fund: { name: 'Fund', cls: 'b-fund', v: '--book-fund', link: '#/home', kind: 'Horizons fund: v1.1 + Janus, by risk' },
+    fund: { name: 'Fund', cls: 'b-fund', v: '--book-fund', link: '#/fund', kind: 'Horizons fund: v1.1 + Janus, by risk' },
   };
   const bookOf = (b) => BOOK[String(b || '').split(' ')[0]] || { name: b, cls: 'b-none', v: '--muted', link: '#/home', kind: '' };
   const JANUS_ICON = '<svg class="janus-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4c-3.6 0-6.2 2.3-7 5.6L6 13.2l2.6 1.1-.4 2.3 1.4 1-.6 2.8c-.3 1.6.9 3.1 2.5 3.1H14v3.5h4V23.5h2.5c1.6 0 2.8-1.5 2.5-3.1l-.6-2.8 1.4-1-.4-2.3 2.6-1.1-3-3.6C22.2 6.3 19.6 4 16 4Z" fill="currentColor"/><path d="M16 5v22" stroke="var(--surface)" stroke-width="1.6"/><circle cx="12.4" cy="11.6" r="1.1" fill="var(--surface)"/><circle cx="19.6" cy="11.6" r="1.1" fill="var(--surface)"/></svg>';
@@ -806,7 +806,7 @@
     const corr = fd.correlation;
     const corrRows = corr.pairs.map((p) => `<tr><td>${esc(FUND_NAMES[p.a])} / ${esc(FUND_NAMES[p.b])}</td><td class="num">${isNum(p.corr) ? fmtNum(p.corr, 2) : '<span class="muted">—</span>'}</td><td class="num">${p.months}</td></tr>`).join('');
     return `<section class="section">
-        <div class="section-head"><h2>Horizons fund</h2>${info(fd.note)}</div>
+        <div class="section-head"><h2>Performance and allocation</h2></div>
         <div class="card b-fund">
           ${fd.live ? `<div class="stats"><div class="stat"><span class="k">Since ${fmtDate(fd.live_start)}</span><span class="v ${signClass(fd.since_start_pct)}">${fmtPct(fd.since_start_pct, 2, true)}</span><span class="s">index ${fmtNum(fd.index, 2)}</span></div><div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(fd.mtd_pct)}</span><span class="s">combined, by risk</span></div></div>
           <div class="chart"><canvas id="c-fund"></canvas></div>` : `<p class="empty">Not started: ${esc(fd.status)}${fd.live_start ? ` (index 100 on ${fmtDate(fd.live_start)})` : ''}. The fund starts at 100 on the first date every member is live.</p>`}
@@ -818,6 +818,36 @@
           <div class="table-wrap"><table class="compact corr"><thead><tr><th>Books</th><th class="num">Correlation</th><th class="num">Months</th></tr></thead><tbody>${corrRows}</tbody></table></div>
         </div>
       </section>`;
+  }
+
+  async function pageFund() {
+    const [b, fd] = await Promise.all([load('books'), load('fund')]);
+    setHead('Horizons fund', fd.live ? `Live since ${fmtDate(fd.live_start)} · Algorithm v1.1 + Janus, combined by risk` : `Not started · ${fd.status}`);
+    const v11 = b.algorithm.versions[1];
+    const hist = (fd.history || []).slice().reverse();
+    const histRows = hist.map((h) => `<tr><td>${fmtDate(h.from)}</td>${Object.keys(h.weights).map((k) => `<td class="num">${fmtPct(100 * h.weights[k], 1)}</td>`).join('')}<td class="num">${fmtPct(100 * h.janus_rule.share, 0)}</td><td>${h.basis.startsWith('risk') ? 'risk' : 'capital'}</td></tr>`).join('');
+    view.innerHTML = `
+      <section class="section"><div class="card b-fund notice"><b>A combined view, read only.</b> Built from the published indices of Algorithm v1.1 (risk share 90%) and Janus (10%) on every build. The books keep their own records; no fund figure is written into any of them, and my decisions (Me) are outside the fund. ${info(fd.note)}</div></section>
+      ${fundSection(fd)}
+      ${fd.live ? `<section class="section"><div class="section-head"><h2>The fund and its members</h2>${info('Each line is that book\'s own index, rebased to 100 on the fund\'s start; the fund is their risk-weighted combination.')}</div>
+        <div class="card"><div class="chart"><canvas id="c-fund-members"></canvas></div>${legendRow([['Fund', '--book-fund'], ['Algorithm v1.1', '--book-algo'], ['Janus', '--book-janus']])}</div></section>` : ''}
+      <section class="section"><div class="section-head"><h2>Allocation history</h2>${info('Weights set at each month start. Share = Janus\'s risk share under the rule. Basis: capital = the risk shares themselves (fewer than 6 months of data); risk = risk share ÷ trailing volatility.')}</div>
+        <div class="card">${histRows ? `<div class="table-wrap"><table class="compact"><thead><tr><th>From</th>${Object.keys(fd.allocation.weights).map((k) => `<th class="num">${k === 'janus' ? 'Janus' : 'v1.1'}</th>`).join('')}<th class="num">Share</th><th>Basis</th></tr></thead><tbody>${histRows}</tbody></table></div>` : '<p class="empty">No allocation has been applied yet: the fund has not started.</p>'}</div></section>
+      <section class="section"><div class="section-head"><h2>Janus's share: the rule</h2></div>
+        <div class="card"><ul class="small">
+          <li><b>5%</b> while Janus's drawdown exceeds 10% (now ${fmtPct(fd.allocation.janus_rule.drawdown_pct, 1)}).</li>
+          <li><b>20%</b> once Janus has at least 30 resolved calls with positive net P&L and a lower Brier score than the market on those calls (now ${fd.allocation.janus_rule.calls_with_market_probability} resolved; Brier ${isNum(fd.allocation.janus_rule.brier_janus) ? fmtNum(fd.allocation.janus_rule.brier_janus, 3) : '—'} vs market ${isNum(fd.allocation.janus_rule.brier_market) ? fmtNum(fd.allocation.janus_rule.brier_market, 3) : '—'}). Every call records the market's probability, 50 where no market price exists.</li>
+          <li><b>10%</b> otherwise. Evaluated at each month start on data to the previous month end.</li></ul>
+          <p class="small"><a href="${esc(meta.repo_url)}/blob/main/docs/fund/allocation.md" target="_blank" rel="noopener">docs/fund/allocation.md</a> · config change C04</p></div></section>`;
+    if (fd.series.length) {
+      dateChart('c-fund', [{ label: 'Fund', data: fd.series, color: '--book-fund', fill: true }], { fmt: (v) => fmtNum(v, 2) });
+      const rebase = (ser) => { const base = ser.find((p) => p[0] >= fd.live_start) || ser[0]; return ser.filter((p) => p[0] >= fd.live_start).map((p) => [p[0], 100 * p[1] / base[1]]); };
+      dateChart('c-fund-members', [
+        { label: 'Fund', data: fd.series, color: '--book-fund', width: 2.6 },
+        { label: 'Algorithm v1.1', data: rebase(v11.series || []), color: '--book-algo' },
+        { label: 'Janus', data: rebase(b.janus.series || []), color: '--book-janus' },
+      ], { fmt: (v) => fmtNum(v, 2) });
+    }
   }
 
   // ------------------------------------------------------------------ Home: the cockpit
@@ -858,7 +888,6 @@
         ${legendRow([['Me', '--book-me'], ['Algorithm v1.0', '--book-algo'], ['Janus', '--book-janus'], ['Fund', '--book-fund'], ['Cash (3m T-bill)', '--muted', true]])}
         <div class="vs-cash">${Object.entries(cmp.vs_cash).map(([k, v]) => `<span class="${bookOf(k).cls}-t">${esc(bookOf(k).name)} ${fmtPct(v.book_pct, 2, true)} vs cash ${fmtPct(v.cash_pct, 2, true)}</span>`).join('')}</div></div>
       </section>
-      ${fundSection(fd)}
       <section class="section">
         <div class="section-head"><h2>Combined risk</h2><a class="more" href="#/risk">Risk and stress tests</a></div>
         <div class="card">${info(ex.note)}
@@ -878,7 +907,6 @@
     sparkline('spark-algorithm', v10.series, '--book-algo');
     sparkline('spark-janus', b.janus.series.length ? b.janus.series : [[meta.today, 100]], '--book-janus');
     sparkline('spark-fund', fd.series.length ? fd.series : [[meta.today, 100]], '--book-fund');
-    if (fd.series.length) dateChart('c-fund', [{ label: 'Fund', data: fd.series, color: '--book-fund', fill: true }], { fmt: (v) => fmtNum(v, 2) });
     dateChart('c-compare', [
       { label: 'Me', data: b.me.series, color: '--book-me' },
       { label: 'Algorithm v1.0', data: v10.series, color: '--book-algo' },
@@ -1176,7 +1204,7 @@
   // ------------------------------------------------------------------ router
   const routes = {
     home: pageHome, me: pageMe, decisions: (id) => (id ? pageDecisions(id) : pageMe()), algorithm: pageAlgorithm,
-    janus: pageJanus, position: pagePosition, calendar: pageCalendar, risk: pageRisk, postmortems: pagePostmortems,
+    janus: pageJanus, fund: pageFund, position: pagePosition, calendar: pageCalendar, risk: pageRisk, postmortems: pagePostmortems,
     forecasts: pageForecasts, trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
     evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo,
   };
