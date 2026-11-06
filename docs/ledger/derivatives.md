@@ -3,50 +3,60 @@
 Code: `ledger/derivs.py`. Tests: `tests/test_derivs.py`. Decisions are logged through the clerk
 (`docs/ledger/clerk.md`) with the extra lines below.
 
-## Marks: exchange daily settlements by contract month
+## Marks: exchange final settlements by contract month (Databento)
 
-| product | contract | marked at | proxy |
+Code: `ledger/settlements.py`, which reuses `em_macro/commod_databento.py`. Each mark is the exchange's **final** daily
+settlement of the position's own contract month, from Databento GLBX.MDP3 (CME Globex MDP 3.0), schema
+`statistics`: stat_type 3 with the final bit of stat_flags set. The preliminary settlement CME sends first is
+ignored.
+
+| product | contract | Globex root | proxy |
 |---|---|---|---|
-| BRENT | ICE Brent crude, by contract month | CME Group daily settlement of NYMEX Brent Last Day Financial (BZ), same month | **yes**: BZ settles to the ICE Brent futures settlement on ICE's last trading day; flagged as proxy |
-| WTI | NYMEX WTI (CL) | CME Group daily settlement (CL) | no |
-| NATGAS | NYMEX Henry Hub (NG) | CME Group daily settlement (NG) | no |
-| HEATOIL | NYMEX NY Harbor ULSD (HO) | CME Group daily settlement (HO) | no |
-| RBOB | NYMEX RBOB (RB) | CME Group daily settlement (RB) | no |
+| BRENT | ICE Brent crude, by contract month | NYMEX Brent Last Day Financial, BZ, same month | **yes**: BZ settles to the ICE Brent futures settlement on ICE's last trading day; flagged as proxy |
+| WTI, NATGAS, HEATOIL, RBOB | NYMEX CL, NG, HO, RB | CL, NG, HO, RB | no |
+| GOLD, SILVER, COPPER | COMEX GC, SI, HG | GC, SI, HG | no |
+| CORN, SOYBEANS, WHEAT | CBOT ZC, ZS, ZW (prices in US cents per bushel) | ZC, ZS, ZW | no |
 
-Spot prices (EIA via FRED, the Janus estimates) are never used for a contract month. On 3 Nov 2026 spot Brent was
-107.03 while March 2027 traded near 94, so in this backwardated market a spot mark would misprice every option.
+Spot prices (EIA via FRED) are never used for a contract month. On 3 Nov 2026 spot Brent was 107.03 while March
+2027 traded near 94, so in this backwardated market a spot mark would misprice every option.
 
-**Fetching.** `python -m ledger.derivs mark` (run by `ledger-daily`) reads the CME Group settlements page's JSON
-for the last five business days. It uses the project's own identifying user agent. If CME refuses an automated
-request (cmegroup.com answered 403 to scripted requests from this environment on 6 Nov 2026), the day is skipped
-and logged. The workaround is not to get past the block. Instead, a session or I enter the settlement by hand from
-the exchange's page:
+**Daily run.** `ledger-daily` runs `python -m ledger.settlements fetch`. It fetches every contract month the books
+need: my open futures and options decisions from their entry date, Janus's positions, and the front and next
+contract of each Janus market. It sends one request, starting the day after the last stored settlement.
+`ledger.derivs mark --no-fetch` and `ledger.janus mark` then mark from the store. Databento's historical data runs
+a few hours behind. A day's final settlement (sent by CME after about 00:30 UTC) is usually available by about
+09:00 UTC, so the 09:22 UTC backup run picks it up when the 05:52 run is too early.
+
+**Cost guard.** Every request is quoted first (`metadata.get_cost`). It is refused when it would take the day's
+(UTC) spend above **US$1.00**. The cap is shared by my marks and Janus's. Quotes, requests and refusals are logged
+privately in `ledger/databento_spend.jsonl`. A typical daily request costs well under US$0.01: the first run, ten
+days of 22 contract months, was quoted at US$0.0059 on 6 Nov 2026.
+
+**Dropped: the CME website.** On 6 Nov 2026, cmegroup.com held every scripted request from GitHub Actions until
+the 60-second timeout, five times a run, and answered 403 from other environments. That fetch is gone. Hand entry
+remains for emergencies:
 
 ```bash
 python -m ledger.derivs settle --product BRENT --month 2027-03 --date 2026-11-09 --price 95.12 \
-       --source "CME Group NYMEX BZ settlements page, read 10 Nov 2026"
+       --source "..."
 ```
-
-A hand-entered settlement states its source and acts like a fetched one. Days with no settlement carry the last
-P&L, and nothing is closed on them.
 
 ## Licence: settlements are stored privately, only P&L in % is published
 
-CME Group's website terms (cmegroup.com Terms of Use, last updated 31 Jan 2025) grant a limited licence for
-personal, non-commercial use. They say that, unless CME authorises otherwise, site content may not be sold, copied
-or distributed, and that republishing it on a non-CME site needs CME's prior written approval. CME's data terms
-list settlement prices among that content. Redistributing them is licensed under CME's Information License
-Agreement. ICE's end-of-day data carries similar terms. So:
+CME's terms do not allow settlement prices to be copied, redistributed or republished without CME's licence:
+cmegroup.com's Terms of Use (last updated 31 Jan 2025), its data terms, and the Information License Agreement.
+Databento adds no restrictions of its own but passes CME's on. So:
 
 - **Settlements** are stored only in the private repository `EthanC100/em-macro-data`, in
-  `ledger/futures_settlements.csv` (found through `EM_MACRO_DATA`, or `../em-macro-data`). `ledger-daily` checks it
-  out with the secret `EM_MACRO_DATA_TOKEN`, a token with contents read and write on that repository. **Add this
-  secret once.** Without it, only the entry rows are written and nothing is marked or closed.
-- **This repository** publishes `data/ledger/derivative_pnl.csv` only: date, decision id, P&L in % of account, the
-  basis (`entry`, `settlement`, `model estimate`, `intrinsic at expiry`), the source's name and the proxy flag. It
-  never publishes a settlement, a model value or an exit price. An automatic close writes `exit_price` as text
-  ("model estimate (settlement-based; prices kept in em-macro-data)").
-- Prices a decision record states itself (entry level, premium, strikes) are mine and stay in the record.
+  `ledger/futures_settlements.csv`, with the spend log beside it. `ledger-daily` checks the repository out with
+  the secret `EM_MACRO_DATA_TOKEN` and fetches with `DATABENTO_API_KEY`.
+- **This repository** publishes P&L in % of account only: `data/ledger/derivative_pnl.csv` for my decisions and
+  `data/janus/futures_pnl.csv` for Janus. It never publishes a settlement, a model value, a fill or exit price, a
+  notional or a contract count. An automatic close writes `exit_price` as text.
+- Prices a decision record states itself (entry level, premium, strikes) are mine and stay in the record. Janus's
+  stop levels are Janus's own decisions and stay in its records.
+- Before relying on this beyond personal use, confirm in Databento's licence manager which CME use category the
+  account falls under. Automated daily pulls may count as non-display use.
 
 ## Options: model estimate (Black-76)
 

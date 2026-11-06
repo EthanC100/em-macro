@@ -185,6 +185,10 @@ def run(books: dict, cache: dict | None = None) -> dict:
                 loss = 100 * arg * r_long
             elif mode == "janus":
                 nf, direction, req_risk, stop, mark = arg
+                if nf is None and mark is None:
+                    missing.append({"book": book, "id": pid, "instrument": inst,
+                                    "reason": "futures / options: notional and prices are private (licensed settlements)"})
+                    continue
                 if nf is None and mark is not None:
                     sr = PX.stop_return(k, direction, mark, stop)
                     nf = (req_risk or 0) / 100.0 / abs(sr) if sr else 0.0

@@ -15,14 +15,30 @@ nothing is a legitimate, often correct, decision.
   - stops can only be tightened;
   - required fields: a 2-3 sentence thesis, what would change its mind, at least one source URL, and The Opposition;
   - a reason for every review; and no-trade reasoning when you open nothing.
-- Universe: only the instruments listed in `context` (energy is marked on official spot prices, an estimate).
-  Conventions:
+- Universe: only the instruments listed in `context`. Conventions:
   - yields: `long` = long the bond;
   - FR-DE: `long` = long OAT / short Bund, which gains when the spread tightens;
   - FX: `long` = long the named currency;
-  - commodities: `long` = long the front-month future.
-- Entries fill at the **next official daily mark** (the first daily mark dated on or after today), not at today's
-  price. Positions close automatically at the first daily mark through the stop, or on or after the horizon.
+  - futures by contract month (WTI, BRENT, NATGAS, HEATOIL, RBOB, GOLD, SILVER, COPPER, CORN, SOYBEANS, WHEAT):
+    `long` = long the contract. `contract` (YYYY-MM) is optional; the default is the front contract by the 35-day
+    rule. The stop is a price of that contract. BRENT is held and marked as NYMEX BZ, a flagged proxy for ICE
+    Brent. Grains are quoted in US cents per bushel.
+  - options, on a futures market only, and only defined risk: add `"option": {"legs": "long 4200 call, short 4600
+    call", "expiry": "2027-01-26", "iv_pct": 22, "iv_source": "<source> or estimate"}`. Allowed: a long call or
+    put, or a vertical (debit or credit). `risk_pct` is the maximum loss. The stop is a level of the underlying.
+    The horizon must be on or before the expiry, and the expiry before the contract's notice date. The value is
+    Black-76 at your stated implied volatility (a model estimate). `direction` is derived from the legs.
+- **Futures settlements are licensed.** They come from Databento and live only in the private repository
+  em-macro-data. A session can propose or tighten futures and options only when it is checked out
+  (`EM_MACRO_DATA`, or `../em-macro-data`). Without it the CLI rejects those items; rates and FX work as before.
+  `context` shows the settlements for your judgement in this session only. Never copy a settlement, fill price or
+  level derived from one into a thesis, review, commit message or any other public text; refer to moves in %.
+- Optional, for every new position: `market_probability` (the market's probability that the view is right, 0-100)
+  with `market_source`. The fund's Janus allocation rule compares Janus's Brier score with the market's on the
+  calls that record it (docs/fund/allocation.md).
+- Entries fill at the **next official daily mark** (for futures and options, the first final exchange settlement
+  dated on or after today), not at today's price. Positions close automatically at the first mark through the
+  stop, on or after the horizon, or at an option's expiry.
 - Push to `main` (the script does this). Do not create a branch or a pull request.
 
 ## 1. Read the book

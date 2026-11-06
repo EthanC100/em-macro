@@ -11,6 +11,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C01 | 2026-11-03 | the 3 December 2026 rebalance | Paper capital raised from US$100,000 to US$10,000,000. | Contract-size granularity for the planned commodity futures: at US$100,000 the smallest tradeable position in a standard futures contract is a large fraction of capital, so positions could not be sized to the model's weights. | None. v1.0 sizes positions by weights (per cent of capital), and all of its performance is reported in percentages, so its frozen results (`results/systematic/test/`, `docs/v1.0_freeze.md`) are unaffected. |
 | C02 | 2026-11-04 | the 3 December 2026 rebalance (positions effective 2026-12) | **v1.1 added**, run live in parallel with v1.0: v1.1 = frozen v1.0 + exactly the T18 rule (risk-unit no-trade band 0.1 × the position's risk budget and partial rebalancing w + 0.5 (w* − w), replacing v1.0's 25% relative band). v1.0 remains the frozen control. | T18 passed its pre-registered rule (4 of 4 criteria at 1x costs; `results/T16-T19_risk_batch.md`). | None. No v1.0 file, parameter, input snapshot or result changed; `python -m em_macro.verify_v1` reproduces v1.0 exactly. v1.1 has its own code, outputs and freeze record (`docs/v1.1_freeze.md`). |
 | C03 | 2026-11-06 | the 3 December 2026 rebalance (positions effective 2026-12) | Paper capital for the algorithm (v1.0 and v1.1) set to US$500,000,000, replacing C01's US$10,000,000. Recorded before any live month is booked (no live month has been booked yet; November 2026 is booked on 3 December). | Capacity: to see the strategy at an institutional size, with capacity checks and a market-impact estimate shown beside the official P&L (diagnostic only). | None. All results stay in percentages of capital; only notional amounts change. `python -m em_macro.verify_v1` and `python -m em_macro.systematic_v11 verify` reproduce v1.0 and v1.1 byte for byte (2026-11-06). |
+| C04 | 2026-11-06 | the fund's start (the first date both members are live: 30 November 2026, v1.1's index start) | **Horizons fund view added**: a combined view of Algorithm v1.1 (risk share 90%) and Janus (10%), combined by risk (risk share ÷ trailing volatility, capital shares until 6 months of data). Janus's share changes only by the rule in `docs/fund/allocation.md`: 20% after 30 resolved calls with a market probability, positive net P&L and a better Brier score than the market on those calls; 5% while its drawdown exceeds 10%. My decisions stay outside. | To see the books as one fund without changing any of them. | None. The fund is read-only (`ledger/fund.py`): no book's record, P&L, rule or result changes, and no fund figure is written into any book. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -316,3 +317,13 @@ The Janus quick check runs as two hourly Claude Code scheduled tasks at :15 and 
 cannot run more often than hourly, so two tasks give the 30-minute cadence). The `janus-fire` workflow, which fired
 the quick-check task's API trigger, is removed, and the `JANUS_FIRE_URL` / `JANUS_FIRE_TOKEN` secrets are not needed
 (they were never added). The merged branches `build/ledger-v2` and `build/janus-sessions` were deleted.
+
+## C04 — Horizons fund view (read only)
+
+- **What is added:** `ledger/fund.py`, which writes the app's `fund.json`, and the Fund card, line, chart,
+  allocation and correlations on Home. The rule is in `docs/fund/allocation.md`, recorded on 2026-11-06 before the
+  fund starts.
+- **What does not change:** v1.0, v1.1, Janus and my decisions. Their records, P&L, limits and results are exactly
+  as before. The fund reads their published indices and never writes back.
+- **Changing the rule** (members, shares, thresholds, volatility window) is a new config change, recorded before it
+  takes effect.

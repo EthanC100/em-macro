@@ -99,9 +99,6 @@ def test_parsing():
     assert DV.parse_legs("long put 80") == [{"q": 1, "kind": "put", "strike": 80.0}]
     assert DV.match_product("ICE Brent March 2027 call spread") == "BRENT"
     assert DV.classify(CALL_SPREAD) == "call spread" and DV.classify([]) == "future"
-    payload = {"settlements": [{"month": "DEC 26", "settle": "96.12"}, {"month": "MAR 27", "settle": "94.00"},
-                               {"month": "Total", "settle": "-"}, {"month": "JLY 27", "settle": "91.5A"}]}
-    assert DV.parse_cme(payload) == [("2026-12", 96.12), ("2027-03", 94.0), ("2027-07", 91.5)]
 
 
 # ----------------------------------------------------------------------------- terms and the Risk Manager
@@ -251,10 +248,3 @@ def test_terms_are_sealed(ledger_root, monkeypatch):
     new = audit.seal(seals)
     assert ("derivative", "entry") in {(s["kind"], s["part"]) for s in new}
     assert audit.verify_seals(seals)["ok"]
-
-
-def test_fetch_cme_with_a_fake_source(tmp_path):
-    payload = json.dumps({"settlements": [{"month": "MAR 27", "settle": "94.00"}]}).encode()
-    n, log = DV.fetch_settlements(tmp_path, {"BRENT"}, date(2026, 11, 10), get=lambda url: payload, days=2)
-    rows = _rows(tmp_path / "ledger/futures_settlements.csv")
-    assert n == 2 and {r["date"] for r in rows} == {"2026-11-09", "2026-11-06"} and rows[0]["settle"] == "94"

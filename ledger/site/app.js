@@ -683,6 +683,7 @@
     me: { name: 'Me', cls: 'b-me', v: '--book-me', link: '#/me', kind: 'My decisions' },
     algorithm: { name: 'Algorithm', cls: 'b-algorithm', v: '--book-algo', link: '#/algorithm', kind: 'Mechanical rules, not AI' },
     janus: { name: 'Janus', cls: 'b-janus', v: '--book-janus', link: '#/janus', kind: 'AI book (experiment)' },
+    fund: { name: 'Fund', cls: 'b-fund', v: '--book-fund', link: '#/home', kind: 'Horizons fund: v1.1 + Janus, by risk' },
   };
   const bookOf = (b) => BOOK[String(b || '').split(' ')[0]] || { name: b, cls: 'b-none', v: '--muted', link: '#/home', kind: '' };
   const JANUS_ICON = '<svg class="janus-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4c-3.6 0-6.2 2.3-7 5.6L6 13.2l2.6 1.1-.4 2.3 1.4 1-.6 2.8c-.3 1.6.9 3.1 2.5 3.1H14v3.5h4V23.5h2.5c1.6 0 2.8-1.5 2.5-3.1l-.6-2.8 1.4-1-.4-2.3 2.6-1.1-3-3.6C22.2 6.3 19.6 4 16 4Z" fill="currentColor"/><path d="M16 5v22" stroke="var(--surface)" stroke-width="1.6"/><circle cx="12.4" cy="11.6" r="1.1" fill="var(--surface)"/><circle cx="19.6" cy="11.6" r="1.1" fill="var(--surface)"/></svg>';
@@ -796,16 +797,39 @@
     return b;
   }
 
+  // ------------------------------------------------------------------ Horizons fund (ledger/fund.py, read only)
+  const FUND_NAMES = { 'algorithm v1.1': 'Algorithm v1.1', janus: 'Janus', me: 'Me' };
+  const fundMix = (fd) => Object.entries(fd.allocation.weights).map(([k, w]) => `${esc(FUND_NAMES[k] || k)} ${fmtPct(100 * w, 0)}`).join(' · ');
+  function fundSection(fd) {
+    const a = fd.allocation, jr = a.janus_rule;
+    const bars = Object.keys(a.weights).map((k) => `<div class="bar-row"><span class="bl">${esc(FUND_NAMES[k] || k)}<br><span class="muted small">risk share ${fmtPct(100 * a.risk_shares[k], 0)}${isNum(a.vol[k].ann_vol_pct) ? ` · vol ${fmtPct(a.vol[k].ann_vol_pct, 1)}` : ''}</span></span><span class="bt"><i class="w" style="width:${(100 * a.weights[k]).toFixed(1)}%"></i></span><span class="bv">${fmtPct(100 * a.weights[k], 1)}</span></div>`).join('');
+    const corr = fd.correlation;
+    const corrRows = corr.pairs.map((p) => `<tr><td>${esc(FUND_NAMES[p.a])} / ${esc(FUND_NAMES[p.b])}</td><td class="num">${isNum(p.corr) ? fmtNum(p.corr, 2) : '<span class="muted">—</span>'}</td><td class="num">${p.months}</td></tr>`).join('');
+    return `<section class="section">
+        <div class="section-head"><h2>Horizons fund</h2>${info(fd.note)}</div>
+        <div class="card b-fund">
+          ${fd.live ? `<div class="stats"><div class="stat"><span class="k">Since ${fmtDate(fd.live_start)}</span><span class="v ${signClass(fd.since_start_pct)}">${fmtPct(fd.since_start_pct, 2, true)}</span><span class="s">index ${fmtNum(fd.index, 2)}</span></div><div class="stat"><span class="k">Month to date</span><span class="v">${mtdHtml(fd.mtd_pct)}</span><span class="s">combined, by risk</span></div></div>
+          <div class="chart"><canvas id="c-fund"></canvas></div>` : `<p class="empty">Not started: ${esc(fd.status)}${fd.live_start ? ` (index 100 on ${fmtDate(fd.live_start)})` : ''}. The fund starts at 100 on the first date every member is live.</p>`}
+          <h3>Allocation${a.from ? ` from ${fmtDate(a.from)}` : ' (the rule today)'}</h3>
+          <div class="bars alloc">${bars}</div>
+          <p class="small">Weights: ${esc(a.basis)}. Janus's risk share: ${fmtPct(100 * jr.share, 0)}, ${esc(jr.reason)}; drawdown ${fmtPct(jr.drawdown_pct, 1)}. The rule: <a href="${esc(meta.repo_url)}/blob/main/docs/fund/allocation.md" target="_blank" rel="noopener">docs/fund/allocation.md</a>. My decisions (Me) are outside the fund; no fund figure is written into any book.</p>
+          <h3>Correlation between the books</h3>
+          ${corr.enough ? '' : `<p class="small muted">Shown once two books share ${corr.min_months} completed months (${esc(corr.basis)}).</p>`}
+          <div class="table-wrap"><table class="compact corr"><thead><tr><th>Books</th><th class="num">Correlation</th><th class="num">Months</th></tr></thead><tbody>${corrRows}</tbody></table></div>
+        </div>
+      </section>`;
+  }
+
   // ------------------------------------------------------------------ Home: the cockpit
   async function pageHome() {
-    const [b, jn, ch] = await Promise.all([homeHead(), load('janus'), load('changes')]);
+    const [b, jn, ch, fd] = await Promise.all([homeHead(), load('janus'), load('changes'), load('fund')]);
     const v10 = b.algorithm.versions[0], v11 = b.algorithm.versions[1];
-    const card = (id, title, sub, mtd, est, open, gauge_, extra) => `
+    const card = (id, title, sub, mtd, est, open, gauge_, extra, openLabel = 'Open positions') => `
       <a class="card book-card ${bookOf(id).cls}" href="${bookOf(id).link}">
         <div class="bc-head"><span class="bc-name">${bookIcon(id)}${esc(title)}</span><span class="bc-kind">${esc(sub)}</span></div>
         <div class="bc-body"><div class="bc-spark"><canvas id="spark-${id}"></canvas></div>
           <div class="bc-stats"><span class="k">Month to date</span><span class="v">${mtdHtml(mtd, est)}</span>
-          <span class="k">Open positions</span><span class="v sm">${open}</span></div>${gauge_}</div>${extra || ''}</a>`;
+          <span class="k">${esc(openLabel)}</span><span class="v sm">${open}</span></div>${gauge_}</div>${extra || ''}</a>`;
     const items = (ch.items || []);
     const changed = items.length ? items.map((it) => `<li class="chg ${bookOf(it.book).cls}">${it.book in BOOK ? bookPill(it.book) : pill(it.book)} ${it.link ? `<a href="${esc(it.link)}">${esc(it.text)}</a>` : esc(it.text)}</li>`).join('')
       : '<li class="muted">Nothing new since the previous update.</li>';
@@ -821,17 +845,20 @@
           `<div class="bc-foot">v1.0 live since ${fmtDate(v10.live_start)}; v1.1 live from the ${fmtDate('2026-12-03')} rebalance${isNum(v11.pre_live_estimate_pct) ? ` (pre-live estimate ${fmtPct(v11.pre_live_estimate_pct, 2, true)}, not counted)` : ''}</div>`)}
         ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, `${b.janus.open_count} of ${jn.max_open}`, gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
           `<div class="bc-foot">${jn.last_check ? `Last checked ${fmtDateTime(jn.last_check.time)} · ${esc(jn.last_check.result || '')}` : 'Not checked yet'} · fills at the next official daily mark</div>`)}
+        ${card('fund', 'Fund', 'Horizons: v1.1 + Janus, by risk', fd.live ? fd.mtd_pct : null, false, fundMix(fd), '',
+          `<div class="bc-foot">${fd.live ? `Live since ${fmtDate(fd.live_start)} · ${esc(fd.allocation.basis.split(' (')[0])}` : `Starts ${fd.live_start ? fmtDate(fd.live_start) : 'when every member is live'}`} · my decisions are outside the fund</div>`, 'Weights')}
       </section>
       <section class="section">
         <div class="card changes"><div class="section-head"><h2>What changed</h2><span class="muted small">${ch.since ? `since ${fmtDateTime(ch.since)}` : ''}</span></div>
         <ul class="chg-list">${changed}</ul></div>
       </section>
       <section class="section">
-        <div class="section-head"><h2>Three books and cash</h2>${info(cmp.note + ' Forecasts are not books: they are scored by Brier only and appear only on the Forecasts page.')}</div>
+        <div class="section-head"><h2>Three books, the fund and cash</h2>${info(cmp.note + ' The fund starts at 100 on its own live start. Forecasts are not books: they are scored by Brier only and appear only on the Forecasts page.')}</div>
         <div class="card"><div class="chart"><canvas id="c-compare"></canvas></div>
-        ${legendRow([['Me', '--book-me'], ['Algorithm v1.0', '--book-algo'], ['Janus', '--book-janus'], ['Cash (3m T-bill)', '--muted', true]])}
+        ${legendRow([['Me', '--book-me'], ['Algorithm v1.0', '--book-algo'], ['Janus', '--book-janus'], ['Fund', '--book-fund'], ['Cash (3m T-bill)', '--muted', true]])}
         <div class="vs-cash">${Object.entries(cmp.vs_cash).map(([k, v]) => `<span class="${bookOf(k).cls}-t">${esc(bookOf(k).name)} ${fmtPct(v.book_pct, 2, true)} vs cash ${fmtPct(v.cash_pct, 2, true)}</span>`).join('')}</div></div>
       </section>
+      ${fundSection(fd)}
       <section class="section">
         <div class="section-head"><h2>Combined risk</h2><a class="more" href="#/risk">Risk and stress tests</a></div>
         <div class="card">${info(ex.note)}
@@ -850,11 +877,14 @@
     sparkline('spark-me', b.me.series, '--book-me');
     sparkline('spark-algorithm', v10.series, '--book-algo');
     sparkline('spark-janus', b.janus.series.length ? b.janus.series : [[meta.today, 100]], '--book-janus');
+    sparkline('spark-fund', fd.series.length ? fd.series : [[meta.today, 100]], '--book-fund');
+    if (fd.series.length) dateChart('c-fund', [{ label: 'Fund', data: fd.series, color: '--book-fund', fill: true }], { fmt: (v) => fmtNum(v, 2) });
     dateChart('c-compare', [
       { label: 'Me', data: b.me.series, color: '--book-me' },
       { label: 'Algorithm v1.0', data: v10.series, color: '--book-algo' },
       ...(v11.series.length ? [{ label: 'Algorithm v1.1', data: v11.series, color: '--book-algo', dash: [2, 2], width: 1.5 }] : []),
       { label: 'Janus', data: b.janus.series, color: '--book-janus' },
+      ...(fd.series.length ? [{ label: 'Fund', data: fd.series, color: '--book-fund', width: 2.4 }] : []),
       { label: 'Cash', data: cmp.cash, color: '--muted', dash: [5, 4], width: 1.4 },
     ], { fmt: (v) => fmtNum(v, 1) });
   }
@@ -987,7 +1017,7 @@
     const posCard = (p) => `
       <div class="card pos-card b-janus">
         <div class="row-top"><a class="row-title" href="#/position/janus/${esc(p.id)}">${esc(p.id)} ${badge(p.direction)} ${esc(p.instrument)}</a><span class="row-pnl ${signClass(p.net_pnl_pct)}">${isNum(p.net_pnl_pct) ? fmtPct(p.net_pnl_pct, 2, true) : (p.status === 'pending' ? pill('awaiting entry', 'warn') : '')}</span></div>
-        <div class="row-meta">${fmtPct(p.risk_pct, 2)} at risk · stop ${fmtLevel(p.stop, p.unit)} · horizon ${fmtDate(p.horizon)} · p ${fmtProb(p.probability)}${p.fill ? ` · entry ${fmtLevel(p.fill.entry_level, p.unit)} (${fmtDate(p.fill.entry_date)})` : ''}${p.estimate ? ` ${pill('spot-proxy estimate', 'warn')}` : ''}${p.close ? ` · ${badge(p.close.outcome)} ${esc(p.close.reason)}` : ''}</div>
+        <div class="row-meta">${fmtPct(p.risk_pct, 2)} at risk · stop ${fmtLevel(p.stop, p.unit)} · horizon ${fmtDate(p.horizon)} · p ${fmtProb(p.probability)}${p.fill ? (p.fill.entry_private ? ` · filled ${fmtDate(p.fill.entry_date)}${p.contract ? ` (${esc(p.contract.code)})` : ''}` : ` · entry ${fmtLevel(p.fill.entry_level, p.unit)} (${fmtDate(p.fill.entry_date)})`) : (p.contract ? ` · ${esc(p.contract.code)}` : '')}${p.option ? ` · ${esc(p.option.structure)} ${esc(p.option.legs.split('|').join(', '))}, expiry ${fmtDate(p.option.expiry)}` : ''}${p.valuation === 'model estimate' ? ` ${pill('model estimate', 'warn')}` : ''}${p.proxy ? ` ${pill('proxy', 'warn')}` : ''}${p.estimate ? ` ${pill('spot-proxy estimate', 'warn')}` : ''}${p.close ? ` · ${badge(p.close.outcome)} ${esc(p.close.reason)}` : ''}</div>
         <p class="thesis">${esc(p.thesis)}</p>
         <p class="small"><b>Would change its mind:</b> ${esc(p.change_mind)}</p>
         ${oppHtml(p.opposition)}
@@ -1022,7 +1052,7 @@
       <section class="section"><div class="section-head"><h2>Sessions</h2><span class="muted small">reviews and quick checks</span></div>
         ${(jn.runs || []).slice().reverse().slice(0, 15).map((r) => `<div class="card b-janus"><div class="row-meta">${fmtDateTime(r.decided_at)} · ${esc((r.session || 'weekly run (API)').replace('_', ' '))} · ${esc(r.model || '')} · ${r.n_new} new · ${r.n_reviews} reviews${r.session_url ? ` · <a href="${esc(r.session_url)}" target="_blank" rel="noopener">session</a>` : ''}</div>${r.market_summary ? `<p>${esc(r.market_summary)}</p>` : ''}</div>`).join('') || '<p class="empty">No session yet.</p>'}
         ${(jn.checks || []).length ? `<h3 class="sub">Recent quick checks</h3><ul class="plain checks">${jn.checks.slice().reverse().slice(0, 12).map((c) => `<li><span class="mono small">${fmtDateTime(c.time)}</span> · ${esc(c.result)}${c.positions && c.positions.length ? ` <span class="muted small">(${esc(c.positions.join(', '))})</span>` : ''}</li>`).join('')}</ul>` : ''}</section>
-      <section class="section"><div class="section-head"><h2>Universe and data</h2>${info('Only instruments with a free public daily mark. Commodity futures are marked on official spot prices (an estimate; EIA stopped publishing NYMEX futures in 2024). Never Norgate or em-macro-data (licence).')}</div>
+      <section class="section"><div class="section-head"><h2>Universe and data</h2>${info('Rates and FX: free public daily marks. Futures (NYMEX energy, COMEX gold, silver and copper, CBOT corn, soybeans and wheat) by contract month, marked at final exchange settlements from Databento; the settlements are licensed and kept privately, so only P&L in % is shown. ICE Brent is held and marked as NYMEX BZ (proxy). Options only as defined-risk structures, valued with Black-76 (model estimate). Never Norgate.')}</div>
         <div class="table-wrap"><table><thead><tr><th>Code</th><th>Market</th><th>Daily source</th></tr></thead><tbody>${jn.universe.map((u) => `<tr><td><b>${esc(u.instrument)}</b>${u.estimate ? ` ${pill('estimate', 'warn')}` : ''}</td><td class="wrap">${esc(u.name)}</td><td class="wrap small">${esc(u.source)} ${esc(u.source_id)}</td></tr>`).join('')}</tbody></table></div>
         <h3 class="sub">Dropped</h3><ul class="plain">${jn.dropped.map((d) => `<li><b>${esc(d.market)}</b>: ${esc(d.reason)}</li>`).join('')}</ul>
         <p class="small">Record chain: ${jn.chain.ok ? `<span class="good">verified</span> (${jn.chain.n} records)` : `<span class="bad">FAILED: ${esc(jn.chain.error)}</span>`}</p></section>`;
