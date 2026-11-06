@@ -71,7 +71,7 @@ def test_gate_a_uses_only_the_never_computed_months():
     out = R.evaluate(pack(x), pack(x), control(), held20())
     assert not g(out, "T23", "A")["pass"] and not g(out, "T24", "A")["pass"]
     assert not out["T23_overall_pass"] and not out["T24_overall_pass"]
-    assert "141 months" in g(out, "T23", "A")["value"] and "142 months" in g(out, "T24", "A")["value"]
+    assert "141 months" in g(out, "T23", "A")["value"] and "141 months" in g(out, "T24", "A")["value"]
 
 
 def test_s2_regression_span_starts_at_the_controls_first_held_month():
@@ -178,3 +178,28 @@ def test_context_and_report_on_synthetic_sleeves(tmp_path, monkeypatch):
     R.write_report()
     text = (tmp_path / "r.md").read_text()
     assert "| T23 basis-momentum (T21 rules) |" in text and "## 2. Holm adjustment" in text and "CL 2020-04-21" in text
+
+
+def test_window_check_uses_targets_only(tmp_path, monkeypatch):
+    codes = ["CL", "HO", "RB", "NG", "SB", "GF", "HE"]
+    for k, c in enumerate(codes):
+        _toy_market(tmp_path / "norgate" / CD.SNAPSHOT / "contracts" / c, c, k)
+    monkeypatch.setenv("EM_MACRO_DATA", str(tmp_path))
+    mks = {c: t2022.Mkt(c, pd.DataFrame(columns=["EUR", "GBP"])) for c in codes}
+    blend = {c: mks[c].sigma_blend() for c in codes}
+    mop = {c: mks[c].sigma_mop() for c in codes}
+    sig = {"T21": {c: t2022.signal_t21(mks[c]) for c in codes}, "T22": {c: t2022.signal_t22(mks[c], mop[c]) for c in codes}}
+    built = []
+    monkeypatch.setattr(t2022.Sleeve, "__init__", lambda self, *a, **k: built.append(1))
+    # a window whose month before already has 7 active instruments must fail; nothing is built as a Sleeve
+    monkeypatch.setattr(R, "W23", (pd.Period("2019-06", "M"), pd.Period("2021-12", "M")))
+    monkeypatch.setattr(R, "W24", (pd.Period("2019-06", "M"), pd.Period("2021-12", "M")))
+    out = R.window_check(mks, sig, {"blend": blend, "mop": mop}, codes, codes)
+    assert not built
+    assert out["active_T22 sleeve|full"]["before_window"] == 7 and not out["active_T22 sleeve|full"]["pass"]
+    assert out["active_T22 sleeve|full"]["min_in_window"] == 7
+
+
+def test_windows_after_amendment_2():
+    assert R.W23 == R.W24 == (pd.Period("1979-05", "M"), pd.Period("1999-12", "M"))
+    assert len(pd.period_range(R.W24[0], R.SUB_A_END, freq="M")) == 141

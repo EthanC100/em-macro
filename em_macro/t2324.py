@@ -3,7 +3,7 @@
     EM_MACRO_DATA=... AQR_DATA=... python -m em_macro.t2324 run      # -> results/T23-T24/*, private derived/T23-T24/
     python -m em_macro.t2324 report                                  # -> results/T23-T24_pre2000.md
 
-Pre-registration: docs/prereg/T23-T24_pre2000_backtest.md (215b3c4) with Amendment 1 (648534b).  The rules are
+Pre-registration: docs/prereg/T23-T24_pre2000_backtest.md (215b3c4) with Amendments 1 (648534b) and 2 (a6fe7d8).  The rules are
 T21's and T22's as run at a160bfd: every market, signal, sleeve and statistic function used here is imported from
 em_macro/t2022.py (and commod_data / commod_build0) unchanged.  This module adds only (i) the window (t2324_window:
 schedule and contract loading start earlier; the sleeves' rebalance months are each trial's window), (ii) the
@@ -35,7 +35,7 @@ from .config import RESULTS, ROOT
 OUT = RESULTS / "T23-T24"
 REPORT = RESULTS / "T23-T24_pre2000.md"
 W23 = (pd.Period("1979-05", "M"), pd.Period("1999-12", "M"))
-W24 = (pd.Period("1979-04", "M"), pd.Period("1999-12", "M"))
+W24 = (pd.Period("1979-05", "M"), pd.Period("1999-12", "M"))   # Amendment 2 (was 1979-04)
 SUB_A_END = pd.Period("1991-01", "M")          # sub-window (a): never computed by any earlier run
 SUB_B = (pd.Period("1991-02", "M"), pd.Period("1999-12", "M"))
 S1_P = 0.02275                                 # 1 - Phi(2): T21's "t > 2"
@@ -43,6 +43,7 @@ MIN_ACTIVE = 6
 A3_MIN = 0.90
 PRE_PREG = "215b3c4"
 AMEND_1 = "648534b"
+AMEND_2 = "a6fe7d8"
 CODE_A160 = {   # SHA-256 at a160bfd (pre-registration header): D0
     "em_macro/t2022.py": "d54cdc750668baa26eb408bfb394ec25e0467fd6e7b77ea919583f8a3345528a",
     "em_macro/commod_data.py": "e5ffe76b98d959d268f46e38b97eb2bfe78aa2f114922efb43b9bbbb8f49cb25",
@@ -128,10 +129,10 @@ def evaluate(s21: dict, s22: dict, s20: dict, held20: pd.DataFrame) -> dict:
          "value": f"{100 * a21.mean():+.3f}%/month ({len(a21)} months)", "pass": bool(a21.mean() > 0)},
     ]
     out["T24"] = [
-        {"#": "S1", "criterion": "net SR > 0.20, 1979-04..1999-12", "value": f"{sr22:.4f}", "pass": bool(sr22 > 0.20)},
-        {"#": "S3", "criterion": "break-even cost multiple >= 2, 1979-04..1999-12", "value": f"{be22:.2f}",
+        {"#": "S1", "criterion": "net SR > 0.20, 1979-05..1999-12", "value": f"{sr22:.4f}", "pass": bool(sr22 > 0.20)},
+        {"#": "S3", "criterion": "break-even cost multiple >= 2, 1979-05..1999-12", "value": f"{be22:.2f}",
          "pass": bool(be22 >= 2)},
-        {"#": "A", "criterion": "mean net return > 0 over sub-window (a) 1979-04..1991-01 (Amendment 1)",
+        {"#": "A", "criterion": "mean net return > 0 over sub-window (a) 1979-05..1991-01 (Amendment 1)",
          "value": f"{100 * a22.mean():+.3f}%/month ({len(a22)} months)", "pass": bool(a22.mean() > 0)},
     ]
     for k in ("T23", "T24"):
@@ -373,6 +374,21 @@ def context(sl: dict, ser: dict, sg: dict, mks: dict, start20) -> dict:
     return out
 
 
+def window_check(mks: dict, sig: dict, sgm: dict, u21: list, u22: list) -> dict:
+    """Active counts from t2022.build_targets alone (targets, no Sleeve): >= 6 in every window month, < 6 before."""
+    out = {}
+    for key, codes, w, kind, sk in (("T21 sleeve|full", u21, W23, "T21", "blend"),
+                                    ("T22 sleeve|full", u22, W24, "T22", "mop")):
+        months = pd.period_range(w[0] - 1, w[1], freq="M")
+        _, SG = T.build_targets({c: mks[c] for c in codes}, {c: sig[kind][c] for c in codes},
+                                {c: sgm[sk][c] for c in codes}, kind, months)
+        n = SG.notna().sum(axis=1)
+        inw, before = n.loc[w[0]:w[1]], int(n.loc[w[0] - 1])
+        out[f"active_{key}"] = {"min_in_window": int(inw.min()), "before_window": before,
+                                "first_month": str(w[0]), "pass": bool(inw.min() >= MIN_ACTIVE and before < MIN_ACTIVE)}
+    return out
+
+
 # ============================================================ run
 def stage_run(aqr_dir: Path):
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -452,20 +468,19 @@ def stage_run(aqr_dir: Path):
             ("T22 sleeve|half A", "T22", halves22["A"], W24, MIN_ACTIVE, "mop"),
             ("T22 sleeve|half B", "T22", halves22["B"], W24, MIN_ACTIVE, "mop"),
             ("T20 control|full", "T20", u20, W23, None, "blend")]
+    # window check (Amendment 2): targets only, before any sleeve, position or P&L is computed
+    reading("Window check (Amendment 2): t2022.build_targets alone (no Sleeve) for each full sleeve over its window and "
+            "the month before; at least 6 active in every window month and fewer than 6 in the month before")
+    checks.update(window_check(mks, sig, sgm, u21, u22))
+    print("window check", {k: v for k, v in checks.items() if k.startswith("active_")}, flush=True)
+    if not all(v["pass"] for k, v in checks.items() if k.startswith("active_")):
+        stop("window check: active counts do not reproduce the pre-registered windows (Amendment 2)")
     sl, sg = {}, {}
     for key, kind, codes, w, mina, sk in plan:
         sub = {c: mks[c] for c in codes}
         sl[key], sg[key] = make_sleeve(key, sub, {c: sig[kind][c] for c in codes}, {c: sgm[sk][c] for c in codes},
                                        kind, w, mina)
         print("sleeve", key, flush=True)
-    # window check: every window month of the full sleeves has >= 6 active (rule 3); the month before has < 6
-    for key, codes, w, kind, sk in (("T21 sleeve|full", u21, W23, "T21", "blend"), ("T22 sleeve|full", u22, W24, "T22", "mop")):
-        n = sg[key].notna().sum(axis=1)
-        _, SGp = T.build_targets({c: mks[c] for c in codes}, {c: sig[kind][c] for c in codes},
-                                 {c: sgm[sk][c] for c in codes}, kind, pd.PeriodIndex([w[0] - 1]))
-        checks[f"active_{key}"] = {"min_in_window": int(n.min()), "before_window": int(SGp.notna().sum(axis=1).iloc[0])}
-        if n.min() < MIN_ACTIVE or SGp.notna().sum(axis=1).iloc[0] >= MIN_ACTIVE:
-            stop(f"window check: {key} active counts do not reproduce the pre-registered window")
     reading("T22 half universes (context): target months with fewer than 6 active instruments hold nothing (section "
             "4.5); the full T22 sleeve has at least 6 in every window month, so nothing is zeroed there")
 
@@ -505,7 +520,7 @@ def stage_run(aqr_dir: Path):
         "run_started_utc": started, "run_finished_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_head_at_run": subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
                                           text=True).stdout.strip(),
-        "pre_registration": PRE_PREG, "amendment_1": AMEND_1,
+        "pre_registration": PRE_PREG, "amendment_1": AMEND_1, "amendment_2": AMEND_2,
         "pandas": pd.__version__, "numpy": np.__version__, "checks": checks,
         "inputs": {"norgate": [CD.SNAPSHOT, CD.FIN_SNAPSHOT, CD.META_SNAPSHOT],
                    "norgate_manifest_sha256": {s: sha(CD.data_root() / "norgate" / s / ("metadata.csv" if s == CD.META_SNAPSHOT else "manifest.csv"))
@@ -533,12 +548,12 @@ def write_report():
     a = L.append
     a("# Trials T23–T24: T21 basis-momentum and T22 diversified trend on 1979–1999 — results\n")
     a("| item | value |\n|---|---|")
-    a("| pre-registration | `docs/prereg/T23-T24_pre2000_backtest.md` (`215b3c4`) with Amendment 1 (`648534b`) |")
+    a("| pre-registration | `docs/prereg/T23-T24_pre2000_backtest.md` (`215b3c4`) with Amendment 1 (`648534b`) and Amendment 2 (`a6fe7d8`: T24 from 1979-05; window check before any sleeve) |")
     a(f"| rules and code | T21 and T22 exactly as run at `a160bfd` (code identical at `7405e5f`); D0 hash check: "
       f"{'pass' if ck['D0']['pass'] else 'FAIL'} |")
     a(f"| run | {run['run_started_utc']} to {run['run_finished_utc']} UTC, commit `{run['git_head_at_run'][:7]}`, "
       f"pandas {run['pandas']}, numpy {run['numpy']}; one run, nothing re-run |")
-    a(f"| windows | T23 1979-05..1999-12 ({st['T23_nw']['months']} months); T24 1979-04..1999-12 "
+    a(f"| windows | T23 1979-05..1999-12 ({st['T23_nw']['months']} months); T24 1979-05..1999-12 "
       f"({st['T24_nw']['months']} months) |")
     u = crit["_universe"]
     a(f"| T23 universe | {len(u['T23'])}: {' '.join(u['T23'])} |")

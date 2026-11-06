@@ -1,4 +1,4 @@
-# Trials T23–T24: T21 and T22 on 1979–1999 — run stopped before any gate was evaluated
+# Trials T23–T24, first attempt (superseded by Amendment 2): run stopped before any gate was evaluated
 
 **Status: NOT RUN (stopped by the pre-registered window rule).** No gate, sleeve return, Sharpe ratio, t-statistic or
 other result of T23 or T24 has been evaluated, written or printed. The run is **not** re-run; the owner decides how to
