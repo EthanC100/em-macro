@@ -151,10 +151,10 @@ def test_build_writes_site_and_json(tmp_path):
     status = {t["trial_id"]: t["status"] for t in tr["items"]}
     assert status["T14"] == "inconclusive" and status["T15"] == "pending"      # election study and its live test
     # T01-T15, the T16-T19 risk batch (T18 passed; T16, T17, T19 failed), then T20-T22 (commodity trials, all failed)
-    # and T23-T24 (T21 and T22 on 1979-1999, pre-registered, pending the owner's approval)
-    assert tr["summary"]["n"] == 24 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 3
+    # and T23-T24 (T21 and T22 on 1979-1999, sleeve-level gates only: both passed)
+    assert tr["summary"]["n"] == 24 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 1
     assert {status[t] for t in ("T20", "T21", "T22")} == {"fail"}
-    assert {status[t] for t in ("T23", "T24")} == {"pending"}
+    assert {status[t] for t in ("T23", "T24")} == {"pass"}
     assert status["T18"] == "pass" and {status[t] for t in ("T16", "T17", "T19")} == {"fail"}
     # v1.1 (v1.0 + T18) next to v1.0 on the Algorithm page
     v11, sbs = alg["v11"], alg["side_by_side"]
@@ -398,9 +398,11 @@ def test_evidence_groups_and_status(tmp_path):
     rule = groups["prospective"][0]
     assert rule["id"] == "election-rule" and rule["threshold"] == 15 and "0 of 15" in rule["reason"]
     assert rule["trial_id"] == "T15"                                          # T15 is the election rule, listed first
-    assert [i["id"] for i in groups["prospective"]] == ["election-rule", "T23", "T24"]   # then the pending T23-T24
+    assert [i["id"] for i in groups["prospective"]] == ["election-rule"]   # T23-T24 have been run (both passed)
     # T01 is the live entry, not a passed trial; T18 passed and runs live as v1.1
-    assert [t["id"] for t in groups["passed"]] == ["T18"] and groups["passed"][0]["live_as"] == "v1.1"
+    assert [t["id"] for t in groups["passed"]] == ["T18", "T23", "T24"] and groups["passed"][0]["live_as"] == "v1.1"
+    assert all(t["live_as"] is None for t in groups["passed"][1:])                  # T23-T24: backtests, not live
+    assert "2 commodity backtests passed (T23, T24; zero-size shadow not yet pre-registered)" in ev["overall"]
     failed = {t["id"]: t for t in groups["failed"]}
     assert "T12" in failed and failed["T12"]["reason"].startswith("rejected (failed pre-registered pass rule)")
     assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
@@ -408,7 +410,7 @@ def test_evidence_groups_and_status(tmp_path):
                                     f"{'s' if n_live != 1 else ''}")
     assert "18 rejected" in ev["overall"]                 # 11, T13 (trial T02), T16, T17, T19, and T20-T22
     assert "v1.1 (v1.0 + T18, passed) live for" in ev["overall"]
-    assert "3 ideas under prospective test" in ev["overall"]   # T15, the election continuation rule, and the pending T23-T24
+    assert "1 idea under prospective test" in ev["overall"]    # T15, the election continuation rule
     assert "T13" in failed and "T14" not in failed and "T15" not in failed and "T18" not in failed
     home = json.loads((out / "data/home.json").read_text())
     assert home["evidence_status"] == ev["overall"]

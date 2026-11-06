@@ -553,6 +553,11 @@ def write_report():
       f"{'pass' if ck['D0']['pass'] else 'FAIL'} |")
     a(f"| run | {run['run_started_utc']} to {run['run_finished_utc']} UTC, commit `{run['git_head_at_run'][:7]}`, "
       f"pandas {run['pandas']}, numpy {run['numpy']}; one run, nothing re-run |")
+    a("| code provenance | the commit before the run failed (stale path in `git add`), so the run used the amended "
+      "runner from the working tree on HEAD `633e983`; those files were committed unchanged in `1e0eb4f` (each "
+      "SHA-256 recorded in `RUN.json` equals the committed file) |")
+    a("| first attempt | stopped at the window check before any gate (`results/T23-T24/attempt1_stop_report.md`); "
+      "Amendment 2 moved T24's start to 1979-05 and the check ahead of any sleeve |")
     a(f"| windows | T23 1979-05..1999-12 ({st['T23_nw']['months']} months); T24 1979-05..1999-12 "
       f"({st['T24_nw']['months']} months) |")
     u = crit["_universe"]
