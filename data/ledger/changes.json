@@ -1,7 +1,27 @@
 {
- "since": "2026-11-06T04:23:16+00:00",
- "at": "2026-11-06T04:36:18+00:00",
+ "since": "2026-11-06T04:36:18+00:00",
+ "at": "2026-11-06T13:35:13+00:00",
  "items": [
+  {
+   "book": "me",
+   "kind": "pnl",
+   "label": "me",
+   "change": -0.038,
+   "text": "me: -0.04 index points (to 99.76)"
+  },
+  {
+   "book": "algorithm",
+   "kind": "pnl",
+   "label": "algorithm v1.0",
+   "change": 0.2493,
+   "text": "algorithm v1.0: +0.25 index points (to 100.99)"
+  },
+  {
+   "book": "me",
+   "kind": "trade",
+   "link": "#/position/me/D003",
+   "text": "New decision D003: Buy ICE Brent March 2027 call spread, long $110 call / short $130 call (expiry late Jan 2027)"
+  },
   {
    "book": "janus",
    "kind": "no trade",
