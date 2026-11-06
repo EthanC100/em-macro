@@ -63,11 +63,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -m ledger.resolve --out "$RUNNER_TEMP/resolve.json" 2>&1 | tee "$RUNNER_TEMP/resolve.log"
 
-      # Futures and options in the Me book (ledger/derivs.py): exchange settlements by contract month are licensed
-      # (CME website terms: no redistribution), so they go only to the private em-macro-data repository; this
-      # repository gets P&L in % (data/ledger/derivative_pnl.csv) and any closes. Needs the secret
-      # EM_MACRO_DATA_TOKEN (contents: read and write on EthanC100/em-macro-data); without it only entry rows are
-      # written and nothing is marked or closed.
+      # Futures and options (my decisions: ledger/derivs.py; Janus: ledger/janus.py) are marked at CME-group final
+      # settlements by contract month from Databento GLBX.MDP3 (ledger/settlements.py). Settlements are licensed
+      # (CME terms, passed on by Databento), so they go only to the private em-macro-data repository; this repository
+      # gets P&L in % only (data/ledger/derivative_pnl.csv, data/janus/futures_pnl.csv) and any closes. Every Databento
+      # request is quoted first and refused if it would take the day's spend above US$1 (shared by both books).
+      # Secrets: EM_MACRO_DATA_TOKEN (contents read/write on EthanC100/em-macro-data) and DATABENTO_API_KEY. Without
+      # them nothing is fetched or marked. (The CME website fetch was dropped on 2026-11-06: cmegroup.com held every
+      # scripted request until the 60-second timeout, five times a run.)
       - name: Private data store for licensed settlements
         if: env.HAS_DATA_TOKEN == 'true'
         uses: actions/checkout@v4
@@ -76,12 +79,19 @@ jobs:
           token: ${{ secrets.EM_MACRO_DATA_TOKEN }}
           path: .em-macro-data
           sparse-checkout: ledger
-      - name: Futures settlements and futures/options P&L
+      - name: Futures settlements (Databento) and futures/options P&L
         id: derivs
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
         run: |
-          python -m ledger.derivs mark 2>&1 | tee "$RUNNER_TEMP/derivs.log"
+          if [ -d .em-macro-data ] && [ -n "$DATABENTO_API_KEY" ]; then
+            pip install -q databento
+            python -m ledger.settlements fetch 2>&1 | tee "$RUNNER_TEMP/derivs.log"
+          else
+            echo "no private store or no DATABENTO_API_KEY: settlements not fetched" | tee "$RUNNER_TEMP/derivs.log"
+          fi
+          python -m ledger.derivs mark --no-fetch 2>&1 | tee -a "$RUNNER_TEMP/derivs.log"
           if [ -d .em-macro-data/ledger ]; then
             cd .em-macro-data
             git config user.name "github-actions[bot]"
@@ -138,6 +148,8 @@ jobs:
       # concurrent appends never break a hash chain.
       - name: Janus fills, stops and horizon closes; audit seals
         id: janus
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data     # Janus's futures marks (read only here)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

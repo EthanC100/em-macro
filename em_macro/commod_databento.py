@@ -65,6 +65,21 @@ def resolve_symbols(reqs: list[dict]) -> None:
         q["not_found"] = sorted(set(q["contracts"]) - set(chosen.values()))
 
 
+def final_settlements(df: pd.DataFrame) -> pd.DataFrame:
+    """Final settlement per (symbol, trading date) from a ``statistics`` frame: stat_type 3 (settlement price) with
+    the final bit of stat_flags set (CME sends a preliminary settlement first, then the final one); the last such
+    record wins. Columns: symbol, date (the trading date, ts_ref), settle. Used by the Ledger's daily marks
+    (ledger/settlements.py); the A5 cross-check above keeps its own (pre-registered) last-record rule."""
+    if df is None or not len(df):
+        return pd.DataFrame(columns=["symbol", "date", "settle"])
+    d = df.reset_index() if "ts_recv" not in df.columns else df
+    d = d[(d["stat_type"] == 3) & ((d["stat_flags"].astype(int) & 1) == 1)].sort_values("ts_recv")
+    d = d.groupby(["symbol", "ts_ref"]).tail(1)
+    return pd.DataFrame({"symbol": d["symbol"].values,
+                         "date": pd.to_datetime(d["ts_ref"]).dt.tz_localize(None).dt.date.values,
+                         "settle": d["price"].astype(float).values})
+
+
 def private_dir():
     d = CD.derived_dir() / "databento"
     d.mkdir(parents=True, exist_ok=True)

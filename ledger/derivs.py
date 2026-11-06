@@ -1,22 +1,23 @@
 """Futures by contract month and options (calls, puts, verticals) in the Me book.
 
-    python -m ledger.derivs mark                       # fetch exchange settlements (private store), mark every open
-                                                       # futures/option decision, close on stop / horizon / expiry,
-                                                       # write P&L in % only to data/ledger/derivative_pnl.csv
+    python -m ledger.derivs mark                       # fetch final settlements from Databento (private store,
+                                                       # ledger/settlements.py), mark every open futures/option
+                                                       # decision, close on stop / horizon / expiry, write P&L in %
+                                                       # only to data/ledger/derivative_pnl.csv
     python -m ledger.derivs settle --product BRENT --month 2027-03 --date 2026-11-06 --price 94.00 \\
-           --source "CME Group NYMEX BZ daily settlement page"    # enter one settlement by hand (private store)
+           --source "..."                                          # enter one settlement by hand (private store)
     python -m ledger.derivs iv D003 48.5 --source "..."            # a new implied vol, only from a stated source
                                                                    # (run through scripts/ledger_commit.sh)
     python -m ledger.derivs value D003 --underlying 100 --date 2026-12-01   # model value at a level (no write)
 
-**Marks.** A futures position is marked at the exchange's daily settlement of its own contract month. The best
-free official source is the exchange's published daily settlement (CME Group, for NYMEX). ICE Brent is marked at
-the NYMEX Brent Last Day Financial future (BZ) of the same contract month, which settles to ICE Brent, and every
-such mark is flagged as a proxy. Spot prices (EIA via FRED) are never used for a contract month: in Nov 2026 spot
+**Marks.** A futures position is marked at the exchange's final daily settlement of its own contract month, from
+Databento GLBX.MDP3 (ledger/settlements.py; the CME website fetch was dropped on 2026-11-06 because cmegroup.com
+blocks scripted requests). ICE Brent is marked at the NYMEX Brent Last Day Financial future (BZ) of the same
+contract month, which settles to ICE Brent, and every such mark is flagged as a proxy. Spot prices (EIA via FRED) are never used for a contract month: in Nov 2026 spot
 Brent was about 107 and March 2027 about 94.
 
-**Licence (docs/ledger/derivatives.md).** CME's website terms allow personal, non-commercial use. They do not
-allow settlement prices to be copied, redistributed or republished without CME's written approval. So
+**Licence (docs/ledger/derivatives.md).** CME settlement prices may not be redistributed or republished without
+CME's licence, and Databento passes those terms on. So
 settlements are stored only in the private repository em-macro-data (``ledger/futures_settlements.csv``, located by
 ``EM_MACRO_DATA`` or ``../em-macro-data``). This public repository publishes only P&L in % of account
 (data/ledger/derivative_pnl.csv), never a settlement, a model value or an exit price. Prices a decision record
@@ -47,7 +48,6 @@ import math
 import os
 import re
 import sys
-import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -63,31 +63,26 @@ TERMS_COLUMNS = ["id", "structure", "product", "contract_month", "exchange", "ma
 IV_COLUMNS = ["id", "decision", "date", "iv_pct", "source", "logged_at"]
 PNL_COLUMNS = ["date", "id", "pnl_pct", "basis", "mark_date", "mark_source", "proxy", "can_act", "note"]
 SETTLE_COLUMNS = ["date", "product", "contract_month", "settle", "source", "source_url", "fetched_at", "note"]
-USER_AGENT = "em-macro-ledger/1.0 (+https://github.com/ethanc100/em-macro)"
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
                                       "dec"], 1)}
 MONTH_CODES = dict(zip("FGHJKMNQUVXZ", range(1, 13)))
 STRUCTURES = ("future", "call", "put", "call spread", "put spread")
 MODEL_LABEL = "model estimate"
 
-# product -> exchange contract, its mark source (CME Group daily settlements; product id of the settlements page)
+# product -> exchange contract and its mark source (ledger/settlements.py CONTRACTS: Databento final settlements)
+from . import settlements as ST  # noqa: E402
+
+ALIASES = {"BRENT": ["ICE Brent", "Brent crude", "Brent"], "WTI": ["NYMEX WTI", "WTI crude", "WTI", "NYMEX crude"],
+           "NATGAS": ["Henry Hub", "natural gas", "natgas"], "HEATOIL": ["heating oil", "ULSD"],
+           "RBOB": ["RBOB", "gasoline"], "GOLD": ["COMEX gold", "gold"], "SILVER": ["COMEX silver", "silver"],
+           "COPPER": ["COMEX copper", "copper"], "CORN": ["CBOT corn", "corn"], "SOYBEANS": ["soybeans", "soybean"],
+           "WHEAT": ["CBOT wheat", "SRW wheat", "wheat"]}
 PRODUCTS = {
-    "BRENT": {"name": "ICE Brent crude", "exchange": "ICE", "aliases": ["ICE Brent", "Brent crude", "Brent"],
-              "cme_id": 424, "cme_code": "BZ", "mark_name": "CME Group NYMEX Brent Last Day Financial (BZ) settlement",
-              "proxy": True, "multiplier": 1000, "unit": "USD per bbl"},
-    "WTI": {"name": "NYMEX WTI crude", "exchange": "NYMEX", "aliases": ["NYMEX WTI", "WTI crude", "WTI", "NYMEX crude"],
-            "cme_id": 425, "cme_code": "CL", "mark_name": "CME Group NYMEX WTI (CL) settlement", "proxy": False,
-            "multiplier": 1000, "unit": "USD per bbl"},
-    "NATGAS": {"name": "NYMEX Henry Hub natural gas", "exchange": "NYMEX", "aliases": ["Henry Hub", "natural gas", "natgas"],
-               "cme_id": 444, "cme_code": "NG", "mark_name": "CME Group NYMEX Henry Hub (NG) settlement", "proxy": False,
-               "multiplier": 10000, "unit": "USD per MMBtu"},
-    "HEATOIL": {"name": "NYMEX NY Harbor ULSD", "exchange": "NYMEX", "aliases": ["heating oil", "ULSD"],
-                "cme_id": 426, "cme_code": "HO", "mark_name": "CME Group NYMEX NY Harbor ULSD (HO) settlement",
-                "proxy": False, "multiplier": 42000, "unit": "USD per gal"},
-    "RBOB": {"name": "NYMEX RBOB gasoline", "exchange": "NYMEX", "aliases": ["RBOB", "gasoline"],
-             "cme_id": 429, "cme_code": "RB", "mark_name": "CME Group NYMEX RBOB (RB) settlement", "proxy": False,
-             "multiplier": 42000, "unit": "USD per gal"},
-}
+    code: {"name": c.get("proxy_for") or c["name"], "exchange": "ICE" if c.get("proxy") else c["exchange"],
+           "aliases": ALIASES[code], "root": c["root"],
+           "mark_name": f"{ST.SOURCE} of {c['exchange']} {c['root']}", "proxy": bool(c.get("proxy")),
+           "multiplier": c["multiplier"], "unit": c["unit"]}
+    for code, c in ST.CONTRACTS.items()}
 
 # extra DECISION RECORD lines for a futures or options position (pasted blocks / the clerk)
 FIELDS = {"Structure": "structure", "Contract": "contract", "Legs": "legs", "Option expiry": "option_expiry",
@@ -427,25 +422,15 @@ def append_terms(terms: dict, root: Path) -> None:
 
 def data_store(root: Path = ROOT) -> Path | None:
     """The private em-macro-data checkout, or None."""
-    p = Path(os.environ.get("EM_MACRO_DATA") or (root.parent / "em-macro-data"))
-    return p if p.is_dir() else None
+    return ST.store_dir(root)
 
 
 def settlements(store: Path | None) -> list[dict]:
-    return _rows(store / "ledger/futures_settlements.csv") if store else []
+    return ST.read(store)
 
 
 def write_settlements(store: Path, new: list[dict]) -> int:
-    path = store / "ledger/futures_settlements.csv"
-    keyed = {(r["product"], r["contract_month"], r["date"]): r for r in _rows(path)}
-    n = 0
-    for r in new:
-        k = (r["product"], r["contract_month"], r["date"])
-        if keyed.get(k, {}).get("settle") != r["settle"]:
-            n += 1
-        keyed[k] = r
-    _write(path, sorted(keyed.values(), key=lambda r: (r["date"], r["product"], r["contract_month"])), SETTLE_COLUMNS)
-    return n
+    return ST.write(store, new)
 
 
 def iv_on(decision: str, d: date, terms: dict, root: Path) -> tuple[float, str]:
@@ -507,60 +492,7 @@ def pnl_pct(terms: dict, size_pct: float, v: float) -> float:
     return round(size_pct * (v - entry_value(terms)) / float(terms["risk_per_unit"]), 4)
 
 
-# ----------------------------------------------------------------------------- CME settlements
-def parse_cme(payload: dict) -> list[tuple[str, float]]:
-    """[(contract month 'YYYY-MM', settle)] from a CME Group settlements response
-    ({"settlements": [{"month": "MAR 27", "settle": "94.00", ...}, ...]})."""
-    out = []
-    for r in payload.get("settlements") or []:
-        m = parse_month(str(r.get("month") or "").replace("JLY", "JUL"))
-        s = str(r.get("settle") or "").replace(",", "").rstrip("ABab'").strip()
-        v = parse_number(s) if s and s not in ("-", "") else None
-        if m and v is not None:
-            out.append((m, v))
-    return out
-
-
-def fetch_cme(product: str, trade_date: date, get=None) -> tuple[list[tuple[str, float]], str]:
-    p = PRODUCTS[product]
-    url = (f"https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/{p['cme_id']}/FUT"
-           f"?tradeDate={trade_date.strftime('%m/%d/%Y')}&strategy=DEFAULT")
-    if get is None:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = resp.read()
-    else:
-        body = get(url)
-    return parse_cme(json.loads(body.decode("utf-8", "replace"))), url
-
-
-def bdays_back(d: date, n: int) -> list[date]:
-    out = []
-    while len(out) < n:
-        if d.weekday() < 5:
-            out.append(d)
-        d -= timedelta(days=1)
-    return out
-
-
-def fetch_settlements(store: Path, products: set[str], today: date, get=None, days: int = 5) -> tuple[int, list[str]]:
-    """Fetch the last ``days`` business days of settlements for ``products`` into the private store."""
-    new, log = [], []
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    for prod in sorted(products):
-        for d in bdays_back(today - timedelta(days=1), days):
-            try:
-                pts, url = fetch_cme(prod, d, get)
-            except Exception as e:  # noqa: BLE001 - one bad day never stops the run
-                log.append(f"{prod} {d}: {str(e)[:160]}")
-                continue
-            for m, v in pts:
-                new.append({"date": d.isoformat(), "product": prod, "contract_month": m, "settle": f"{v:g}",
-                            "source": PRODUCTS[prod]["mark_name"], "source_url": url, "fetched_at": now, "note": ""})
-            log.append(f"{prod} {d}: {len(pts)} contract months")
-    return (write_settlements(store, new) if new else 0), log
-
-
+# ----------------------------------------------------------------------------- settlements
 def settle_series(rows: list[dict], product: str, month: str) -> list[tuple[date, float, dict]]:
     out = [(parse_date(r["date"]), float(r["settle"]), r) for r in rows
            if r.get("product") == product and r.get("contract_month") == month and r.get("settle")]
@@ -575,7 +507,7 @@ def can_act(row: dict) -> bool:
 
 
 # ----------------------------------------------------------------------------- daily mark
-def mark(root: Path = ROOT, today: date | None = None, fetch: bool = True, get=None) -> dict:
+def mark(root: Path = ROOT, today: date | None = None, fetch: bool = True, client=None) -> dict:
     """Mark every open futures/options decision: P&L rows (public, % only), closes (decisions.csv)."""
     from .intake import read_rows, write_rows
     from .schema import AUTO_PREFIX, DECISION_COLUMNS
@@ -588,8 +520,11 @@ def mark(root: Path = ROOT, today: date | None = None, fetch: bool = True, get=N
     if store is None:
         log.append("no private store (em-macro-data not checked out; set EM_MACRO_DATA): entry rows only, no settlement marks")
     elif fetch and open_ids:
-        n, flog = fetch_settlements(store, {terms[i]["product"] for i in open_ids}, today, get)
-        log += flog + [f"{n} new or changed settlements stored privately"]
+        status = {d["id"]: (d.get("status") or "open").lower() for d in decisions}
+        needs = {(terms[i]["product"], terms[i]["contract_month"]): parse_date(terms[i]["entry_date"])
+                 for i in open_ids if status.get(i) == "open"}
+        res = ST.fetch(needs, today, store, c=client, purpose="me")
+        log += res["log"]
     srows = settlements(store)
     pnl_rows = {(r["id"], r["date"]): r for r in _rows(root / PNL)}
     changed = []
