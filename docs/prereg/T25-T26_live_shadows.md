@@ -4,7 +4,7 @@
 |---|---|
 | trials | **T25**: a zero-size live shadow of the **T21 basis-momentum** sleeve (the sleeve that passed T23). **T26**: a zero-size live shadow of the **T22 diversified futures trend** sleeve (the sleeve that passed T24). Ledger ids `T25` and `T26` in `trials.csv`, the next free ids (the last row is T24). Trial groups: **`G20_basis_momentum`** (T25) and **`G21_diversified_futures_trend`** (T26). They are the same hypotheses and rules as T21/T23 and T22/T24, tested on a new sample (live data), so they share those groups. |
 | why | T23–T24 §1: "A pass of T23 or T24 supports a **separate, later pre-registration of a zero-size live shadow** of that sleeve: positions logged monthly, at no capital." Both passed (`results/T23-T24_pre2000.md`). This is that pre-registration. |
-| what this is | A **prospective out-of-sample test** on live data. Each sleeve's positions and paper P&L are recorded monthly at zero capital. The test is evaluated **once**, on a date fixed here (§5.1). |
+| what this is | A **prospective out-of-sample test** on live data. Each sleeve's positions and paper P&L are recorded monthly at zero capital. It is evaluated on a date fixed here (§5.1), with **three pre-registered outcomes** (decayed, confirmed, inconclusive). An inconclusive sleeve gets **one** further fixed period, after which only decayed or confirmed is allowed (§5). |
 | family | T25 and T26 are **one family**. The Holm adjustment across the two is in §5.3. |
 | rules | T21 and T22 **exactly as run at `a160bfd`**: `docs/prereg/T20-T22_commodity_trials.md` with Amendments 1–4, the Build 0 report and the trial code. That means the same signals, roll rule (35-day buffer, Amendment 3 guard, Amendment 4.4 missing months), volatility estimators, rank weights, 10% single-market risk cap, 10% sleeve target with the 36-month pro-forma scaler, v1.1's T18 band, and **decisive costs (2 × c_raw)**. **No parameter changes of any kind.** The deliberate differences from the backtests are listed in §2.2; none is a parameter. |
 | code | The code at `a160bfd`, unchanged. SHA-256: `em_macro/t2022.py` `d54cdc75…3345528a`, `em_macro/commod_data.py` `e5ffe76b…8f49cb25`, `em_macro/commod_build0.py` `2c58f7e2…6e1951c`, `em_macro/t18_rebal.py` `dda6456d…0f96c43`, `em_macro/systematic.py` `1eb4cf6b…50be66`, `em_macro/systematic_v11.py` `b3c4404e…885952`, `em_macro/t01.py` `bc52b3e0…2432b2b` (identical at `a160bfd`, at T23–T24's run and at this branch's base `9a05493`). New code is limited to the data adapter, the live operation and the reporting (§8). |
@@ -17,14 +17,26 @@
 
 | trial | hypothesis (restated from T21/T23 and T22/T24) | prior evidence |
 |---|---|---|
-| T25 | The T21 basis-momentum sleeve earns a positive net return after decisive costs out of sample. Adding it to v1.1 at the 25% risk budget does not harm v1.1's Sharpe ratio or drawdown. | Boons and Porras Prado (2019). T21, 2000-01..2026-09: Newey–West t 2.05, net Sharpe 0.40, break-even 5.5. It failed only C1 and C2 against v1.1. T23, 1979-05..1999-12: NW t 2.29, Sharpe 0.49, break-even 4.6, all gates passed. |
-| T26 | The T22 diversified trend sleeve earns a positive net return after decisive costs out of sample, and adding it to v1.1 at the 25% risk budget does not harm v1.1's Sharpe or drawdown. | MOP (2012), HOP (2017). T22: net Sharpe 0.40 (2000–2019) and 0.24 (2020-01..2026-09), break-even 6.6. It failed only C1 and C2. T24, 1979-05..1999-12: Sharpe 0.68, break-even 7.1, all gates passed. |
+| T25 | The T21 basis-momentum sleeve's live net return after decisive costs is not below what its backtests predict (breadth-adjusted), it is positive, and adding the sleeve to v1.1 at the 25% risk budget does not worsen v1.1's live Sharpe ratio or drawdown beyond the T20–T22 non-inferiority margins. | Boons and Porras Prado (2019). T21, 2000-01..2026-09: Newey–West t 2.05, net Sharpe 0.40, break-even 5.5. It failed only C1 and C2 against v1.1. T23, 1979-05..1999-12: NW t 2.29, Sharpe 0.49, break-even 4.6, all gates passed. |
+| T26 | The same claim for the T22 diversified trend sleeve: live net return after decisive costs not below its breadth-adjusted backtest prediction and positive, and no damage to v1.1 beyond the non-inferiority margins. | MOP (2012), HOP (2017). T22: net Sharpe 0.40 (2000–2019) and 0.24 (2020-01..2026-09), break-even 6.6. It failed only C1 and C2. T24, 1979-05..1999-12: Sharpe 0.68, break-even 7.1, all gates passed. |
 
-**What the result means (fixed now).**
-- **A pass of T25 or T26 leads only to a separate, later pre-registration of v1.2.** That would be a candidate version, v1.1 plus that sleeve (or sleeves), under the programme's process. A pass does **not** adopt anything, add the sleeve to v1.1, or change any capital.
-- **A fail closes that sleeve.** No further variant of it is pre-registered in this programme: no other parameters, universe, horizon, data source or evaluation date. If one passes and the other fails, only the passing one may go on to the v1.2 pre-registration.
-- **"Not evaluable" (§7.6)** also closes the sleeve for this programme. A new attempt would need a new pre-registration with a new trial id, stating that this one was not evaluable.
-- **Neither outcome changes v1.0 or v1.1, or re-opens any earlier trial.** The outcomes of T20–T24 in `trials.csv` stand as recorded. The 12-month paper stage of the T20–T22 pre-registration (§4.4) is not started, because neither T21 nor T22 passed it. This shadow is not that stage: it has zero capital and no integer contracts.
+**What each outcome means (fixed now; §5 defines them).**
+- **Decayed:** the live mean return is significantly below what the backtest predicts. **The sleeve is closed.** No
+  further variant of it is pre-registered in this programme: no other parameters, universe, horizon, data source or
+  evaluation date.
+- **Confirmed:** the live mean is positive and not significantly below the backtest's prediction, and adding the
+  sleeve to v1.1 stays within the non-inferiority margins. **The sleeve becomes eligible for a separate, later
+  pre-registration of v1.2** (a candidate version: v1.1 plus that sleeve, or both). Confirmation does **not** adopt
+  anything, add the sleeve to v1.1, or change any capital. It is weak evidence on its own: with no true effect a
+  sleeve is confirmed about 46–48% of the time (§5.4). The v1.2 pre-registration must carry its own test.
+- **Inconclusive** (first evaluation only): neither. **The shadow continues for one further fixed period of 36
+  months** (§5.1). At the second evaluation only decayed or confirmed is possible: inconclusive then **counts as
+  decayed**, and the sleeve is closed.
+- **"Not evaluable" (§7.6)** also closes the sleeve for this programme. A new attempt would need a new
+  pre-registration with a new trial id, stating that this one was not evaluable.
+- **No outcome changes v1.0 or v1.1, or re-opens any earlier trial.** The outcomes of T20–T24 in `trials.csv` stand
+  as recorded. The 12-month paper stage of the T20–T22 pre-registration (§4.4) is not started, because neither T21
+  nor T22 passed it. This shadow is not that stage: it has zero capital and no integer contracts.
 
 ## 2. Rules
 
@@ -50,7 +62,7 @@ No a160bfd function is edited or reimplemented.
 | D2 | **Data:** warm-up history from the a160bfd Norgate snapshot; live dates from Databento final settlements (stat_type 3, final flag). | Norgate is not updated live in this programme. Databento agrees with Norgate within one tick on ≥ 99.97% of days in every CME-group market (Build 0 A5). | One splice per market at the snapshot's last date, checked before go-live (§8, P2). |
 | D3 | **Both sleeves start flat** in the first live month: `build_targets` is called with `months` = the live months only. | So no sleeve return, position or T18 band path is ever computed for the restricted universe before live data exist. | The first month's trades are full entries, charged at decisive costs, as in the backtests' first months (T23–T24 §3). |
 | D4 | **Zero capital: fractional weights**, with no integer contracts and no live rounding rule (T20–T22 §4.4). | Zero size, as T23–T24 §1 specifies. | None on returns: the backtests' decisive runs used fractional weights. |
-| D5 | **Gates.** T21's S2 (alpha against the T20 carry sleeve) is not a gate: T20 failed and runs nowhere live. T22's S2 (carry-crisis correlation) is reported, not gated (§5.5). Combination gates replace C1–C4 (§5.2). | §5. | §5. |
+| D5 | **Outcomes instead of gates.** The backtests' sleeve gates (S1–S3, A) are replaced by the three outcomes of §5, built from a decay test against the backtest's prediction and the non-inferiority margins against v1.1. T21's S2 (alpha against the T20 carry sleeve) is not used: T20 failed and runs nowhere live. T22's S2 (carry-crisis correlation) and the break-even multiple are reported, not decisive (§5.6). | §5. | §5. |
 
 ## 3. Universe
 
@@ -102,91 +114,136 @@ The universe is fixed at go-live and changes only mechanically, under §7. No ma
 6. **Ledger.** The Algorithm page gets a **"Shadows"** section. For each shadow it shows:
    - the live index (net, decisive costs), the months live out of 60, and the current held weights by market, with direction and contract;
    - the last rebalance, and outages and dropped markets;
-   - the evaluation date with the gates, labelled "evaluated once on <date>; nothing before then is a result";
+   - the evaluation dates with the outcome rules, labelled "evaluated on <date> (and, if inconclusive, on <date>); nothing before then is a result";
    - "zero size, paper; not part of v1.0, v1.1 or the fund".
 
    The shadows are not part of the Horizons fund and never feed any book.
-7. **No early stop, no interim decision.** The live record is visible as it accrues. No interim look stops a shadow early, for success or failure, or changes any gate, date or rule. The only decision is at the evaluation date (§5).
+7. **No early stop, no interim decision** (§5.5).
 
-## 5. Evaluation (once, at a date fixed now)
+## 5. Evaluation: three outcomes at a date fixed now, with one fixed extension
 
-### 5.1 Window and date
+### 5.1 Windows and dates
 
-- **Window:** the first **60 live months**, M1..M60. If M1 = 2026-12, that is **2026-12 .. 2031-11**.
-- **Evaluation date:** **15 December 2031** (with M1 = 2026-12). By then v1.1's November 2031 month is booked (3 December) and the shadows' November settlements are stored. If M1 is later, the window is the 60 months from M1, and the evaluation is on the 15th of the month after M60. Both are written in the go-live record (§8) at the first live rebalance, and never changed.
-- **Why 60 months** (before any live data):
-  - **The programme's convention.** The Ledger's evidence page judges a mechanical strategy's live record against
-    a 90%-confidence track-record length: 55 months for v1.0, at its backtest Sharpe ratio of 0.65. 60 months is
-    that convention rounded up to whole years. It is the same order of evidence the programme already asks of its
-    live algorithm.
-  - **The power table (§5.4) shows what it buys.** If the breadth-adjusted backtest effect is real, each shadow
-    has about a 1 in 4 chance of passing at 60 months (23% and 25%), about 1 in 5 at 4 years, and about 1 in 3 at
-    10 years. With no effect, about 5%. No horizon up to 10 years makes this test decisive. Waiting five more
-    years would add only about 10 percentage points.
-  - The date is fixed now and never moved.
+- **First evaluation:** the first **60 live months**, M1..M60. If M1 = 2026-12, that is **2026-12 .. 2031-11**,
+  evaluated on **15 December 2031**. By then v1.1's November 2031 month is booked (3 December) and the shadows'
+  November settlements are stored.
+- **Second evaluation (inconclusive sleeves only):** **36 further months**, so the whole record M1..M96. If M1 =
+  2026-12, that is **2026-12 .. 2034-11**, evaluated on **15 December 2034**. The second evaluation uses all 96
+  months, not the 36 alone.
+- If M1 is later, both windows run from M1 and each evaluation is on the 15th of the month after its last month.
+  M1 and both dates are written in the go-live record (§8) at the first live rebalance, and never changed.
+- **Why 60 + 36 months** (before any live data):
+  - 60 months is the programme's minimum live record for judging a mechanical strategy: the Ledger's
+    90%-confidence track-record length is 55 months for v1.0 (`MIN_TRACK_RECORD_YEARS` = 4.6), rounded up to whole
+    years.
+  - **36 more months (8 years in all) is a judgement about how long the programme will wait, not a power optimum.**
+    The length of the extension hardly changes how well the outcomes separate a real effect from none. A longer
+    extension raises the final confirmation rate under the backtest effect and under zero effect almost equally
+    (Monte Carlo as §5.4, 6,000 paths):
 
-### 5.2 Gates (decisive costs; the full shadow universe; months M1..M60)
+    | extension | total | final confirmed, backtest effect (T25 / T26) | final confirmed, zero effect (T25 / T26) |
+    |---|---|---|---|
+    | 24 months | 7 years | 74% / 78% | 45% / 46% |
+    | **36 months** | **8 years** | **77% / 80%** | **46% / 48%** |
+    | 60 months | 10 years | 80% / 83% | 48% / 50% |
+    | 96 months | 13 years | 85% / 86% | 50% / 52% |
 
-| trial | # | gate | passes if |
-|---|---|---|---|
-| T25, T26 | S1 | mean monthly net return of the stand-alone shadow (`Sleeve.monthly(2.0)`), Newey–West (6 lags) t-statistic | mean > 0 **and** Holm-adjusted one-sided p < **0.10** (§5.3) |
-| T25, T26 | S3 | break-even cost multiple m* = annualised mean gross return / annualised cost drag at 1 × c_raw | m* ≥ 2 |
-| T25, T26 | C-SR | v1.1 + shadow at the 25% risk budget (`t2022.combine`: v1.1's held weights from its monthly run, its own cost model and lags; the shadow's legs at decisive costs), against v1.1's live record over M1..M60 | ΔSR = SR(v1.1 + shadow) − SR(v1.1) ≥ **−0.05** (point estimate; non-inferiority margin of T20–T22 Amendments 1–2) |
-| T25, T26 | C-DD | the same combined book | \|MaxDD(v1.1 + shadow)\| ≤ **1.10 × \|MaxDD(v1.1)\|** (T20–T22 C3's margin) |
+    36 months keeps the whole test within 8 years, and the programme can still act on the answer.
 
-- **A trial passes only if all four gates hold**, with S1 after the Holm adjustment.
-- S3 at decisive costs is nearly implied by S1, since m* ≥ 2 means the gross return at least covers 2 × c_raw. It is kept because the backtests had it.
-- **v1.1's record** is its official live paper P&L (`results/systematic_v1.1/paper_pnl.csv`) over M1..M60. The combination is computed once, on the evaluation date, with v1.1's monthly run outputs and the `systematic` inputs of that date, as v1.1's own update computes them.
+### 5.2 Quantities (decisive costs; the full shadow universe; months M1..M_T, T = 60 or 96)
 
-### 5.3 Multiple testing across the two
+| symbol | definition |
+|---|---|
+| r_t | the shadow's monthly net return at decisive costs, `Sleeve.monthly(2.0)` |
+| m̂, ŝ | the sample mean and standard deviation (ddof 1) of r_t over the window |
+| SR_pred | the **backtest prediction**, fixed now: the pooled decisive Sharpe ratio of the sleeve's two backtests, months-weighted (T21 2000-01..2026-09 and T23 1979-05..1999-12: **0.4346**; T22 2000-01..2019-12 and 2020-01..2026-09 with T24 1979-05..1999-12: **0.4998**), times **√(N / N₀)** for the restricted universe (N = the number of universe markets at go-live; N₀ = 20 for T21, 30 for T22). With the §3.2 universes (N = 14 and 20): **0.364** (T25) and **0.408** (T26). |
+| m₀ | the predicted monthly mean at the shadow's own realised volatility: m₀ = SR_pred / √12 × ŝ. The shadow targets 10% volatility, as did the backtests, so the prediction is stated in Sharpe units and scaled by the realised volatility. |
+| t_d | the decay statistic: t_d = (m̂ − m₀) / se_NW, with se_NW the Newey–West (6 lags) standard error of the mean (`t2022.nw_tstat`'s estimator) |
+| p_d | one-sided decay p-value: p_d = Φ(t_d) (small when the live mean is far below the prediction) |
+| ΔSR | SR(v1.1 + shadow) − SR(v1.1), the combined book from `t2022.combine` (v1.1's held weights from its monthly run, its own cost model and lags; the shadow's legs at decisive costs; 25% risk budget), against v1.1's live record over the same months |
+| MaxDD | maximum drawdown of the compounded monthly index |
 
-```
-p_k = 1 − Φ(t_k),   t_k = NW (6 lags) t of shadow k's mean monthly net return over M1..M60
-Holm (m = 2): order p_(1) ≤ p_(2);  p_adj,(1) = min(1, 2 p_(1));  p_adj,(2) = max(p_adj,(1), p_(2))
-```
+### 5.3 The three outcomes, and the correction across the two sleeves
 
-S1 passes for shadow k if mean_k > 0 and p_adj,k < 0.10, so the family-wise one-sided error is at most 10%. The other gates are point estimates and are not adjusted, as T20–T22 §5 left its non-bootstrap gates. Raw and adjusted p-values are both reported.
+At each evaluation, for the sleeves evaluated there (both at the first; the inconclusive ones at the second):
 
-### 5.4 Honest power (computed before any live data)
+1. **Decayed** if the **Holm-adjusted** p_d < **0.05** (one-sided), adjusting across the sleeves evaluated at
+   that date:
 
-**Method.** A Monte Carlo of 8,000 paths per case, seed 20261106 (script reproduced in Phase 2's report):
-- monthly returns of v1.1 and the two shadows, normal, each at 10% annual volatility;
+   ```
+   two sleeves: order p_(1) ≤ p_(2);  p_adj,(1) = min(1, 2 p_(1));  p_adj,(2) = max(p_adj,(1), p_(2))
+   one sleeve:  p_adj = p_d
+   ```
+
+2. **Confirmed** if not decayed **and** all of:
+   - **positive:** m̂ > 0;
+   - **Sharpe non-inferiority** (T20–T22 Amendments 1–2 margin): ΔSR ≥ −0.05, point estimate;
+   - **drawdown non-inferiority** (T20–T22 C3 margin): |MaxDD(v1.1 + shadow)| ≤ 1.10 × |MaxDD(v1.1)|.
+
+   "Consistent with the backtest" means the decay test does not reject.
+3. **Inconclusive** otherwise, at the first evaluation only. At the second evaluation, a sleeve that is neither
+   decayed nor confirmed **counts as decayed**.
+
+Raw and Holm-adjusted p_d, t_d, m̂, m₀, ΔSR and both drawdowns are reported at each evaluation. The positive-mean and
+non-inferiority conditions are point estimates and are not adjusted, as T20–T22 §5 left its point-estimate gates.
+
+### 5.4 Probabilities of each outcome (Monte Carlo, before any live data)
+
+**Method.** 8,000 paths per case, seed 20261106 (script reproduced in Phase 2's report):
+- monthly returns of v1.1 and the two shadows, normal, each at 10% annual volatility, over 96 months;
 - correlations from the 2020-01..2026-09 backtest diagnostics: T21–v1.1 0.08, T22–v1.1 0.05, T21–T22 0.20;
 - v1.1's Sharpe ratio at its 2006–2026 decisive value, 0.71;
-- the shadows' Sharpe ratios at the **backtest effect, breadth-adjusted**: the pooled decisive Sharpe of each sleeve's two backtests (T21 1979–2026 ≈ 0.435; T22 ≈ 0.50) times √(N/N₀) for the restricted universe (T21 √(14/20), giving **0.36**; T22 √(20/30), giving **0.41**);
-- the S1 Holm rule, ΔSR and MaxDD computed exactly as in §5.2 on the paths. A plain t-statistic stands in for NW on independent normal returns.
+- the outcome rules applied exactly as in §5.3 at 60 months, and at 96 months to the paths inconclusive at 60, with
+  Holm across the sleeves evaluated at each date. A plain standard error stands in for Newey–West on independent
+  normal returns. The combined book is the 0.75/0.25 return mix rescaled to v1.1's volatility.
 
-Monte Carlo error is about ±0.5 percentage points.
+Three cases for the true Sharpe ratio: the **backtest effect** (SR_pred: 0.364 and 0.408), **half** of it, and
+**zero**. Monte Carlo error is about ±0.5 percentage points.
 
-| true effect | horizon | T25: S1 | T25: C-SR and C-DD | **T25: all gates** | T26: S1 | T26: C-SR and C-DD | **T26: all gates** |
-|---|---|---|---|---|---|---|---|
-| backtest, breadth-adjusted | 3 years | 18% | 62% | 17% | 20% | 65% | 19% |
-| backtest, breadth-adjusted | **5 years (decisive)** | 24% | 66% | **23%** | 26% | 70% | **25%** |
-| backtest, breadth-adjusted | 8 years | 32% | 72% | 29% | 35% | 75% | 33% |
-| backtest, breadth-adjusted | 10 years | 37% | 74% | 33% | 41% | 77% | 37% |
-| backtest, no breadth haircut (0.435 / 0.50) | 5 years | 31% | 71% | 28% | 34% | 76% | 31% |
-| half the breadth-adjusted effect | 5 years | 13% | 53% | 12% | 14% | 57% | 13% |
-| **no effect** (Sharpe 0) | 5 years | 5% | 40% | **4.8%** | 6% | 42% | **5.3%** |
+| true effect | sleeve | at 5 years: decayed | confirmed | inconclusive | at 8 years: confirmed | inconclusive → decayed | **final: confirmed** | **final: decayed** |
+|---|---|---|---|---|---|---|---|---|
+| backtest effect | T25 | 2.6% | 65.0% | 32.4% | 12.6% | 17.2% | **77.6%** | **22.4%** |
+| backtest effect | T26 | 2.4% | 67.8% | 29.8% | 12.6% | 14.5% | **80.4%** | **19.6%** |
+| half | T25 | 7.1% | 49.4% | 43.5% | 13.2% | 24.7% | 62.6% | 37.4% |
+| half | T26 | 6.8% | 53.0% | 40.2% | 13.1% | 21.0% | 66.1% | 33.9% |
+| **zero** | T25 | 14.0% | 36.6% | 49.3% | 9.5% | 28.0% | **46.2%** | **53.8%** |
+| **zero** | T26 | 16.9% | 37.1% | 45.9% | 10.7% | 22.8% | **47.9%** | **52.1%** |
+
+"Final: decayed" includes decayed at either evaluation and inconclusive-then-decayed at 8 years.
 
 **What this means, stated plainly.**
-- **If the backtest effect is real, each shadow is still more likely to fail than pass**: about a 1 in 4 chance of passing at 60 months, and about 1 in 3 at 10 years. A Sharpe ratio near 0.4 needs about 20 years of data for an expected t-statistic of 2.
-- **A pass is meaningful evidence:** with no effect, a shadow passes about 5% of the time.
-- **A fail is weak evidence against the effect.** But this programme fixes now that a fail closes the sleeve (§1). The owner accepts that a real but modest effect will most likely be closed by this test.
-- The combination gates pass about 40% of the time even with no effect, so they guard against harm and do not discriminate. S1 does the discriminating.
-- These figures assume normal, independent monthly returns. Fat tails and serial correlation in practice would lower the power further.
+- **If the backtest effect is real**, each sleeve is confirmed about 78–80% of the time, and wrongly closed about
+  20–22% of the time. Most of those wrong closures (15–17 points) come from "inconclusive at 8 years counts as
+  decayed", not from the decay test, which rejects a real effect only about 2–3% of the time at 5 years.
+- **If the true effect is zero**, each sleeve is still **confirmed about 46–48% of the time**. Confirmation asks
+  only for a positive mean that is not significantly below the prediction. A sleeve with no edge has a positive
+  mean about half the time, and the decay test has little power against a prediction of Sharpe 0.36–0.41. So
+  **confirmation is weak evidence that the effect exists.** It means only "not shown to have decayed, positive,
+  and harmless to v1.1", and it gives eligibility for a v1.2 pre-registration that must carry its own test.
+- **A closure is also weak evidence that the effect is gone:** with no effect, a sleeve is closed about 52–54% of
+  the time. Neither outcome is decisive at any horizon the programme can wait for. A Sharpe ratio near 0.4 needs
+  about 20 years for an expected t-statistic of 2.
+- These figures assume normal, independent monthly returns. Fat tails and serial correlation would make every test
+  less decisive.
 
-### 5.5 Reported, not decisive
+### 5.5 No early stop, no interim decision
 
-None of these can change a decision:
+The live record is visible as it accrues. No interim look stops a shadow, for success or failure, or changes any
+outcome rule, prediction, date or margin. The only decisions are at the dates of §5.1.
+
+### 5.6 Reported, not decisive
+
+None of these can change an outcome:
 - the 2× cost sensitivity (`monthly(4.0)`);
+- the break-even cost multiple m*;
+- the Newey–West t of the mean (the backtests' S1 statistic) and the live Sharpe ratio, with confidence intervals;
 - by year;
-- each shadow's P&L by sector (T26: commodities and currencies);
+- each shadow's P&L by sector;
 - the correlations between the two shadows, with v1.1 and with v1.0's live carry-only sleeve;
-- T22's S2 analogue: the correlation with v1.0's carry-only sleeve (`systematic.run(inp, ["carry"])`, as T01 and T22) in carry's worst 6 live months (10% of 60);
-- the monthly count of active markets;
-- the outage log (§7);
-- turnover;
-- the superiority version of the combined test (ΔSR > 0), as context.
+- T22's S2 analogue: the correlation with v1.0's carry-only sleeve (`systematic.run(inp, ["carry"])`, as T01 and
+  T22) in carry's worst 10% of live months;
+- the superiority version of the combined test (ΔSR > 0);
+- the monthly count of active markets, and the outage log (§7).
 
 ## 6. Disclosure: everything already known about these sleeves
 
@@ -223,12 +280,13 @@ None of these can change a decision:
    - **Notice and last-trade dates:**
      - for contracts in the Norgate metadata, Norgate's dates;
      - for contracts listed later, `commod_data`'s exchange rules, with the Amendment 3 guard for notice = LTD markets. If the exchange publishes a different date before the contract is held, the exchange's date applies and is logged.
-6. **Not evaluable.** At the evaluation date, a shadow is **not evaluable** if:
-   - fewer than 54 of its 60 months (90%) had a computed rebalance with at least 6 active markets; or
+6. **Not evaluable.** At an evaluation date, a shadow is **not evaluable** if:
+   - fewer than 90% of the window's months (54 of 60; 87 of 96 at the second evaluation) had a computed rebalance
+     with at least 6 active markets; or
    - its record was interrupted for more than 3 consecutive months.
 
    It is then neither passed nor failed, and §1 applies.
-7. **Bugs.** A bug found before the evaluation date is fixed only if the fix restores what this document and the a160bfd code specify. The fix, its commit and the affected months are recorded. The whole live path is then recomputed from M1, as every run does, so the record stays consistent. No gate, date or rule changes.
+7. **Bugs.** A bug found before the evaluation date is fixed only if the fix restores what this document and the a160bfd code specify. The fix, its commit and the affected months are recorded. The whole live path is then recomputed from M1, as every run does, so the record stays consistent. No outcome rule, prediction, margin or date changes.
 8. **Late runs.** If the rebalance is computed after the 3rd (item 2, or a delayed run), the decision still uses only settlements up to t. The execution date is the market's first settlement on or after the 3rd, so a late computation never changes the positions.
 
 ## 8. Phase 2 (only after the owner replies "approved")
@@ -239,16 +297,16 @@ None of these can change a decision:
      - presents the Norgate warm-up and the Databento live settlements to the unchanged `commod_data.MarketData` (one splice per contract at the snapshot's last date);
      - builds `t2022.Mkt`, the signals, `build_targets` with `months` = live months, and `Sleeve`;
      - writes the private and public files of §4.4;
-     - evaluates once at the evaluation date.
+     - evaluates at the dates of §5.1, applying §5.3 exactly.
    - The Ledger "Shadows" section, and the `ledger-daily` step.
-   - `tests/test_t2526.py`, **tested on synthetic data only**: the splice, start-flat, the missing-data rules of §7, Holm at the boundaries, and no price in any public file.
+   - `tests/test_t2526.py`, **tested on synthetic data only**: the splice, start-flat, the missing-data rules of §7, the three outcomes and Holm at their boundaries (one and two sleeves), inconclusive-to-decayed at the second evaluation, and no price in any public file.
 3. **Pre-live checks before the first live rebalance.** Each is recorded in `results/shadows/GO_LIVE.json`. A failure moves go-live to the next rebalance.
    - **P0:** the SHA-256 of every a160bfd file listed above matches.
    - **P1:** the §3.2 counts, recomputed on the then-current window, still qualify every universe market. A market that no longer qualifies is excluded under §3.1, before go-live.
    - **P2: splice agreement.** For every universe market, the Databento final settlements of the held F1 (and F2 for T21) agree with the Norgate snapshot within one tick on ≥ 99% of their common days (Build 0 A5's tolerance), counts only. A failing market is excluded before go-live.
    - **P3:** every universe market has σ and a signal available at the first decision date. Otherwise §7.2 applies that month.
    - **P4:** a dry rebalance on the first decision date prints only the active count per sleeve, which must be ≥ 6, and no weight.
-4. **Go-live record.** At the first live rebalance: M1, the evaluation date, the universe, the code commit and the hashes are recorded. This fixes every date of §5.1.
+4. **Go-live record.** At the first live rebalance: M1, both evaluation dates, the universe, N for SR_pred (§5.2), the code commit and the hashes are recorded. This fixes every date and prediction of §5.
 
 ## 9. Ledger and multiple-testing record
 

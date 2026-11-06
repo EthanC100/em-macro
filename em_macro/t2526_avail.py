@@ -136,15 +136,25 @@ def run() -> dict:
     for s, k in sym_of.items():
         if s in found and k not in chosen:
             chosen[k] = s
-    kw = dict(dataset=DATASET, symbols=sorted(chosen.values()), stype_in="raw_symbol", schema=SCHEMA,
-              start=f"{CHECK_START}T00:00:00Z", end=end)
-    quote = float(c.metadata.get_cost(**kw))
+    # one request per market (the single request timed out): every request quoted first; refused if the total of
+    # the quotes exceeds QUOTE_CAP_USD
+    by_market: dict[str, list[str]] = {}
+    for (code, ym), s in chosen.items():
+        by_market.setdefault(code, []).append(s)
+    reqs = {code: dict(dataset=DATASET, symbols=sorted(syms), stype_in="raw_symbol", schema=SCHEMA,
+                       start=f"{CHECK_START}T00:00:00Z", end=end) for code, syms in by_market.items()}
+    quotes = {code: float(c.metadata.get_cost(**kw)) for code, kw in reqs.items()}
+    quote = sum(quotes.values())
     if quote > QUOTE_CAP_USD:
-        raise SystemExit(f"refused: quote US${quote:.4f} above US${QUOTE_CAP_USD}")
-    df = c.timeseries.get_range(**kw).to_df(map_symbols=True).reset_index()
-    fin = df[(df["stat_type"] == 3) & ((df["stat_flags"].astype(int) & 1) == 1)]
-    days = {s: set(pd.to_datetime(g["ts_ref"]).dt.date) for s, g in fin.groupby("symbol")}
-    del df, fin                                            # nothing but the dates is kept
+        raise SystemExit(f"refused: total quote US${quote:.4f} above US${QUOTE_CAP_USD}")
+    days: dict[str, set] = {}
+    for code, kw in reqs.items():
+        df = c.timeseries.get_range(**kw).to_df(map_symbols=True).reset_index()
+        fin = df[(df["stat_type"] == 3) & ((df["stat_flags"].astype(int) & 1) == 1)]
+        for s, g in fin.groupby("symbol"):
+            days[s] = set(pd.to_datetime(g["ts_ref"]).dt.date)
+        del df, fin                                        # nothing but the dates is kept
+        print(f"{code}: {len(kw['symbols'])} contracts counted", flush=True)
     rows, summary = [], {}
     for code, r in pl.items():
         if not r["on_glbx"]:
