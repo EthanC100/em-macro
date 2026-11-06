@@ -245,7 +245,7 @@
         <div class="card hero rule">
           <span class="k">${esc(home.account_index_label || ACCOUNT_LABEL)}</span>
           <span class="v">${fmtNum(home.account_index, 1)}</span>
-          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; ${home.usd_switched ? `paper capital ${fmtUsd(home.usd_capital)} from the ${fmtDate(home.usd_switch_rebalance)} rebalance, at index ${fmtNum(home.index_at_switch, 1)}` : `paper capital ${fmtUsd(home.usd_capital)}, raised to US$10,000,000 at the ${fmtDate(home.usd_switch_rebalance)} rebalance`})</span>
+          <span class="s">${fmtUsd(home.account_usd)} · ${fmtPct(home.account_change_pct, 2, true)} since the live start (100 = end of ${fmtMonth(home.account_base_month)}; ${home.usd_switched ? `paper capital ${fmtUsd(home.usd_capital)} from the ${fmtDate(home.usd_switch_rebalance)} rebalance, at index ${fmtNum(home.index_at_switch, 1)}` : `paper capital ${fmtUsd(home.usd_capital)}, raised to US$500,000,000 at the ${fmtDate(home.usd_switch_rebalance)} rebalance`})</span>
           ${home.usd_switch_note ? `<span class="s"><strong>${esc(home.usd_switch_note)}</strong></span>` : ''}
           <span class="s">Latest month ${fmtMonth(home.last_month)} ${fmtPct(home.last_month_net_pct, 2, true)}${home.live.months ? '' : ' (pre-live, not counted)'}</span>
         </div>
@@ -375,6 +375,18 @@
       ${d.status === 'open' ? `<div class="btn-row"><a class="btn primary" href="${esc(meta.issue_forms.resolve)}" target="_blank" rel="noopener">Resolve ${esc(d.id)}</a></div>` : ''}`;
   }
 
+  function capacitySection(c, label) {
+    if (!c || !c.rows) return '';
+    const rows = c.rows.map((r) => `<tr class="${r.flags.length ? 'flag' : ''}"><td>${esc(r.instrument)}</td><td class="num">${fmtUsd(r.notional_usd)}</td>
+      <td class="num">${r.adv_usd ? fmtUsd(r.adv_usd) : '—'}</td><td class="num ${r.flags.includes('adv') ? 'bad' : ''}">${fmtPct(r.pct_adv, 1)}</td>
+      <td class="num ${r.flags.includes('limit') ? 'bad' : ''}">${isNum(r.pct_limit) ? fmtPct(r.pct_limit, 0) : '—'}</td><td class="num">${fmtNum(r.impact_bp_full, 1)}bp</td>
+      <td class="wrap small">${esc(r.adv_status || '')}</td></tr>`).join('');
+    return `<section class="section"><h2>Capacity, ${esc(label)} at ${fmtUsd(c.capital_usd)}</h2>
+      <p class="small">${c.flagged.length ? `<b class="bad">Flagged: ${esc(c.flagged.join(', '))}</b>` : 'No position above 10% of ADV or near a position limit.'}</p>
+      <div class="table-wrap"><table><thead><tr><th>Instrument</th><th class="num">Notional</th><th class="num">ADV</th><th class="num">% ADV</th><th class="num">% limit</th><th class="num">Impact</th><th>ADV source</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small muted">${esc(c.method)} ${esc(c.impact_note || '')}</p></section>`;
+  }
+
   async function pageAlgorithm() {
     const alg = await load('algorithm');
     const months = alg.months;
@@ -494,7 +506,8 @@
         <div class="table-wrap"><table><thead><tr><th>Instrument</th><th>Description</th><th>Side</th><th class="num">Size</th><th class="num">Risk</th><th class="num">Vol</th><th class="num">Carry z</th><th class="num">Trend z</th><th class="num">Value z</th></tr></thead><tbody>${posRows}</tbody></table></div>
         <p class="small muted">Size is signed notional in % of capital; risk share is the position's share of portfolio risk. Source: results/systematic/positions.csv.</p>
       </section>
-      ${v11PosSection}`;
+      ${v11PosSection}
+      ${capacitySection(alg.capacity, 'v1.0')}${alg.v11 && alg.v11.capacity ? capacitySection(alg.v11.capacity, 'v1.1') : ''}`;
     equityChart('c-alg-equity', months, { historyBase: alg.frozen.freeze_month });
     monthlyBarChart('c-alg-monthly', months);
     drawdownChart('c-alg-dd', months);

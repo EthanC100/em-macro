@@ -27,6 +27,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from . import capacity as CAP
 from .marks import latest_marks, live_mark, load_registry, read_marks
 from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct,
                      parse_date, parse_number, parse_probability)
@@ -49,14 +50,15 @@ ACCOUNT_INDEX_LABEL = "Account index (start = 100, live from Nov 2026)"
 # US$ equivalent of the account index. Before the switch: US$100,000 x index / 100. The switch is the
 # 3 December 2026 rebalance, i.e. when the positions effective from 2026-12 are published (keyed on the
 # positions' effective month, not the calendar, so a late run switches when it actually happens). New capital
-# enters at the index level of the switch, so from it: US$10,000,000 x index / index_at_switch, where
+# enters at the index level of the switch, so from it: US$500,000,000 x index / index_at_switch, where
 # index_at_switch is the account index at the end of the month before the switch's effective month (the
-# month that rebalance books). The dollar figure starts at exactly US$10,000,000; percentages are unaffected.
+# month that rebalance books). The dollar figure starts at exactly US$500,000,000; percentages are unaffected.
+# C01 (US$10,000,000) was replaced before any live month was booked by C03 (US$500,000,000), same rebalance.
 USD_INITIAL_CAPITAL = 100_000.0
-USD_SWITCH_CAPITAL = 10_000_000.0
+USD_SWITCH_CAPITAL = 500_000_000.0
 USD_SWITCH_EFFECTIVE_MONTH = "2026-12"
 USD_SWITCH_REBALANCE = "2026-12-03"
-USD_SWITCH_NOTE = "Paper capital raised to US$10,000,000 (configuration change, not performance)"
+USD_SWITCH_NOTE = "Paper capital raised to US$500,000,000 (configuration change C03, not performance)"
 # v1.1 = frozen v1.0 + the T18 rebalancing rule (docs/v1.1_freeze.md), run live in parallel with v1.0, which
 # remains the frozen control. Its live record starts with the 3 December 2026 rebalance (positions effective
 # 2026-12); earlier months after the T18 test period (2026-10, 2026-11) are its pre-live gap.
@@ -391,6 +393,34 @@ def _backtest_row(rows: list[dict], strategy: str) -> dict:
             "turnover_x_pa": fnum(r.get("turnover_x_pa"), 4), "cost_drag_pct_pa": fnum(r.get("cost_drag_%_pa"), 4)}
 
 
+def capacity_block(positions: list[dict], rel: str, months: list[dict]) -> dict:
+    """Capacity table at the C03 capital and the "estimated P&L with impact" for live months (diagnostic only:
+    the official P&L keeps the frozen cost model). Impact of each rebalance's trades is booked in the month the
+    new positions start earning, at that month's paper capital."""
+    ref = CAP.load_reference()
+    cap = CAP.algo_capital("2026-12")
+    table = CAP.algorithm_table(positions, cap, ref)
+    vols = {p["instrument"]: p.get("instrument_vol_pct") for p in positions if p.get("instrument_vol_pct")}
+    hist = CAP.position_history(rel)
+    imp = CAP.monthly_impact(hist, ref, vols)
+    idx = idx_i = 100.0
+    for m in months:
+        x = imp.get(m["month"])
+        m["impact"] = x["impact_frac"] if (x and m.get("live") and not x["first"]) else (0.0 if m.get("live") else None)
+        if m.get("live") and m.get("net") is not None:
+            m["net_with_impact"] = round(m["net"] - (m["impact"] or 0.0), 6)
+            idx *= 1 + m["net"]
+            idx_i *= 1 + m["net_with_impact"]
+            m["index_official"], m["index_with_impact"] = round(idx, 3), round(idx_i, 3)
+    table["rebalance_impact"] = [{"effective_from": k, "capital_usd": v["capital_usd"],
+                                  "impact_pct_capital": round(100 * v["impact_frac"], 4), "n_trades": len(v["trades"])}
+                                 for k, v in imp.items()]
+    table["impact_note"] = ("Estimated P&L with impact = official monthly net minus the square-root impact of that month's "
+                            "rebalance trades at the month's paper capital (US$100,000 to Nov 2026, US$500,000,000 from Dec 2026, "
+                            "C01/C03). The official P&L keeps the frozen cost model.")
+    return table
+
+
 def build_v11() -> dict:
     """v1.1's paper P&L and positions (results/systematic_v1.1/), labelled by its own live start."""
     pnl = read_csv(ROOT / V11_DIR / "paper_pnl.csv")
@@ -412,8 +442,9 @@ def build_v11() -> dict:
                                                "risk_share_pct", "instrument_vol_pct", "carry_z", "trend_z",
                                                "value_z")}}
            for p in positions]
+    capacity = capacity_block(pos, f"{V11_DIR}/positions.csv", months)
     return {
-        "months": months, "positions": pos,
+        "months": months, "positions": pos, "capacity": capacity,
         "as_of": positions[0].get("as_of") if positions else None,
         "effective_from": positions[0].get("effective_from") if positions else None,
         "rebalance_date": git_last_date(f"{V11_DIR}/positions.csv"),
@@ -576,8 +607,9 @@ def build_algorithm() -> dict:
     as_of = positions[0].get("as_of") if positions else None
     effective_from = positions[0].get("effective_from") if positions else None
     v11 = build_v11()
+    capacity = capacity_block(pos, "results/systematic/positions.csv", months)
     return {
-        "months": months, "live": live_stats, "backtest": backtest_stats, "frozen": frozen,
+        "months": months, "live": live_stats, "backtest": backtest_stats, "frozen": frozen, "capacity": capacity,
         "v11": v11, "side_by_side": side_by_side(months, v11),
         "account_index_label": ACCOUNT_INDEX_LABEL,
         "positions": pos,
