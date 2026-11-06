@@ -192,9 +192,9 @@ def test_cli_rejects_a_bad_proposal_with_exit_1(tmp_path):
     assert out.returncode == 1 and "REJECTED" in out.stderr and "per-position limit" in out.stdout
 
 
-def test_janus_fire_workflow():
+def test_no_janus_trigger_workflows():
+    """The quick checks run as two hourly Claude Code scheduled tasks (:15 and :45); no workflow starts Janus."""
     wf = ROOT / ".github/workflows"
-    assert not (wf / "janus-weekly.yml").exists()
-    fire = (wf / "janus-fire.yml").read_text()
-    assert "experimental-cc-routine-2026-04-01" in fire and "JANUS_FIRE_URL" in fire and "JANUS_FIRE_TOKEN" in fire
-    assert '*/30 6-21 * * 1-5' in fire
+    assert not (wf / "janus-weekly.yml").exists() and not (wf / "janus-fire.yml").exists()
+    for f in wf.glob("*.yml"):
+        assert "JANUS_FIRE" not in f.read_text(), f.name

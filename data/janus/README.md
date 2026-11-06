@@ -5,8 +5,8 @@ and never read this folder. No edge is claimed. Code: `ledger/janus.py`.
 
 **How Janus runs (from 2026-11-06):** entirely in Claude Code sessions on the account's plan. No Anthropic API
 call is made from GitHub Actions.
-- **Quick check** (`docs/janus/quick_check.md`): every 30 minutes on weekdays, 06:00 to 21:30 UTC, started by the
-  `janus-fire` workflow through the task's API trigger.
+- **Quick check** (`docs/janus/quick_check.md`): every 30 minutes, as two hourly Claude Code scheduled tasks at :15
+  and :45 past the hour.
 - **Daily review** (`docs/janus/daily_review.md`): weekdays at 18:07 New York time, after the US close.
 
 A session never edits this folder. It reads `python -m ledger.janus context`, then writes through

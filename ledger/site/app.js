@@ -963,7 +963,7 @@
       </div>`;
     const counter = jn.calls_needed ? Math.min(100, 100 * jn.n_closed / jn.calls_needed) : 0;
     view.innerHTML = `
-      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start). Janus works in Claude Code sessions: a quick check every 30 minutes on weekdays (06:00 to 21:30 UTC) and a full review after the US close; The Opposition argues against every new position. Every rule is enforced in code and the record is append-only.</div></section>
+      <section class="section"><div class="card b-janus notice"><span class="janus-head">${JANUS_ICON}<b>Janus is an experiment in AI judgement.</b></span> Its results do not feed the algorithm, and no edge is claimed. Paper account of US$500,000,000, reported in % (index 100 at its start). Janus works in Claude Code sessions: a quick check every 30 minutes (at :15 and :45) and a full review after the US close; The Opposition argues against every new position. Every rule is enforced in code and the record is append-only.</div></section>
       <section class="section"><div class="card b-janus last-check">
         <div class="row-top"><b>Last checked ${jn.last_check ? fmtDateTime(jn.last_check.time) : '—'}</b>${jn.last_check ? `<span class="muted small">${esc(String(jn.last_check.session || '').replace('_', ' '))}</span>` : ''}</div>
         ${jn.last_check ? `<div class="row-meta">${esc(jn.last_check.result || '')}${jn.last_check.positions ? ` · positions: ${esc(jn.last_check.positions.join(', ') || 'none open')}` : ''}</div>` : ''}

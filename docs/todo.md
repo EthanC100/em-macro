@@ -27,8 +27,8 @@ Edit it by hand; the next build picks it up.
 - [x] No Anthropic API key needed (Janus, the forecast resolver, post-mortems and the letters' narrative run in Claude Code sessions)
 - [ ] Election-tracker jobs inactive until merged
 - [x] The Opposition (automated for every new Janus position; daily briefings still in the Claude app)
-- [x] Janus in Claude Code sessions (quick check every 30 minutes on weekdays via `janus-fire`, daily review after the US close; post-mortems in the daily review)
-- [ ] Create the scheduled tasks (Janus quick check, Janus daily review, Ledger forecast resolver, Ledger monthly letters) and the `JANUS_FIRE_URL` / `JANUS_FIRE_TOKEN` secrets
+- [x] Janus in Claude Code sessions (quick check every 30 minutes as two hourly scheduled tasks at :15 and :45, daily review after the US close; post-mortems in the daily review)
+- [ ] Create the scheduled tasks (Janus quick check at :15 and :45, Janus daily review, Ledger forecast resolver, Ledger monthly letters)
 - [ ] Delete the `ANTHROPIC_API_KEY` repository secret once the sessions-only branch is merged
 - [x] Stale-marks alert (`ledger-watchdog` and ledger-daily open "[ALERT] Ledger marks stale" after 2 days)
 

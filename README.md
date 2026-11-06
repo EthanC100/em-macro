@@ -1275,8 +1275,8 @@ used, else none.
    `ledger:report` on its first run; nothing to do by hand.
 4. Run the `ledger-pages` workflow once (Actions → ledger-pages → Run workflow) or push to `main` to publish
    the first build.
-5. **Claude Code scheduled tasks** (no Anthropic API key is used anywhere): the Janus quick check (API trigger,
-   fired by `janus-fire`; secrets `JANUS_FIRE_URL` and `JANUS_FIRE_TOKEN`), the Janus daily review, the Ledger
+5. **Claude Code scheduled tasks** (no Anthropic API key is used anywhere): the Janus quick check (two hourly
+   tasks, at :15 and :45), the Janus daily review, the Ledger
    forecast resolver and the Ledger monthly letters. Each one's prompt points at its runbook in `docs/janus/`,
    `docs/ledger/` or `docs/letters/` (section 14).
 

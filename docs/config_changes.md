@@ -309,3 +309,10 @@ it is recorded as C03 and the existing record is not renumbered.
   fresh `main`.
 - **Test:** `tests/test_sessions.py` fails if any workflow uses `ANTHROPIC_API_KEY` or installs the SDK, or if any
   code imports `anthropic`.
+
+## 2026-11-06: janus-fire removed
+
+The Janus quick check runs as two hourly Claude Code scheduled tasks at :15 and :45 past the hour (a scheduled task
+cannot run more often than hourly, so two tasks give the 30-minute cadence). The `janus-fire` workflow, which fired
+the quick-check task's API trigger, is removed, and the `JANUS_FIRE_URL` / `JANUS_FIRE_TOKEN` secrets are not needed
+(they were never added). The merged branches `build/ledger-v2` and `build/janus-sessions` were deleted.

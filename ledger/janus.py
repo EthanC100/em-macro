@@ -1,6 +1,7 @@
 """Janus: an AI discretionary paper book (an experiment in AI judgement; no edge is claimed).
 
-Janus decides in Claude Code sessions (docs/janus/quick_check.md every 30 minutes on weekdays, docs/janus/daily_review.md
+Janus decides in Claude Code sessions (docs/janus/quick_check.md every 30 minutes, as two hourly scheduled tasks at :15
+and :45; docs/janus/daily_review.md
 after the US close). No Anthropic API call is made from GitHub Actions. The session never edits data/janus/; every
 change goes through this CLI, which enforces every rule in code:
 
