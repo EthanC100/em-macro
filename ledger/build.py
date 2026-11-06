@@ -74,6 +74,7 @@ V11_LIVE_START_MONTH = "2026-12"
 V11_LIVE_SINCE = "2026-12-03"
 V11_TRIAL_ID = "T18"
 BACKTEST_ONLY_PASSES = {"T23", "T24"}    # passed pre-2000 sleeve backtests; not live, not validated ideas
+SHADOW_TRIALS = ("T25", "T26")          # zero-size live shadows of T21/T22 (docs/prereg/T25-T26_live_shadows.md)
 V11_NAME = "v1.1 systematic macro strategy (v1.0 + T18 turnover rule: risk-unit band and partial rebalancing)"
 LIVE_TURNOVER_FILE = "results/live_compare/turnover.csv"
 T18_PERFORMANCE_FILE = "results/T16-T19/performance.csv"
@@ -622,6 +623,7 @@ def build_algorithm() -> dict:
     capacity = capacity_block(pos, "results/systematic/positions.csv", months)
     return {
         "months": months, "live": live_stats, "backtest": backtest_stats, "frozen": frozen, "capacity": capacity,
+        "shadows": build_shadows(),
         "v11": v11, "side_by_side": side_by_side(months, v11),
         "account_index_label": ACCOUNT_INDEX_LABEL,
         "positions": pos,
@@ -637,6 +639,54 @@ def build_algorithm() -> dict:
         "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.0_freeze.md",
         "gross_leverage": months[-1]["gross_leverage"] if months else None,
     }
+
+
+# ----------------------------------------------------------------------------- shadows (T25-T26)
+SHADOW_DIR = "results/shadows"
+SHADOW_PREREG = "docs/prereg/T25-T26_live_shadows.md"
+
+
+def build_shadows(root: Path = ROOT) -> dict:
+    """The Algorithm page's Shadows section (pre-registration §4.6): the zero-size live shadows' index (net,
+    decisive costs), months live, current held weights with direction and contract, the last rebalance, outages and
+    dropped markets, and the evaluation dates. Public files only (weights, contract codes, %): no price."""
+    d = root / SHADOW_DIR
+    gpath = d / "GO_LIVE.json"
+    g = json.loads(gpath.read_text()) if gpath.exists() else None
+    out = {"label": "zero size, paper; not part of v1.0, v1.1 or the fund", "prereg": SHADOW_PREREG,
+           "prereg_url": f"{REPO_URL}/blob/main/{SHADOW_PREREG}", "go_live": None, "items": []}
+    if g:
+        out["go_live"] = {"M1": g.get("M1"), "confirmed": bool(g.get("confirmed")), "moved": g.get("moved", []),
+                          "first_evaluation": g.get("first_evaluation"), "second_evaluation": g.get("second_evaluation")}
+    names = {"T25": "T21 basis-momentum shadow", "T26": "T22 diversified trend shadow"}
+    for tid in SHADOW_TRIALS:
+        sp = d / tid / "status.json"
+        st = json.loads(sp.read_text()) if sp.exists() else None
+        item = {"id": tid, "name": names[tid], "live": bool(st and g and g.get("confirmed")),
+                "universe": (g or {}).get("universe", {}).get(tid, []), "N": (g or {}).get("N", {}).get(tid),
+                "sr_pred": (g or {}).get("sr_pred", {}).get(tid)}
+        if st:
+            idx = read_csv(d / tid / "index.csv")
+            pos = read_csv(d / tid / "positions.csv")
+            last = st.get("last_rebalance")
+            held = [{"market": r["market"], "contract": r["contract"], "held_weight": fnum(r["held_weight"], 4),
+                     "target_weight": fnum(r["target_weight"], 4)}
+                    for r in pos if r["month"] == last and (fnum(r["held_weight"], 6) or 0) != 0]
+            held.sort(key=lambda r: -abs(r["held_weight"] or 0))
+            for r in held:
+                r["direction"] = "long" if (r["held_weight"] or 0) > 0 else "short"
+            reb = st.get("rebalances", {})
+            item.update({
+                "index": st.get("index"), "index_as_of": st.get("index_as_of"), "months_live": st.get("months_live"),
+                "months_in_first_window": st.get("months_in_first_window", 60), "last_rebalance": last,
+                "active_markets": st.get("active_markets", {}).get(last) if last else None,
+                "series": [[r["date"], fnum(r["index_net_decisive"], 4)] for r in idx],
+                "positions": held,
+                "missing": {m: r["missing"] for m, r in reb.items() if r.get("missing")},
+                "dropped": st.get("dropped", {}), "months_with_fewer_than_6": st.get("months_with_fewer_than_6", []),
+                "note": st.get("note")})
+        out["items"].append(item)
+    return out
 
 
 # ----------------------------------------------------------------------------- trials
@@ -953,6 +1003,7 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
     # a passed trial that is now a live version (T18 -> v1.1) is a systematic rule change, not a discretionary idea
     # passed sleeve backtests (T23-T24) support only a later zero-size shadow pre-registration: not validated ideas
     backtests = [t for t in passed if t["id"] in BACKTEST_ONLY_PASSES]
+    shadows = [t["trial_id"] for t in trials["items"] if t["trial_id"] in SHADOW_TRIALS]
     discretionary = [t for t in passed if t["id"] != V11_TRIAL_ID and t["id"] not in BACKTEST_ONLY_PASSES]
     v11_text = (f"v1.1 (v1.0 + {V11_TRIAL_ID}, passed) live for {n11} month{'s' if n11 != 1 else ''} "
                 f"from the {_day_month(V11_LIVE_SINCE)} rebalance, in parallel with v1.0")
@@ -965,7 +1016,9 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
                    f"({months_needed} needed for a 90%-confidence track record); {v11_text}; "
                    f"{len(prospective)} idea{'s' if len(prospective) != 1 else ''} under prospective test; "
                    + (f"{len(backtests)} commodity backtest{'s' if len(backtests) != 1 else ''} passed "
-                      f"({', '.join(t['id'] for t in backtests)}; zero-size shadow not yet pre-registered); "
+                      f"({', '.join(t['id'] for t in backtests)}; "
+                      + (f"zero-size live shadows pre-registered as {', '.join(shadows)}, pending); " if shadows
+                         else "zero-size shadow not yet pre-registered); ")
                       if backtests else "")
                    + f"{len(failed)} rejected.")
     return {

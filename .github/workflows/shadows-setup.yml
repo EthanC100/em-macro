@@ -1,0 +1,132 @@
+name: shadows-setup
+
+# One-off set-up of the T25-T26 zero-size live shadows (docs/prereg/T25-T26_live_shadows.md, Amendment 1 A1.2 and
+# §8). Run it by hand once, after this branch is merged and before the 3 December 2026 rebalance (in any case before
+# 5 May 2027, when the Norgate snapshot must be deleted):
+#   1. history: Databento GLBX.MDP3 final settlements from 2023-01-01 for every universe market, quoted first and
+#      refused above US$20 in total (a retry skips markets already fetched);
+#   2. check: once, against the Norgate snapshot: one tick on >= 99% of common days, identical F1/F2 chains with the
+#      exchange-rule dates, and P1 (the §3.2 counts on the stored history). A failing market is excluded;
+#   3. golive: P0 (a160bfd hashes) and the go-live record, M1 = the first rebalance on or after today (confirmed by
+#      ledger-daily at that rebalance with P3 and P4).
+# Settlements go only to em-macro-data (databento/shadows). This repository gets results/shadows/prelive.json
+# (counts, shares and unit factors only) and results/shadows/GO_LIVE.json. Nothing reads Norgate after this run.
+on:
+  workflow_dispatch:
+    inputs:
+      golive:
+        description: "Write the go-live record after a passing check (no = history and check only)"
+        type: choice
+        options: ["yes", "no"]
+        default: "yes"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ledger-intake          # the same group as ledger-daily: one job edits the ledger and the private store
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt databento
+
+      - name: Private data store (Norgate snapshot for the check, Databento shadow store)
+        uses: actions/checkout@v4
+        with:
+          repository: EthanC100/em-macro-data
+          token: ${{ secrets.EM_MACRO_DATA_TOKEN }}
+          path: .em-macro-data
+          sparse-checkout: |
+            ledger
+            databento/shadows
+            norgate/2026-11_metadata
+            norgate/2026-11_futures/contracts/CL
+            norgate/2026-11_futures/contracts/RB
+            norgate/2026-11_futures/contracts/HO
+            norgate/2026-11_futures/contracts/NG
+            norgate/2026-11_futures/contracts/HG
+            norgate/2026-11_futures/contracts/GC
+            norgate/2026-11_futures/contracts/SI
+            norgate/2026-11_futures/contracts/PL
+            norgate/2026-11_futures/contracts/ZC
+            norgate/2026-11_futures/contracts/ZS
+            norgate/2026-11_futures/contracts/ZW
+            norgate/2026-11_futures/contracts/KE
+            norgate/2026-11_futures/contracts/ZM
+            norgate/2026-11_futures/contracts/ZL
+            norgate/2026-11_futures/contracts/LE
+            norgate/2026-11_financials/contracts/6E
+            norgate/2026-11_financials/contracts/6B
+            norgate/2026-11_financials/contracts/6M
+
+      - name: Databento history (one-off, quoted first, cap US$20)
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+        run: python -m em_macro.t2526_data history 2>&1 | tee "$RUNNER_TEMP/history.log"
+
+      - name: Store the history privately
+        if: always()
+        run: |
+          cd .em-macro-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- databento/shadows ledger
+          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: Databento history from 2023-01-01"; git push -q; }
+
+      - name: Check against the Norgate snapshot (counts only)
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m em_macro.t2526_data check 2>&1 | tee "$RUNNER_TEMP/check.log"
+
+      - name: Go-live record (P0, universe, M1, evaluation dates)
+        if: inputs.golive == 'yes'
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m em_macro.t2526 golive 2>&1 | tee "$RUNNER_TEMP/golive.log"; exit "${PIPESTATUS[0]}"
+
+      - name: Commit the private contract files and the public records
+        if: always()
+        run: |
+          cd .em-macro-data
+          git add -A -- databento/shadows
+          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: contract files and unit factors after the check"; git push -q; }
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -d results/shadows ] || { echo "nothing to commit"; exit 0; }
+          git add results/shadows
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "Shadows T25-T26: pre-live check (counts only) and go-live record"
+          for i in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            sleep $((i * 3)); git pull --rebase origin main
+          done
+          echo "::error::push failed after 4 attempts"; exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Shadows T25-T26 set-up"
+            for f in history check golive; do
+              [ -f "$RUNNER_TEMP/$f.log" ] && { echo "### $f"; echo '```'; tail -n 40 "$RUNNER_TEMP/$f.log"; echo '```'; }
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
