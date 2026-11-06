@@ -30,9 +30,14 @@ nothing is a legitimate, often correct, decision.
     The horizon must be on or before the expiry, and the expiry before the contract's notice date. The value is
     Black-76 at your stated implied volatility (a model estimate). `direction` is derived from the legs.
 - **Futures settlements are licensed.** They come from Databento and live only in the private repository
-  em-macro-data. This environment has `DATA_REPO_READ_TOKEN`, a fine-grained read-only token for it. The CLI
-  (`context`, `propose`, `mark`) uses it to clone em-macro-data **read-only**: sparse (`ledger/` only), next to
-  this repository, or to refresh that clone. It prints one `settlements: ...` status line on stderr.
+  em-macro-data. The CLI (`context`, `propose`, `mark`) makes or refreshes a **read-only** clone of it (sparse,
+  `ledger/` only), next to this repository, and prints one `settlements: ...` status line on stderr.
+  - The clone uses the environment's own GitHub access through the Claude Code git proxy, which works only when
+    em-macro-data is one of this session's repositories. `DATA_REPO_READ_TOKEN` is a fallback for environments
+    without that proxy: the proxy replaces any header a client sends, so the token cannot help here.
+  - If the status line says it could not clone, attach the repository yourself with the `add_repo` tool
+    (owner `EthanC100`, repo `em-macro-data`, access `read`), then run `context` again. If `add_repo` refuses, carry
+    on without futures settlements, as below.
   - **Never print, echo or log the token.** Do not run `env`, `printenv` or `echo $DATA_REPO_READ_TOKEN`, and do not
     put it in a URL or a git command yourself. Let the CLI use it.
   - **Never write to em-macro-data** from this session: no commit, push, `ledger.derivs settle` or

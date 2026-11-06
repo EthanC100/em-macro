@@ -77,8 +77,9 @@ edited. A fill, a stop change, a close or a review is a new record.
 - Fetching is in `ledger-daily` (one quoted Databento request a day, refused above US$1 of daily spend, shared
   with my decisions' marks).
 - Janus sessions read the settlements through a **read-only** clone of em-macro-data (sparse, `ledger/` only). The
-  CLI makes it with the Janus environment's `DATA_REPO_READ_TOKEN`, which is never printed, and refuses to write to
-  it. Only ledger-daily writes settlements.
+  CLI makes it through the environment's own GitHub access (the Claude Code git proxy: em-macro-data must be one
+  of the session's repositories), with `DATA_REPO_READ_TOKEN` as a fallback where there is no such proxy. The
+  Janus CLI refuses to write to the store. Only ledger-daily writes settlements.
 - **Every position records the market's probability** (`market_probability`, `market_source`, `market_basis`):
   the best market-implied figure, or 50 with basis `none` where no market price exists
   (docs/fund/allocation.md).
