@@ -97,6 +97,8 @@ def cash_index(mb: MarkBook, start: date, end: date) -> list[list]:
 
 # ----------------------------------------------------------------------------- me
 def me_book(today: date, mb: MarkBook) -> dict:
+    from .audit import corrections as _corrections
+    corr = _corrections()
     registry = load_registry()
     decisions = _rows(ROOT / "data/ledger/decisions.csv")
     positions = [d for d in decisions if d.get("action") in ("Buy", "Sell")]
@@ -120,7 +122,9 @@ def me_book(today: date, mb: MarkBook) -> dict:
                      "direction": "long" if d.get("action") == "Buy" else ("short" if d.get("action") == "Sell" else "none"),
                      "status": status, "size_pct": parse_number(d.get("size_pct")), "date": d.get("date"),
                      "horizon": d.get("horizon"), "probability": parse_probability(d.get("probability")),
-                     "entry_level": parse_number(d.get("entry_level")), "stop": parse_number(d.get("stop")),
+                     "entry_level": parse_number(d.get("entry_level")), "entry_text": d.get("entry_level"),
+                     "stop": parse_number(d.get("stop")),
+                     "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == d["id"]],
                      "thesis": d.get("thesis"), "change_mind": d.get("change_mind"), "outcome": d.get("outcome"),
                      "pnl_pct": sc["pnl_pct"], "brier": sc["brier"], "unit": (reg or {}).get("unit"),
                      "asset_class": asset_class((reg or {}).get("kind"), (reg or {}).get("book")),
