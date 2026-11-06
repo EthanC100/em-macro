@@ -1019,10 +1019,41 @@
     };
     const live = alg.live, bt = alg.frozen.test_2020_on || {};
     const months = alg.months;
+    const sh = alg.shadows || { items: [] };
+    const gl = sh.go_live;
+    const evalTxt = gl && gl.first_evaluation ? `evaluated on ${fmtDate(gl.first_evaluation.date)} (and, if inconclusive, on ${fmtDate(gl.second_evaluation.date)}); nothing before then is a result` : 'evaluation dates are fixed at go-live; nothing before them is a result';
+    const shadowBlock = (it) => {
+      const pos = (it.positions || []).map((p) => `<tr><td>${esc(p.market)}</td><td>${badge(p.direction)}</td><td>${esc(p.contract)}</td><td class="num">${fmtNum(p.held_weight, 3)}</td></tr>`).join('');
+      const drops = Object.entries(it.dropped || {}).map(([m, d]) => `${esc(m)} (from ${fmtMonth(d.from_month)})`).join(', ');
+      const miss = Object.entries(it.missing || {}).map(([m, l]) => `${fmtMonth(m)}: ${esc(l.join(', '))}`).join('; ');
+      if (!it.live) {
+        return `<div class="card"><div class="row-top"><b>${esc(it.id)} · ${esc(it.name)}</b>${pill('not live yet', 'warn')}</div>
+          <p class="small">${gl ? `Go-live planned at the ${fmtMonth(gl.M1)} rebalance, after the pre-live checks at that rebalance.` : 'Goes live at the first rebalance after the pre-live checks (planned: 3 December 2026).'}${it.universe && it.universe.length ? ` Universe: ${esc(it.universe.join(', '))} (N = ${it.N}; predicted Sharpe ${fmtNum(it.sr_pred, 3)}).` : ''}</p></div>`;
+      }
+      return `<div class="card">
+        <div class="row-top"><b>${esc(it.id)} · ${esc(it.name)}</b>${pill('zero size, paper', 'warn')}</div>
+        <div class="stats">
+          <div class="stat"><span class="k">Index</span><span class="v">${fmtNum(it.index, 2)}</span><span class="s">net, decisive costs; ${it.index_as_of ? fmtDate(it.index_as_of) : '—'}</span></div>
+          <div class="stat"><span class="k">Months live</span><span class="v">${it.months_live || 0}</span><span class="s">of ${it.months_in_first_window}</span></div>
+          <div class="stat"><span class="k">Last rebalance</span><span class="v">${it.last_rebalance ? fmtMonth(it.last_rebalance) : '—'}</span><span class="s">${isNum(it.active_markets) ? `${it.active_markets} active of ${it.N}` : ''}</span></div>
+        </div>
+        ${(it.series || []).length > 1 ? `<div class="chart"><canvas id="c-shadow-${esc(it.id)}"></canvas></div>` : ''}
+        <h3 class="sub">Held weights (${it.last_rebalance ? fmtMonth(it.last_rebalance) : '—'})</h3>
+        ${pos ? `<div class="table-wrap"><table><thead><tr><th>Market</th><th>Side</th><th>Contract</th><th class="num">Weight</th></tr></thead><tbody>${pos}</tbody></table></div>` : '<p class="empty">No position this month.</p>'}
+        <p class="small muted">${miss ? `Missing markets: ${miss}. ` : ''}${drops ? `Dropped: ${drops}. ` : ''}${(it.months_with_fewer_than_6 || []).length ? `Months with fewer than 6 active markets: ${esc(it.months_with_fewer_than_6.map(fmtMonth).join(', '))}.` : ''}</p>
+      </div>`;
+    };
+    const shadowsHtml = `
+      <section class="section">
+        <div class="section-head"><h2>Shadows</h2>${info(`Pre-registered zero-size live shadows of the T21 basis-momentum (T25) and T22 diversified trend (T26) commodity sleeves, run on Databento final settlements with the trial code unchanged. Weights are fractions of a notional sleeve at its 10% volatility target; the index is net of decisive costs (2× the cost model). No price is published. Rules: ${sh.prereg}.`)}</div>
+        <div class="card notice"><b>Zero size, paper.</b> ${esc((sh.label || '').replace(/^zero size, paper; /, '').replace(/^./, (c) => c.toUpperCase()))}. ${esc(evalTxt.replace(/^./, (c) => c.toUpperCase()))}.</div>
+        ${sh.items.map(shadowBlock).join('')}
+      </section>`;
     view.innerHTML = `
       <section class="section"><div class="card b-algorithm notice"><b>Mechanical rules, not AI.</b> v1.0 is the frozen control (carry, trend and value; FX and bonds); v1.1 is v1.0 plus the pre-registered T18 turnover rule. Both run on the same inputs every month on the 3rd; neither reads my decisions or Janus. ${info('Live records: v1.0 from the November 2026 positions (index 100 at the end of October 2026), v1.1 from the 3 December 2026 rebalance. Paper capital US$500,000,000 from that rebalance (C03); results are in % of capital. Positions are set by the monthly run; daily figures for the month in progress are estimates, replaced by the official figure on the 3rd.')}</div></section>
       ${verBlock(v10, alg.capacity)}
       ${verBlock(v11, alg.v11 && alg.v11.capacity)}
+      ${shadowsHtml}
       <section class="section">
         <details class="collapsible"><summary><h2>Backtest (not counted)</h2><span class="muted small">2020-01 to the freeze, evaluated once; pre-live months</span></summary>
           <div class="stats">
@@ -1047,6 +1078,11 @@
         { label: `${v.id} with impact`, data: v.impact_series, color: '--book-algo-2', dash: [5, 4], width: 1.6 },
         ...totalDataset(v, v.id, '--book-algo'),
       ], { fmt: (x) => fmtNum(x, 2) });
+    }
+    for (const it of sh.items) {
+      if (it.live && (it.series || []).length > 1) {
+        dateChart(`c-shadow-${it.id}`, [{ label: `${it.id} (net, decisive costs)`, data: it.series, color: '--book-algo-2', fill: false }], { fmt: (x) => fmtNum(x, 2) });
+      }
     }
     const details = view.querySelector('details.collapsible');
     let drawn = false;

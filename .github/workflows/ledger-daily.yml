@@ -78,7 +78,10 @@ jobs:
           repository: EthanC100/em-macro-data
           token: ${{ secrets.EM_MACRO_DATA_TOKEN }}
           path: .em-macro-data
-          sparse-checkout: ledger
+          sparse-checkout: |
+            ledger
+            databento/shadows
+            shadows
       - name: Futures settlements (Databento) and futures/options P&L
         id: derivs
         env:
@@ -100,6 +103,31 @@ jobs:
             git diff --cached --quiet || { git commit -q -m "Ledger futures settlements $(date -u +%Y-%m-%d)"; git push -q; }
           fi
 
+      # T25-T26 zero-size live shadows (docs/prereg/T25-T26_live_shadows.md, §4 and §7): new Databento final
+      # settlements for the shadows' contracts (one quote, under the same US$1 daily cap), then the live path is
+      # rebuilt from the first live month. Settlements, per-market P&L and trades stay in em-macro-data; this
+      # repository gets results/shadows (weights, contract codes, % returns, status). Nothing runs before the
+      # go-live record (results/shadows/GO_LIVE.json, written by the shadows-setup workflow). A failure here never
+      # stops the marks; it is an outage under §7.3 and the next run recomputes.
+      - name: Shadows T25-T26 (zero size, paper)
+        id: shadows
+        continue-on-error: true
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+        run: |
+          if [ ! -f results/shadows/GO_LIVE.json ]; then echo "shadows: no go-live record yet"; exit 0; fi
+          if [ ! -d .em-macro-data/databento/shadows ]; then echo "::warning::shadows: no private store"; exit 0; fi
+          if [ -n "$DATABENTO_API_KEY" ]; then
+            python -m em_macro.t2526_data update 2>&1 | tee "$RUNNER_TEMP/shadows.log"
+          fi
+          python -m em_macro.t2526 daily 2>&1 | tee -a "$RUNNER_TEMP/shadows.log"
+          cd .em-macro-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- databento/shadows shadows ledger
+          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26 $(date -u +%Y-%m-%d)"; git pull -q --rebase; git push -q; }
+
       # Post-mortems are written in the Janus daily review session (docs/janus/daily_review.md), not here.
       - name: Stress tests and what changed
         id: analytics
@@ -120,7 +148,8 @@ jobs:
           paths=(data/ledger/marks.csv data/ledger/decisions.csv data/ledger/forecasts.csv data/ledger/derivative_pnl.csv
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/ledger/postmortems
                  data/ledger/reports data/ledger/changes.json data/ledger/state.json
-                 data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot)
+                 data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot
+                 results/shadows)
           existing=()
           for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
           git add -- "${existing[@]}"
