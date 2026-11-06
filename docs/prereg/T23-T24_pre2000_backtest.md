@@ -248,3 +248,48 @@ already-computed 1991–1999 months cannot decide the result by themselves.
 T24 (§4.3), the T20 control, the treatment of T22's S2 (§4.1), the data rules (§7), the Phase 2 procedure (§6) and
 the meaning of the result (§1). The ledger rows T23 and T24 are updated to reference this amendment, changing no
 other row.
+
+## Amendment 2 — 2026-11-06, decided by the owner after a stopped run, before any gate was evaluated
+
+Recorded after Amendment 1 (`648534b`) and after the first Phase 2 attempt (trial branch, stop record `e9a5b6c`,
+`results/T23-T24_pre2000.md` there). That attempt passed checks D0–D3 and then **stopped at the window check**. **No
+gate, sleeve return or statistic of T23 or T24 was evaluated, written or printed.** The sleeves had been built in
+memory before the check, which was an ordering error in the runner. The text above is left as written; where this
+section and the text above differ, this section governs.
+
+### A2.1 T24's window starts in 1979-05
+
+**Reason.** §3 defines each window as running from the first month with at least 6 active instruments (§2.1 rule 3
+of T20–T22) to 1999-12. Phase 1 counted a market as active by the entry rule (§2.1 rule 2, `commod_build0.entry_month`),
+which counts daily-return rows. It did not apply T22's volatility requirement: `t2022.Mkt.sigma_mop` needs 252
+non-missing daily returns.
+- **Silver (SI) in 1979-04** has 272 return rows at the decision date but only 234 non-missing returns (38 rows have no
+  return because the held contract had no previous settlement). So it has no σ and no T22 signal that month.
+- Phase 1 therefore counted SI as active in 1979-04 by mistake. The code has **5** active T22 instruments in 1979-04 and
+  **8** in 1979-05.
+- **The pre-registered rule itself gives 1979-05.** This amendment corrects the Phase 1 count; it does not change the rule.
+
+**Change.**
+
+| trial | window | months |
+|---|---|---|
+| T23 | 1979-05 .. 1999-12 (unchanged) | 248 |
+| **T24** | **1979-05 .. 1999-12** (was 1979-04 .. 1999-12) | **248** |
+
+- **Sub-window (a)** of Amendment 1 runs from **1979-05 to 1991-01 for both trials** (141 months). Sub-window (b) is
+  unchanged (1991-02..1999-12).
+- T24's positions start flat in 1979-05.
+- Check D3 (A3 against AQR) is evaluated over the overlapping months of T24's window, now 1979-05..1999-12.
+- The committed Phase 1 files (`results/T23-T24/availability*`) are left as they were. Check D1 still compares against
+  them; the 1979-04 T22 count there (6) is the overcount this amendment corrects.
+
+### A2.2 The window check runs before any sleeve
+
+Before any sleeve, position or P&L is computed, the runner builds each full sleeve's **targets only**
+(`t2022.build_targets`, no `Sleeve`) for its window and the month before. It checks that the code's own active count is
+at least 6 in every window month and below 6 in the month before. A failure stops the run and is reported, with
+nothing further computed.
+
+**Not changed.** Everything else: the rules and code of T21 and T22 at a160bfd, the gates (S1–S3 and A), the Holm rule
+(§4.3), the T20 control (on T23's window, unchanged), checks D0–D3, the data rules, the reporting and the meaning of the
+result. Phase 2 is run once from here.
