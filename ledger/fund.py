@@ -4,19 +4,21 @@ Read only. The fund is computed from the books' published daily indices on every
 fund.json. It never writes a figure into any book: v1.1's, Janus's and my records are unchanged and keep their own
 P&L.
 
-- **Members and risk shares.** Algorithm v1.1 90% and Janus 10%. My own decisions (Me) are outside the fund.
+- **Members and risk shares.** Algorithm v1.1 80% and Janus 20% at the start (amendment of 2026-11-07 to config
+  change C04, set before any Janus call resolved). My own decisions (Me) are outside the fund.
 - **Combination by risk.** At each month start, each member's weight is proportional to its risk share divided by
   its trailing volatility. The volatility is the standard deviation of the member's monthly returns over up to the
   last 12 completed months, annualised with sqrt(12). Weights are normalised to sum to 1, so the fund is not
   levered. Until every member has 6 completed months of live data, the weights are the risk shares themselves
   (capital shares). Weights are held fixed through the month, and the fund's daily return is the weighted sum of
   the members' daily returns.
-- **Janus's risk share** changes only by the rule in docs/fund/allocation.md (config change C04), evaluated at each
-  month start on data to the previous month end. It is 5% while Janus's drawdown from its peak exceeds 10%.
-  Otherwise it is 20% once Janus has at least 30 resolved calls (every position records a market probability, 50
-  where no market-implied one exists: amendment of 2026-11-06), with positive
-  total net P&L (after costs) and a lower Brier score than the market on those same calls. Otherwise it is 10%.
-  The algorithm takes the rest.
+- **Janus's risk share** changes only by the rule in docs/fund/allocation.md (config change C04, amended
+  2026-11-07), evaluated at each month start on data to the previous month end. It is 5% while Janus's drawdown
+  from its peak exceeds 10%, overriding everything else. Otherwise, once Janus has at least 30 resolved calls
+  (every position records a market probability, 50 where no market-implied one exists): 30% if its total net P&L
+  (after costs) on those calls is positive and its Brier score is lower than the market's; 10% if that P&L is
+  negative or its Brier score is higher than the market's. Otherwise (fewer than 30 calls, or a tie on either
+  measure without a failure on the other) it stays at its starting 20%. The algorithm takes the rest.
 - **Start.** The fund starts on the first date every member is live (v1.1: the 3 December 2026 rebalance, index
   100 on 30 November 2026).
 - **Correlation** of monthly returns between the books (Me included for information) once two books share at
@@ -27,8 +29,8 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 
-SHARES = {"algorithm v1.1": 0.90, "janus": 0.10}
-JANUS_UP, JANUS_DOWN, JANUS_BASE = 0.20, 0.05, 0.10
+SHARES = {"algorithm v1.1": 0.80, "janus": 0.20}          # starting risk shares (C04 as amended 2026-11-07)
+JANUS_START, JANUS_UP, JANUS_LOW, JANUS_DOWN = 0.20, 0.30, 0.10, 0.05
 MIN_RESOLVED_CALLS = 30
 DRAWDOWN_LIMIT_PCT = 10.0
 MIN_MONTHS_FOR_VOL, VOL_WINDOW_MONTHS = 6, 12
@@ -123,19 +125,25 @@ def janus_record(closed: list[dict], upto: date) -> dict:
 
 
 def janus_share(closed: list[dict], janus_series: list[list], upto: date) -> dict:
+    """Janus's risk share at a month start (docs/fund/allocation.md, C04 as amended 2026-11-07)."""
     rec = janus_record(closed, upto)
     dd = drawdown_pct(janus_series, upto) if janus_series else 0.0
+    n, net, bj, bm = (rec["calls_with_market_probability"], rec["net_pnl_pct_on_those_calls"], rec["brier_janus"],
+                      rec["brier_market"])
+    stats = (f"{n} resolved calls, net P&L {net:+.2f}%, Brier {bj:.3f} vs market {bm:.3f}"
+             if bj is not None and bm is not None else f"{n} resolved calls")
     if dd > DRAWDOWN_LIMIT_PCT:
-        share, why = JANUS_DOWN, f"drawdown {dd:.1f}% exceeds {DRAWDOWN_LIMIT_PCT:g}%"
-    elif (rec["calls_with_market_probability"] >= MIN_RESOLVED_CALLS and rec["net_pnl_pct_on_those_calls"] > 0
-          and rec["brier_janus"] is not None and rec["brier_janus"] < rec["brier_market"]):
-        share, why = JANUS_UP, (f"{rec['calls_with_market_probability']} resolved calls, net "
-                                f"P&L {rec['net_pnl_pct_on_those_calls']:+.2f}%, Brier {rec['brier_janus']:.3f} vs "
-                                f"market {rec['brier_market']:.3f}")
+        share, why = JANUS_DOWN, f"drawdown {dd:.1f}% exceeds {DRAWDOWN_LIMIT_PCT:g}% (overrides the others)"
+    elif n < MIN_RESOLVED_CALLS:
+        share, why = JANUS_START, f"starting share: {n} of {MIN_RESOLVED_CALLS} resolved calls needed for 30% or 10%"
+    elif net > 0 and bj < bm:
+        share, why = JANUS_UP, f"{stats}: positive P&L and a better Brier score than the market"
+    elif net < 0 or bj > bm:
+        share, why = JANUS_LOW, (f"{stats}: " + " and ".join(x for x, bad in (("negative P&L", net < 0),
+                                                                             ("a worse Brier score than the market",
+                                                                              bj > bm)) if bad))
     else:
-        share, why = JANUS_BASE, (f"base share: {rec['calls_with_market_probability']} of {MIN_RESOLVED_CALLS} resolved "
-                                  "calls needed for 20%" if rec["calls_with_market_probability"] < MIN_RESOLVED_CALLS
-                                  else "base share: P&L or Brier condition for 20% not met")
+        share, why = JANUS_START, f"{stats}: a tie on P&L or Brier, so neither 30% nor 10% applies (starting share)"
     return {"share": share, "reason": why, "drawdown_pct": dd, **rec}
 
 
