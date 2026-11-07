@@ -1,11 +1,11 @@
 date,instrument,value,unit,frequency,source,source_url,fetched_at,note
-2024-12-31,ID10Y,7.01,% yield,monthly,panel_monthly y10:IDN,data/processed/country_month_panel.csv,2026-11-07T11:58:10+00:00,
-2026-09-30,CL10Y,6.01,% yield,monthly,panel_monthly y10:CHL,data/processed/country_month_panel.csv,2026-11-07T11:58:10+00:00,
-2026-09-30,CO10Y,12.73,% yield,monthly,panel_monthly y10:COL,data/processed/country_month_panel.csv,2026-11-07T11:58:10+00:00,
+2024-12-31,ID10Y,7.01,% yield,monthly,panel_monthly y10:IDN,data/processed/country_month_panel.csv,2026-11-07T15:47:03+00:00,
+2026-09-30,CL10Y,6.01,% yield,monthly,panel_monthly y10:CHL,data/processed/country_month_panel.csv,2026-11-07T15:47:03+00:00,
+2026-09-30,CO10Y,12.73,% yield,monthly,panel_monthly y10:COL,data/processed/country_month_panel.csv,2026-11-07T15:47:03+00:00,
 2026-09-30,FR-DE,96.7,bp,monthly,panel_monthly spread_vs_de_bp:FRA,data/processed/country_month_panel.csv,2026-11-04T10:10:11+00:00,
 2026-09-30,FR10Y,4.44,% yield,monthly,panel_monthly y10:FRA,data/processed/country_month_panel.csv,2026-11-04T10:10:03+00:00,
-2026-09-30,IT-DE,88.9,bp,monthly,panel_monthly spread_vs_de_bp:ITA,data/processed/country_month_panel.csv,2026-11-07T11:58:19+00:00,
-2026-09-30,IT10Y,4.362,% yield,monthly,panel_monthly y10:ITA,data/processed/country_month_panel.csv,2026-11-07T11:58:11+00:00,
+2026-09-30,IT-DE,88.9,bp,monthly,panel_monthly spread_vs_de_bp:ITA,data/processed/country_month_panel.csv,2026-11-07T15:47:07+00:00,
+2026-09-30,IT10Y,4.362,% yield,monthly,panel_monthly y10:ITA,data/processed/country_month_panel.csv,2026-11-07T15:47:04+00:00,
 2026-10-01,DE10YBM,3.502,% yield,daily,riksbank DEGVB10Y,https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-01/2026-11-07,2026-11-06T04:32:06+00:00,backfilled history
 2026-10-01,FR-DE,143.48,bp,daily,spread FR10Y-DE10YBM,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-01/2026-11-07 ; https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-01/2026-11-07,2026-11-06T04:32:06+00:00,backfilled history
 2026-10-01,FR10Y,4.9368,% yield,daily,riksbank FRGVB10Y,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-01/2026-11-07,2026-11-06T04:32:06+00:00,backfilled history
@@ -630,7 +630,7 @@ date,instrument,value,unit,frequency,source,source_url,fetched_at,note
 2026-11-02,ZAR,16.6795,ZAR per USD,daily,sarb EXCX135D,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/EXCX135D/2026-09-07/2026-11-07,2026-11-06T04:09:27+00:00,recent history returned by the source
 2026-11-03,AUD,1.43188,AUD per USD,daily,ecb_exr AUD,https://data-api.ecb.europa.eu/service/data/EXR/D.AUD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:11:01+00:00,recent history returned by the source
 2026-11-03,BR10Y,15.5714,% yield,daily,em_macro yields.brazil_10y,em_macro.yields.brazil_10y,2026-11-06T13:29:51+00:00,recent history returned by the source
-2026-11-03,BRENT,107.03,USD per bbl,daily,fred DCOILBRENTEU,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU,2026-11-07T11:58:26+00:00,
+2026-11-03,BRENT,107.03,USD per bbl,daily,fred DCOILBRENTEU,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU,2026-11-07T15:47:12+00:00,
 2026-11-03,BRL,5.4935,BRL per USD,daily,bcb_sgs 1,https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados/ultimos/15?formato=json,2026-11-04T10:09:27+00:00,
 2026-11-03,CAD,1.39753,CAD per USD,daily,ecb_exr CAD,https://data-api.ecb.europa.eu/service/data/EXR/D.CAD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:11:02+00:00,recent history returned by the source
 2026-11-03,CHF,0.81993,CHF per USD,daily,ecb_exr CHF,https://data-api.ecb.europa.eu/service/data/EXR/D.CHF.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:11:00+00:00,recent history returned by the source
@@ -645,21 +645,21 @@ date,instrument,value,unit,frequency,source,source_url,fetched_at,note
 2026-11-03,GB-DE,187.98,bp,daily,spread GB10Y-DE10Y,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=22/Sep/2026&Dateto=06/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-22,2026-11-06T04:35:11+00:00,GB10Y 5.2098 (2026-11-03) minus DE10Y 3.33 (2026-11-05)
 2026-11-03,GB10Y,5.2098,% yield,daily,boe IUDMNPY,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=22/Sep/2026&Dateto=06/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-06T04:35:01+00:00,
 2026-11-03,GBP,1.3415,USD per GBP,daily,boe XUDLUSS,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=20/Sep/2026&Dateto=04/Nov/2026&SeriesCodes=XUDLUSS&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-04T10:09:35+00:00,
-2026-11-03,HEATOIL,4.47,USD per gal,daily,fred DHOILNYH,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DHOILNYH,2026-11-07T11:58:26+00:00,
+2026-11-03,HEATOIL,4.47,USD per gal,daily,fred DHOILNYH,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DHOILNYH,2026-11-07T15:47:13+00:00,
 2026-11-03,IDR,18136.7,IDR per USD,daily,ecb_exr IDR,https://data-api.ecb.europa.eu/service/data/EXR/D.IDR.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-04T10:09:32+00:00,
 2026-11-03,JPY,158.288,JPY per USD,daily,ecb_exr JPY,https://data-api.ecb.europa.eu/service/data/EXR/D.JPY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:10:59+00:00,recent history returned by the source
 2026-11-03,MX10Y,9.23,% yield,daily,em_macro yields.mexico_10y,em_macro.yields.mexico_10y,2026-11-04T10:10:01+00:00,
 2026-11-03,MXN,18.7592,MXN per USD,daily,banxico SF43718,"https://www.banxico.org.mx/SieInternet/consultaSerieGrafica.do?s=SF43718,CF300,1&versionSerie=LA-MAS-RECIENTE&l=es",2026-11-04T10:09:28+00:00,
-2026-11-03,NATGAS,2.63,USD per MMBtu,daily,fred DHHNGSP,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DHHNGSP,2026-11-07T11:58:26+00:00,
+2026-11-03,NATGAS,2.63,USD per MMBtu,daily,fred DHHNGSP,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DHHNGSP,2026-11-07T15:47:13+00:00,
 2026-11-03,PL-DE,287,bp,daily,spread PL10Y-DE10Y,em_macro.extra_yields.poland_10y ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-20,2026-11-04T10:10:11+00:00,PL10Y 6.25 (2026-11-03) minus DE10Y 3.38 (2026-11-03)
 2026-11-03,PL10Y,6.25,% yield,daily,em_macro extra_yields.poland_10y,em_macro.extra_yields.poland_10y,2026-11-04T10:10:10+00:00,
 2026-11-03,PLN,3.9526,PLN per USD,daily,nbp usd,https://api.nbp.pl/api/exchangerates/rates/a/usd/last/15/?format=json,2026-11-04T10:09:32+00:00,
-2026-11-03,RBOB,2.728,USD per gal,daily,fred DGASNYH,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGASNYH,2026-11-07T11:58:27+00:00,
+2026-11-03,RBOB,2.728,USD per gal,daily,fred DGASNYH,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGASNYH,2026-11-07T15:47:13+00:00,
 2026-11-03,TR10Y,35.79,% yield,daily,em_macro extra_yields.turkey_10y,em_macro.extra_yields.turkey_10y,2026-11-04T10:10:03+00:00,
 2026-11-03,TRY,49.9974,TRY per USD,daily,ecb_exr TRY,https://data-api.ecb.europa.eu/service/data/EXR/D.TRY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-04T10:09:31+00:00,
 2026-11-03,US10Y,4.95,% yield,daily,fred DGS10,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10,2026-11-06T04:10:56+00:00,recent history returned by the source
 2026-11-03,USDCASH,4.03,% yield,daily,fred DTB3,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3,2026-11-06T04:11:05+00:00,recent history returned by the source
-2026-11-03,WTI,99.64,USD per bbl,daily,fred DCOILWTICO,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO,2026-11-07T11:58:26+00:00,
+2026-11-03,WTI,99.64,USD per bbl,daily,fred DCOILWTICO,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO,2026-11-07T15:47:12+00:00,
 2026-11-03,ZA10Y,8.73,% yield,daily,sarb CMJD004A,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/CMJD004A/2026-09-07/2026-11-07,2026-11-06T04:34:56+00:00,
 2026-11-03,ZAR,16.6418,ZAR per USD,daily,sarb EXCX135D,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/EXCX135D/2026-09-05/2026-11-05,2026-11-04T10:09:30+00:00,
 2026-11-04,AUD,1.42549,AUD per USD,daily,ecb_exr AUD,https://data-api.ecb.europa.eu/service/data/EXR/D.AUD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:11:01+00:00,recent history returned by the source
@@ -671,13 +671,13 @@ date,instrument,value,unit,frequency,source,source_url,fetched_at,note
 2026-11-04,COP,3235.59,COP per USD,daily,datos_gov_co 32sa-8pi3,https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=15&$order=vigenciadesde%20DESC,2026-11-04T10:09:36+00:00,
 2026-11-04,DE10Y,3.38,% yield,daily,bundesbank D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A,https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-22,2026-11-06T04:10:55+00:00,recent history returned by the source
 2026-11-04,DE10YBM,3.28,% yield,daily,riksbank DEGVB10Y,https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-16/2026-11-07,2026-11-06T04:35:03+00:00,
-2026-11-04,ES-DE,61.4,bp,daily,spread ES10Y-DE10Y,https://www.bde.es/webbe/es/estadisticas/compartido/datos/csv/ti_1_3.csv ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T11:58:27+00:00,ES10Y 3.904 (2026-11-04) minus DE10Y 3.29 (2026-11-06)
-2026-11-04,ES10Y,3.904,% yield,daily,bde ti_1_3:TI_1_3.11,https://www.bde.es/webbe/es/estadisticas/compartido/datos/csv/ti_1_3.csv,2026-11-07T11:58:14+00:00,
+2026-11-04,ES-DE,61.4,bp,daily,spread ES10Y-DE10Y,https://www.bde.es/webbe/es/estadisticas/compartido/datos/csv/ti_1_3.csv ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T15:47:14+00:00,ES10Y 3.904 (2026-11-04) minus DE10Y 3.29 (2026-11-06)
+2026-11-04,ES10Y,3.904,% yield,daily,bde ti_1_3:TI_1_3.11,https://www.bde.es/webbe/es/estadisticas/compartido/datos/csv/ti_1_3.csv,2026-11-07T15:47:05+00:00,
 2026-11-04,EUR,1.1267,USD per EUR,daily,ecb_exr USD,https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:09:32+00:00,recent history returned by the source
 2026-11-04,FR-DE,150.23,bp,daily,spread FR10Y-DE10YBM,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-16/2026-11-07 ; https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-16/2026-11-07,2026-11-06T04:35:11+00:00,FR10Y 4.7823 (2026-11-04) minus DE10YBM 3.28 (2026-11-04)
 2026-11-04,FR10Y,4.7823,% yield,daily,riksbank FRGVB10Y,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-16/2026-11-07,2026-11-06T04:34:57+00:00,
-2026-11-04,GB-DE,184.64,bp,daily,spread GB10Y-DE10Y,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T11:58:27+00:00,GB10Y 5.1364 (2026-11-04) minus DE10Y 3.29 (2026-11-06)
-2026-11-04,GB10Y,5.1364,% yield,daily,boe IUDMNPY,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-07T11:58:15+00:00,
+2026-11-04,GB-DE,184.64,bp,daily,spread GB10Y-DE10Y,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T15:47:14+00:00,GB10Y 5.1364 (2026-11-04) minus DE10Y 3.29 (2026-11-06)
+2026-11-04,GB10Y,5.1364,% yield,daily,boe IUDMNPY,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=IUDMNPY&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-07T15:47:06+00:00,
 2026-11-04,GBP,1.3471,USD per GBP,daily,boe XUDLUSS,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=22/Sep/2026&Dateto=06/Nov/2026&SeriesCodes=XUDLUSS&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-06T04:34:24+00:00,
 2026-11-04,IDR,18128.9,IDR per USD,daily,ecb_exr IDR,https://data-api.ecb.europa.eu/service/data/EXR/D.IDR.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T04:09:29+00:00,recent history returned by the source
 2026-11-04,JP10Y,2.855,% yield,daily,mof_jgb 10Y,https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv,2026-11-06T04:10:57+00:00,recent history returned by the source
@@ -703,9 +703,9 @@ date,instrument,value,unit,frequency,source,source_url,fetched_at,note
 2026-11-05,EUR,1.1224,USD per EUR,daily,ecb_exr USD,https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T13:29:27+00:00,
 2026-11-05,FR-DE,153.73,bp,daily,spread FR10Y-DE10YBM,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-16/2026-11-07 ; https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-16/2026-11-07,2026-11-06T16:52:28+00:00,FR10Y 4.7869 (2026-11-05) minus DE10YBM 3.2496 (2026-11-05)
 2026-11-05,FR10Y,4.7869,% yield,daily,riksbank FRGVB10Y,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-16/2026-11-07,2026-11-06T16:52:15+00:00,
-2026-11-05,GBP,1.3476,USD per GBP,daily,boe XUDLUSS,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=XUDLUSS&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-07T11:57:38+00:00,
+2026-11-05,GBP,1.3476,USD per GBP,daily,boe XUDLUSS,https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=23/Sep/2026&Dateto=07/Nov/2026&SeriesCodes=XUDLUSS&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N,2026-11-07T15:46:39+00:00,
 2026-11-05,IDR,18069.4,IDR per USD,daily,ecb_exr IDR,https://data-api.ecb.europa.eu/service/data/EXR/D.IDR.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T13:28:33+00:00,
-2026-11-05,JP10Y,2.806,% yield,daily,mof_jgb 10Y,https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv,2026-11-07T11:58:20+00:00,
+2026-11-05,JP10Y,2.806,% yield,daily,mof_jgb 10Y,https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv,2026-11-07T15:47:09+00:00,
 2026-11-05,JPY,158.455,JPY per USD,daily,ecb_exr JPY,https://data-api.ecb.europa.eu/service/data/EXR/D.JPY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T13:30:05+00:00,
 2026-11-05,MX10Y,9.11629,% yield,daily,em_macro yields.mexico_10y,em_macro.yields.mexico_10y,2026-11-06T16:52:13+00:00,
 2026-11-05,MXN,18.7147,MXN per USD,daily,banxico SF43718,"https://www.banxico.org.mx/SieInternet/consultaSerieGrafica.do?s=SF43718,CF300,1&versionSerie=LA-MAS-RECIENTE&l=es",2026-11-06T16:51:02+00:00,
@@ -714,30 +714,30 @@ date,instrument,value,unit,frequency,source,source_url,fetched_at,note
 2026-11-05,PLN,3.9101,PLN per USD,daily,nbp usd,https://api.nbp.pl/api/exchangerates/rates/a/usd/last/15/?format=json,2026-11-06T04:34:23+00:00,
 2026-11-05,TR10Y,35.59,% yield,daily,em_macro extra_yields.turkey_10y,em_macro.extra_yields.turkey_10y,2026-11-06T16:52:14+00:00,
 2026-11-05,TRY,50.0471,TRY per USD,daily,ecb_exr TRY,https://data-api.ecb.europa.eu/service/data/EXR/D.TRY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-06T13:28:32+00:00,
-2026-11-05,US10Y,4.84,% yield,daily,fred DGS10,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10,2026-11-07T11:58:19+00:00,
-2026-11-05,USDCASH,4,% yield,daily,fred DTB3,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3,2026-11-07T11:58:27+00:00,
-2026-11-05,ZA10Y,8.54,% yield,daily,sarb CMJD004A,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/CMJD004A/2026-09-08/2026-11-08,2026-11-07T11:58:08+00:00,
+2026-11-05,US10Y,4.84,% yield,daily,fred DGS10,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10,2026-11-07T15:47:08+00:00,
+2026-11-05,USDCASH,4,% yield,daily,fred DTB3,https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3,2026-11-07T15:47:14+00:00,
+2026-11-05,ZA10Y,8.54,% yield,daily,sarb CMJD004A,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/CMJD004A/2026-09-08/2026-11-08,2026-11-07T15:47:03+00:00,
 2026-11-05,ZAR,16.3568,ZAR per USD,daily,sarb EXCX135D,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/EXCX135D/2026-09-07/2026-11-07,2026-11-06T04:34:19+00:00,
-2026-11-06,AUD,1.45544,AUD per USD,daily,ecb_exr AUD,https://data-api.ecb.europa.eu/service/data/EXR/D.AUD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:58:24+00:00,
-2026-11-06,BR10Y,15.16,% yield,daily,em_macro yields.brazil_10y,em_macro.yields.brazil_10y,2026-11-07T11:58:06+00:00,
-2026-11-06,BRL,5.5013,BRL per USD,daily,bcb_sgs 1,https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados/ultimos/15?formato=json,2026-11-07T11:57:32+00:00,
-2026-11-06,CAD,1.40663,CAD per USD,daily,ecb_exr CAD,https://data-api.ecb.europa.eu/service/data/EXR/D.CAD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:58:26+00:00,
-2026-11-06,CHF,0.818898,CHF per USD,daily,ecb_exr CHF,https://data-api.ecb.europa.eu/service/data/EXR/D.CHF.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:58:23+00:00,
-2026-11-06,CLP,970.94,CLP per USD,daily,mindicador dolar,https://mindicador.cl/api/dolar,2026-11-07T11:57:39+00:00,
+2026-11-06,AUD,1.45544,AUD per USD,daily,ecb_exr AUD,https://data-api.ecb.europa.eu/service/data/EXR/D.AUD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:47:11+00:00,
+2026-11-06,BR10Y,15.16,% yield,daily,em_macro yields.brazil_10y,em_macro.yields.brazil_10y,2026-11-07T15:47:00+00:00,
+2026-11-06,BRL,5.5013,BRL per USD,daily,bcb_sgs 1,https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados/ultimos/15?formato=json,2026-11-07T15:46:35+00:00,
+2026-11-06,CAD,1.40663,CAD per USD,daily,ecb_exr CAD,https://data-api.ecb.europa.eu/service/data/EXR/D.CAD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:47:12+00:00,
+2026-11-06,CHF,0.818898,CHF per USD,daily,ecb_exr CHF,https://data-api.ecb.europa.eu/service/data/EXR/D.CHF.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:47:10+00:00,
+2026-11-06,CLP,970.94,CLP per USD,daily,mindicador dolar,https://mindicador.cl/api/dolar,2026-11-07T15:46:41+00:00,
 2026-11-06,COP,3228.26,COP per USD,daily,datos_gov_co 32sa-8pi3,https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=15&$order=vigenciadesde%20DESC,2026-11-06T16:51:09+00:00,
-2026-11-06,DE10Y,3.29,% yield,daily,bundesbank D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A,https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T11:58:19+00:00,
-2026-11-06,DE10YBM,3.252,% yield,daily,riksbank DEGVB10Y,https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-17/2026-11-08,2026-11-07T11:58:19+00:00,
-2026-11-06,EUR,1.1165,USD per EUR,daily,ecb_exr USD,https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:57:40+00:00,
-2026-11-06,FR-DE,151.37,bp,daily,spread FR10Y-DE10YBM,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-17/2026-11-08 ; https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-17/2026-11-08,2026-11-07T11:58:27+00:00,FR10Y 4.7657 (2026-11-06) minus DE10YBM 3.252 (2026-11-06)
-2026-11-06,FR10Y,4.7657,% yield,daily,riksbank FRGVB10Y,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-17/2026-11-08,2026-11-07T11:58:11+00:00,
-2026-11-06,IDR,18100.3,IDR per USD,daily,ecb_exr IDR,https://data-api.ecb.europa.eu/service/data/EXR/D.IDR.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:57:37+00:00,
-2026-11-06,JPY,158.325,JPY per USD,daily,ecb_exr JPY,https://data-api.ecb.europa.eu/service/data/EXR/D.JPY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:58:22+00:00,
-2026-11-06,MX10Y,9.11,% yield,daily,em_macro yields.mexico_10y,em_macro.yields.mexico_10y,2026-11-07T11:58:07+00:00,
-2026-11-06,MXN,18.6297,MXN per USD,daily,banxico SF43718,"https://www.banxico.org.mx/SieInternet/consultaSerieGrafica.do?s=SF43718,CF300,1&versionSerie=LA-MAS-RECIENTE&l=es",2026-11-07T11:57:32+00:00,
-2026-11-06,PL-DE,282,bp,daily,spread PL10Y-DE10Y,em_macro.extra_yields.poland_10y ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T11:58:27+00:00,PL10Y 6.11 (2026-11-06) minus DE10Y 3.29 (2026-11-06)
-2026-11-06,PL10Y,6.11,% yield,daily,em_macro extra_yields.poland_10y,em_macro.extra_yields.poland_10y,2026-11-07T11:58:17+00:00,
-2026-11-06,PLN,3.9321,PLN per USD,daily,nbp usd,https://api.nbp.pl/api/exchangerates/rates/a/usd/last/15/?format=json,2026-11-07T11:57:38+00:00,
-2026-11-06,TR10Y,35.78,% yield,daily,em_macro extra_yields.turkey_10y,em_macro.extra_yields.turkey_10y,2026-11-07T11:58:10+00:00,
-2026-11-06,TRY,50.1529,TRY per USD,daily,ecb_exr TRY,https://data-api.ecb.europa.eu/service/data/EXR/D.TRY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T11:57:36+00:00,
-2026-11-06,ZAR,16.504,ZAR per USD,daily,sarb EXCX135D,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/EXCX135D/2026-09-08/2026-11-08,2026-11-07T11:57:34+00:00,
-2026-11-07,COP,3237.83,COP per USD,daily,datos_gov_co 32sa-8pi3,https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=15&$order=vigenciadesde%20DESC,2026-11-07T11:57:39+00:00,
+2026-11-06,DE10Y,3.29,% yield,daily,bundesbank D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A,https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T15:47:07+00:00,
+2026-11-06,DE10YBM,3.252,% yield,daily,riksbank DEGVB10Y,https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-17/2026-11-08,2026-11-07T15:47:07+00:00,
+2026-11-06,EUR,1.1165,USD per EUR,daily,ecb_exr USD,https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:46:41+00:00,
+2026-11-06,FR-DE,151.37,bp,daily,spread FR10Y-DE10YBM,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-17/2026-11-08 ; https://api.riksbank.se/swea/v1/Observations/DEGVB10Y/2026-10-17/2026-11-08,2026-11-07T15:47:14+00:00,FR10Y 4.7657 (2026-11-06) minus DE10YBM 3.252 (2026-11-06)
+2026-11-06,FR10Y,4.7657,% yield,daily,riksbank FRGVB10Y,https://api.riksbank.se/swea/v1/Observations/FRGVB10Y/2026-10-17/2026-11-08,2026-11-07T15:47:04+00:00,
+2026-11-06,IDR,18100.3,IDR per USD,daily,ecb_exr IDR,https://data-api.ecb.europa.eu/service/data/EXR/D.IDR.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:46:38+00:00,
+2026-11-06,JPY,158.325,JPY per USD,daily,ecb_exr JPY,https://data-api.ecb.europa.eu/service/data/EXR/D.JPY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:47:09+00:00,
+2026-11-06,MX10Y,9.11,% yield,daily,em_macro yields.mexico_10y,em_macro.yields.mexico_10y,2026-11-07T15:47:02+00:00,
+2026-11-06,MXN,18.6297,MXN per USD,daily,banxico SF43718,"https://www.banxico.org.mx/SieInternet/consultaSerieGrafica.do?s=SF43718,CF300,1&versionSerie=LA-MAS-RECIENTE&l=es",2026-11-07T15:46:35+00:00,
+2026-11-06,PL-DE,282,bp,daily,spread PL10Y-DE10Y,em_macro.extra_yields.poland_10y ; https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en&startPeriod=2026-09-23,2026-11-07T15:47:14+00:00,PL10Y 6.11 (2026-11-06) minus DE10Y 3.29 (2026-11-06)
+2026-11-06,PL10Y,6.11,% yield,daily,em_macro extra_yields.poland_10y,em_macro.extra_yields.poland_10y,2026-11-07T15:47:06+00:00,
+2026-11-06,PLN,3.9321,PLN per USD,daily,nbp usd,https://api.nbp.pl/api/exchangerates/rates/a/usd/last/15/?format=json,2026-11-07T15:46:39+00:00,
+2026-11-06,TR10Y,35.78,% yield,daily,em_macro extra_yields.turkey_10y,em_macro.extra_yields.turkey_10y,2026-11-07T15:47:03+00:00,
+2026-11-06,TRY,50.1529,TRY per USD,daily,ecb_exr TRY,https://data-api.ecb.europa.eu/service/data/EXR/D.TRY.EUR.SP00.A?format=csvdata&lastNObservations=15,2026-11-07T15:46:37+00:00,
+2026-11-06,ZAR,16.504,ZAR per USD,daily,sarb EXCX135D,https://custom.resbank.co.za/SarbWebApi/WebIndicators/Shared/GetTimeseriesObservations/EXCX135D/2026-09-08/2026-11-08,2026-11-07T15:46:36+00:00,
+2026-11-07,COP,3237.83,COP per USD,daily,datos_gov_co 32sa-8pi3,https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=15&$order=vigenciadesde%20DESC,2026-11-07T15:46:40+00:00,
