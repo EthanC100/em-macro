@@ -1,13 +1,26 @@
 {
- "since": "2026-11-06T13:35:13+00:00",
- "at": "2026-11-06T16:52:44+00:00",
+ "since": "2026-11-06T16:52:44+00:00",
+ "at": "2026-11-07T11:59:18+00:00",
  "items": [
+  {
+   "book": "me",
+   "kind": "pnl",
+   "label": "me",
+   "change": -0.046,
+   "text": "me: -0.05 index points (to 99.72)"
+  },
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": -0.2676,
-   "text": "algorithm v1.0: -0.27 index points (to 100.72)"
+   "change": 0.1096,
+   "text": "algorithm v1.0: +0.11 index points (to 100.83)"
+  },
+  {
+   "book": "janus",
+   "kind": "no trade",
+   "link": "#/janus",
+   "text": "Janus reviewed and opened nothing (no-trade record)"
   }
  ]
 }

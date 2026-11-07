@@ -680,5 +680,5 @@
   }
  ],
  "method": "Stress tests: each book's current positions replayed through three historical episodes.\n\n    python -m ledger.stress           # fetch any missing history, then write data/ledger/stress.json\n\nEach position is held unchanged from the episode's start to its end, and the instrument moves as it did then:\n  * FX and commodities by the relative price change; yields and spreads by the absolute change in % or bp;\n  * the algorithm: weight x long return (bonds and spreads through the 10-year duration at the start level, no carry);\n  * Janus: notional x position return (filled positions; pending orders at their requested risk);\n  * my decisions: size x level change x direction / |entry - stop| (the P&L formula of ledger/scoring.py), the change\n    applied to the current mark (relative for prices, absolute for yields and spreads).\nInstruments without history over an episode are listed, not guessed. Monthly-average history (marked) is used only\nwhere no daily series exists, and the result says so.",
- "as_of": "2026-11-06"
+ "as_of": "2026-11-07"
 }
