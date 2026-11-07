@@ -23,6 +23,16 @@ Norgate's metadata (none, so exchange rules give every date) and the last schedu
    (read/write on em-macro-data) and `DATABENTO_API_KEY` secrets, and the Norgate snapshot folders of the 18
    markets in em-macro-data. It fetches the history, runs the check, writes the go-live record, and commits
    `results/shadows/prelive.json` and `results/shadows/GO_LIVE.json`.
+   - **The history step** splits each market into calendar-year pieces (2023 … 2026) and downloads them in
+     parallel (8 at a time). Each piece is logged as sent before it goes out (`databento/shadows/
+     history_spend.jsonl`, private). It is committed and pushed to em-macro-data as soon as it is stored.
+   - **A rerun never pays twice:** it skips stored pieces, and markets stored whole by run #1.
+   - **The US$20 cap** counts everything already spent:
+     - run #1, recorded in `UNLOGGED_SPEND` in `em_macro/t2526_data.py`: US$2.34;
+     - every request sent since, interrupted ones and retries included.
+   - **Run #1 (7 November 2026)** was cancelled by the 60-minute job timeout. It had stored CL, RB, HO, NG, HG,
+     GC, SI and PL, which were pushed by the cleanup step, and was in the middle of ZC. Its output was buffered,
+     so its log showed only warnings. The job now has 240 minutes and output is unbuffered.
 2. **Daily:** the `ledger-daily` step "Shadows T25-T26" fetches new settlements, rebuilds both paths from M1 and
    commits `results/shadows/`. At M1's rebalance it runs P3 and P4 and marks the go-live record confirmed. If P4
    finds fewer than 6 active markets in either sleeve, M1 moves to the next rebalance, with both evaluation dates.

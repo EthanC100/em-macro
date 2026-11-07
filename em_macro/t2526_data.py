@@ -194,33 +194,179 @@ def _download(c, req: dict) -> pd.DataFrame:
                          "settle": fs["settle"].astype(float)}).dropna(subset=["contract"])
 
 
+HISTORY_LEDGER = "history_spend.jsonl"       # private, in databento/shadows: one line per paid request
+# Paid one-off history downloads not in the ledger above: they ran before it existed. Counted against the US$20 cap.
+UNLOGGED_SPEND = [
+    {"run": "shadows-setup #1 (Actions run 42324089494, 2026-11-07 01:27-02:27 UTC, cancelled by the 60-minute job "
+            "timeout)", "usd": 2.34, "markets_stored": ["CL", "RB", "HO", "NG", "HG", "GC", "SI", "PL"],
+     "market_in_progress": "ZC",
+     "basis": ("Databento get_cost quotes of the same nine requests, re-run on 2026-11-07 with run #1's parameters "
+               "(2023-01-01 to the dataset end at its start): the eight stored markets US$2.2660 and the interrupted "
+               "ZC request US$0.0670, counted in full; total US$2.3330, rounded up. Databento's API has no usage "
+               "endpoint; the billed figure is in the Databento portal")},
+]
+WORKERS = 8
+
+
+def _ledger_path(base: Path) -> Path:
+    return base / HISTORY_LEDGER
+
+
+def history_ledger(base: Path | None = None) -> list[dict]:
+    p = _ledger_path(base or base_dir())
+    return [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+
+
+def history_spent(base: Path | None = None) -> float:
+    """Everything the one-off history has cost so far: the runs before the ledger, and every request sent since
+    (a request is logged as "sent" before it goes out, so an interrupted one still counts)."""
+    return (sum(float(u["usd"]) for u in UNLOGGED_SPEND)
+            + sum(float(r["quote_usd"]) for r in history_ledger(base) if r.get("status") == "sent"))
+
+
+def history_chunks(end: datetime) -> list[tuple[str, date, datetime]]:
+    """Calendar-year pieces of HISTORY_START .. end: small enough that each finishes in minutes and is stored at
+    once, so an interrupted run loses at most the pieces in flight."""
+    out, y = [], HISTORY_START.year
+    while True:
+        a = max(date(y, 1, 1), HISTORY_START)
+        b = min(datetime(y + 1, 1, 1, tzinfo=timezone.utc), end)
+        if b <= datetime(a.year, a.month, a.day, tzinfo=timezone.utc):
+            return out
+        out.append((str(y), a, b))
+        y += 1
+
+
+def _retry(fn, tries: int = 4, wait: float = 5.0, log=print, what: str = ""):
+    import time
+    for k in range(tries):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001 - gateway timeouts, connection resets
+            if k == tries - 1:
+                raise
+            log(f"retry {what}: {str(e).splitlines()[0][:100]}")
+            time.sleep(wait * (k + 1))
+
+
 def history(c=None, codes: list[str] | None = None, today: date | None = None, base: Path | None = None,
-            cap: float = ONE_OFF_CAP_USD, log=print, force: bool = False) -> dict:
-    """One-off: every designated contract whose life overlaps HISTORY_START..today+18 months, from HISTORY_START.
-    Every per-market request is quoted first; nothing is downloaded if the total exceeds ``cap``."""
+            cap: float = ONE_OFF_CAP_USD, log=print, force: bool = False, workers: int = WORKERS,
+            on_stored=None) -> dict:
+    """One-off: every designated contract whose life overlaps HISTORY_START..today+18 months, from HISTORY_START,
+    in calendar-year pieces per market, downloaded in parallel.
+
+    - **Never paid twice:** a piece already stored (``history_spend.jsonl``) is skipped, and so is a market stored
+      whole before the pieces existed (raw file present, no ledger line).
+    - **Cap:** every piece is quoted first; nothing is downloaded if what was already spent (``history_spent``)
+      plus the quotes exceeds ``cap``. Each request is logged as sent before it goes out and checked against the
+      cap again then (retries included).
+    - **Stored at once:** each piece is written to the private store as it arrives and ``on_stored`` is called
+      (the CLI commits and pushes em-macro-data there)."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    base = base or base_dir()
     c = c or _client()
     codes = codes or all_markets()
-    if not force:                                    # a retry never pays twice for a market already fetched
-        codes = [k for k in codes if read_raw(k, base).empty]
-        if not codes:
-            return {"quote_usd": 0.0, "cap_usd": cap, "markets": 0, "contracts": 0, "refused": False, "stored": {},
-                    "note": "every market already has its history"}
     today = today or date.today()
+    led = history_ledger(base)
+    done = {(r["market"], r["chunk"]) for r in led if r.get("status") == "stored"}
+    in_ledger = {r["market"] for r in led}
+    if not force:
+        codes = [k for k in codes if k in in_ledger or read_raw(k, base).empty]
     end = _available_end(c)
-    reqs = _requests(c, codes, HISTORY_START, pd.Period(HISTORY_START, "M"), pd.Period(today, "M") + 18, end)
-    quotes = {code: float(c.metadata.get_cost(**r["kw"])) for code, r in reqs.items()}
-    total = sum(quotes.values())
-    rec = {"quote_usd": round(total, 4), "cap_usd": cap, "markets": len(reqs),
-           "contracts": sum(len(r["map"]) for r in reqs.values())}
-    if total > cap:
-        log(f"refused: one-off quote US${total:.2f} above US${cap:.2f}")
+    pieces = []
+    for name, a, b in history_chunks(end):
+        todo = [k for k in codes if force or (k, name) not in done]
+        if not todo:
+            continue
+        reqs = _requests(c, todo, a, pd.Period(HISTORY_START, "M"), pd.Period(today, "M") + 18, b)
+        pieces += [(k, name, r) for k, r in reqs.items()]
+    spent = history_spent(base)
+    if not pieces:
+        return {"quote_usd": 0.0, "spent_before_usd": round(spent, 4), "cap_usd": cap, "requests": 0, "markets": 0,
+                "contracts": 0, "refused": False, "stored": {}, "note": "every market already has its history"}
+    with ThreadPoolExecutor(workers) as ex:
+        quotes = list(ex.map(lambda p: _retry(lambda: float(c.metadata.get_cost(**p[2]["kw"])), log=log,
+                                              what=f"quote {p[0]} {p[1]}"), pieces))
+    total = sum(quotes)
+    rec = {"quote_usd": round(total, 4), "spent_before_usd": round(spent, 4), "cap_usd": cap,
+           "requests": len(pieces), "markets": len({p[0] for p in pieces}),
+           "contracts": len({v for p in pieces for v in p[2]["map"].values()})}
+    log(f"quote US${total:.4f} for {len(pieces)} requests ({rec['markets']} markets); spent before US${spent:.4f}; "
+        f"cap US${cap:.2f}")
+    if spent + total > cap + 1e-9:
+        log(f"refused: US${spent:.2f} already spent + quote US${total:.2f} is above the US${cap:.2f} cap")
         return {**rec, "refused": True}
-    stored = {}
-    for code, r in reqs.items():
-        df = _download(c, r)
-        stored[code] = write_raw(code, df, base)
-        log(f"{code}: {len(r['map'])} contracts, {stored[code]} settlements stored privately")
-    return {**rec, "refused": False, "stored": stored}
+    lock, code_locks = threading.Lock(), {k: threading.Lock() for k in {p[0] for p in pieces}}
+    state = {"spent": spent}
+    stored: dict[str, int] = {}
+
+    def log_line(r):
+        p = _ledger_path(base)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a") as f:
+            f.write(json.dumps(r, sort_keys=True) + "\n")
+
+    def one(args):
+        (code, name, r), q = args
+        meta = {"market": code, "chunk": name, "start": r["kw"]["start"], "end": r["kw"]["end"],
+                "symbols": len(r["kw"]["symbols"])}
+
+        def attempt():
+            with lock:                                    # logged and checked before every request that is sent
+                if state["spent"] + q > cap + 1e-9:
+                    raise RuntimeError(f"stop: {code} {name} (US${q:.4f}) would take the one-off spend above "
+                                       f"US${cap:.2f} (spent US${state['spent']:.4f})")
+                state["spent"] += q
+                log_line({**meta, "status": "sent", "quote_usd": q,
+                          "time": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+            return _download(c, r)
+        df = _retry(attempt, tries=3, log=log, what=f"download {code} {name}")
+        with code_locks[code]:
+            n = write_raw(code, df, base)
+        with lock:
+            log_line({**meta, "status": "stored", "rows": int(len(df)), "quote_usd": q,
+                      "time": datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+            stored[code] = stored.get(code, 0) + n
+            log(f"{code} {name}: {len(r['map'])} contracts, {n} settlements stored privately")
+            if on_stored:
+                on_stored(f"Shadows T25-T26 history: {code} {name}")
+        return code
+
+    errors = []
+    with ThreadPoolExecutor(workers) as ex:
+        futs = [ex.submit(one, a) for a in zip(pieces, quotes)]
+        for f in futs:
+            try:
+                f.result()
+            except Exception as e:  # noqa: BLE001 - one failed piece does not lose the others
+                errors.append(str(e).splitlines()[0][:200])
+    for e in errors:
+        log(f"failed: {e}")
+    return {**rec, "refused": False, "stored": stored, "spent_after_usd": round(history_spent(base), 4),
+            "failed": errors}
+
+
+def git_commit_store(message: str, root: Path | None = None, log=print) -> bool:
+    """Commit and push the private shadow store (em-macro-data clone at ``root``). Failures are logged, never
+    raised: the workflow's last step commits whatever is left."""
+    import subprocess
+    root = root or CD.data_root()
+
+    def run(*a):
+        return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True)
+    run("add", "-A", "--", "databento/shadows")
+    if run("diff", "--cached", "--quiet").returncode == 0:
+        return True
+    if run("commit", "-q", "-m", message).returncode != 0:
+        log("commit failed")
+        return False
+    for _ in range(4):
+        if run("push", "-q").returncode == 0:
+            return True
+        run("pull", "-q", "--rebase")
+    log("push failed: left for the workflow's final step")
+    return False
 
 
 def update(c=None, codes: list[str] | None = None, today: date | None = None, base: Path | None = None,
@@ -386,12 +532,15 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["history", "check", "update"])
     ap.add_argument("--today", default=None)
+    ap.add_argument("--commit", action="store_true", help="history: commit and push each piece as it is stored")
     a = ap.parse_args(argv)
     today = date.fromisoformat(a.today) if a.today else date.today()
     if a.cmd == "history":
-        r = history(today=today)
-        print(json.dumps({k: v for k, v in r.items() if k != "stored"}))
-        return 1 if r.get("refused") else 0
+        def say(x):
+            print(x, flush=True)
+        r = history(today=today, log=say, on_stored=(lambda m: git_commit_store(m, log=say)) if a.commit else None)
+        print(json.dumps({k: v for k, v in r.items() if k != "stored"}), flush=True)
+        return 1 if r.get("refused") or r.get("failed") else 0
     if a.cmd == "check":
         if date.today() >= NORGATE_END:
             print("refused: on or after 5 May 2027 the Norgate snapshot is deleted (Amendment 1 A1.2 item 5)")

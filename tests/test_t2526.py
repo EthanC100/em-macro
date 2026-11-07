@@ -229,21 +229,105 @@ class _FakeClient:
         self.metadata, self.symbology = Meta(), Sym()
 
 
-def test_history_quotes_first_and_refuses_above_20(tmp_path, monkeypatch):
+def _rows(r):
+    """A small fake download: one settlement per contract on the request's first day."""
+    d = pd.Timestamp(r["kw"]["start"][:10])
+    return pd.DataFrame({"date": d, "contract": sorted(r["map"].values()), "settle": 1.0})
+
+
+@pytest.fixture()
+def no_prior_spend(monkeypatch):
+    monkeypatch.setattr(D, "UNLOGGED_SPEND", [])
+
+
+def test_history_quotes_first_and_refuses_above_20(tmp_path, monkeypatch, no_prior_spend):
     calls = []
-    monkeypatch.setattr(D, "_download", lambda c, r: calls.append(r) or pd.DataFrame(columns=["date", "contract", "settle"]))
-    r = D.history(_FakeClient(10.5), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
-    assert r["refused"] and r["quote_usd"] == 21.0 and not calls
+    monkeypatch.setattr(D, "_download", lambda c, r: calls.append(r) or _rows(r))
+    # 2 markets x 4 calendar years (2023 .. 2026) = 8 requests
+    r = D.history(_FakeClient(2.6), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
+    assert r["refused"] and r["requests"] == 8 and r["quote_usd"] == pytest.approx(20.8) and not calls
+    assert not (tmp_path / D.HISTORY_LEDGER).exists()
     r = D.history(_FakeClient(0.4), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
-    assert not r["refused"] and len(calls) == 2
-    assert all(k["kw"]["start"].startswith("2023-01-01") for k in calls)
+    assert not r["refused"] and len(calls) == 8 and not r["failed"]
+    assert sorted(k["kw"]["start"][:10] for k in calls) == sorted(["2023-01-01", "2024-01-01", "2025-01-01",
+                                                                    "2026-01-01"] * 2)
     assert all(s[-1].isdigit() and len(s) == 4 for k in calls for s in k["kw"]["symbols"])   # one-digit year
-    # a retry skips markets already fetched: nothing is quoted or paid twice
-    D.write_raw("CL", pd.DataFrame({"date": pd.to_datetime(["2023-01-03"]), "contract": "CL-2023G", "settle": [1.0]}),
-                tmp_path)
+    led = D.history_ledger(tmp_path)
+    assert sum(x["status"] == "sent" for x in led) == 8 and sum(x["status"] == "stored" for x in led) == 8
+    assert D.history_spent(tmp_path) == pytest.approx(3.2)
+    # a rerun pays for nothing: every piece is stored
     calls.clear()
     r = D.history(_FakeClient(0.4), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
-    assert r["markets"] == 1 and [k["map"] for k in calls][0] and all("NG" in s for s in calls[0]["kw"]["symbols"])
+    assert r["requests"] == 0 and not calls
+
+
+def test_history_skips_markets_stored_whole_and_counts_earlier_spend(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(D, "_download", lambda c, r: calls.append(r) or _rows(r))
+    monkeypatch.setattr(D, "UNLOGGED_SPEND", [{"run": "earlier", "usd": 18.5}])
+    # CL stored whole by an earlier run (raw file, no ledger line): skipped
+    D.write_raw("CL", pd.DataFrame({"date": pd.to_datetime(["2023-01-03"]), "contract": "CL-2023G", "settle": [1.0]}),
+                tmp_path)
+    r = D.history(_FakeClient(0.4), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
+    assert r["refused"] and r["spent_before_usd"] == 18.5 and r["quote_usd"] == pytest.approx(1.6) and not calls
+    monkeypatch.setattr(D, "UNLOGGED_SPEND", [{"run": "earlier", "usd": 18.0}])
+    r = D.history(_FakeClient(0.4), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None)
+    assert not r["refused"] and r["markets"] == 1 and len(calls) == 4
+    assert all(s.startswith("NG") for k in calls for s in k["kw"]["symbols"])
+    assert r["spent_after_usd"] == pytest.approx(19.6)
+
+
+def test_history_interrupted_piece_counts_and_is_fetched_again(tmp_path, monkeypatch, no_prior_spend):
+    stored_msgs = []
+    fail = {"n": 0}
+
+    def dl(c, r):
+        if r["kw"]["start"].startswith("2024") and "NG" in r["kw"]["symbols"][0] and fail["n"] < 3:
+            fail["n"] += 1
+            raise ConnectionError("reset")
+        return _rows(r)
+    monkeypatch.setattr(D, "_download", dl)
+    monkeypatch.setattr(D, "_retry", lambda fn, tries=4, wait=0, log=None, what="": _retry_fast(fn, tries))
+    r = D.history(_FakeClient(0.5), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None,
+                  on_stored=stored_msgs.append)
+    # NG 2024 failed on all 3 attempts: each attempt was sent and counts; the other 7 pieces were stored at once
+    assert len(r["failed"]) == 1 and len(stored_msgs) == 7 and "NG 2024" not in " ".join(stored_msgs)
+    assert D.history_spent(tmp_path) == pytest.approx(0.5 * (7 + 3))
+    # the rerun fetches only NG 2024, and the cap counts everything paid so far
+    r = D.history(_FakeClient(0.5), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None,
+                  on_stored=stored_msgs.append)
+    assert r["requests"] == 1 and r["spent_before_usd"] == pytest.approx(5.0) and not r["failed"]
+    assert stored_msgs[-1].endswith("NG 2024")
+
+
+def _retry_fast(fn, tries):
+    for k in range(tries):
+        try:
+            return fn()
+        except Exception:
+            if k == tries - 1:
+                raise
+
+
+def test_history_stops_at_the_cap_mid_run(tmp_path, monkeypatch, no_prior_spend):
+    monkeypatch.setattr(D, "_download", lambda c, r: (_ for _ in ()).throw(ConnectionError("reset")))
+    monkeypatch.setattr(D, "_retry", lambda fn, tries=4, wait=0, log=None, what="": _retry_fast(fn, tries))
+    r = D.history(_FakeClient(2.0), ["CL", "NG"], date(2026, 11, 20), tmp_path, log=lambda *_: None, workers=1)
+    # quoted 16 <= 20, but every retry is a new paid request: stopped before the spend passes US$20
+    assert r["failed"] and D.history_spent(tmp_path) <= 20.0 + 1e-9
+    assert any("would take the one-off spend above" in e for e in r["failed"])
+
+
+def test_history_chunks():
+    from datetime import datetime, timezone
+    ch = D.history_chunks(datetime(2026, 11, 6, 18, 33, tzinfo=timezone.utc))
+    assert [c[0] for c in ch] == ["2023", "2024", "2025", "2026"] and ch[0][1] == date(2023, 1, 1)
+    assert ch[-1][2] == datetime(2026, 11, 6, 18, 33, tzinfo=timezone.utc)
+
+
+def test_unlogged_spend_is_recorded():
+    assert D.UNLOGGED_SPEND and D.UNLOGGED_SPEND[0]["usd"] > 0
+    assert D.UNLOGGED_SPEND[0]["markets_stored"] == ["CL", "RB", "HO", "NG", "HG", "GC", "SI", "PL"]
 
 
 def test_update_under_the_shared_daily_cap(store, monkeypatch):

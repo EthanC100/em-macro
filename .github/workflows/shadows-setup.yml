@@ -3,8 +3,10 @@ name: shadows-setup
 # One-off set-up of the T25-T26 zero-size live shadows (docs/prereg/T25-T26_live_shadows.md, Amendment 1 A1.2 and
 # §8). Run it by hand once, after this branch is merged and before the 3 December 2026 rebalance (in any case before
 # 5 May 2027, when the Norgate snapshot must be deleted):
-#   1. history: Databento GLBX.MDP3 final settlements from 2023-01-01 for every universe market, quoted first and
-#      refused above US$20 in total (a retry skips markets already fetched);
+#   1. history: Databento GLBX.MDP3 final settlements from 2023-01-01 for every universe market, in calendar-year
+#      pieces downloaded in parallel. Everything is quoted first and refused if what was already spent (run #1
+#      included) plus the quotes exceeds US$20. Each piece is committed to em-macro-data as soon as it is stored,
+#      so a rerun skips it and never pays for it again;
 #   2. check: once, against the Norgate snapshot: one tick on >= 99% of common days, identical F1/F2 chains with the
 #      exchange-rule dates, and P1 (the §3.2 counts on the stored history). A failing market is excluded;
 #   3. golive: P0 (a160bfd hashes) and the go-live record, M1 = the first rebalance on or after today (confirmed by
@@ -30,7 +32,7 @@ concurrency:
 jobs:
   setup:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 240           # run #1 was cancelled at 60 minutes, 8 markets in (sequential, one request each)
     defaults:
       run:
         shell: bash
@@ -76,11 +78,18 @@ jobs:
             norgate/2026-11_financials/contracts/6B
             norgate/2026-11_financials/contracts/6M
 
-      - name: Databento history (one-off, quoted first, cap US$20)
+      - name: Databento history (one-off, quoted first, cap US$20 including earlier runs)
+        timeout-minutes: 200       # below the job's 240, so the steps that commit what was stored still run
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
           DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
-        run: python -m em_macro.t2526_data history 2>&1 | tee "$RUNNER_TEMP/history.log"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          cd .em-macro-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cd ..
+          python -m em_macro.t2526_data history --commit 2>&1 | tee "$RUNNER_TEMP/history.log"
 
       - name: Store the history privately
         if: always()
@@ -89,11 +98,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A -- databento/shadows ledger
-          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: Databento history from 2023-01-01"; git push -q; }
+          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: Databento history (remaining pieces)"; git pull -q --rebase; git push -q; }
 
       - name: Check against the Norgate snapshot (counts only)
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          PYTHONUNBUFFERED: "1"
         run: python -m em_macro.t2526_data check 2>&1 | tee "$RUNNER_TEMP/check.log"
 
       - name: Go-live record (P0, universe, M1, evaluation dates)
@@ -107,7 +117,7 @@ jobs:
         run: |
           cd .em-macro-data
           git add -A -- databento/shadows
-          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: contract files and unit factors after the check"; git push -q; }
+          git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: contract files and unit factors after the check"; git pull -q --rebase; git push -q; }
           cd ..
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -127,6 +137,8 @@ jobs:
           {
             echo "## Shadows T25-T26 set-up"
             for f in history check golive; do
-              [ -f "$RUNNER_TEMP/$f.log" ] && { echo "### $f"; echo '```'; tail -n 40 "$RUNNER_TEMP/$f.log"; echo '```'; }
+              if [ -f "$RUNNER_TEMP/$f.log" ]; then
+                echo "### $f"; echo '```'; grep -v -e Warning -e "inplace" -e "fs = final" "$RUNNER_TEMP/$f.log" | tail -n 60; echo '```'
+              fi
             done
           } >> "$GITHUB_STEP_SUMMARY"
