@@ -30,6 +30,13 @@ request into `dev`. You never touch `main`.
 6. Return `{"qid", "branch", "pr", "test", "fail_before": "...", "pass_after": "...", "suite": "...",
    "ledger_diff": "..."}`. If you could not finish, return `{"qid", "status": "failed", "why"}` and leave no PR.
 
+## Tests gate existing writers
+`systematic-monthly` runs `python -m pytest -q tests` before it commits the rebalance (and ledger-daily runs
+`tests/test_ledger.py`, `test_automation.py`, `test_janus.py`, `test_books.py` before it commits marks). A test you
+add must never fail because an existing writer, or Ethan, later edits its own data or a document on main: do not
+tie prose or hand-edited files to writer-owned data in a way that fails; skip with a message instead, and keep
+strict checks for dev (`NIGHT_SHIFT_STRICT=1`, set by pr-review and promote).
+
 ## Never
 Push to `main` or `dev` directly; change a protected path; edit existing writers' data files by hand; skip,
 delete or weaken a test; change Janus's mandate, schedule or limits; pre-register or run anything on 2020+ data;

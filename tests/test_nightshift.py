@@ -196,7 +196,8 @@ def test_protected_change_on_dev_is_found_but_writer_changes_on_main_are_not(rep
     (repo / "docs/prereg/T1.md").write_text("edited\n")
     (repo / "b.txt").write_text("x\n")
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-qm", "dev Q002")
+    _git(repo, "commit", "-qm", "Merge Q002: b")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "night-start: triage Q009, Opposition review")   # bookkeeping
     _git(repo, "checkout", "-q", "main")
     (repo / "trials.csv").write_text("writer\n")                     # an existing writer on main
     _git(repo, "add", "-A")

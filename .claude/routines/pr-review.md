@@ -25,7 +25,10 @@ python -m nightshift.protected $(git diff --name-only origin/dev...pr-<n>)
 ```
 Also check the diff for: files owned by existing writers (`data/ledger/`, `data/janus/`, `results/shadows/`,
 `results/systematic*/`, `data/processed/`, `.github/workflows/`), secrets, salts, licensed settlement prices,
-Norgate data, and a new test named for the item that the PR body shows failing before the fix.
+Norgate data, and a new test named for the item that the PR body shows failing before the fix. Run the suite
+with `NIGHT_SHIFT_STRICT=1`. A new test that would fail when an existing writer or Ethan later edits its own data
+or a document on main (it would then block systematic-monthly's or ledger-daily's commit) is a concern to file as a
+follow-up item, or a BLOCK (a) if it can fail on main's current data.
 
 ## 3. The Opposition
 Agent tool, `subagent_type: opposition`, with the diff and the queue row. Log it:

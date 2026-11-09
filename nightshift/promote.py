@@ -134,8 +134,10 @@ def compare_builds(a: Path, b: Path) -> list[dict]:
 
 
 def merged_item_ids(repo: Path, base: str, head: str) -> list[str]:
-    subjects = git(repo, "log", "--format=%s", f"{base}..{head}")
-    return sorted(set(re.findall(r"\b(Q\d{3,})\b", subjects)))
+    """Queue items merged into dev since base: only pr-review's merge commits ("Merge Qnnn: ..."), never ids that
+    merely appear in bookkeeping messages, so an unmerged item's declared Ledger diff can never excuse a difference."""
+    subjects = git(repo, "log", "--format=%s", f"{base}..{head}").splitlines()
+    return sorted({m.group(1) for s in subjects for m in [re.match(r"^Merge (Q\d{3,})\b", s)] if m})
 
 
 def unexplained(diffs: list[dict], intended: set[str]) -> list[dict]:
