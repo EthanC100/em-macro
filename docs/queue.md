@@ -95,7 +95,7 @@ The fix is in code; the bad row is ledger-daily's data and is not edited by hand
 ### Q007
 
 Raised by The Opposition on PR #27 (advisory, p=80%), checked by the orchestrator on dev 2317609:
-- `.github/workflows/systematic.yml:89` (step "Tests", id tests): `python -m pytest -q tests`, which runs before
+- `.github/workflows/systematic.yml:123` (step "Tests", id tests): `python -m pytest -q tests`, which runs before
   "Commit and push" and is not continue-on-error, so every test in `tests/` gates the monthly rebalance commit.
 - `tests/test_q003_todo_counts.py` (merged in #27) fails when `data/ledger/instruments.csv` changes a frequency
   without a matching edit of the `docs/todo.md` Technical line, and fails with "found 0" when that line is reworded
