@@ -1,0 +1,19 @@
+# Weekly brief (docs/agent-system.md, "Weekly brief"; routine .claude/routines/weekly-brief.md).
+schedule: "Saturday 08:00 Asia/Singapore"
+byline: "Ethan Cukierman, Horizons"
+audience: beginner          # plain words; every term explained the first time
+output_dir: briefs          # briefs/YYYY-MM-DD.pdf
+min_sources_per_level: 2    # every market level needs two independent public sources, or it is dropped or flagged
+on_unverified_level: flag   # flag | drop
+licensed_terms_forbidden:   # the brief never states a licensed settlement price
+  - settlement
+  - Databento
+  - Norgate
+
+delivery:
+  gmail_draft: true         # the routine creates a Gmail draft to the list (Gmail connector on the routine)
+  mailing_list: ""          # address or Google group of the list; empty = draft addressed to Ethan only (Needs Ethan)
+  auto_send: false          # when true, send through the mailing service below instead of leaving a draft
+  service:
+    name: buttondown        # suggested; any service with an HTTP send API works (docs/agent-system.md)
+    api_key_env: BRIEF_MAILER_API_KEY   # stored in the routine's cloud environment, never in the repo
