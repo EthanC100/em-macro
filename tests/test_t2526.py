@@ -131,7 +131,7 @@ def test_contract_files_in_norgate_units_read_by_unchanged_marketdata(store):
     with D.databento_layout(pd.Period("2027-02", "M"), base):
         md = CD.MarketData("HG")
         assert md.latest == DAYS[-1]
-        assert (md.contracts["ltd_source"].isin(["exchange rule", "norgate final settlement"])).all()
+        assert (md.contracts["ltd_source"].isin(["exchange rule", "exchange rule (Amendment 2)"])).all()
         assert (md.contracts["fnd_source"] != "norgate").all()             # exchange rules, not Norgate metadata
         assert md.rolls.index[-1] == pd.Period("2027-02", "M")
 
@@ -605,3 +605,60 @@ def test_evaluable_rule():
     allmiss = {**frozen, **{k: {"missing": list("abcdefg")} for k in gone}}
     e = M.evaluable(allmiss, {**active, **{k: 0 for k in gone}}, months, 7)
     assert e["longest_interruption"] == 3 and e["evaluable"]                  # 57 good months, 3-month gap
+
+
+# ============================================================================ Amendment 2
+def _drop_last_rows(base, code):
+    """Databento's final settlements end one trading day early: no final-flagged settlement on the last trade day."""
+    for q in (base / "contracts" / code).glob("*.csv"):
+        df = pd.read_csv(q)
+        if len(df) > 1 and df["date"].iloc[-1] < "2027-02-26":          # expired contracts only
+            df.iloc[:-1].to_csv(q, index=False)
+
+
+def test_amendment2_exchange_rule_ltd_on_databento_files(store):
+    root, base = store["root"], store["base"]
+    _write_norgate(root, "CL", store["series"]["CL"])
+    _drop_last_rows(base, "CL")
+    md_n = CD.MarketData("CL")
+    md_n.rolls
+    last = pd.Period("2026-10", "M")
+    with D.databento_layout(last, base):
+        md_d = CD.MarketData("CL")
+        assert isinstance(md_d, D._ORIGINAL_MARKETDATA) and type(md_d) is D._ExchangeRuleDates
+        raw_table = D._ORIGINAL_MARKETDATA.contracts.func(md_d)       # the a160bfd table as it would be
+        t = md_d.contracts
+        exp = t[~t["live"] & ~t["stopped_early"] & (t["ltd_rule"] >= pd.Timestamp("2023-03-01"))]
+        assert len(exp) > 20
+        assert (raw_table.loc[exp.index, "ltd"] < exp["ltd_rule"]).all()  # without A2: one day early
+        assert (exp["ltd"] == exp["ltd_rule"]).all() and (exp["notice"] == exp["ltd"]).all()
+        ch = D.compare_chains(md_n, md_d, pd.Period("2023-02", "M"), last)
+    assert ch["equal"], ch["differing_months"]
+    assert CD.MarketData is D._ORIGINAL_MARKETDATA                        # restored on exit
+    # the live sleeves read the same layout: built on the shortened files, the targets still compute
+    with D.databento_layout(pd.Period("2027-02", "M"), base):
+        assert CD.MarketData("CL").contracts["ltd_source"].str.contains("Amendment 2|exchange rule").all()
+
+
+def test_amendment2_rerun_runs_once(tmp_path, monkeypatch):
+    out = tmp_path / "prelive_amendment2.json"
+    out.write_text("{}")
+    monkeypatch.setattr(D, "PRELIVE_A2", out)
+    assert D.main(["check", "--amendment-2"]) == 1                      # refused: the single rerun already ran
+
+
+def test_golive_amend_keeps_m1_and_takes_the_rerun_universe(live, monkeypatch):
+    out = live["out"] / "GO_LIVE.json"
+    g0 = json.loads(out.read_text())
+    a2 = live["out"] / "prelive_amendment2.json"
+    assert "no Amendment 2 rerun" in M.golive_amend(prelive=a2, out=out)["reason"]
+    a2.write_text(json.dumps({"universe_after_check": {"T25": CODES[:6], "T26": CODES}}))
+    r = M.golive_amend(prelive=a2, out=out)
+    assert r["ok"] and r["M1"] == g0["M1"] and r["first_evaluation"] == g0["first_evaluation"]
+    assert r["N"] == {"T25": 6, "T26": 7} and r["amendment_2"]["before"]["N"] == g0["N"]
+    assert r["sr_pred"]["T25"] == round(0.4346 * math.sqrt(6 / 20), 4)
+    assert "already amended" in M.golive_amend(prelive=a2, out=out)["reason"]
+    g = json.loads(out.read_text())
+    g["confirmed"], g["amendment_2"] = True, None
+    out.write_text(json.dumps(g))
+    assert "already confirmed" in M.golive_amend(prelive=a2, out=out)["reason"]

@@ -106,6 +106,42 @@ def golive(today: date | None = None, prelive: Path = D.PRELIVE, out: Path | Non
     out = out or GO_LIVE
     if out.exists():
         return {"ok": False, "reason": "already live", **json.loads(out.read_text())}
+    return _golive_record(today, prelive, out)
+
+
+def golive_amend(prelive: Path = D.PRELIVE_A2, out: Path | None = None) -> dict:
+    """Amendment 2: replace the universe, N and SR_pred of a provisional (not yet confirmed) go-live record with
+    the single rerun's result. M1 and both evaluation dates are kept; refuses once go-live is confirmed."""
+    out = out or GO_LIVE
+    if not out.exists():
+        return {"ok": False, "reason": "no go-live record to amend"}
+    g = json.loads(out.read_text())
+    if g.get("confirmed"):
+        return {"ok": False, "reason": "go-live already confirmed: the universe is fixed"}
+    if g.get("amendment_2"):
+        return {"ok": False, "reason": "already amended by the Amendment 2 rerun"}
+    if not prelive.exists():
+        return {"ok": False, "reason": f"no Amendment 2 rerun ({prelive.name})"}
+    pre = json.loads(prelive.read_text())
+    uni = {k: list(pre["universe_after_check"].get(k, [])) for k in TRIALS}
+    small = [k for k in TRIALS if len(uni[k]) < 6]
+    if small:
+        return {"ok": False, "reason": f"fewer than 6 markets after the rerun: {small}"}
+    p0 = p0_hashes()
+    if not p0["ok"]:
+        return {"ok": False, "reason": f"P0: a160bfd files changed: {p0['mismatch']}"}
+    rec = {**g, "universe": uni, "N": {k: len(v) for k, v in uni.items()},
+           "sr_pred": {k: round(sr_pred(k, len(uni[k])), 4) for k in TRIALS}, "P0": p0,
+           "amendment_2": {"amended_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                           "prelive": f"results/shadows/{prelive.name}", "before": {"universe": g["universe"],
+                                                                                    "N": g["N"], "sr_pred": g["sr_pred"]},
+                           "commit": _commit()},
+           "rules": "docs/prereg/T25-T26_live_shadows.md with Amendments 1 and 2"}
+    out.write_text(json.dumps(rec, indent=1) + "\n")
+    return {"ok": True, **rec}
+
+
+def _golive_record(today: date, prelive: Path, out: Path) -> dict:
     if today >= date(2027, 5, 5):
         return {"ok": False, "reason": "on or after 5 May 2027: not evaluable (Amendment 1 A1.2 item 5)"}
     if not prelive.exists():
@@ -551,10 +587,11 @@ def main(argv=None) -> int:
     ap.add_argument("cmd", choices=["golive", "daily", "status", "evaluate"])
     ap.add_argument("--today", default=None)
     ap.add_argument("--date", default=None)
+    ap.add_argument("--amend", action="store_true", help="golive: apply the Amendment 2 rerun to a provisional record")
     a = ap.parse_args(argv)
     today = date.fromisoformat(a.today) if a.today else date.today()
     if a.cmd == "golive":
-        r = golive(today)
+        r = golive_amend() if a.amend else golive(today)
         print(json.dumps(r, indent=1))
         return 0 if r["ok"] else 1
     if a.cmd == "daily":

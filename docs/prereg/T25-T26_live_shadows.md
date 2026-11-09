@@ -400,3 +400,60 @@ on Norgate:
 **Not changed.** Everything else: the rules and code of T21 and T22 at a160bfd, the universe rule and its check, the
 three outcomes, the prediction, the margins, Holm, the dates, the operation and the disclosures. The ledger rows T25
 and T26 are updated to reference this amendment, changing no other row.
+
+## Amendment 2 — 2026-11-09, decided by the owner before go-live is confirmed
+
+**The rule, fixed by the owner before the investigation.**
+- If an exclusion's cause is an **implementation error** (the check not testing what A1.2 specifies, e.g. a date or
+  listing-convention mismatch in the comparison code), the code is fixed, recorded here with the diagnosis, and the
+  check is rerun **once** for all 18 markets. Whatever that single rerun says is final.
+- If the chains genuinely differ, the exclusions stand.
+- No threshold or definition of the check changes.
+
+### Diagnosis (counts and dates only)
+
+The first check (`results/shadows/prelive.json`, 9 Nov 2026) excluded CL, LE, 6E, 6B and 6M for "F1/F2 chain
+differs". All five passed the price test: 100% of common days within one tick, unit factor 1.
+
+**Common cause, in every market.**
+- On a contract's last trading day, Databento GLBX.MDP3 carries only the *preliminary* settlement; the final flag
+  is never set. Checked directly: CLH4 on 20 Feb 2024 and 6EM5 on 16 Jun 2025 each have one settlement record,
+  with stat_flags 2 and no final bit.
+- The history stores final settlements only, so every expired contract's Databento data ends **one trading day
+  before** its exchange-rule last trade date. This holds in 45/45 CL, 23/23 LE, 15/15 each of 6E, 6B and 6M, and
+  45/45 in RB, which passed.
+- The unchanged a160bfd contract table dates an expired contract's last trade to its **last data row**.
+- So on the Databento side, every expired contract's last trade date was one day early: neither the exchange rule
+  nor Norgate's date. Norgate's last row equals the exchange-rule date in 100% of these contracts.
+- A1.2 specifies the Databento-side chain **with the exchange-rule dates**. The check therefore compared the wrong
+  dates: an implementation error.
+
+**Per market.**
+
+| market | months differing | diagnosis |
+|---|---|---|
+| CL | 2023-05, 2024-01, 2025-12 | **Implementation error.** For a market whose notice date is its last trade date, the Amendment 3 guard (more than 10 trading days from the next execution to the last trade date) failed by one day on the shortened dates. Example: 2024-01, CL-2024H, guard window 10 days instead of 11. That moved F1 one contract later. |
+| 6E, 6B, 6M | 2023-11, 2024-02, 2024-05, 2025-02 (identical in all three) | **Implementation error,** the same guard effect: CME FX last trade dates fell one day early. Separately, Databento has no 6E final settlement for any contract on 17 Jun 2025, so its calendar dates 6EM5's exchange-rule last trade one day earlier than Norgate's (13 vs 16 Jun). By my reading of the roll rule this changes no chain. |
+| LE | 2023-03, 2024-05, 2025-01 | **Genuine difference.** LE's notice date is its first notice date. The a160bfd exchange rule (first business day of the contract month, e.g. 3 Apr 2023) differs from Norgate's first notice date (e.g. 10 Apr 2023) in all 23 contracts. In the three months the 35-day buffer falls between the two dates. This is the a160bfd rule table, which is frozen (P0), not the comparison code. The one-day last-trade error also affects LE, but does not cause these months. |
+
+### Fix (adapter only; no a160bfd file, threshold or definition changes)
+
+- `em_macro/t2526_data.py` `databento_layout` now presents the Databento files through `_ExchangeRuleDates`.
+- It is the a160bfd contract table, computed by its own code. For expired contracts, the last trade date is taken
+  from the exchange rule (`ltd_rule`), as for live contracts already, and notice is recomputed as min(first
+  notice, last trade). The 35-day rule, the Amendment 3 guard, the calendar and the first-notice rules are
+  unchanged.
+- The live sleeves use the same layout, so live roll dates follow the exchange rules as A1.2 item 1 already says.
+- The missing last-day settlement never reaches P&L: F1 is always rolled well before its last trade date (35-day
+  buffer and guard).
+
+### The single rerun
+
+- `python -m em_macro.t2526_data check --amendment-2`, run by the shadows-setup workflow in mode
+  `amendment-2-rerun`.
+- It checks all 18 markets again and writes `results/shadows/prelive_amendment2.json`. The code refuses a second
+  rerun.
+- `python -m em_macro.t2526 golive --amend` then gives the provisional go-live record the rerun's universe, N and
+  SR_pred. M1 (2026-12) and both evaluation dates are kept, and the previous values are recorded in the record.
+- Go-live is still confirmed only by P3 and P4 at M1's rebalance.
+- The original `prelive.json` is kept unchanged.

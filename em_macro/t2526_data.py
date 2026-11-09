@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+from functools import cached_property
 import json
 import shutil
 import sys
@@ -42,6 +43,7 @@ ONE_OFF_CAP_USD = 20.00
 TOLERANCE_SHARE = 0.99                       # one tick on >= 99% of common days (Build 0 A5)
 AVAIL = ROOT / "results/T25-T26/availability.json"
 PRELIVE = ROOT / "results/shadows/prelive.json"
+PRELIVE_A2 = ROOT / "results/shadows/prelive_amendment2.json"     # the single rerun of Amendment 2 (final)
 NORGATE_END = date(2027, 5, 5)               # Amendment 1 A1.2: the Norgate subscription ends about then
 MONTH_CODES = CD.MONTH_CODES
 
@@ -77,18 +79,45 @@ def raw_symbols(code: str, y: int, m: int) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- the redirect
+_ORIGINAL_MARKETDATA = CD.MarketData
+
+
+class _ExchangeRuleDates(_ORIGINAL_MARKETDATA):
+    """Amendment 2: on the Databento files every contract's last trade date is the exchange rule.
+
+    The unchanged a160bfd contract table dates an expired contract's last trade to its last data row ("final
+    settlement row"). That holds for Norgate's files, whose last row is the expiry-day settlement. It does not hold
+    for Databento GLBX.MDP3: on a contract's last trading day the feed carries only the preliminary settlement (the
+    final flag is never set), so the stored final settlements end one trading day early. Amendment 1 A1.2 specifies
+    exchange-rule dates on the Databento side; this applies them to expired contracts too (live and stopped-early
+    contracts already use the rule), and recomputes notice = min(first notice, last trade) with the a160bfd rule.
+    Nothing else in the table, the roll rule, the guard or the calendar changes."""
+
+    @cached_property
+    def contracts(self) -> pd.DataFrame:
+        t = _ORIGINAL_MARKETDATA.contracts.func(self).copy()       # the a160bfd table, computed by its own code
+        exp = ~t["live"] & ~t["stopped_early"]
+        t.loc[exp, "ltd"] = t.loc[exp, "ltd_rule"]
+        t.loc[exp, "ltd_source"] = "exchange rule (Amendment 2)"
+        t["notice"] = t[["fnd", "ltd"]].min(axis=1)
+        return t
+
+
 @contextlib.contextmanager
 def databento_layout(end_month: pd.Period, base: Path | None = None):
-    """Point the unchanged a160bfd data layer at the Databento contract files (process-local, restored on exit)."""
+    """Point the unchanged a160bfd data layer at the Databento contract files (process-local, restored on exit):
+    the snapshot folder, no Norgate metadata (exchange-rule first notice dates), the last schedule month, and
+    (Amendment 2) exchange-rule last trade dates for expired contracts."""
     base = base or base_dir()
-    orig = (CD.snapshot_dir, CD.norgate_metadata, CD.ASSEMBLY_END_MONTH)
+    orig = (CD.snapshot_dir, CD.norgate_metadata, CD.ASSEMBLY_END_MONTH, CD.MarketData)
     CD.snapshot_dir = lambda snapshot=None: base
     CD.norgate_metadata = lambda: None
     CD.ASSEMBLY_END_MONTH = end_month
+    CD.MarketData = _ExchangeRuleDates
     try:
         yield base
     finally:
-        CD.snapshot_dir, CD.norgate_metadata, CD.ASSEMBLY_END_MONTH = orig
+        CD.snapshot_dir, CD.norgate_metadata, CD.ASSEMBLY_END_MONTH, CD.MarketData = orig
 
 
 # ----------------------------------------------------------------------------- raw store
@@ -479,7 +508,8 @@ def p1(code: str, raw: pd.DataFrame) -> dict:
             "qualifies_T26": bool(r["in_T22"] and f1 >= AV.COVERAGE_MIN)}
 
 
-def check(codes: list[str] | None = None, base: Path | None = None, write: bool = True, log=print) -> dict:
+def check(codes: list[str] | None = None, base: Path | None = None, write: bool = True, log=print,
+          out_path: Path | None = None) -> dict:
     """Amendment 1 A1.2 check, once, before go-live. Writes counts only to results/shadows/prelive.json and, for the
     passing markets, the per-contract files in Norgate units."""
     base = base or base_dir()
@@ -525,8 +555,9 @@ def check(codes: list[str] | None = None, base: Path | None = None, write: bool 
                "markets": out, "universe_after_check": after}
     if write:
         (base / "factors.json").write_text(json.dumps(factors, indent=1))
-        PRELIVE.parent.mkdir(parents=True, exist_ok=True)
-        PRELIVE.write_text(json.dumps(summary, indent=1) + "\n")
+        out_path = out_path or PRELIVE
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(summary, indent=1) + "\n")
     return summary
 
 
@@ -535,6 +566,7 @@ def main(argv=None) -> int:
     ap.add_argument("cmd", choices=["history", "check", "update"])
     ap.add_argument("--today", default=None)
     ap.add_argument("--commit", action="store_true", help="history: commit and push each piece as it is stored")
+    ap.add_argument("--amendment-2", action="store_true", help="check: the single Amendment 2 rerun (all 18 markets)")
     a = ap.parse_args(argv)
     today = date.fromisoformat(a.today) if a.today else date.today()
     if a.cmd == "history":
@@ -547,7 +579,17 @@ def main(argv=None) -> int:
         if date.today() >= NORGATE_END:
             print("refused: on or after 5 May 2027 the Norgate snapshot is deleted (Amendment 1 A1.2 item 5)")
             return 1
-        s = check()
+        if a.amendment_2:
+            # Amendment 2: one rerun, for all 18 markets, with the corrected comparison; its result is final
+            if PRELIVE_A2.exists():
+                print("refused: the Amendment 2 rerun has already run (results/shadows/prelive_amendment2.json); "
+                      "its result is final")
+                return 1
+            s = check(all_markets(), out_path=PRELIVE_A2)
+            s["amendment"] = "Amendment 2: single rerun with exchange-rule last trade dates on the Databento side"
+            PRELIVE_A2.write_text(json.dumps(s, indent=1) + "\n")
+        else:
+            s = check()
         print(json.dumps(s["universe_after_check"]))
         return 0
     r = update(today=today)

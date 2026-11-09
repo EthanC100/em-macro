@@ -21,6 +21,12 @@ on:
         type: choice
         options: ["yes", "no"]
         default: "yes"
+      mode:
+        description: "setup, or amendment-2-rerun: the single rerun of the check for all 18 markets (final) and the
+          provisional go-live record amended with its universe"
+        type: choice
+        options: ["setup", "amendment-2-rerun"]
+        default: "setup"
 
 permissions:
   contents: write
@@ -79,6 +85,7 @@ jobs:
             norgate/2026-11_financials/contracts/6M
 
       - name: Databento history (one-off, quoted first, cap US$20 including earlier runs)
+        if: inputs.mode == 'setup'
         timeout-minutes: 200       # below the job's 240, so the steps that commit what was stored still run
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
@@ -92,7 +99,7 @@ jobs:
           python -m em_macro.t2526_data history --commit 2>&1 | tee "$RUNNER_TEMP/history.log"
 
       - name: Store the history privately
-        if: always()
+        if: always() && inputs.mode == 'setup'
         run: |
           cd .em-macro-data
           git config user.name "github-actions[bot]"
@@ -101,16 +108,33 @@ jobs:
           git diff --cached --quiet || { git commit -q -m "Shadows T25-T26: Databento history (remaining pieces)"; git pull -q --rebase; git push -q; }
 
       - name: Check against the Norgate snapshot (counts only)
+        if: inputs.mode == 'setup'
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
           PYTHONUNBUFFERED: "1"
         run: python -m em_macro.t2526_data check 2>&1 | tee "$RUNNER_TEMP/check.log"
 
       - name: Go-live record (P0, universe, M1, evaluation dates)
-        if: inputs.golive == 'yes'
+        if: inputs.mode == 'setup' && inputs.golive == 'yes'
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
         run: python -m em_macro.t2526 golive 2>&1 | tee "$RUNNER_TEMP/golive.log"; exit "${PIPESTATUS[0]}"
+
+      # Amendment 2 (docs/prereg/T25-T26_live_shadows.md): the check reruns once for all 18 markets with the corrected
+      # comparison; the code refuses a second rerun, and whatever it says is final. The provisional go-live record
+      # (M1 and both dates kept) then takes the rerun's universe, N and SR_pred.
+      - name: Amendment 2 rerun of the check (once, all 18 markets, final)
+        if: inputs.mode == 'amendment-2-rerun'
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          PYTHONUNBUFFERED: "1"
+        run: python -m em_macro.t2526_data check --amendment-2 2>&1 | tee "$RUNNER_TEMP/check.log"; exit "${PIPESTATUS[0]}"
+
+      - name: Amend the provisional go-live record
+        if: inputs.mode == 'amendment-2-rerun'
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m em_macro.t2526 golive --amend 2>&1 | tee "$RUNNER_TEMP/golive.log"; exit "${PIPESTATUS[0]}"
 
       - name: Commit the private contract files and the public records
         if: always()
@@ -124,7 +148,7 @@ jobs:
           [ -d results/shadows ] || { echo "nothing to commit"; exit 0; }
           git add results/shadows
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
-          git commit -m "Shadows T25-T26: pre-live check (counts only) and go-live record"
+          git commit -m "Shadows T25-T26 (${{ inputs.mode }}): pre-live check (counts only) and go-live record"
           for i in 1 2 3 4; do
             if git push origin HEAD:main; then exit 0; fi
             sleep $((i * 3)); git pull --rebase origin main
