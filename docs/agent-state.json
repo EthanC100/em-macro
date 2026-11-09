@@ -33,6 +33,16 @@
    "note": "Q003 implemented (PR #27), reviewed, merged into dev",
    "session": "https://claude.ai/code/session_01Ayx8qeLpHu9tU83oY5YgvB",
    "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": null,
+   "finished_at": "2026-11-09T23:18:41+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "check only (dry run): refused on (c) protected paths and (b) app.js/lab.json, both from the unmerged setup PR; as if merged: all checks pass, only todo.json (Q003) differs",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
