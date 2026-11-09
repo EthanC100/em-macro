@@ -1,0 +1,17 @@
+{
+  "name": "frozen tags: v1.0-frozen and v1.1-frozen never move",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/tags/v1.0-frozen", "refs/tags/v1.1-frozen"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "update" }
+  ]
+}

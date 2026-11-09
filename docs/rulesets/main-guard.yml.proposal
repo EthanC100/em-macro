@@ -1,0 +1,51 @@
+# PROPOSAL, not active (docs/agent-system.md, "Identity finding", option C). To enable: copy this file to
+# .github/workflows/main-guard.yml in a PR you merge yourself. It only reads and alerts; it never reverts.
+#
+# Every push to main is checked: a commit that was not part of a merged pull request and that touches a protected
+# path (.github/CODEOWNERS block) opens "[ALERT] direct push to a protected path". This catches what the ruleset
+# cannot: the night shift and Janus/clerk sessions push as the same GitHub user (the admin role bypasses the
+# ruleset), so only the paths, not the identity, can tell an allowed write from a forbidden one.
+name: main-guard
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Protected paths changed outside a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          pip install -q pyyaml
+          hits=""
+          for c in $(git rev-list "$BEFORE..$AFTER" 2>/dev/null || git rev-list -1 "$AFTER"); do
+            prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$c/pulls" --jq 'map(select(.merged_at != null)) | length' 2>/dev/null || echo 0)
+            [ "$prs" != "0" ] && continue
+            # existing writers' legitimate direct writes: Actions workflows (ledger-daily writes results/shadows at
+            # go-live, private-commitments and ledger-daily append seals), and pure appends to the audit chain made
+            # through scripts/ledger_commit.sh by Janus / clerk sessions
+            [ "$(git log -1 --format=%ae "$c")" = "41898282+github-actions[bot]@users.noreply.github.com" ] && continue
+            files=$(git diff-tree --no-commit-id --name-only -r "$c")
+            if git diff "$c~1" "$c" -- data/ledger/seals.jsonl | grep -q '^-[^-]'; then :; else
+              files=$(echo "$files" | grep -v '^data/ledger/seals.jsonl$' || true)
+            fi
+            p=$(python -m nightshift.protected $files || true)
+            [ -n "$p" ] && hits="$hits\n$c $(git log -1 --format='%an: %s' "$c")\n$p"
+          done
+          if [ -n "$hits" ]; then
+            printf "Direct push to protected paths on main:%b\n" "$hits" > /tmp/body.md
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "[ALERT] direct push to a protected path" --label alert --body-file /tmp/body.md
+          fi
