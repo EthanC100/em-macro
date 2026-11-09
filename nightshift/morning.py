@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
+import tempfile
 import subprocess
 import sys
 from datetime import date, datetime, timedelta
@@ -50,9 +52,15 @@ def promoted(day: date) -> str:
     return f"no - {'check only: ' if r.get('mode') == 'check only' else ''}{why}"
 
 
+MERGE_SUBJECT = re.compile(r"^(Merge Q\d{3,}|Q\d{3,}:|night-start: merge main)")
+
+
 def merged_into_dev(dev: str, since: datetime) -> list[str]:
-    out = _git("log", dev, "--first-parent", f"--since={since.isoformat()}", "--format=%h %s")
-    return [l for l in out.splitlines() if l][:6]
+    """Queue merges and the main sync on dev's first-parent line; bookkeeping commits are only counted."""
+    out = [l for l in _git("log", dev, "--first-parent", f"--since={since.isoformat()}", "--format=%h %s").splitlines() if l]
+    real = [l for l in out if MERGE_SUBJECT.match(l.split(" ", 1)[1] if " " in l else "")]
+    other = len(out) - len(real)
+    return real[:6] + ([f"({other} bookkeeping commit(s): state, queue, logs)"] if other else [])
 
 
 def night_runs(st: dict, night: str) -> list[dict]:
@@ -84,6 +92,11 @@ def verify_runs(runs: list[dict], dev: str, exploration_rows: list[dict], night_
 def janus_section(today: date) -> list[str]:
     from ledger import janus as J
     recs = J.load()
+    live = _git("show", "origin/main:data/janus/records.jsonl")        # the existing Janus tasks write to main
+    if live:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
+            f.write(live + "\n")
+        recs = J.load(Path(f.name))
     rs, bs = J.review_status(recs, today), J.budget_status(recs, today)
     pos = J.positions(recs)
     open_pos = [k for k, v in pos.items() if (v.get("status") or "") in ("open", "pending")]
