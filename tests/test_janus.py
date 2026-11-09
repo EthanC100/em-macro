@@ -40,9 +40,15 @@ def pos(**over):
     return p
 
 
+SOURCES_READ = [{"title": "FOMC statement", "url": "https://www.federalreserve.gov/s"},
+                {"title": "CFTC Commitments of Traders", "url": "https://www.cftc.gov/cot"}]
+BELOW = {"condition": "US CPI release on 12 Nov decides the December Fed call; sizing up before it is a coin toss",
+         "until": "2026-11-18", "reasoning": "Add the rates ideas after the CPI print."}
+
+
 def review(**over):
     p = {"session": "daily_review", "model": "claude-opus-5-5", "market_summary": "Rates elevated.", "reviews": [],
-         "new_positions": [pos()], "no_trade_reasoning": ""}
+         "new_positions": [pos()], "no_trade_reasoning": "", "sources_read": SOURCES_READ, "below_budget": BELOW}
     p.update(over)
     return p
 
@@ -189,8 +195,12 @@ def test_commodity_roll_rule_and_capacity_cap():
 def test_cli_rejects_a_bad_proposal_with_exit_1(tmp_path):
     f = tmp_path / "p.json"
     f.write_text(json.dumps(review(new_positions=[pos(risk_pct=5)])))
+    # an isolated private store: the CLI never clones the real em-macro-data from a test
+    env = {**__import__("os").environ, "EM_MACRO_DATA": str(tmp_path / "no-store"),
+           "DATA_REPO_URL": str(tmp_path / "no-such-repo.git")}
+    env.pop("DATA_REPO_READ_TOKEN", None)
     out = subprocess.run([sys.executable, "-m", "ledger.janus", "propose", "--file", str(f), "--dry-run"], cwd=ROOT,
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, env=env)
     assert out.returncode == 1 and "REJECTED" in out.stderr and "per-position limit" in out.stdout
 
 
@@ -221,3 +231,109 @@ def test_market_probability_is_recorded(tmp_path):
     assert J.apply_proposal(review(new_positions=[n]), now=NOW, path=path, marks_rows=MARKS)["ok"]
     o = J.positions(J.load(path))["J001"]["open"]
     assert (o["market_probability"], o["market_basis"]) == (38.0, "prediction market") and "Kalshi" in o["market_source"]
+
+
+# ----------------------------------------------------------------------------- mandate of 2026-11-09
+SAT = datetime(2026, 11, 14, 23, 7, tzinfo=timezone.utc)
+MON = datetime(2026, 11, 16, 23, 7, tzinfo=timezone.utc)
+NO_TRADE = dict(new_positions=[], no_trade_reasoning="Waiting for CPI on the rates ideas.")
+
+
+def idea(**over):
+    d = {"instrument": "US10Y", "direction": "long", "risk_pct": 1.0, "probability": 57, "market_probability": 50,
+         "thesis": "Growth is slowing; enter at Monday's mark."}
+    d.update(over)
+    return d
+
+
+@pytest.mark.parametrize("sr", [[], None, [{"title": "a note without a link"}], [{"title": "x", "url": "ftp://x"}]])
+def test_daily_review_without_research_is_rejected(tmp_path, sr):
+    res = J.apply_proposal(review(sources_read=sr), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any("sources_read is empty" in e and "counts as failed" in e for e in res["errors"])
+    assert not (tmp_path / "r.jsonl").exists()
+
+
+@pytest.mark.parametrize("bb, expect", [
+    (None, "below the 3% budget"),
+    ({"condition": "no clear edge in rates", "until": "2026-11-18", "reasoning": "x"}, "specific event or condition"),
+    ({"condition": "Nothing compelling across the universe", "until": "2026-11-18", "reasoning": "x"}, "specific event"),
+    ({"condition": "uncertainty", "until": "2026-11-18", "reasoning": "x"}, "specific event"),
+    ({"condition": "US CPI release on 12 Nov decides the Fed call", "until": "2027-01-30", "reasoning": "x"}, "until"),
+    ({"condition": "US CPI release on 12 Nov decides the Fed call", "until": "2026-11-18", "reasoning": ""}, "reasoning"),
+])
+def test_below_three_percent_needs_a_specific_dated_reason(tmp_path, bb, expect):
+    res = J.apply_proposal(review(below_budget=bb), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
+
+
+def test_three_percent_needs_no_reason_and_the_run_records_the_budget(tmp_path):
+    path = tmp_path / "r.jsonl"
+    three = [pos(instrument="US10Y", stop=5.10), pos(instrument="DE10Y", stop=3.50), pos(instrument="GB10Y", stop=5.40)]
+    res = J.apply_proposal(review(new_positions=three, below_budget=None), now=NOW, path=path, marks_rows=MARKS)
+    assert res["ok"], res["errors"]
+    run = next(r for r in J.load(path) if r["type"] == "run")
+    assert run["risk_after_pct"] == 3.0 and run["sources_read"] == SOURCES_READ and "below_budget" not in run
+    # a later review below budget records its reason
+    res = J.apply_proposal(review(reviews=[{"id": "J001", "action": "close", "reasoning": "CPI trigger fired."},
+                                          {"id": "J002", "action": "hold", "reasoning": "On track."},
+                                          {"id": "J003", "action": "hold", "reasoning": "On track."}], **NO_TRADE),
+                           now=NOW, path=path, marks_rows=MARKS)
+    assert res["ok"], res["errors"]
+    run = [r for r in J.load(path) if r["type"] == "run"][-1]
+    assert run["risk_after_pct"] == 2.0 and run["below_budget"] == BELOW
+
+
+def test_weekend_review_may_defer_named_ideas(tmp_path):
+    path = tmp_path / "r.jsonl"
+    ideas = [idea(), idea(instrument="DE10Y", risk_pct=1.0), idea(instrument="EUR", risk_pct=1.0)]
+    res = J.apply_proposal(review(below_budget=None, deferred_ideas=ideas, **NO_TRADE), now=SAT, path=path, marks_rows=MARKS)
+    assert res["ok"], res["errors"]
+    assert [r for r in J.load(path) if r["type"] == "run"][-1]["deferred_ideas"] == ideas
+    # still must research
+    res = J.apply_proposal(review(below_budget=None, deferred_ideas=ideas, sources_read=[], **NO_TRADE), now=SAT,
+                           path=tmp_path / "x.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any("sources_read" in e for e in res["errors"])
+    # ideas worth less than the budget still need a reason; a weekday cannot defer
+    res = J.apply_proposal(review(below_budget=None, deferred_ideas=ideas[:1], **NO_TRADE), now=SAT,
+                           path=tmp_path / "y.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any("below the 3% budget" in e for e in res["errors"])
+    res = J.apply_proposal(review(below_budget=None, deferred_ideas=ideas, **NO_TRADE), now=MON,
+                           path=tmp_path / "z.jsonl", marks_rows=MARKS)
+    assert not res["ok"] and any("weekend and market-holiday reviews only" in e for e in res["errors"])
+    res = J.apply_proposal(review(below_budget=None, deferred_ideas=ideas, market_holiday="US Thanksgiving", **NO_TRADE),
+                           now=MON, path=tmp_path / "h.jsonl", marks_rows=MARKS)
+    assert res["ok"], res["errors"]
+    bad = J.apply_proposal(review(below_budget=None, deferred_ideas=[idea(instrument="PLATINUM")], **NO_TRADE),
+                           now=SAT, path=tmp_path / "b.jsonl", marks_rows=MARKS)
+    assert not bad["ok"] and any("not in the universe" in e for e in bad["errors"])
+
+
+def test_quick_check_flags_a_failed_or_missing_review_and_low_risk(tmp_path):
+    path = tmp_path / "r.jsonl"
+    # a pre-mandate review with no sources_read, written directly (the CLI now rejects it)
+    J.append(J.load(path), {"type": "run", "session": "daily_review", "date": "2026-11-08", "model": "m",
+                            "decided_at": "2026-11-08T23:07:00+00:00", "status": "ok", "n_new": 0, "n_reviews": 0,
+                            "sources_read": []}, path)
+    t = datetime(2026, 11, 9, 10, 15, tzinfo=timezone.utc)
+    rec = J.record_check(["none"], "no change", "claude-opus-5-5", now=t, path=path)
+    assert any("failed: empty sources_read" in f and "before the 2026-11-09" in f for f in rec["flags"])
+    assert any("below the 3% budget" in f for f in rec["flags"])
+    assert "FLAG:" in J.summarize(J.load(path), MARKS, t.date())["last_check"]["result"]
+    # a researched review with a current reason clears both flags
+    res = J.apply_proposal(review(**NO_TRADE), now=datetime(2026, 11, 9, 23, 7, tzinfo=timezone.utc), path=path,
+                           marks_rows=MARKS)
+    assert res["ok"], res["errors"]
+    rec = J.record_check(["none"], "no change", "claude-opus-5-5", now=datetime(2026, 11, 10, 9, 15, tzinfo=timezone.utc),
+                         path=path)
+    assert "flags" not in rec
+    # two days without a review: missing
+    rec = J.record_check(["none"], "no change", "claude-opus-5-5", now=datetime(2026, 11, 12, 9, 15, tzinfo=timezone.utc),
+                         path=path)
+    assert any("no daily review since 2026-11-09" in f for f in rec["flags"])
+    ctx_status = J.review_status(J.load(path), date(2026, 11, 12))
+    assert ctx_status["status"] == "missing" and ctx_status["sources_read"] == 2
+
+
+def test_existing_limits_are_unchanged():
+    assert (J.MAX_RISK_POS, J.MAX_RISK_TOTAL, J.MAX_OPEN) == (2.0, 10.0, 8)
+    assert J.RISK_BUDGET == (3.0, 10.0) and J.SMALL_EDGE_RISK == (0.25, 0.5) and J.TYPICAL_POSITIONS == (2, 6)

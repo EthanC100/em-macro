@@ -12,6 +12,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C02 | 2026-11-04 | the 3 December 2026 rebalance (positions effective 2026-12) | **v1.1 added**, run live in parallel with v1.0: v1.1 = frozen v1.0 + exactly the T18 rule (risk-unit no-trade band 0.1 × the position's risk budget and partial rebalancing w + 0.5 (w* − w), replacing v1.0's 25% relative band). v1.0 remains the frozen control. | T18 passed its pre-registered rule (4 of 4 criteria at 1x costs; `results/T16-T19_risk_batch.md`). | None. No v1.0 file, parameter, input snapshot or result changed; `python -m em_macro.verify_v1` reproduces v1.0 exactly. v1.1 has its own code, outputs and freeze record (`docs/v1.1_freeze.md`). |
 | C03 | 2026-11-06 | the 3 December 2026 rebalance (positions effective 2026-12) | Paper capital for the algorithm (v1.0 and v1.1) set to US$500,000,000, replacing C01's US$10,000,000. Recorded before any live month is booked (no live month has been booked yet; November 2026 is booked on 3 December). | Capacity: to see the strategy at an institutional size, with capacity checks and a market-impact estimate shown beside the official P&L (diagnostic only). | None. All results stay in percentages of capital; only notional amounts change. `python -m em_macro.verify_v1` and `python -m em_macro.systematic_v11 verify` reproduce v1.0 and v1.1 byte for byte (2026-11-06). |
 | C04 | 2026-11-06 | the fund's start (the first date both members are live: 30 November 2026, v1.1's index start) | **Horizons fund view added**: a combined view of Algorithm v1.1 (risk share 90%; 80% from the 2026-11-07 amendment) and Janus (10%; 20% from the 2026-11-07 amendment), combined by risk (risk share ÷ trailing volatility, capital shares until 6 months of data). Janus's share changes only by the rule in `docs/fund/allocation.md`: 20% after 30 resolved calls with positive net P&L and a better Brier score than the market on those calls (amended 2026-11-06: every Janus position must record a market probability, 50 where none exists); 5% while its drawdown exceeds 10%. Amended 2026-11-07, before the fund starts and before any Janus call resolved: Janus starts at 20%; after 30 resolved calls, 30% with positive net P&L and a better Brier score than the market, 10% with negative net P&L or a worse Brier score; 5% while its drawdown exceeds 10%, overriding. My decisions stay outside. | To see the books as one fund without changing any of them. | None. The fund is read-only (`ledger/fund.py`): no book's record, P&L, rule or result changes, and no fund figure is written into any book. |
+| C05 | 2026-11-09 | the next Janus daily review (9 November 2026) | **Janus mandate**: (a) research is required: every daily review researches the main drivers across its universe (central banks, data, geopolitics, positioning) on the web before deciding and records what it read in `sources_read`; a review with empty `sources_read` is rejected and counts as failed, and the quick check flags it. (b) Risk budget: normally 2-6 positions and 3-10% of the account at risk, best ideas even at modest conviction (e.g. 55%), size scaled with conviction and edge over the market probability (a small edge: 0.25-0.5% at risk); below 3% only with a specific written reason tied to an identifiable event or condition; weekend and holiday reviews may defer entries but must research and name the ideas. Set blind: no Janus position had ever been opened. | The first four reviews (6-8 November) opened nothing with general "no edge" reasoning, three of them with no recorded research. | None. Janus is a separate paper book: no algorithm, frozen result or other book changes. All existing Janus limits stay (2% per position, 10% total, 8 open, capacity, costs, The Opposition, `market_probability`). |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -344,3 +345,39 @@ the quick-check task's API trigger, is removed, and the `JANUS_FIRE_URL` / `JANU
   - Evaluated at each month start on data to the previous month end, as before. Nothing else changed: members,
     the risk combination, the volatility window, the 6-month fallback and the market-probability requirement.
     Rule text: `docs/fund/allocation.md`; code: `ledger/fund.py`.
+
+## C05 — Janus mandate: research required, 3-10% risk budget (2026-11-09)
+
+Recorded on 2026-11-09 and effective from the next daily review. It was set by the owner **blind**: Janus had never
+opened a position, so no Janus result informed it.
+
+**Why.** Janus's first four daily reviews (6, 6, 7 and 8 November) all opened nothing, each with a general "no
+defensible edge" reason. Three of them recorded no `sources_read` at all.
+
+**(a) Research is required.**
+- Every daily review does web research on the main drivers across its universe before deciding: central banks,
+  data, geopolitics and positioning. It records what it read in `sources_read`, with URLs.
+- `ledger/janus.py` rejects a daily review with empty `sources_read`. Such a review counts as failed.
+- Every quick check record carries the CLI's flags, added by the CLI itself: a failed review (empty
+  `sources_read`), or no daily review since yesterday. The Janus page shows them with the last check.
+
+**(b) Risk budget.**
+- Janus normally holds 2-6 positions using 3-10% of the account at risk. It chooses its best ideas even at modest
+  conviction (for example 55%).
+- Size scales with conviction and with the edge over the market probability. A small edge gets a small position,
+  0.25-0.5% at risk. The runbook gives a sizing table; only the 2% per-position limit is enforced in code.
+- It may hold less than 3% at risk only with a specific written reason tied to an identifiable event or condition,
+  in `below_budget`: `condition`, `until` (at most 30 days ahead) and `reasoning`. A general "no edge" is not a
+  reason. The CLI rejects a review that leaves the account below 3% without one, and rejects a generic condition.
+- Weekend and market-holiday reviews may defer new entries to the next trading day with `deferred_ideas`, but must
+  still research and name the ideas.
+- A quick check flags the account below 3% without a current reason.
+
+**Unchanged.** Every existing limit: 2% at risk per position, 10% in total, 8 open positions, capacity, costs, The
+Opposition and `market_probability`. Also unchanged: the fill rule (the next official daily mark), stops that only
+tighten, and the append-only hash-chained record. Records made before this change are not edited. The 8 November
+review, which recorded no `sources_read`, is shown as failed "before the research rule".
+
+**Where:** `docs/janus/daily_review.md` (Mandate), `docs/janus/quick_check.md` (flags), `ledger/janus.py`
+(`_check_mandate`, `review_status`, `budget_status`, `mandate_flags`) and `tests/test_janus.py`.
+

@@ -38,6 +38,14 @@ From it, note the following. If a module is missing, run `pip install -q -r requ
   would change Janus's mind), `mark` and `mark_date` (the latest official daily mark), `net_pnl_pct` and
   `distance_to_stop_pct_account`.
 - **`last_check`**, and your own model string (from your system prompt, e.g. `claude-opus-5-5`).
+- **`flags`**: the mandate's flags, computed by the CLI. Flags are raised for:
+  - a failed daily review (empty `sources_read`);
+  - no daily review since yesterday;
+  - the account below 3% at risk without a current specific reason.
+
+  The CLI attaches them to your check record by itself. Also start your `--result` line with `FLAG:` and the flag,
+  for example `FLAG: daily review 2026-11-08 failed (empty sources_read); no change`. A quick check never opens a
+  position to fix a risk-budget flag: only the daily review opens positions.
 
 If there are **no open positions**, skip to step 4 and record `--positions none --result "no open positions; no change"`.
 

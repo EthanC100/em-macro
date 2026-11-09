@@ -38,6 +38,10 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     probability, a 2-3 sentence thesis, what would change its mind, at least one source URL, and The Opposition;
     a reason for every review; a daily review reviews every open position and gives no-trade reasoning when it opens
     nothing; a quick check cannot open positions;
+  * mandate of 2026-11-09: a daily review must record its web research in ``sources_read`` (rejected otherwise), and
+    may leave the account below 3% at risk only with ``below_budget`` {condition, until, reasoning} naming a specific
+    event or condition (or, on a weekend or market holiday, ``deferred_ideas`` for the next trading day); every quick
+    check record carries the CLI's flags (a failed or missing daily review, risk below budget without a reason);
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -75,6 +79,17 @@ DIR = ROOT / "data/janus"
 RECORDS = DIR / "records.jsonl"
 ACCOUNT_USD = CAP.JANUS_CAPITAL
 MAX_RISK_POS, MAX_RISK_TOTAL, MAX_OPEN = 2.0, 10.0, 8
+# Mandate of 2026-11-09 (docs/janus/daily_review.md; docs/config_changes.md C05), set before any position was opened
+MANDATE_FROM = date(2026, 11, 9)
+RISK_BUDGET = (3.0, 10.0)            # normal % of the account at risk; below 3% only with a specific, dated reason
+TYPICAL_POSITIONS = (2, 6)
+SMALL_EDGE_RISK = (0.25, 0.5)        # % at risk for a small edge over the market probability
+RESEARCH_DRIVERS = ("central banks", "data", "geopolitics", "positioning")
+BELOW_BUDGET_MAX_DAYS = 30           # below_budget.until: when the condition resolves or is reassessed
+GENERIC_REASON = re.compile(
+    r"\b(no|lack of|without|absence of)\s+(an?\s+|clear\s+|real\s+|defensible\s+|obvious\s+|strong\s+|good\s+)*"
+    r"(edge|view|conviction|opportunit\w*|set-?ups?|trades?|ideas?)\b|\bnothing\s+(clears|compelling|stands)|"
+    r"^\s*(uncertainty|volatility|markets? (are|is) (uncertain|volatile)|wait and see)\W*$", re.I)
 MIN_HORIZON_DAYS, MAX_HORIZON_DAYS = 5, 190
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
@@ -534,6 +549,9 @@ def _last_check(records: list[dict]) -> dict | None:
     for r in records:
         if r["type"] == "check":
             best = {"time": r["time"], "session": "quick_check", "result": r["result"], "positions": r["positions"]}
+            if r.get("flags"):
+                best["flags"] = r["flags"]
+                best["result"] = f"{r['result']} · FLAG: " + "; ".join(r["flags"])
         elif r["type"] == "run":
             what = (f"{r.get('n_reviews', 0)} review(s), {r.get('n_new', 0)} new position(s)" if r.get("session")
                     else "weekly run (API, before sessions)")
@@ -846,7 +864,116 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
         n_open += 1
         new.append({**n, "instrument": inst, "direction": direction, "risk_pct": round(risk, 4), "stop": stop,
                     "probability": prob, "horizon": hz.isoformat()})
+    if session == "daily_review":
+        errors += _check_mandate(ans, total, today)
     return reviews, new, errors
+
+
+def _valid_sources(xs) -> list[dict]:
+    return [x for x in (xs or []) if isinstance(x, dict) and _url_ok(x.get("url"))]
+
+
+def non_trading_day(ans: dict, today: date) -> bool:
+    """A weekend, or a market holiday named in the proposal (``market_holiday``)."""
+    return today.weekday() >= 5 or bool(str(ans.get("market_holiday") or "").strip())
+
+
+def _check_mandate(ans: dict, risk_after: float, today: date) -> list[str]:
+    """The 2026-11-09 mandate: research is required (sources_read), and the account normally holds 3-10% at risk.
+    Below 3% only with a specific written reason tied to an identifiable event or condition (below_budget), or, on a
+    weekend or market holiday, with the researched ideas named for the next trading day (deferred_ideas)."""
+    errs = []
+    if not _valid_sources(ans.get("sources_read")):
+        errs.append("sources_read is empty: every daily review must research the main drivers across its universe ("
+                    + ", ".join(RESEARCH_DRIVERS) + ") on the web before deciding and list what it read with URLs; "
+                    "a review without it counts as failed")
+    deferred, d_risk = [], 0.0
+    for i, d in enumerate(ans.get("deferred_ideas") or [], 1):
+        tag = f"deferred idea {i}"
+        if not isinstance(d, dict):
+            errs.append(f"{tag}: must be an object")
+            continue
+        inst = str(d.get("instrument", "")).strip().upper()
+        try:
+            r, pr, mp = float(d.get("risk_pct")), float(d.get("probability")), float(d.get("market_probability"))
+        except (TypeError, ValueError):
+            errs.append(f"{tag}: risk_pct, probability and market_probability must be numbers")
+            continue
+        bad = [m for m, ok in ((f"{inst or '?'} is not in the universe", inst in UNIVERSE),
+                               ("direction is required", str(d.get("direction") or "").strip()),
+                               (f"risk_pct {r:g} must be in (0, {MAX_RISK_POS:g}]", 0 < r <= MAX_RISK_POS + 1e-9),
+                               ("probability and market_probability must be in (0, 100]", 0 < pr <= 100 and 0 < mp <= 100),
+                               ("thesis is required", str(d.get("thesis") or "").strip())) if not ok]
+        errs += [f"{tag}: {m}" for m in bad]
+        if not bad:
+            deferred.append(d)
+            d_risk += r
+    if ans.get("deferred_ideas") and not non_trading_day(ans, today):
+        errs.append("deferred_ideas are for weekend and market-holiday reviews only: on a trading day, open them")
+    if risk_after >= RISK_BUDGET[0] - 1e-9:
+        return errs
+    if non_trading_day(ans, today) and deferred and risk_after + d_risk >= RISK_BUDGET[0] - 1e-9:
+        return errs
+    bb = ans.get("below_budget")
+    head = (f"the account's risk after this review is {risk_after:.2f}%, below the {RISK_BUDGET[0]:g}% "
+            f"budget ({RISK_BUDGET[0]:g}-{RISK_BUDGET[1]:g}%, normally {TYPICAL_POSITIONS[0]}-{TYPICAL_POSITIONS[1]} "
+            "positions): open your best ideas, sized by conviction and edge over the market probability, ")
+    if not isinstance(bb, dict):
+        return errs + [head + "or give below_budget: {\"condition\": the identifiable event or condition, \"until\": "
+                              "YYYY-MM-DD when it resolves or is reassessed, \"reasoning\": why it justifies holding less}"]
+    cond, why = " ".join(str(bb.get("condition") or "").split()), " ".join(str(bb.get("reasoning") or "").split())
+    until = parse_date(bb.get("until"))
+    if len(cond) < 15 or GENERIC_REASON.search(cond):
+        errs.append("below_budget.condition must name a specific event or condition (for example a dated central-bank "
+                    "decision, a data release or a vote), not a general lack of edge")
+    if not why:
+        errs.append("below_budget.reasoning is required")
+    if not until or not (today <= until <= today + timedelta(days=BELOW_BUDGET_MAX_DAYS)):
+        errs.append(f"below_budget.until must be a date from today to {BELOW_BUDGET_MAX_DAYS} days ahead")
+    return errs
+
+
+def review_status(records: list[dict], today: date) -> dict:
+    """The latest daily review: failed if it recorded no sources_read (the research rule), missing if none since
+    yesterday (UTC). The quick check flags either."""
+    runs = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"]
+    if not runs:
+        return {"last_date": None, "sources_read": 0, "status": "missing", "flags": ["no daily review recorded yet"]}
+    last = runs[-1]
+    d, n = parse_date(last["date"]), len(_valid_sources(last.get("sources_read")))
+    flags = []
+    if n == 0:
+        flags.append(f"daily review {d} failed: empty sources_read"
+                     + (f" (before the {MANDATE_FROM} research rule)" if d < MANDATE_FROM else ""))
+    if d < today - timedelta(days=1):
+        flags.append(f"no daily review since {d}")
+    status = "failed" if n == 0 else ("missing" if d < today - timedelta(days=1) else "ok")
+    return {"last_date": d.isoformat(), "sources_read": n, "status": status, "flags": flags}
+
+
+def budget_status(records: list[dict], today: date) -> dict:
+    """Risk at risk against the 3-10% budget; below 3% is flagged unless the latest daily review gave a current
+    below_budget reason, or named deferred ideas on a non-trading day within the last 3 days."""
+    risk = round(open_risk(positions(records)), 4)
+    runs = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"]
+    last = runs[-1] if runs else {}
+    out = {"risk_used_pct": risk, "budget_pct": list(RISK_BUDGET), "typical_positions": list(TYPICAL_POSITIONS),
+           "flags": []}
+    if risk >= RISK_BUDGET[0] - 1e-9:
+        return out
+    bb, dd = last.get("below_budget"), last.get("deferred_ideas")
+    until = parse_date((bb or {}).get("until")) if isinstance(bb, dict) else None
+    if until and until >= today:
+        out["reason"] = f"below budget until {until}: {bb.get('condition')}"
+    elif dd and last.get("date") and parse_date(last["date"]) >= today - timedelta(days=3):
+        out["reason"] = f"{len(dd)} idea(s) deferred to the next trading day by the {last['date']} review"
+    else:
+        out["flags"].append(f"{risk:.2f}% at risk, below the {RISK_BUDGET[0]:g}% budget without a current specific reason")
+    return out
+
+
+def mandate_flags(records: list[dict], today: date) -> list[str]:
+    return review_status(records, today)["flags"] + budget_status(records, today)["flags"]
 
 
 MARKET_BASES = ("options", "prediction market", "futures", "other market", "none")
@@ -976,7 +1103,14 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                "model": model, "session_url": ans.get("session_url"), "status": "ok",
                                "market_summary": " ".join(str(ans.get("market_summary") or "").split()),
                                "n_new": len(new), "n_reviews": len(reviews),
-                               "sources_read": (ans.get("sources_read") or [])[:40]}, path)
+                               "sources_read": (ans.get("sources_read") or [])[:40],
+                               **({"risk_after_pct": round(open_risk(positions(records)) + sum(n["risk_pct"] for n in new)
+                                                           - sum(positions(records)[r["id"]]["open"]["risk_pct"]
+                                                                 for r in reviews if r["action"] == "close"), 4)}
+                                  if session == "daily_review" else {}),
+                               **{k: ans[k] for k in ("below_budget", "deferred_ideas", "market_holiday") if ans.get(k)},
+                               **({"flags": mandate_flags(records, today)} if session == "quick_check" else {})},
+                     path)
     pos = positions(records)
     for r in reviews:
         p = pos[r["id"]]
@@ -1044,8 +1178,10 @@ def record_check(checked: list[str], result: str, model: str, now: datetime | No
     if not str(model or "").strip():
         raise ValueError("model is required")
     _ensure_account(records, now.date(), path)
+    flags = mandate_flags(records, now.date())          # added by the CLI: a quick check cannot leave them out
     return append(records, {"type": "check", "session": "quick_check", "time": now.isoformat(), "date": now.date().isoformat(),
-                            "positions": checked, "result": result, "model": model.strip(), "session_url": session_url}, path)
+                            "positions": checked, "result": result, "model": model.strip(), "session_url": session_url,
+                            **({"flags": flags} if flags else {})}, path)
 
 
 def context(marks_rows: list[dict] | None = None, today: date | None = None, fetch: bool = False) -> dict:
@@ -1087,6 +1223,19 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                                               "probability", "market_probability", "market_source", "market_basis",
                                                               "thesis", "change_mind", "sources",
                                                               "opposition.case_against"]},
+            "mandate": {"from": MANDATE_FROM.isoformat(),
+                        "research": ("required: every daily review researches the main drivers across the universe ("
+                                     + ", ".join(RESEARCH_DRIVERS) + ") on the web before deciding and records them in "
+                                     "sources_read; a review without it is rejected (counts as failed)"),
+                        "risk_budget": (f"normally {TYPICAL_POSITIONS[0]}-{TYPICAL_POSITIONS[1]} positions and "
+                                        f"{RISK_BUDGET[0]:g}-{RISK_BUDGET[1]:g}% of the account at risk, best ideas even at "
+                                        "modest conviction (e.g. 55%); size scales with conviction and edge over the "
+                                        f"market probability (a small edge: {SMALL_EDGE_RISK[0]:g}-{SMALL_EDGE_RISK[1]:g}% "
+                                        f"at risk); below {RISK_BUDGET[0]:g}% only with below_budget {{condition, until, "
+                                        "reasoning}} naming a specific event or condition; weekend and holiday reviews "
+                                        "may defer entries with deferred_ideas")},
+            "daily_review_status": review_status(records, today), "risk_budget_status": budget_status(records, today),
+            "flags": mandate_flags(records, today),
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
             "open": [{k: p.get(k) for k in keep} | {"entry": (p.get("fill") or {}).get("entry_level"),
                                                      "entry_date": (p.get("fill") or {}).get("entry_date")} for p in s["open"]],
