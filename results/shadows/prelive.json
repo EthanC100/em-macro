@@ -1,0 +1,516 @@
+{
+ "checked_at": "2026-11-09T03:35:42+00:00",
+ "rule": "docs/prereg/T25-T26_live_shadows.md Amendment 1 A1.2 (prices, chain) and \u00a78 P1",
+ "tolerance": "one tick",
+ "min_share": 0.99,
+ "history_start": "2023-01-01",
+ "markets": {
+  "CL": {
+   "prices": {
+    "common_days": 39344,
+    "contracts": 64,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [
+     "2023-05",
+     "2024-01",
+     "2025-12"
+    ],
+    "equal": false
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  },
+  "RB": {
+   "prices": {
+    "common_days": 34987,
+    "contracts": 64,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "HO": {
+   "prices": {
+    "common_days": 34991,
+    "contracts": 64,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "NG": {
+   "prices": {
+    "common_days": 39559,
+    "contracts": 64,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "HG": {
+   "prices": {
+    "common_days": 17047,
+    "contracts": 27,
+    "factor": 100.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "GC": {
+   "prices": {
+    "common_days": 13962,
+    "contracts": 32,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "SI": {
+   "prices": {
+    "common_days": 12173,
+    "contracts": 27,
+    "factor": 100.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "PL": {
+   "prices": {
+    "common_days": 9606,
+    "contracts": 22,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-05"
+    ],
+    "market_days": 68,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZC": {
+   "prices": {
+    "common_days": 12768,
+    "contracts": 27,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZS": {
+   "prices": {
+    "common_days": 17336,
+    "contracts": 38,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZW": {
+   "prices": {
+    "common_days": 11815,
+    "contracts": 27,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "KE": {
+   "prices": {
+    "common_days": 11824,
+    "contracts": 27,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZM": {
+   "prices": {
+    "common_days": 20092,
+    "contracts": 43,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZL": {
+   "prices": {
+    "common_days": 20092,
+    "contracts": 43,
+    "factor": 1.0,
+    "share": 0.99995
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [],
+    "equal": true
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "LE": {
+   "prices": {
+    "common_days": 8979,
+    "contracts": 32,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [
+     "2023-03",
+     "2024-05",
+     "2025-01"
+    ],
+    "equal": false
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 0.7246,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  },
+  "6E": {
+   "prices": {
+    "common_days": 13017,
+    "contracts": 21,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [
+     "2023-11",
+     "2024-02",
+     "2024-05",
+     "2025-02"
+    ],
+    "equal": false
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  },
+  "6B": {
+   "prices": {
+    "common_days": 13019,
+    "contracts": 21,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [
+     "2023-11",
+     "2024-02",
+     "2024-05",
+     "2025-02"
+    ],
+    "equal": false
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 1.0,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  },
+  "6M": {
+   "prices": {
+    "common_days": 6065,
+    "contracts": 21,
+    "factor": 1.0,
+    "share": 1.0
+   },
+   "chain": {
+    "months": 45,
+    "differing_months": [
+     "2023-11",
+     "2024-02",
+     "2024-05",
+     "2025-02"
+    ],
+    "equal": false
+   },
+   "P1": {
+    "window": [
+     "2026-08-03",
+     "2026-11-06"
+    ],
+    "market_days": 69,
+    "min_share_F1": 1.0,
+    "min_share_F2": 0.8696,
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  }
+ },
+ "universe_after_check": {
+  "T25": [
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL"
+  ],
+  "T26": [
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL",
+   "GC",
+   "SI",
+   "PL"
+  ]
+ }
+}
