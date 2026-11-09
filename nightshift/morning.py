@@ -41,6 +41,15 @@ def on_branch(commit: str, ref: str) -> bool:
                           capture_output=True).returncode == 0
 
 
+def _short(reason: str, n: int = 110) -> str:
+    """One phone line per reason: long file lists become the first entries and a count."""
+    if len(reason) <= n:
+        return reason
+    head, _, rest = reason.partition(": ")
+    items = [x.strip(" '[]") for x in rest.split(",")]
+    return f"{head}: {', '.join(items[:2])} (+{len(items) - 2} more)" if len(items) > 2 else reason[:n] + "..."
+
+
 def promoted(day: date) -> str:
     p = ROOT / f"results/night/promote/{day.isoformat()}.json"
     if not p.exists():
@@ -48,7 +57,7 @@ def promoted(day: date) -> str:
     r = json.loads(p.read_text(encoding="utf-8"))
     if r.get("ok") and r.get("mode") == "promote":
         return f"yes - PR opened with auto-merge ({r.get('pr', 'see PR list')})"
-    why = "; ".join(r.get("reasons") or []) or "checks passed"
+    why = "; ".join(_short(x) for x in r.get("reasons") or []) or "checks passed"
     return f"no - {'check only: ' if r.get('mode') == 'check only' else ''}{why}"
 
 
