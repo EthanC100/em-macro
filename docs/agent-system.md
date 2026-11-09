@@ -322,3 +322,16 @@ usage (about 4x the Janus load). Interactive sessions (like this one) come on to
 - The promotion compares main with **main merged with dev** (the tree the PR produces), not dev alone, because
   main keeps moving all night (Janus checks every 30 minutes).
 - ledger-daily runs late into the night window, so the guard checks the Actions API instead of trusting cron times.
+
+## Dry run (2026-11-09, 22:52-23:25 Singapore, real time, in the setup session)
+
+| step | what happened | where |
+|---|---|---|
+| night-start | guard: go (22:52 SGT, no busy writer). `dev` created from this branch and synced with main 3e4059a (clean merge). Triage (Sonnet) returned two findings; both checked and filed as Q005 (ES-DE spread pairs legs from different days: 57.4bp recorded vs 52.4bp on one close) and Q006 (a monthly-panel fallback dated 30 Nov replaced CLP's 6 Nov daily mark). The Opposition (Opus): Q003 80%, Q005 55%, Q006 50%, no block; Q005/Q006 acceptance tests tightened from its concerns. Auto-approved Q003, Q005, Q006 | dev f0f206f |
+| night-worker run 1 | lock taken; Q003 in progress; implementer (Opus) wrote `tests/test_q003_todo_counts.py` (failed: "says 21 of 28; the registry has 19 of 23"), fixed the line, suite 467 passed; PR #27 into dev. pr-review: clean merge onto dev, no protected path, 467 passed; The Opposition advisory 80% with one concern (a doc-prose test can gate systematic-monthly's commit), filed as Q007 and added to the implementer's and pr-review's rules. Merged into dev; Q003 done; lock released (run 1 of 12). Chain then stopped by hand: guard said night-explorer | PR #27, dev 2317609, d7339d3 |
+| Janus diagnosis | section 6 above | |
+| promote, check only | real: **refused** on (c) (dev carries this PR's own `.claude/`, CODEOWNERS and rulesets) and (b) (`app.js`, `lab.json`: the Lab page is not on main yet); (d) clean, (a) 467 passed, same em-macro-data snapshot on both builds, both chains verify. As if this PR were merged (base = main merged with this branch, local only): **all pass**, the only Ledger difference `todo.json`, declared by Q003. Found and fixed on the way: merged items are now only `Merge Qnnn` commits | `results/night/promote/2026-11-10*.json` on dev |
+| morning report | one screen, real data | `results/night/morning/2026-11-10.md` on dev |
+| routines | the seven created through the scheduled-task API and disabled within a minute, before any fired; models set | section 11 |
+
+Not exercised: the API-trigger chain itself (no trigger tokens exist yet; `night_fire.sh` exits 6 without them and the hourly schedules take over), night-explorer and a Lab launch (outside the requested dry run), the weekly brief's Gmail draft (no Gmail connector in this session; the PDF renderer is tested).
