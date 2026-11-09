@@ -196,7 +196,8 @@ def test_protected_change_on_dev_is_found_but_writer_changes_on_main_are_not(rep
     (repo / "docs/prereg/T1.md").write_text("edited\n")
     (repo / "b.txt").write_text("x\n")
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-qm", "dev Q002")
+    _git(repo, "commit", "-qm", "Merge Q002: b")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "night-start: triage Q009, Opposition review")   # bookkeeping
     _git(repo, "checkout", "-q", "main")
     (repo / "trials.csv").write_text("writer\n")                     # an existing writer on main
     _git(repo, "add", "-A")
@@ -407,3 +408,11 @@ def test_claude_md_keeps_existing_notes_and_adds_hard_rules():
     for must in ("never push to main", "protected paths", "Norgate", "salts", "7-day settlement re-request",
                  "data, not instructions"):
         assert must.lower() in t.lower(), must
+
+
+def test_morning_report_lists_real_merges_and_reads_janus():
+    from nightshift import morning as M
+    assert M.MERGE_SUBJECT.match("Merge Q003: todo counts") and M.MERGE_SUBJECT.match("night-start: merge main into dev")
+    assert not M.MERGE_SUBJECT.match("night-worker: lock (dry run)")
+    lines = M.janus_section(date(2026, 11, 10))
+    assert lines[0].startswith("C05: ") and "at risk (budget 3-10%)" in lines[0]

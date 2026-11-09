@@ -283,8 +283,15 @@ usage (about 4x the Janus load). Interactive sessions (like this one) come on to
    created it; if it is missing, create it from main.
 3. **Apply the rulesets** (section 8 phone steps), then the ledger-daily test run.
 4. **Routines** at claude.ai/code/routines. The seven tasks were created from this session through the
-   scheduled-task API, **disabled**, with the right schedules and prompts (see the PR). For each, open it, check or
-   set the fields below, and enable it after steps 2-3:
+   scheduled-task API and **disabled straight away** (created 14:56 UTC, disabled 14:57 UTC, before any could fire),
+   with the schedules, one-line prompts and models below. What the API could not set, so you set it in the UI:
+   **the repository** (they were created with no repository attached: add EthanC100/em-macro, and em-macro-data
+   read-only), **effort**, **connectors** (refused for this organisation through the API: add GitHub where listed
+   and Gmail on weekly-brief), the **API triggers** and the **GitHub trigger** (not available from the API), and
+   "allow pushes to any branch". Then enable them after steps 2-3. Ids: night-start trig_01NmjpBKMbVrzBq2JbD92uJn,
+   night-worker trig_01BVzWxckZiRAXYo1vdQReJq, night-explorer trig_01UQxVUME1DHW9Qz83tiVSiz, pr-review
+   trig_01MjBsxNX2nQk6US3Fnfpqp6, promote trig_01WPa6MSaCJwziF6byaUS84z, morning-report trig_01Q21bwRJnYg8XRJQqrPUsvg
+   (push notification on), weekly-brief trig_01LXiKzH3ctXPHnkJr1tcQCd.
 
    | name | prompt (one line) | model | effort | repository | environment | connectors | trigger |
    |---|---|---|---|---|---|---|---|
