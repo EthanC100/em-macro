@@ -463,19 +463,16 @@ def add_iv(decision: str, iv_pct: float, source: str, d: date, root: Path = ROOT
 # ----------------------------------------------------------------------------- private entry (licensed settlement)
 # An entry at an exchange settlement is a licensed price: the public terms then name it instead of stating it
 # (correction K002, D003), and the numbers are resolved at run time from the private store.
-PRIVATE_ENTRY = re.compile(r"^settlement (\d{4}-\d{2}-\d{2}) \(private\)$")
-PRIVATE_PREMIUM = "Black-76 at the entry settlement (private)"
+# A salted commitment to each private value may follow inside the brackets (ledger/commitments.py):
+# "settlement 2026-11-06 (private; salted commitment <64 hex>)". Never publish a plain hash of a private value.
+PRIVATE_ENTRY = re.compile(r"^settlement (\d{4}-\d{2}-\d{2}) \(private(?:; salted commitment [0-9a-f]{64})?\)$")
+PRIVATE_PREMIUM_PREFIX = "Black-76 at the entry settlement (private"
+PRIVATE_PREMIUM = PRIVATE_PREMIUM_PREFIX + ")"
 PRIVATE_RISK = "the entry premium (private)"
 
 
 def is_private(terms: dict) -> bool:
     return bool(PRIVATE_ENTRY.match(terms.get("entry_underlying") or ""))
-
-
-def private_entry_digest(product: str, month: str, d: str, price: float) -> str:
-    """Public commitment to a private entry level: SHA-256 of 'PRODUCT MONTH|date|price' (price as %.10g)."""
-    import hashlib
-    return hashlib.sha256(f"{product} {month}|{d}|{price:.10g}".encode()).hexdigest()
 
 
 def resolve_terms(terms: dict, srows: list[dict]) -> dict | None:
@@ -491,7 +488,7 @@ def resolve_terms(terms: dict, srows: list[dict]) -> dict | None:
         return None
     t = {**terms, "entry_underlying": f"{F:.10g}"}
     legs = legs_from_text(t["legs"])
-    if t["structure"] != "future" and t.get("entry_premium") == PRIVATE_PREMIUM:
+    if t["structure"] != "future" and (t.get("entry_premium") or "").startswith(PRIVATE_PREMIUM_PREFIX):
         T = year_frac(parse_date(t["entry_date"]), parse_date(t["option_expiry"]))
         v = structure_value(legs, F, T, float(t["iv_entry_pct"]) / 100, float(t["rate_pct"] or 0) / 100)
         t["entry_premium"] = f"{v:.10g}"

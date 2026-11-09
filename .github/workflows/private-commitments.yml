@@ -1,0 +1,83 @@
+name: private-commitments
+
+# Salted commitments for a private (licensed) entry (ledger/commitments.py). Run by hand:
+#   Actions -> private-commitments -> Run workflow (decision D003, supersedes K002).
+# 1. fetches final settlements into em-macro-data (the entry settlement must be there; quoted first, US$1 daily cap);
+# 2. generates one random 32-byte salt per private value and writes salt + value ONLY to em-macro-data
+#    (ledger/commitments.jsonl), pushed before anything is published;
+# 3. appends the correction (new field texts carrying SHA-256(salt || value)) to data/ledger/seals.jsonl and
+#    data/ledger/derivatives.csv, and pushes main;
+# 4. verifies every commitment with the private salts. No salt or value is ever printed: this log may be public.
+on:
+  workflow_dispatch:
+    inputs:
+      decision:
+        description: "Decision with a private entry"
+        default: "D003"
+      supersedes:
+        description: "Correction whose unsalted digests are replaced"
+        default: "K002"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ledger-intake          # one job at a time edits the ledger and the private store
+  cancel-in-progress: false
+
+jobs:
+  recommit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -q -r requirements.txt databento
+      - name: Private data store
+        uses: actions/checkout@v4
+        with:
+          repository: EthanC100/em-macro-data
+          token: ${{ secrets.EM_MACRO_DATA_TOKEN }}
+          path: .em-macro-data
+          sparse-checkout: ledger
+      - name: Settlements (the entry settlement must be in the private store)
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+        run: python -m ledger.settlements fetch
+      - name: Salted commitments and the correction
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m ledger.commitments recommit "${{ inputs.decision }}" --supersedes "${{ inputs.supersedes }}"
+      - name: Store the salts privately first
+        run: |
+          cd .em-macro-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ledger
+          git commit -q -m "Salted commitments for ${{ inputs.decision }} (salts and values, private)"
+          git push -q
+      - name: Verify every commitment with the private salts
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m ledger.commitments verify && python -m ledger.audit verify
+      - name: Publish the correction (commitments only)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ledger/derivatives.csv data/ledger/seals.jsonl
+          git commit -m "${{ inputs.decision }}: salted commitments replace ${{ inputs.supersedes }}'s unsalted digests"
+          for i in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            sleep $((i * 3)); git pull --rebase origin main
+          done
+          echo "::error::push failed after 4 attempts"; exit 1

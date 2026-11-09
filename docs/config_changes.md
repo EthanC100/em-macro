@@ -276,15 +276,46 @@ it is recorded as C03 and the existing record is not renumbered.
   - `risk_per_unit` = "the entry premium (private)";
   - the decision's `entry_level` = the same reference in words.
 
-  `ledger/derivs.py` (`resolve_terms`) resolves them at run time from the settlement in em-macro-data. The
-  correction's reason commits to both private numbers with SHA-256 digests, so they can be checked later without
-  being published. Until the 6 Nov settlement is in the private store, D003 keeps its entry row only.
+  `ledger/derivs.py` (`resolve_terms`) resolves them at run time from the settlement in em-macro-data. Until the
+  6 Nov settlement is in the private store, D003 keeps its entry row only.
+- **Superseded, 2026-11-09:** the correction's reason also published unsalted SHA-256 digests of the two private
+  numbers. They can be brute-forced: see the next note.
 - **How it is recorded:** one correction, K002, appended to `data/ledger/seals.jsonl` as two records: the
   derivative terms (four fields) and the decision (`entry_level`).
   - `python -m ledger.audit correct-file` (`correct_many`) is new: one correction may change several fields.
     Verification checks that it changed exactly those fields and nothing else.
   - D003's page lists each corrected field under "Corrections".
   - Readers of `entry_level` (`schema.entry_number`) treat a private entry as having no public number.
+
+## 2026-11-09: salted commitments for private values (K002's digests superseded by K003)
+
+- **Problem:** K002's reason published plain SHA-256 digests of D003's entry settlement and repriced premium. A
+  settlement to 0.01 has only about 20,000 plausible values, so hashing each candidate recovers it. Those digests
+  are in K002's record in the append-only audit chain, and in this repository's git history. **Treat them as having
+  disclosed both values.** Editing the record would break the chain, and removing them from git history would mean
+  rewriting `main`; neither is done here.
+- **Convention from now on** (`ledger/commitments.py`):
+  - every private value is committed as **SHA-256(salt || value)**, with its own random 32-byte salt
+    (`secrets.token_bytes`);
+  - the value is the canonical string `"<PRODUCT> <YYYY-MM>|<date>|<what>|<number %.10g>"`;
+  - the salt and the value are stored **only** in em-macro-data `ledger/commitments.jsonl`;
+  - only the commitment is published, inside the field it commits to, e.g. `settlement 2026-11-06 (private; salted
+    commitment <hex>)`, so the audit chain covers it;
+  - `python -m ledger.commitments verify` recomputes each commitment from the private salt and value. Where the
+    store holds the settlement, it also checks that the value equals what the ledger derives from it. It never
+    prints a salt or a value.
+  - The unsalted digest helper is removed. Any future private-entry commitment goes through `ledger.commitments`.
+- **K003 (applied by the `private-commitments` workflow, run by hand):**
+  1. fetches the entry settlement into em-macro-data;
+  2. generates the salts and pushes them there first;
+  3. appends correction K003, which changes D003's `entry_underlying` and `entry_premium` texts to carry the salted
+     commitments;
+  4. verifies, then pushes `main`.
+
+  The values, P&L and every other field are unchanged. The salts are generated in GitHub Actions because only the
+  workflows hold write access to em-macro-data.
+- **What salting does not hide:** what this repository already publishes by design (P&L in %, the 69-spread count)
+  still narrows the private values. That is inherent to publishing P&L in %.
 
 ## 2026-11-06: Janus moves to Claude Code sessions; no Anthropic API calls for Janus from GitHub Actions
 
