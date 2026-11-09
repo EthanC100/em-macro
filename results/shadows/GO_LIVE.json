@@ -13,6 +13,7 @@
  "confirmed": false,
  "universe": {
   "T25": [
+   "CL",
    "RB",
    "HO",
    "NG",
@@ -25,6 +26,7 @@
    "ZL"
   ],
   "T26": [
+   "CL",
    "RB",
    "HO",
    "NG",
@@ -37,16 +39,19 @@
    "ZL",
    "GC",
    "SI",
-   "PL"
+   "PL",
+   "6E",
+   "6B",
+   "6M"
   ]
  },
  "N": {
-  "T25": 10,
-  "T26": 13
+  "T25": 11,
+  "T26": 17
  },
  "sr_pred": {
-  "T25": 0.3073,
-  "T26": 0.329
+  "T25": 0.3223,
+  "T26": 0.3762
  },
  "P0": {
   "ok": true,
@@ -57,5 +62,49 @@
   "file": "results/shadows/prelive.json"
  },
  "commit": "f335afcdd653ea12ad7e906c04e376ffbf2a8929",
- "rules": "docs/prereg/T25-T26_live_shadows.md with Amendment 1"
+ "rules": "docs/prereg/T25-T26_live_shadows.md with Amendments 1 and 2",
+ "amendment_2": {
+  "amended_at": "2026-11-09T03:59:44+00:00",
+  "prelive": "results/shadows/prelive_amendment2.json",
+  "before": {
+   "universe": {
+    "T25": [
+     "RB",
+     "HO",
+     "NG",
+     "HG",
+     "ZC",
+     "ZS",
+     "ZW",
+     "KE",
+     "ZM",
+     "ZL"
+    ],
+    "T26": [
+     "RB",
+     "HO",
+     "NG",
+     "HG",
+     "ZC",
+     "ZS",
+     "ZW",
+     "KE",
+     "ZM",
+     "ZL",
+     "GC",
+     "SI",
+     "PL"
+    ]
+   },
+   "N": {
+    "T25": 10,
+    "T26": 13
+   },
+   "sr_pred": {
+    "T25": 0.3073,
+    "T26": 0.329
+   }
+  },
+  "commit": "67d33bfb06d83634c8ad3e136db9677deef95269"
+ }
 }

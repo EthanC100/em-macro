@@ -644,6 +644,7 @@ def test_amendment2_rerun_runs_once(tmp_path, monkeypatch):
     out = tmp_path / "prelive_amendment2.json"
     out.write_text("{}")
     monkeypatch.setattr(D, "PRELIVE_A2", out)
+    monkeypatch.setattr(D, "GO_LIVE_FILE", tmp_path / "GO_LIVE.json")
     assert D.main(["check", "--amendment-2"]) == 1                      # refused: the single rerun already ran
 
 
@@ -662,3 +663,53 @@ def test_golive_amend_keeps_m1_and_takes_the_rerun_universe(live, monkeypatch):
     g["confirmed"], g["amendment_2"] = True, None
     out.write_text(json.dumps(g))
     assert "already confirmed" in M.golive_amend(prelive=a2, out=out)["reason"]
+
+
+def test_amendment2_marked_used_by_either_record(tmp_path, monkeypatch):
+    pre, go = tmp_path / "prelive_amendment2.json", tmp_path / "GO_LIVE.json"
+    monkeypatch.setattr(D, "PRELIVE_A2", pre)
+    monkeypatch.setattr(D, "GO_LIVE_FILE", go)
+    assert not D.amendment2_used()
+    go.write_text(json.dumps({"M1": "2026-12", "amendment_2": {"amended_at": "2026-11-09T03:59:44+00:00"}}))
+    assert D.amendment2_used() and D.main(["check", "--amendment-2"]) == 1
+    go.write_text(json.dumps({"M1": "2026-12"}))
+    pre.write_text("{}")
+    assert D.amendment2_used() and D.main(["check", "--amendment-2"]) == 1
+
+
+def test_apply_result_writes_private_files_without_checking(store, tmp_path, monkeypatch):
+    base = store["base"]
+    monkeypatch.setattr(D, "compare_prices", lambda *a, **k: pytest.fail("apply_result must not compare"))
+    monkeypatch.setattr(D, "compare_chains", lambda *a, **k: pytest.fail("apply_result must not compare"))
+    import shutil
+    shutil.rmtree(base / "contracts" / "CL")                            # excluded by an earlier check
+    res = tmp_path / "result.json"
+    res.write_text(json.dumps({"markets": {
+        "CL": {"prices": {"factor": 1.0}, "passed": True},
+        "HG": {"prices": {"factor": 100.0}, "passed": True},
+        "NG": {"prices": {"factor": 1.0}, "passed": False, "reason": "F1/F2 chain differs"}}}))
+    f = D.apply_result(res, base, log=lambda *_: None)
+    assert f == {"CL": {"factor": 1.0, "passed": True}, "HG": {"factor": 100.0, "passed": True},
+                 "NG": {"factor": 1.0, "passed": False}}
+    assert any((base / "contracts" / "CL").glob("*.csv")) and not (base / "contracts" / "NG").exists()
+    c = next(iter(store["series"]["HG"]))
+    assert np.allclose(pd.read_csv(base / "contracts" / "HG" / f"{c}.csv")["close"], store["series"]["HG"][c].values)
+    assert json.loads((base / "factors.json").read_text()) == f
+    from ledger import settlements as ST
+    (base / ST.READ_ONLY_MARK).write_text("")
+    with pytest.raises(ST.ReadOnlyStore):
+        D.apply_result(res, base, log=lambda *_: None)
+
+
+def test_recorded_amendment2_result_and_go_live():
+    """The committed record of run #3: 18 markets, LE the only exclusion, and the amended provisional go-live."""
+    pre = json.loads(D.PRELIVE_A2.read_text())
+    assert len(pre["markets"]) == 18 and [c for c, m in pre["markets"].items() if not m["passed"]] == ["LE"]
+    assert pre["universe_after_check"]["T25"] == ["CL", "RB", "HO", "NG", "HG", "ZC", "ZS", "ZW", "KE", "ZM", "ZL"]
+    assert len(pre["universe_after_check"]["T26"]) == 17 and "LE" not in pre["universe_after_check"]["T26"]
+    assert all(m["prices"]["factor"] in (1.0, 100.0) for m in pre["markets"].values())
+    g = json.loads(M.GO_LIVE.read_text())
+    assert g["universe"] == pre["universe_after_check"] and g["N"] == {"T25": 11, "T26": 17}
+    assert g["sr_pred"] == {"T25": 0.3223, "T26": 0.3762} and g["M1"] == "2026-12" and not g["confirmed"]
+    assert g["first_evaluation"]["date"] == "2031-12-15" and g["amendment_2"]["commit"].startswith("67d33bf")
+    assert D.amendment2_used()

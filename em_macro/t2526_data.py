@@ -561,9 +561,49 @@ def check(codes: list[str] | None = None, base: Path | None = None, write: bool 
     return summary
 
 
+GO_LIVE_FILE = ROOT / "results/shadows/GO_LIVE.json"
+
+
+def amendment2_used(prelive: Path | None = None, go_live: Path | None = None) -> bool:
+    """The single Amendment 2 rerun is used once its result is recorded, in either file."""
+    prelive, go_live = prelive or PRELIVE_A2, go_live or GO_LIVE_FILE
+    if prelive.exists():
+        return True
+    return go_live.exists() and bool(json.loads(go_live.read_text()).get("amendment_2"))
+
+
+def apply_result(result: Path, base: Path | None = None, log=print) -> dict:
+    """Write the private store's unit factors and per-contract files from a recorded check result, without
+    comparing anything again: a passing market gets its contract files at the recorded factor, a failing market has
+    none. Used to record the Amendment 2 rerun (run #3), whose own commit step failed."""
+    base = base or base_dir()
+    ST_guard(base)
+    res = json.loads(result.read_text())
+    factors = {}
+    for code, m in res["markets"].items():
+        f = (m.get("prices") or {}).get("factor")
+        if f is None:
+            raise ValueError(f"{code}: no unit factor in {result.name}")
+        if m.get("passed"):
+            n = write_contracts(code, float(f), base)
+            log(f"{code}: {n} contract files at factor {f:g}")
+        else:
+            shutil.rmtree(base / "contracts" / code, ignore_errors=True)
+            log(f"{code}: excluded, no contract files")
+        factors[code] = {"factor": float(f), "passed": bool(m.get("passed"))}
+    (base / "factors.json").write_text(json.dumps(factors, indent=1))
+    return factors
+
+
+def ST_guard(base: Path) -> None:
+    from ledger import settlements as ST
+    ST._guard_write(base)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["history", "check", "update"])
+    ap.add_argument("cmd", choices=["history", "check", "update", "apply-result"])
+    ap.add_argument("--file", default=None, help="apply-result: a recorded check result (results/shadows/...json)")
     ap.add_argument("--today", default=None)
     ap.add_argument("--commit", action="store_true", help="history: commit and push each piece as it is stored")
     ap.add_argument("--amendment-2", action="store_true", help="check: the single Amendment 2 rerun (all 18 markets)")
@@ -581,9 +621,9 @@ def main(argv=None) -> int:
             return 1
         if a.amendment_2:
             # Amendment 2: one rerun, for all 18 markets, with the corrected comparison; its result is final
-            if PRELIVE_A2.exists():
-                print("refused: the Amendment 2 rerun has already run (results/shadows/prelive_amendment2.json); "
-                      "its result is final")
+            if amendment2_used():
+                print("refused: the Amendment 2 rerun has already run (shadows-setup run #3, recorded in "
+                      "results/shadows/prelive_amendment2.json and GO_LIVE.json); its result is final")
                 return 1
             s = check(all_markets(), out_path=PRELIVE_A2)
             s["amendment"] = "Amendment 2: single rerun with exchange-rule last trade dates on the Databento side"
@@ -591,6 +631,9 @@ def main(argv=None) -> int:
         else:
             s = check()
         print(json.dumps(s["universe_after_check"]))
+        return 0
+    if a.cmd == "apply-result":
+        apply_result(Path(a.file) if a.file else PRELIVE_A2)
         return 0
     r = update(today=today)
     print("\n".join(r["log"]))

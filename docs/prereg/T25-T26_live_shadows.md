@@ -457,3 +457,29 @@ differs". All five passed the price test: 100% of common days within one tick, u
   SR_pred. M1 (2026-12) and both evaluation dates are kept, and the previous values are recorded in the record.
 - Go-live is still confirmed only by P3 and P4 at M1's rebalance.
 - The original `prelive.json` is kept unchanged.
+
+### The rerun: shadows-setup run #3, 9 Nov 2026 03:59 UTC (final)
+
+- **Run:** Actions run 42559206297, mode `amendment-2-rerun`, code at `67d33bf`. The check ran once for all 18
+  markets, and its result is final.
+- **Every market passed the price test:** 100% of common days within one tick. The unit factor is 1, except HG and
+  SI at 100.
+- **Chains:** every market agrees except **LE**, whose chain still differs (the first-notice rule, as diagnosed).
+  LE is the only exclusion. P1 qualifies as before.
+- **Final universe:**
+  - **T25: 11 markets:** CL, RB, HO, NG, HG, ZC, ZS, ZW, KE, ZM, ZL.
+  - **T26: 17 markets:** the T25 markets plus GC, SI, PL, 6E, 6B, 6M.
+  - **SR_pred:** 0.3223 (T25) and 0.3762 (T26), from 0.3073 and 0.329.
+  - M1 (2026-12) and both evaluation dates are unchanged.
+- **The commit failed.** The run's last step stopped with git exit code 128 ("empty ident name"). In this mode the
+  steps that set the bot's git identity in the em-macro-data checkout were skipped. Nothing from the run was
+  committed: no public file, and no private contract file or unit factor.
+- **How the result is recorded, without checking again:**
+  - `results/shadows/GO_LIVE.json` is the amended record exactly as `golive --amend` printed it in the log.
+  - `results/shadows/prelive_amendment2.json` holds what the log shows for each market: share, common days, factor,
+    chain equal or differs, P1, pass or fail. It also holds the universe and the verbatim log lines, and lists the
+    fields the run did not print.
+  - The private contract files and unit factors are written from that record by `t2526_data apply-result`, which
+    compares nothing. It runs in shadows-setup mode `amendment-2-record`.
+- **The rerun is used.** `check --amendment-2` refuses once either record exists.
+- **The workflow now sets the bot's git identity in the private checkout in every mode.**

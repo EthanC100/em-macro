@@ -22,10 +22,10 @@ on:
         options: ["yes", "no"]
         default: "yes"
       mode:
-        description: "setup, or amendment-2-rerun: the single rerun of the check for all 18 markets (final) and the
-          provisional go-live record amended with its universe"
+        description: "setup; amendment-2-rerun (used: run #3, refused by the code); amendment-2-record: write the
+          private contract files and unit factors from the recorded rerun result, without checking again"
         type: choice
-        options: ["setup", "amendment-2-rerun"]
+        options: ["setup", "amendment-2-rerun", "amendment-2-record"]
         default: "setup"
 
 permissions:
@@ -84,6 +84,13 @@ jobs:
             norgate/2026-11_financials/contracts/6B
             norgate/2026-11_financials/contracts/6M
 
+      # the bot's identity in the private checkout, for every mode (run #3 failed with git exit 128 because only
+      # the history steps, skipped in a rerun, set it)
+      - name: Git identity in the private checkout
+        run: |
+          git -C .em-macro-data config user.name "github-actions[bot]"
+          git -C .em-macro-data config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Databento history (one-off, quoted first, cap US$20 including earlier runs)
         if: inputs.mode == 'setup'
         timeout-minutes: 200       # below the job's 240, so the steps that commit what was stored still run
@@ -135,6 +142,13 @@ jobs:
         env:
           EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
         run: python -m em_macro.t2526 golive --amend 2>&1 | tee "$RUNNER_TEMP/golive.log"; exit "${PIPESTATUS[0]}"
+
+      - name: Amendment 2 record (private files from the recorded result; no check)
+        if: inputs.mode == 'amendment-2-record'
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+          PYTHONUNBUFFERED: "1"
+        run: python -m em_macro.t2526_data apply-result --file results/shadows/prelive_amendment2.json 2>&1 | tee "$RUNNER_TEMP/check.log"; exit "${PIPESTATUS[0]}"
 
       - name: Commit the private contract files and the public records
         if: always()
