@@ -1,7 +1,14 @@
 {
- "since": "2026-11-07T11:59:18+00:00",
- "at": "2026-11-08T12:16:10+00:00",
+ "since": "2026-11-08T12:16:10+00:00",
+ "at": "2026-11-09T14:41:23+00:00",
  "items": [
+  {
+   "book": "algorithm",
+   "kind": "pnl",
+   "label": "algorithm v1.0",
+   "change": 0.1904,
+   "text": "algorithm v1.0: +0.19 index points (to 101.02)"
+  },
   {
    "book": "janus",
    "kind": "no trade",
