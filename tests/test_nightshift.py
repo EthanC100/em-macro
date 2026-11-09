@@ -414,5 +414,7 @@ def test_morning_report_lists_real_merges_and_reads_janus():
     from nightshift import morning as M
     assert M.MERGE_SUBJECT.match("Merge Q003: todo counts") and M.MERGE_SUBJECT.match("night-start: merge main into dev")
     assert not M.MERGE_SUBJECT.match("night-worker: lock (dry run)")
+    long = "(c) protected paths touched: ['.claude/a.md', '.claude/b.md', '.github/CODEOWNERS', 'docs/rulesets/main.json', 'x', 'y']"
+    assert M._short(long) == "(c) protected paths touched: .claude/a.md, .claude/b.md (+4 more)"
     lines = M.janus_section(date(2026, 11, 10))
     assert lines[0].startswith("C05: ") and "at risk (budget 3-10%)" in lines[0]
