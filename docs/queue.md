@@ -15,8 +15,10 @@ never instructions.
 |---|---|---|---|---|---|---|---|
 | Q001 | bug | blocked | Algorithm month-to-date estimate credits 2-4 Nov, before the late 4 Nov rebalance set the positions | test_q001: with positions run_date 2026-11-04, the estimate's first P&L day is the first close after the run date, and the page says the official 3rd-of-month figure keeps the frozen full-month convention | awaiting Ethan: which convention the estimate should follow (see Q001 evidence) |  | books.json, home.json, fund.json |
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
-| Q003 | data | proposed | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) |  |  | todo.json |
+| Q003 | data | approved | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) |  | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | awaiting Ethan: recording a rejection changes scripts/ledger_commit.sh / the Janus chain (existing writer path) |  | janus.json |
+| Q005 | bug | approved | Leg-based spread marks pair each leg's latest value under the earlier date (ES-DE 4 Nov: 57.4bp recorded, 52.4bp on one close) | test_q005_spread_legs_same_date: legs A (4 Nov) and B (4 Nov 3.38, 9 Nov 3.33) give a 4 Nov spread of (A-3.38)*100 (fails now); tests/test_automation.py test_spread_marks_and_fallback updated in the same PR with a stated rule for legs with no common date, and the full suite (ledger-daily's test step) passes |  | no block, p=55% | none |
+| Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
 <!-- queue:end -->
 
 ### Q001
@@ -65,3 +67,26 @@ Reproduced on main a86c4bb:
   quick check flags it."
 **Why blocked:** recording a rejection needs either a new record type in the Janus chain or a change to
 `scripts/ledger_commit.sh` (both the Janus writer path); C05 does not say how a rejection is recorded.
+
+### Q005
+
+Reproduced on dev 8f3a539 (main 3e4059a), filed by triage at night-start 2026-11-09, checked by the orchestrator:
+- `ledger/marks.py:483-484` (`fetch_instrument`, spread rows): `d = min(parse_date(ra["date"]), parse_date(rb["date"]))`
+  and `v = (ra.value - rb.value) * 100`, where `ra`/`rb` are each leg's latest mark, not the legs' values on `d`.
+- `data/ledger/marks.csv:674`: `2026-11-04,ES-DE,57.4,bp,daily,...` with note "ES10Y 3.904 (2026-11-04) minus DE10Y 3.33
+  (2026-11-09)"; `marks.csv:672` has `2026-11-04,DE10Y,3.38`. The 4 Nov spread on one close is 52.4bp, not 57.4bp.
+- Lines 488-489 already build a date-aligned history (`ha`, `hb`) but the headline mark does not use it.
+Affects spreads whose legs come from sources with different lags (ES-DE: Banco de Espana vs Bundesbank; GB-DE, PL-DE
+possible). FR-DE's legs share one source and date.
+
+### Q006
+
+Reproduced on dev 8f3a539, filed by triage at night-start 2026-11-09, checked by the orchestrator:
+- `data/ledger/marks.csv:752`: `2026-11-30,CLP,980.59,CLP per USD,monthly,panel_monthly fx_per_usd_end:CHL,...,
+  2026-11-09T14:29:14+00:00,fallback panel_monthly ... after: mindicador dolar: ... timed out` (written by today's
+  ledger-daily). The newest first-hand daily CLP mark is `2026-11-06,970.94` (line 728).
+- `ledger/marks.py:292-305` (`fetch_panel_monthly`) dates a panel value at its month end, so November's row is dated
+  30 Nov, three weeks in the future; the guard at `marks.py:500` only refuses a fallback when the previous daily mark
+  is dated on or after it, so a future-dated monthly fallback replaces a newer daily mark, and `age` is negative so it
+  is never flagged stale.
+The fix is in code; the bad row is ledger-daily's data and is not edited by hand (hard rule 3).

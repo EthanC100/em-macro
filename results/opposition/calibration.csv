@@ -1,1 +1,4 @@
 logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
+2026-11-09,queue,Q003,80,advisory,claude-opus-5-5,,,test must not drift with the registry; keep '9 of 23' (algorithm inputs) unchanged
+2026-11-09,queue,Q005,55,advisory,claude-opus-5-5,,,test_automation.py:100-117 asserts current pairing; ledger-daily test step; old rows not rewritten
+2026-11-09,queue,Q006,50,advisory,claude-opus-5-5,,,existing 30 Nov row keeps winning latest_marks; evidence's stale-flag claim wrong (monthly marks)

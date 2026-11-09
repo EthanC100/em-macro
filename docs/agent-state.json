@@ -5,6 +5,17 @@
  "runs_used": 0,
  "last_kind": null,
  "chain_stopped": null,
- "log": [],
+ "log": [
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-09T22:57:46+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main 3e4059a (clean); triage filed Q005, Q006; Opposition: Q003/Q005/Q006 no block; approved Q003, Q005, Q006",
+   "session": null
+  }
+ ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
 }
