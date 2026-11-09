@@ -460,6 +460,50 @@ def add_iv(decision: str, iv_pct: float, source: str, d: date, root: Path = ROOT
     return rec
 
 
+# ----------------------------------------------------------------------------- private entry (licensed settlement)
+# An entry at an exchange settlement is a licensed price: the public terms then name it instead of stating it
+# (correction K002, D003), and the numbers are resolved at run time from the private store.
+PRIVATE_ENTRY = re.compile(r"^settlement (\d{4}-\d{2}-\d{2}) \(private\)$")
+PRIVATE_PREMIUM = "Black-76 at the entry settlement (private)"
+PRIVATE_RISK = "the entry premium (private)"
+
+
+def is_private(terms: dict) -> bool:
+    return bool(PRIVATE_ENTRY.match(terms.get("entry_underlying") or ""))
+
+
+def private_entry_digest(product: str, month: str, d: str, price: float) -> str:
+    """Public commitment to a private entry level: SHA-256 of 'PRODUCT MONTH|date|price' (price as %.10g)."""
+    import hashlib
+    return hashlib.sha256(f"{product} {month}|{d}|{price:.10g}".encode()).hexdigest()
+
+
+def resolve_terms(terms: dict, srows: list[dict]) -> dict | None:
+    """Numeric terms: as logged, or, for a private entry, the entry settlement from the private store and the
+    premium repriced by Black-76 at it (the logged implied volatility, rate and expiry, on the entry date), with the
+    maximum loss of the structure at that premium. None when the entry settlement is not in the store."""
+    m = PRIVATE_ENTRY.match(terms.get("entry_underlying") or "")
+    if not m:
+        return terms
+    d = parse_date(m.group(1))
+    F = next((x[1] for x in settle_series(srows, terms["product"], terms["contract_month"]) if x[0] == d), None)
+    if F is None:
+        return None
+    t = {**terms, "entry_underlying": f"{F:.10g}"}
+    legs = legs_from_text(t["legs"])
+    if t["structure"] != "future" and t.get("entry_premium") == PRIVATE_PREMIUM:
+        T = year_frac(parse_date(t["entry_date"]), parse_date(t["option_expiry"]))
+        v = structure_value(legs, F, T, float(t["iv_entry_pct"]) / 100, float(t["rate_pct"] or 0) / 100)
+        t["entry_premium"] = f"{v:.10g}"
+    if t.get("risk_per_unit") == PRIVATE_RISK:
+        prem = float(t["entry_premium"]) if t["structure"] != "future" else None
+        rpu, err = risk_per_unit(legs, prem, F, None)
+        if err:
+            return None
+        t["risk_per_unit"] = f"{rpu:.10g}"
+    return t
+
+
 # ----------------------------------------------------------------------------- valuation
 def value(terms: dict, F: float, d: date, root: Path = ROOT, settle_on_expiry: float | None = None) -> tuple[float, str]:
     """(value per unit, basis): 'settlement' for a future, 'model estimate' before an option's expiry,
@@ -532,6 +576,18 @@ def mark(root: Path = ROOT, today: date | None = None, fetch: bool = True, clien
         t = terms.get(d["id"])
         if not t:
             continue
+        if is_private(t):
+            t = resolve_terms(t, srows)
+            if t is None:
+                log.append(f"{d['id']}: its entry settlement is not in the private store yet: entry row only")
+                t0 = terms[d["id"]]
+                ed0 = parse_date(t0["entry_date"]).isoformat()
+                if (d["id"], ed0) not in pnl_rows:
+                    pnl_rows[(d["id"], ed0)] = {"date": ed0, "id": d["id"], "pnl_pct": "0", "basis": "entry",
+                                                "mark_date": ed0, "mark_source": "decision record (entry)",
+                                                "proxy": t0["proxy"], "can_act": "no",
+                                                "note": "entry at the recorded level and premium"}
+                continue
         size = float(parse_number(d.get("size_pct")) or 0)
         ed = parse_date(t["entry_date"])
         if (d["id"], ed.isoformat()) not in pnl_rows:
@@ -664,6 +720,11 @@ def main(argv=None) -> int:
         print(f"{a.decision}: no futures/options terms", file=sys.stderr)
         return 2
     d = parse_date(a.date) if a.date else date.today()
+    if is_private(t):
+        t = resolve_terms(t, settlements(data_store()))
+        if t is None:
+            print(f"{a.decision}: the entry settlement is private and not in the store", file=sys.stderr)
+            return 2
     val, basis = value(t, a.underlying, d)
     print(json.dumps({"value_per_unit": round(val, 4), "basis": basis, "entry_value": entry_value(t),
                       "risk_per_unit": float(t["risk_per_unit"])}))

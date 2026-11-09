@@ -258,6 +258,34 @@ it is recorded as C03 and the existing record is not renumbered.
   widens from 44bp to 50.74bp. The loss at the stop is still the 1% size, but each basis point is now worth
   1/50.74% of account instead of 1/44%.
 
+## 2026-11-09: correction K002, D003's entry at the 6 Nov close (a private settlement)
+
+- **What:** D003's entry is now the **6 Nov 2026 close**: the NYMEX BZ March 2027 (BZH7) final settlement, the source
+  and close of every D003 mark. The 94.00 underlying and 3.00 premium were placeholders pending the real settlement.
+  - The premium is repriced by the ledger's Black-76 at that close, with the record's own implied-volatility
+    estimate (56.4%), rate (4.03%) and expiry (26 Jan 2027).
+  - For this debit spread, the maximum loss per unit is that premium.
+  - The spread count is recomputed at the same 2% at risk of the record's US$10m book: **69** spreads (was 65), the
+    most whose premium stays within US$200,000.
+  - Size (2%), legs, expiry, stop, horizon and every other field are unchanged.
+- **The 6 Nov entry row (P&L 0) is kept**, so P&L on the entry day is 0. The first settlement-based mark is 9 Nov.
+- **Licence:** a settlement is a licensed price, and a premium repriced from it with public inputs would reveal it.
+  The public record therefore names the values instead of stating them:
+  - `entry_underlying` = "settlement 2026-11-06 (private)";
+  - `entry_premium` = "Black-76 at the entry settlement (private)";
+  - `risk_per_unit` = "the entry premium (private)";
+  - the decision's `entry_level` = the same reference in words.
+
+  `ledger/derivs.py` (`resolve_terms`) resolves them at run time from the settlement in em-macro-data. The
+  correction's reason commits to both private numbers with SHA-256 digests, so they can be checked later without
+  being published. Until the 6 Nov settlement is in the private store, D003 keeps its entry row only.
+- **How it is recorded:** one correction, K002, appended to `data/ledger/seals.jsonl` as two records: the
+  derivative terms (four fields) and the decision (`entry_level`).
+  - `python -m ledger.audit correct-file` (`correct_many`) is new: one correction may change several fields.
+    Verification checks that it changed exactly those fields and nothing else.
+  - D003's page lists each corrected field under "Corrections".
+  - Readers of `entry_level` (`schema.entry_number`) treat a private entry as having no public number.
+
 ## 2026-11-06: Janus moves to Claude Code sessions; no Anthropic API calls for Janus from GitHub Actions
 
 - **Removed:** the `janus-weekly` workflow and the API call in `ledger/janus.py` (`run`). Post-mortems are no longer

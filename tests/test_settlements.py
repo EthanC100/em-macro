@@ -71,12 +71,12 @@ def test_final_settlement_only_and_private_store(tmp_path):
 
 
 def test_late_final_settlement_is_still_fetched(tmp_path):
-    """6 Nov's final arrived on Sunday 8 Nov (and Databento had withdrawn the day meanwhile): a run that already
-    stored a later day must still pick it up."""
+    """A Friday's final can arrive on the Sunday (and Databento may withdraw a day meanwhile): a run that already
+    stored a later day must still pick it up. Synthetic prices."""
     later = [_stat("BZH7", "2026-11-09", 95.5)]
     ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), tmp_path, c=FakeClient(later))
     assert [r["date"] for r in ST.read(tmp_path)] == ["2026-11-09"]
-    c = FakeClient(later + [_stat("BZH7", "2026-11-06", 93.30)], end="2026-11-11T06:00:00.000000000Z")
+    c = FakeClient(later + [_stat("BZH7", "2026-11-06", 92.40)], end="2026-11-11T06:00:00.000000000Z")
     res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 11), tmp_path, c=c)
     assert res["stored"] == 1 and [r["date"] for r in ST.read(tmp_path)] == ["2026-11-06", "2026-11-09"]
     # long after: the window is the last REFETCH_DAYS days before the newest stored settlement, not the whole history

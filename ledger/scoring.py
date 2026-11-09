@@ -13,7 +13,7 @@ entry level, stop and exit price; otherwise a P&L entered at resolution is used,
 """
 from __future__ import annotations
 
-from .schema import parse_number, parse_probability, stop_level
+from .schema import entry_number, parse_number, parse_probability, stop_level
 
 
 def brier(p_pct, outcome01) -> float | None:
@@ -48,7 +48,7 @@ def decision_pnl_pct(d: dict) -> float | None:
         return round(explicit, 3)
     if d.get("action") not in ("Buy", "Sell"):
         return None
-    entry = parse_number(d.get("entry_level"))
+    entry = entry_number(d.get("entry_level"))
     stop = stop_level(d.get("stop"))
     exit_ = parse_number(d.get("exit_price"))
     size = parse_number(d.get("size_pct"))
@@ -63,7 +63,7 @@ def pnl_at_level(d: dict, level: float) -> float | None:
     from the entry level, stop and size; None when any of them is missing."""
     if d.get("action") not in ("Buy", "Sell") or level is None:
         return None
-    entry = parse_number(d.get("entry_level"))
+    entry = entry_number(d.get("entry_level"))
     stop = stop_level(d.get("stop"))
     size = parse_number(d.get("size_pct"))
     if None in (entry, stop, size) or entry == stop:

@@ -38,7 +38,8 @@ from .intake import read_rows, write_rows
 from .marks import (CONFIG, http_get, latest_marks, load_registry, mark_can_act, mark_is_current,
                     match_instrument, read_marks)
 from .independence import independent_sources
-from .schema import (AUTO_PREFIX, DECISION_COLUMNS, FORECAST_COLUMNS, parse_date, parse_number, stop_level)
+from .schema import (AUTO_PREFIX, DECISION_COLUMNS, FORECAST_COLUMNS, entry_number, parse_date, parse_number,
+                     stop_level)
 from .scoring import pnl_at_level, score_decision, score_forecast
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,7 +81,7 @@ def stop_rule(d: dict) -> tuple[float | None, str | None]:
     level = stop_level(d.get("stop"))
     if level is None:
         return None, None
-    entry = parse_number(d.get("entry_level"))
+    entry = entry_number(d.get("entry_level"))
     if entry is not None and entry != level:
         return level, "below" if level < entry else "above"
     text = (d.get("stop") or "").lower()

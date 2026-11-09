@@ -295,7 +295,7 @@
         <div class="stat"><span class="k">Live P&L</span><span class="v ${signClass(d.live_pnl_pct)}">${isNum(d.live_pnl_pct) ? fmtPct(d.live_pnl_pct, 2, true) : '—'}</span><span class="s">${d.derivative ? `${esc(valuationText(d))}${d.mark_date ? `, ${fmtDate(d.mark_date)}` : ''}` : isNum(d.mark) ? `mark ${fmtLevel(d.mark, d.mark_unit)}, ${fmtDate(d.mark_date)}${d.mark_frequency === 'monthly' ? ' (monthly)' : ''}` : d.mark_instrument ? 'no mark yet' : d.kind === 'position' ? 'instrument not in the registry' : 'no position'}</span></div>
       </div>`;
     const dv = d.derivative;
-    const derivNote = dv ? `${esc(dv.structure)} on ${esc(dv.product)} ${esc(dv.contract_month)} (${esc(dv.exchange)}${dv.legs ? `: ${esc(dv.legs.split('|').join(', '))}` : ''}${dv.option_expiry ? `, expiry ${fmtDate(dv.option_expiry)}` : ''}) · marked at the ${esc(dv.mark_source)}${dv.proxy === 'yes' ? ' <b>(proxy)</b>' : ''}${dv.structure !== 'future' ? ` · <b>model estimate</b>: Black-76 with implied vol ${esc(dv.iv_entry_pct)}% at entry (${esc(dv.iv_source)}); intrinsic value from expiry · maximum loss ${esc(dv.risk_per_unit)} per unit (the premium)` : ''} · <span class="muted">settlement prices are licensed and kept privately; only P&L in % is published</span>` : '';
+    const derivNote = dv ? `${esc(dv.structure)} on ${esc(dv.product)} ${esc(dv.contract_month)} (${esc(dv.exchange)}${dv.legs ? `: ${esc(dv.legs.split('|').join(', '))}` : ''}${dv.option_expiry ? `, expiry ${fmtDate(dv.option_expiry)}` : ''}) · marked at the ${esc(dv.mark_source)}${dv.proxy === 'yes' ? ' <b>(proxy)</b>' : ''}${dv.structure !== 'future' ? ` · <b>model estimate</b>: Black-76 with implied vol ${esc(dv.iv_entry_pct)}% at entry (${esc(dv.iv_source)}); intrinsic value from expiry · ${isNum(Number(dv.risk_per_unit)) && dv.risk_per_unit !== '' ? `maximum loss ${esc(dv.risk_per_unit)} per unit (the premium)` : 'maximum loss: the premium, priced at the entry-day settlement (kept private: licensed)'}` : ''} · <span class="muted">settlement prices are licensed and kept privately; only P&L in % is published</span>` : '';
     const markNote = dv ? derivNote : d.mark_instrument ? `${esc(d.mark_instrument)}${isNum(d.mark) ? ` = ${fmtLevel(d.mark, d.mark_unit)} on ${fmtDate(d.mark_date)}` : ' (no mark yet)'}${d.mark_frequency === 'monthly' ? ' · <b>marked monthly</b> (no free daily source; see Marks)' : ''}${d.mark_source ? ` · ${esc(d.mark_source)}` : ''}${d.mark_source_url && /^https?:/.test(d.mark_source_url) ? ` · <a href="${esc(d.mark_source_url.split(' ;')[0])}" target="_blank" rel="noopener">source</a>` : ''}${d.mark_note ? ` · <span class="muted">${esc(d.mark_note)}</span>` : ''}${!isNum(d.live_pnl_pct) && d.kind === 'position' && isNum(d.mark) && !isNum(d.entry_level) ? ' · P&L needs a numeric entry level' : ''}` : (d.kind === 'position' ? 'instrument not matched in data/ledger/instruments.csv' : '');
     view.innerHTML = `
       <a class="back" href="#/decisions">← Decisions</a>
@@ -1162,7 +1162,7 @@
       title = `${p.id} · ${p.instrument}`; unit = p.mark_unit || p.unit; hist = p.mark_history || []; thesis = p.thesis;
       entry = p.entry_level; stop = p.stop; sub = `Me · ${p.action} · ${p.status}`;
       rows = [['Action', badge(p.action)], ['Size', `${fmtPct(p.size_pct, 2)} of account at risk`], ['Probability', fmtProb(p.probability)],
-        ['Entry', isNum(entry) ? `${fmtLevel(entry, unit)} (${fmtDate(p.date)})${(p.corrections || []).some((c) => c.field === 'entry_level') ? ` ${pill('corrected', 'warn')}` : ''}` : '—'], ['Stop', isNum(stop) ? fmtLevel(stop, unit) : '—'],
+        ['Entry', (isNum(entry) ? `${fmtLevel(entry, unit)} (${fmtDate(p.date)})` : (p.entry_text ? esc(p.entry_text) : '—')) + ((p.corrections || []).some((c) => c.field === 'entry_level') ? ` ${pill('corrected', 'warn')}` : '')], ['Stop', isNum(stop) ? fmtLevel(stop, unit) : '—'],
         ['Mark', isNum(p.mark) ? `${fmtLevel(p.mark, unit)} (${fmtDate(p.mark_date)}, ${esc(p.mark_frequency)})${p.mark_flag ? ` ${pill(p.mark_flag, 'warn')}` : ''}` : '—'],
         ['P&L', p.status === 'resolved' ? fmtPct(p.pnl_pct, 2, true) : `<span class="${signClass(p.live_pnl_pct)}">${fmtPct(p.live_pnl_pct, 2, true)}</span> of account`],
         ['Distance to stop', isNum(p.stop_distance) ? fmtLevel(Math.abs(p.stop_distance), unit) : '—'], ['Horizon', fmtDate(p.horizon)],
@@ -1199,7 +1199,7 @@
         ['Stop', 'none (monthly rebalance)'], ['Risk share', fmtPct(p.risk_share_pct, 1)]];
     } else throw new Error('Unknown book');
     const corr = (book === 'me' && p.corrections) || [];
-    const FIELD = { entry_level: 'Entry level' };
+    const FIELD = { entry_level: 'Entry level', entry_underlying: 'Underlying at entry', entry_premium: 'Entry premium', risk_per_unit: 'Maximum loss per unit', quantity: 'Quantity (spreads)' };
     const corrHtml = corr.length ? `<section class="section"><h2>Corrections</h2>${corr.map((c) => `
       <div class="card correction"><div class="row-top"><b>${esc(c.correction_id)} · ${esc(FIELD[c.field] || c.field)}</b><span class="muted small">${fmtDateTime(c.sealed_at)}</span></div>
         <dl class="kv"><dt>Was</dt><dd>${esc(c.old_value)}</dd><dt>Now</dt><dd>${esc(c.new_value)}</dd><dt>Reason</dt><dd>${esc(c.reason)}</dd>

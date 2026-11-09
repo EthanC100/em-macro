@@ -26,7 +26,7 @@ from . import derivs as DV
 from . import janus as JN
 from . import pricing as PX
 from .marks import latest_marks, live_mark, load_registry, mark_can_act, match_instrument, read_marks
-from .schema import parse_date, parse_number, parse_probability, stop_level
+from .schema import entry_number, parse_date, parse_number, parse_probability, stop_level
 from .scoring import pnl_at_level, score_decision
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,9 +126,9 @@ def me_book(today: date, mb: MarkBook) -> dict:
                      "direction": "long" if d.get("action") == "Buy" else ("short" if d.get("action") == "Sell" else "none"),
                      "status": status, "size_pct": parse_number(d.get("size_pct")), "date": d.get("date"),
                      "horizon": d.get("horizon"), "probability": parse_probability(d.get("probability")),
-                     "entry_level": parse_number(d.get("entry_level")), "entry_text": d.get("entry_level"),
+                     "entry_level": entry_number(d.get("entry_level")), "entry_text": d.get("entry_level"),
                      "stop": stop_level(d.get("stop")),
-                     "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == d["id"]],
+                     "corrections": [c for c in corr if c["kind"] in ("decision", "derivative") and c["id"] == d["id"]],
                      "thesis": d.get("thesis"), "change_mind": d.get("change_mind"), "outcome": d.get("outcome"),
                      "pnl_pct": sc["pnl_pct"], "brier": sc["brier"], "unit": (reg or {}).get("unit"),
                      "asset_class": "Commodities" if dv else asset_class((reg or {}).get("kind"), (reg or {}).get("book")),

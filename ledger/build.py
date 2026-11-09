@@ -37,7 +37,7 @@ from . import postmortem as PM
 from . import risk as RISK
 from .marks import latest_marks, live_mark, load_registry, read_marks
 from .schema import (DECISION_OUTCOMES, FORECAST_OUTCOMES, REPORT_TYPES, kelly_size_pct, stop_level,
-                     parse_date, parse_number, parse_probability)
+                     entry_number, parse_date, parse_number, parse_probability)
 from .scoring import (calibration_bins, cumulative, score_decision, score_forecast)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -271,7 +271,7 @@ def build_decisions(today: date) -> dict:
             "date": iso(parse_date(r.get("date"))),
             "horizon": iso(horizon),
             "resolved_date": iso(parse_date(r.get("resolved_date"))),
-            "entry_level": fnum(r.get("entry_level"), 4),
+            "entry_level": fnum(entry_number(r.get("entry_level")), 4),
             "exit_price": fnum(r.get("exit_price"), 4),
             "stop_level": stop_level(r.get("stop")),
             "status": (r.get("status") or "open").strip().lower(),
@@ -283,7 +283,7 @@ def build_decisions(today: date) -> dict:
             "brier_claude": sc["brier_claude"],
             "pnl_pct": sc["pnl_pct"],
             "issue_url": f"{REPO_URL}/issues/{r['issue']}" if str(r.get("issue") or "").isdigit() else None,
-            "corrections": [c for c in corr if c["kind"] == "decision" and c["id"] == r["id"]],
+            "corrections": [c for c in corr if c["kind"] in ("decision", "derivative") and c["id"] == r["id"]],
         })
         out.append(d)
     out.sort(key=lambda d: (d["date"] or "", d["id"]), reverse=True)

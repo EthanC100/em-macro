@@ -248,3 +248,71 @@ def test_terms_are_sealed(ledger_root, monkeypatch):
     new = audit.seal(seals)
     assert ("derivative", "entry") in {(s["kind"], s["part"]) for s in new}
     assert audit.verify_seals(seals)["ok"]
+
+
+# ----------------------------------------------------------------------------- correction K002: entry at a private settlement
+PRIVATE_FIELDS = {"entry_underlying": "settlement 2026-11-06 (private)",
+                  "entry_premium": DV.PRIVATE_PREMIUM, "risk_per_unit": DV.PRIVATE_RISK, "quantity": "69"}
+ENTRY_TEXT = ("6 Nov 2026 close: the NYMEX BZ March 2027 final settlement (private, em-macro-data; replaces the 94.00 "
+              "placeholder by correction K002)")
+
+
+def _k002(ledger_root, monkeypatch):
+    res = intake.process_paste(BLOCK, "clerk", TODAY, ledger_root)
+    monkeypatch.setattr(audit, "ROOT", ledger_root)
+    seals = ledger_root / "data/ledger/seals.jsonl"
+    audit.seal(seals, now="2026-11-06T00:00:00+00:00")
+    recs = audit.correct_many([("derivative", res["id"], PRIVATE_FIELDS),
+                               ("decision", res["id"], {"entry_level": ENTRY_TEXT})], "placeholder entry", seals)
+    return res["id"], seals, recs
+
+
+def test_multi_field_correction_verifies_and_hides_nothing(ledger_root, monkeypatch):
+    did, seals, recs = _k002(ledger_root, monkeypatch)
+    assert [r["correction_id"] for r in recs] == ["K001", "K001"]        # one correction id for both entries
+    assert recs[0]["fields"]["entry_underlying"] == {"old": "94", "new": "settlement 2026-11-06 (private)"}
+    v = audit.verify_seals(seals)
+    assert v["ok"], v
+    flat = audit.corrections(seals)
+    assert {c["field"] for c in flat} == set(PRIVATE_FIELDS) | {"entry_level"}
+    assert all(c["correction_id"] == "K001" for c in flat)
+    # a second, unrecorded change to the same row fails verification
+    p = ledger_root / "data/ledger/derivatives.csv"
+    p.write_text(p.read_text().replace(",56.4,", ",50,"))
+    v = audit.verify_seals(seals)
+    assert not v["ok"] and "changed after sealing" in v["error"]
+    # a later single-field correction gets the next id
+    p.write_text(p.read_text().replace(",50,", ",56.4,"))
+    assert audit.correct("decision", did, "horizon", "2026-12-16", "test", seals)["correction_id"] == "K002"
+
+
+def test_private_entry_is_resolved_from_the_store_and_never_published(ledger_root, tmp_path, monkeypatch):
+    did, _seals, _ = _k002(ledger_root, monkeypatch)
+    store = tmp_path / "em-macro-data"
+    # without the entry settlement in the store: the entry row only, no mark
+    out = DV.mark(ledger_root, date(2026, 11, 11), fetch=False)
+    assert any("not in the private store" in x for x in out["log"])
+    assert [r["basis"] for r in _rows(ledger_root / DV.PNL) if r["id"] == did] == ["entry"]
+    _settle(store, [("2026-11-06", 91.7), ("2026-11-09", 95.2)])
+    out = DV.mark(ledger_root, date(2026, 11, 11), fetch=False)
+    mine = [r for r in _rows(ledger_root / DV.PNL) if r["id"] == did]
+    assert [(r["date"], r["basis"]) for r in mine] == [("2026-11-06", "entry"), ("2026-11-09", "model estimate")]
+    assert mine[0]["pnl_pct"] == "0"                                  # the original entry row is kept
+    t = DV.resolve_terms(DV.load_terms(ledger_root)[did], DV.settlements(store))
+    assert float(t["entry_underlying"]) == 91.7 and float(t["risk_per_unit"]) == float(t["entry_premium"])
+    v0, _ = DV.value(t, 91.7, date(2026, 11, 6), ledger_root)
+    assert abs(DV.pnl_pct(t, 2.0, v0)) < 1e-9                         # P&L at the entry close is 0
+    v1, _ = DV.value(t, 95.2, date(2026, 11, 9), ledger_root)
+    assert float(mine[1]["pnl_pct"]) == DV.pnl_pct(t, 2.0, v1) > 0
+    q = math.floor(200_000 / (float(t["entry_premium"]) * 1000))      # spreads within 2% of a US$10m book
+    assert q * float(t["entry_premium"]) * 1000 <= 200_000 < (q + 1) * float(t["entry_premium"]) * 1000
+    # no private number in any public file
+    for f in ("data/ledger/derivatives.csv", "data/ledger/decisions.csv", "data/ledger/seals.jsonl", DV.PNL):
+        txt = (ledger_root / f).read_text()
+        assert "91.7" not in txt and f"{float(t['entry_premium']):.6f}" not in txt
+    assert "(private" in next(d for d in _rows(ledger_root / "data/ledger/decisions.csv") if d["id"] == did)["entry_level"]
+
+
+def test_private_entry_text_is_not_read_as_a_number():
+    from ledger.schema import entry_number
+    assert entry_number(ENTRY_TEXT) is None and entry_number("165.74bp (Riksbank close)") == 165.74

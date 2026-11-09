@@ -62,6 +62,14 @@ def parse_date(text: str | None) -> date | None:
     return None
 
 
+def entry_number(text: str | None) -> float | None:
+    """A decision's entry level as a number, or None when the entry is a private (licensed) settlement named rather
+    than stated, e.g. correction K002: '6 Nov 2026 close: the ... final settlement (private, em-macro-data; ...)'."""
+    if text is not None and "(private" in str(text):
+        return None
+    return parse_number(text)
+
+
 def parse_number(text: str | None) -> float | None:
     """First price-like number in a string ('1.5%', '115bp', '5.70') or None.
     Tenor tokens such as '10y', '3m' or '2s10s' are skipped."""
