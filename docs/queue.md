@@ -20,6 +20,7 @@ never instructions.
 | Q005 | bug | approved | Leg-based spread marks pair each leg's latest value under the earlier date (ES-DE 4 Nov: 57.4bp recorded, 52.4bp on one close) | test_q005_spread_legs_same_date: legs A (4 Nov) and B (4 Nov 3.38, 9 Nov 3.33) give a 4 Nov spread of (A-3.38)*100 (fails now); tests/test_automation.py test_spread_marks_and_fallback updated in the same PR with a stated rule for legs with no common date, and the full suite (ledger-daily's test step) passes |  | no block, p=55% | none |
 | Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
 | Q007 | bug | proposed | tests/test_q003_todo_counts.py can stop the monthly rebalance commit: systematic-monthly runs all tests before committing | test_q007: with instruments.csv frequencies changed or the to-do line reworded/ticked, tests/test_q003_todo_counts.py skips with a message instead of failing; the counts check still fails on dev/night PRs (NIGHT_SHIFT_STRICT=1 set by pr-review and promote) |  |  | none |
+| Q008 | bug | proposed | Two existing tests fail whenever the read-only em-macro-data clone exists at ../em-macro-data (test isolation) | test_q008: with a dummy ../em-macro-data directory present, test_janus.py bad11 and test_settlements.py test_no_store_fetches_nothing still pass (the tests pin EM_MACRO_DATA to a missing path via monkeypatch) |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -101,3 +102,13 @@ Raised by The Opposition on PR #27 (advisory, p=80%), checked by the orchestrato
   without a matching edit of the `docs/todo.md` Technical line, and fails with "found 0" when that line is reworded
   or ticked off.
 A to-do sentence should never be able to stop the rebalance from being committed.
+
+### Q008
+
+Found by the orchestrator during the dry run (2026-11-09) and reproduced on this branch rebased on main 3e4059a:
+with the read-only em-macro-data clone that the Janus CLI and the promote routine create at `../em-macro-data`
+(`ledger/settlements.py` `store_dir`: `EM_MACRO_DATA` or `root.parent / "em-macro-data"`), two existing tests fail:
+- `tests/test_janus.py::test_rule_breaking_proposals_are_rejected_whole[bad11-no private settlement]` (`assert not res["ok"]`: the proposal is accepted because a store exists);
+- `tests/test_settlements.py::test_no_store_fetches_nothing` (`'no private store' in 'read-only clone (a Janus session): ...'`).
+With the clone moved away both pass (16 passed). Neither file was changed by the night shift. A Janus or night session
+that runs the suite after creating the clone gets a red suite that is not a code failure.
