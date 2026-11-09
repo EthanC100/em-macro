@@ -43,6 +43,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DAILY_CAP_USD = 1.00
+REFETCH_DAYS = 7          # days before the last stored settlement that every fetch requests again (late finals)
 SETTLE_FILE = "ledger/futures_settlements.csv"
 SPEND_FILE = "ledger/databento_spend.jsonl"
 SETTLE_COLUMNS = ["date", "product", "contract_month", "settle", "source", "source_url", "fetched_at", "note"]
@@ -364,7 +365,9 @@ def fetch(needs: dict[tuple[str, str], date], today: date | None = None, store: 
     starts = {}
     for (prod, month), first in needs.items():
         last = max((x[0] for x in series(have, prod, month)), default=None)
-        st = max(first, last + timedelta(days=1)) if last else first
+        # the last REFETCH_DAYS days are always requested again: a final settlement can arrive days late (a Friday's
+        # on the Sunday) or be republished after Databento withdraws a day, after a later day is already stored
+        st = max(first, last + timedelta(days=1) - timedelta(days=REFETCH_DAYS)) if last else first
         if st <= end.date():
             starts[(prod, month)] = st
     if not starts:

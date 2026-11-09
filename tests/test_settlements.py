@@ -63,10 +63,28 @@ def test_final_settlement_only_and_private_store(tmp_path):
     assert kinds.index("cost") < kinds.index("get_range")          # quoted before every request
     spend = [json.loads(x) for x in (tmp_path / ST.SPEND_FILE).read_text().splitlines()]
     assert spend[-1]["downloaded"] and spend[-1]["quote_usd"] == 0.0001
-    # nothing new: only the days after the last stored one are requested
-    ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), tmp_path, c=c)
+    # the next fetch asks again for the last REFETCH_DAYS days (here back to the first date needed)
+    res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), tmp_path, c=c)
     last_get = [kw for k, kw in c.calls if k == "get_range"][-1]
-    assert last_get["start"].startswith("2026-11-10")
+    assert last_get["start"].startswith("2026-11-06") and res["stored"] == 0      # nothing new, nothing duplicated
+    assert len(ST.read(tmp_path)) == 2
+
+
+def test_late_final_settlement_is_still_fetched(tmp_path):
+    """6 Nov's final arrived on Sunday 8 Nov (and Databento had withdrawn the day meanwhile): a run that already
+    stored a later day must still pick it up."""
+    later = [_stat("BZH7", "2026-11-09", 95.5)]
+    ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), tmp_path, c=FakeClient(later))
+    assert [r["date"] for r in ST.read(tmp_path)] == ["2026-11-09"]
+    c = FakeClient(later + [_stat("BZH7", "2026-11-06", 93.30)], end="2026-11-11T06:00:00.000000000Z")
+    res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 11), tmp_path, c=c)
+    assert res["stored"] == 1 and [r["date"] for r in ST.read(tmp_path)] == ["2026-11-06", "2026-11-09"]
+    # long after: the window is the last REFETCH_DAYS days before the newest stored settlement, not the whole history
+    c2 = FakeClient(later + [_stat("BZH7", "2026-11-20", 96.0)], end="2026-11-21T06:00:00.000000000Z")
+    ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 21), tmp_path, c=c2)
+    c3 = FakeClient([], end="2026-11-22T06:00:00.000000000Z")
+    ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 22), tmp_path, c=c3)
+    assert [kw for k, kw in c3.calls if k == "get_range"][-1]["start"].startswith("2026-11-14")
 
 
 def test_daily_cap_refuses_and_is_shared(tmp_path):

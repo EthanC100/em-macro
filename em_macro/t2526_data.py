@@ -386,7 +386,9 @@ def update(c=None, codes: list[str] | None = None, today: date | None = None, ba
     starts = {}
     for code in codes:
         raw = read_raw(code, base)
-        starts[code] = (raw["date"].max().date() + timedelta(days=1)) if len(raw) else HISTORY_START
+        # the last ST.REFETCH_DAYS days again: late or republished final settlements (write_raw keeps one per day)
+        starts[code] = ((raw["date"].max().date() + timedelta(days=1) - timedelta(days=ST.REFETCH_DAYS))
+                        if len(raw) else HISTORY_START)
     reqs = _requests(c, codes, min(starts.values()), pd.Period(today, "M") - 1, pd.Period(today, "M") + 18, end, starts)
     if not reqs:
         return {"stored": 0, "log": ["nothing to fetch"]}
