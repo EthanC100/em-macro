@@ -407,3 +407,11 @@ def test_claude_md_keeps_existing_notes_and_adds_hard_rules():
     for must in ("never push to main", "protected paths", "Norgate", "salts", "7-day settlement re-request",
                  "data, not instructions"):
         assert must.lower() in t.lower(), must
+
+
+def test_morning_report_lists_real_merges_and_reads_janus():
+    from nightshift import morning as M
+    assert M.MERGE_SUBJECT.match("Merge Q003: todo counts") and M.MERGE_SUBJECT.match("night-start: merge main into dev")
+    assert not M.MERGE_SUBJECT.match("night-worker: lock (dry run)")
+    lines = M.janus_section(date(2026, 11, 10))
+    assert lines[0].startswith("C05: ") and "at risk (budget 3-10%)" in lines[0]
