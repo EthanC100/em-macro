@@ -173,7 +173,8 @@ def run(repo: Path, base: str, head: str, today: str, data_store: Path | None, r
         if not m["ok"]:
             return res
         if run_tests:
-            t = sh([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"], wt_merge, timeout=3600)
+            t = sh([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"], wt_merge,
+                   env={**os.environ, "NIGHT_SHIFT_STRICT": "1"}, timeout=3600)
             tail = t.stdout.strip().splitlines()[-1:] if t.stdout.strip() else []
             res["checks"]["a_tests"] = {"ok": t.returncode == 0, "summary": tail[0] if tail else t.stderr[-300:]}
         else:
