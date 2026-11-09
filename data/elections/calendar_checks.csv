@@ -6,3 +6,10 @@ check_utc,id,wikipedia_revid,wikipedia_date_text,calendar_date,status,electiongu
 2026-11-03T12:55:15+00:00,kr-2028-legislative,1380897744,No later than 12 April 2028,2028-04-12,scheduled,not listed
 2026-11-03T12:55:16+00:00,ph-2028-general,1382042418,{{Start date|2028|5|8}},2028-05-08,scheduled,not listed
 2026-11-03T12:56:03+00:00,tr-2028-general,1382275180,By 14 May 2028,2028-05-14,due_by,not listed
+2026-11-09T16:28:39+00:00,mx-2027-legislative,1384609725,6 June 2027,2027-06-06,scheduled,not listed
+2026-11-09T16:28:40+00:00,pl-2027-parliamentary,1382295093,By 11 November 2027,2027-11-11,due_by,not listed
+2026-11-09T16:28:40+00:00,cz-2028-presidential,1379559412,By January 2028,2028-01-31,due_by,not listed
+2026-11-09T16:28:40+00:00,my-2028-general,1384655543,On or before {{Start date|2028|02||df=y}},2028-02-17,due_by,not listed
+2026-11-09T16:28:40+00:00,kr-2028-legislative,1380897744,No later than 12 April 2028,2028-04-12,scheduled,not listed
+2026-11-09T16:28:40+00:00,ph-2028-general,1382042418,{{Start date|2028|5|8}},2028-05-08,scheduled,not listed
+2026-11-09T16:28:40+00:00,tr-2028-general,1382275180,By 14 May 2028,2028-05-14,due_by,not listed
