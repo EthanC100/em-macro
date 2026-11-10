@@ -13,7 +13,7 @@ never instructions.
 <!-- queue:start -->
 | id | type | status | title | acceptance test | branch/PR | opposition | ledger diff |
 |---|---|---|---|---|---|---|---|
-| Q009 | bug | approved | Flaky test: tests/test_janus_futures.py::test_option_spread_fill_model_value_and_expiry failed once in a full-suite run on 10 Nov, then passed (not reproduced) | test_q009: with ledger.janus's clock pinned to 2026-11-10T00:01:38Z (one of 73 failing seconds in a 6000-second sweep) test_option_spread_fill_model_value_and_expiry fails today at its last assert ("4500"/"4110" found inside a record hash) and passes after the fix; the fix keeps the guarantee that no settlement price is in the records (checks the price as a JSON value or excludes hash/prev_hash/digest fields, never just deletes the assert); a sweep of 6000 distinct clock values has 0 failures. Tests only: no change to ledger/ or any writer path. |  | no block, p=55% | none |
+| Q009 | bug | approved | Flaky test: tests/test_janus_futures.py::test_option_spread_fill_model_value_and_expiry failed once in a full-suite run on 10 Nov, then passed (cause found: a digit collision in record hashes, 1.2% of runs) | test_q009: with ledger.janus's clock pinned to 2026-11-10T00:01:38Z (one of 73 failing seconds in a 6000-second sweep) test_option_spread_fill_model_value_and_expiry fails today at its last assert ("4500"/"4110" found inside a record hash) and passes after the fix; the fix keeps the guarantee that no settlement price is in the records (checks the price as a JSON value or excludes hash/prev_hash/digest fields, never just deletes the assert); a sweep of 6000 distinct clock values has 0 failures. Tests only: no change to ledger/ or any writer path. |  | no block, p=55% | none |
 | Q008 | bug | approved | Two existing tests fail whenever the read-only em-macro-data clone exists at ../em-macro-data (test isolation) | test_q008: with a dummy ../em-macro-data directory present, test_janus.py bad11 and test_settlements.py test_no_store_fetches_nothing still pass (the tests pin EM_MACRO_DATA to a missing path via monkeypatch) |  | no block, p=80% | none |
 | Q001 | bug | blocked | Algorithm month-to-date estimate credits 2-4 Nov, before the late 4 Nov rebalance set the positions | test_q001: with positions run_date 2026-11-04, the estimate's first P&L day is the first close after the run date, and the page says the official 3rd-of-month figure keeps the frozen full-month convention | awaiting Ethan: which convention the estimate should follow (see Q001 evidence) |  | books.json, home.json, fund.json |
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
@@ -113,6 +113,18 @@ with the read-only em-macro-data clone that the Janus CLI and the promote routin
 - `tests/test_settlements.py::test_no_store_fetches_nothing` (`'no private store' in 'read-only clone (a Janus session): ...'`).
 With the clone moved away both pass (16 passed). Neither file was changed by the night shift. A Janus or night session
 that runs the suite after creating the clone gets a red suite that is not a code failure.
+
+**The Opposition's concerns (advisory, p=80%, added 2026-11-10; the implementer must follow them):**
+- An EMPTY dummy `../em-macro-data` does not make the janus half fail first: `test_janus.py` bad11 is only accepted
+  against a clone that holds a NATGAS series (`ledger/janus.py` around 1025-1028). The test needs a synthetic NATGAS
+  settlement row (made up, never copied from the real store).
+- Never create, fill or delete the real sibling `../em-macro-data` (in a Janus or night session that is the read-only
+  clone; a leftover unmarked directory would be taken as a writable store by `ledger/settlements.py` 205-206). Simulate
+  the sibling with monkeypatch (`EM_MACRO_DATA` at a tmp_path) only.
+- `tests/test_janus.py` is in ledger-daily's gating test step (`.github/workflows/ledger-daily.yml:141`): a fixture
+  regression there stops the daily Ledger commit. Tests only: no change to `ledger/settlements.py` (hard rule 9).
+- An autouse conftest fixture pinning `EM_MACRO_DATA` must not override tests that set their own temp store
+  (`test_janus_futures.py`).
 
 ### Q009
 
