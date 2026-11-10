@@ -45,7 +45,7 @@ Set by the owner before Janus had opened any position, so set without seeing any
   `market_probability` and `thesis`.
   - On a market holiday that falls on a weekday, also set `market_holiday` to its name.
   - If the deferred ideas plus open risk come to less than 3%, `below_budget` is still required.
-  - The next trading-day review opens them (with The Opposition), or says why not.
+  - The next trading-day review opens them (with The Opposition). From C07 it must: see 4 below.
 
 **3. Config change C06 (from the 10 November 2026 review).**
 - **At least 2 open positions at all times.** `below_budget` may only let risk fall below 3% (for example two
@@ -56,7 +56,8 @@ Set by the owner before Janus had opened any position, so set without seeing any
   - the CLI checks each against the marks: `last_mark` must match and the mark must be stale (at least 2 weekdays
     without a mark, or none);
   - while other instruments with current marks could fill the shortfall, the minimum stands: open there.
-  - On a weekend or market holiday, named `deferred_ideas` count toward the 2.
+  - On a weekend or market holiday, named `deferred_ideas` count toward the 2 (from C07, only those whose own
+    market is closed on the review date: see 4 below).
 - **An event-based `below_budget`** (a release, decision, meeting, vote, or any date) also gives:
   - `type`: `"event"`;
   - `event_date`: the event's date as the **official calendar** lists it (for example the BLS release schedule
@@ -68,6 +69,38 @@ Set by the owner before Janus had opened any position, so set without seeing any
   (and nothing else) and exits 3; `scripts/janus_commit.sh` commits it and also exits 3. Every quick check flags it
   until a review passes, so fix every error and propose again in the same session. `--dry-run` writes nothing:
   use it first.
+
+**4. Config change C07 (from the 10 November 2026 review at 23:07 UTC; approved by Ethan on 10 November).**
+- **No 50% calls.** No position you open (and no deferred idea) may state `probability` 50. 50 is no view: either
+  state the side you favour (for example 55, or 45 with the direction flipped) or do not open it.
+- **Wider search when the minimum binds.** The minimum binds when the book held fewer than 2 positions (after your
+  closes) and this review brings it to exactly 2. Then list `candidates`:
+  - at least **5** different instruments across at least **2** asset classes (rates, FX, commodities);
+  - each `{"instrument", "direction", "probability", "market_probability", "outcome": "opened" | "deferred" |
+    "not_opened", "opposition": "kept" | "dropped" | "none", "reason"}`, including every position you open and every
+    idea you defer;
+  - a candidate you dropped after The Opposition (`"opposition": "dropped"`) may be reopened only with a
+    `reopen_reason` saying why no other candidate is better, naming each candidate you did not open.
+- **Time anchor.** Run `date -u` before you write the proposal, and give `time_anchor`:
+  - `now_utc`: the current UTC time, e.g. `"2026-11-10T23:07:00Z"`. The CLI rejects it if it is more than 3 hours
+    old, so refresh it if you propose again later;
+  - `events`: one entry for **every** event you cite in any reason, thesis or the market summary: `event`,
+    `time_utc` (the release or decision time in UTC: for example US data at 08:30 ET is 13:30 UTC in winter, 12:30
+    UTC in summer) or `date` when it is not on today's UTC date, and `occurred` (had it happened at `now_utc`?).
+    Every date you write (`10 Nov`, `8-9 Dec`) and every scheduled event you name (CPI, payrolls, FOMC, GDP, PMI,
+    OPEC, ...) needs an entry;
+  - never describe an event that has not happened as released ("released", "came in", "printed", "showed"). Write
+    "is due at 13:30 UTC", or "has not been released".
+- **Deferrals.** A deferred idea counts toward the 2-position minimum only if **that instrument's market** is closed
+  today:
+  - on a weekend, every market;
+  - FX trades every weekday except 1 January and 25 December, so an FX idea on a weekday holiday does not count;
+  - any other market on a weekday holiday: give `market_closed`: `{"holiday": "...", "calendar_url": "..."}`, the
+    exchange's or an official holiday calendar (hosts in `context`, `mandate.c07.market_calendars`), also listed in
+    `sources_read`.
+
+  A deferred idea **must open at the next session**: the first daily review on a day its market is open opens it
+  (same instrument and direction). While its market stays closed, carry it forward in `deferred_ideas`.
 
 **All existing limits stay**: 2% at risk per position, 10% in total, 8 open positions, capacity, costs, The
 Opposition and `market_probability` on every new position.
@@ -86,7 +119,10 @@ Opposition and `market_probability` on every new position.
   - the mandate: a non-empty `sources_read`, and `below_budget` (or `deferred_ideas` on a weekend or holiday) when
     the account would be below 3% at risk;
   - C06: at least 2 positions (fewer only with a verified `data_failure`), and an event-based `below_budget` dated
-    from an official calendar listed in `sources_read`, expiring at the end of the next trading day after the event.
+    from an official calendar listed in `sources_read`, expiring at the end of the next trading day after the event;
+  - C07: no opened position at probability 50; `candidates` (5 instruments, 2 asset classes) when the minimum
+    binds; a `time_anchor` covering every cited event, with nothing in the future described as released; deferred
+    ideas that count only where their market is closed and open at the next session.
 - Universe: only the instruments listed in `context`. Conventions:
   - yields: `long` = long the bond;
   - FR-DE: `long` = long OAT / short Bund, which gains when the spread tightens;
@@ -172,9 +208,11 @@ position must be reviewed.
 ## 3. Choose new positions (the risk budget)
 
 Rank the views your research supports and take your best ones, even at modest conviction (for example 55%), until
-the account is normally at 3-10% at risk in 2-6 positions. For each candidate:
+the account is normally at 3-10% at risk in 2-6 positions. Keep the ranked list: when the C06 minimum binds it goes in
+`candidates` (at least 5 instruments across at least 2 asset classes; C07). For each candidate:
 - **Probability:** your honest probability (0-100) that the position closes with a gain before costs. 50 is no
-  view; above 70 is rare. Compare it with `market_probability`: the difference is your edge.
+  view, and the CLI rejects a position opened at 50 (C07); above 70 is rare. Compare it with `market_probability`:
+  the difference is your edge.
 - **Size:** the stop is a level in the instrument's own unit, on the losing side of the latest mark. `risk_pct` is
   the % of the account lost if it is hit. Scale it with conviction and edge, as in the mandate's table: a small
   edge gets 0.25-0.5%.
@@ -194,23 +232,37 @@ position: instrument, direction, size, stop, horizon, probability, thesis and ch
 > "probability_view_wrong": 0-100, "sources": [{"title", "url"}]}.
 
 Put its reply, with its `model`, in the position's `opposition` field. If The Opposition persuades you, drop the
-position or change it; never edit its text.
+position or change it; never edit its text. Record the result in the candidate's `opposition` (`kept` or
+`dropped`). Reopening a dropped candidate needs a `reopen_reason` that says why no other candidate is better (C07).
 
 ## 5. Write, validate and apply the proposal
 
-`/tmp/janus_review.json`:
+`/tmp/janus_review.json` (C07 format):
 
 ```json
 {"session": "daily_review", "model": "<your model string>", "session_url": "<this session's URL if known>",
+ "time_anchor": {"now_utc": "2026-11-10T23:07:00Z",
+                 "events": [{"event": "US October CPI (BLS)", "time_utc": "2026-11-10T13:30:00Z", "occurred": true},
+                            {"event": "FOMC decision", "date": "2026-12-09", "occurred": false}]},
  "market_summary": "2-4 sentences on what matters today",
  "reviews": [{"id": "J001", "action": "hold", "reasoning": "..."}],
- "new_positions": [{"instrument": "US10Y", "direction": "long", "risk_pct": 1.0, "stop": 5.10, "horizon": "2026-12-18",
-                    "probability": 58, "market_probability": 50, "market_basis": "none",
+ "new_positions": [{"instrument": "US10Y", "direction": "long", "risk_pct": 0.5, "stop": 5.10, "horizon": "2026-12-18",
+                    "probability": 56, "market_probability": 50, "market_basis": "none",
                     "market_source": "no market-implied probability for this level: coin flip (0.50)",
                     "thesis": "Two sentences. Or three.", "change_mind": "...",
                     "sources": [{"title": "...", "url": "https://..."}],
                     "opposition": {"case_against": "...", "key_risks": ["..."], "what_proves_it_wrong": "...",
                                    "probability_view_wrong": 50, "sources": [], "model": "<subagent model>"}}],
+ "candidates": [{"instrument": "US10Y", "direction": "long", "probability": 56, "market_probability": 50,
+                 "outcome": "opened", "opposition": "kept", "reason": "why it ranks first"},
+                {"instrument": "EUR", "direction": "short", "probability": 54, "market_probability": 50,
+                 "outcome": "not_opened", "opposition": "none", "reason": "why it was not taken"},
+                {"instrument": "GOLD", "direction": "long", "probability": 55, "market_probability": 50,
+                 "outcome": "not_opened", "opposition": "dropped", "reason": "what The Opposition showed"},
+                {"instrument": "WTI", "direction": "short", "probability": 53, "market_probability": 50,
+                 "outcome": "not_opened", "opposition": "none", "reason": "why it was not taken"},
+                {"instrument": "GB10Y", "direction": "long", "probability": 52, "market_probability": 50,
+                 "outcome": "not_opened", "opposition": "none", "reason": "why it was not taken"}],
  "no_trade_reasoning": "required when new_positions is empty",
  "sources_read": [{"title": "...", "url": "https://...", "driver": "central banks|data|geopolitics|positioning"}],
  "below_budget": {"condition": "US CPI on 10 Nov decides the December Fed call", "type": "event",
@@ -218,12 +270,16 @@ position or change it; never edit its text.
                   "until": "2026-11-11", "reasoning": "required only if the account would be below 3% at risk"},
  "data_failure": [{"instrument": "GB10Y", "mark": "which mark failed", "last_mark": "YYYY-MM-DD or none"}],
  "deferred_ideas": [{"instrument": "US10Y", "direction": "long", "risk_pct": 0.5, "probability": 56,
-                     "market_probability": 50, "thesis": "weekend or market-holiday reviews only"}],
+                     "market_probability": 50, "thesis": "weekend or market-holiday reviews only",
+                     "market_closed": {"holiday": "weekday holidays only: its name",
+                                       "calendar_url": "https://www.sifma.org/resources/general/holiday-schedule/"}}],
  "market_holiday": "only on a weekday market holiday: its name"}
 ```
 
-Leave out `below_budget`, `data_failure`, `deferred_ideas` and `market_holiday` when they do not apply. Never leave out
-`sources_read`.
+Leave out `below_budget`, `data_failure`, `deferred_ideas`, `market_holiday` and `market_closed` when they do not
+apply, and `candidates` when the minimum does not bind (list them anyway if you like: they are checked and recorded).
+A candidate reopened after The Opposition also gives `reopen_reason`. Never leave out `sources_read` or
+`time_anchor`; every event in your reasons and theses must be in `time_anchor.events`.
 
 ```bash
 python -m ledger.janus propose --file /tmp/janus_review.json --dry-run      # fix every error it lists

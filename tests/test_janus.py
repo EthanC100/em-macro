@@ -237,8 +237,10 @@ def test_market_probability_is_recorded(tmp_path):
 
 
 # ----------------------------------------------------------------------------- mandate of 2026-11-09
-SAT = datetime(2026, 11, 14, 23, 7, tzinfo=timezone.utc)
-MON = datetime(2026, 11, 16, 23, 7, tzinfo=timezone.utc)
+# the C05 deferral rule alone: the weekend before C06 and C07 (their deferral rules are tested in test_janus_c06.py
+# and test_janus_c07.py)
+SAT = datetime(2026, 11, 7, 23, 7, tzinfo=timezone.utc)
+MON = datetime(2026, 11, 9, 23, 7, tzinfo=timezone.utc)
 NO_TRADE = dict(new_positions=[], no_trade_reasoning="Waiting for CPI on the rates ideas.")
 
 

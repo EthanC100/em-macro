@@ -14,6 +14,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C04 | 2026-11-06 | the fund's start (the first date both members are live: 30 November 2026, v1.1's index start) | **Horizons fund view added**: a combined view of Algorithm v1.1 (risk share 90%; 80% from the 2026-11-07 amendment) and Janus (10%; 20% from the 2026-11-07 amendment), combined by risk (risk share ÷ trailing volatility, capital shares until 6 months of data). Janus's share changes only by the rule in `docs/fund/allocation.md`: 20% after 30 resolved calls with positive net P&L and a better Brier score than the market on those calls (amended 2026-11-06: every Janus position must record a market probability, 50 where none exists); 5% while its drawdown exceeds 10%. Amended 2026-11-07, before the fund starts and before any Janus call resolved: Janus starts at 20%; after 30 resolved calls, 30% with positive net P&L and a better Brier score than the market, 10% with negative net P&L or a worse Brier score; 5% while its drawdown exceeds 10%, overriding. My decisions stay outside. | To see the books as one fund without changing any of them. | None. The fund is read-only (`ledger/fund.py`): no book's record, P&L, rule or result changes, and no fund figure is written into any book. |
 | C05 | 2026-11-09 | the next Janus daily review (9 November 2026) | **Janus mandate**: (a) research is required: every daily review researches the main drivers across its universe (central banks, data, geopolitics, positioning) on the web before deciding and records what it read in `sources_read`; a review with empty `sources_read` is rejected and counts as failed, and the quick check flags it. (b) Risk budget: normally 2-6 positions and 3-10% of the account at risk, best ideas even at modest conviction (e.g. 55%), size scaled with conviction and edge over the market probability (a small edge: 0.25-0.5% at risk); below 3% only with a specific written reason tied to an identifiable event or condition; weekend and holiday reviews may defer entries but must research and name the ideas. Set blind: no Janus position had ever been opened. | The first four reviews (6-8 November) opened nothing with general "no edge" reasoning, three of them with no recorded research. | None. Janus is a separate paper book: no algorithm, frozen result or other book changes. All existing Janus limits stay (2% per position, 10% total, 8 open, capacity, costs, The Opposition, `market_probability`). |
 | C06 | 2026-11-10 | the 10 November 2026 daily review (23:07 UTC) | **Janus: hard 2-position minimum, dated event reasons, failed-review records**: (1) at least 2 open positions at all times; a dated `below_budget` reason may only let total risk fall below 3%, never the book below 2 positions; fewer than 2 only for a named data failure (which mark, how stale), and only for the instruments affected. (2) An event-based reason cites the event's date from an official calendar URL listed in `sources_read`, and expires at the end of the next trading day after the event. (3) The CLI rejects a review that breaks (1) or (2), and a rejected daily review writes a failed-review record (closes Q004). Approved by Ethan on 2026-11-10. | The 9 and 10 November reviews held no position under a `below_budget` reason, and the 10 November review dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET (correction K004). A rejected review left no record (Q004). | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing else in C05 changes. |
+| C07 | 2026-11-10 | the first Janus daily review after it was recorded (10 November 2026, 23:07 UTC) | **Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals only where the market is closed**: (1) no opened position may state a probability of 50%; the CLI rejects a proposal containing one. (2) When the C06 two-position minimum binds, the review lists at least 5 candidates across at least 2 asset classes; a candidate it dropped after The Opposition may be reopened only if it states why no other candidate is better. (3) Every review records its current UTC time and, for each event cited in a reason or thesis, whether it had already occurred; an event dated in the future cannot be described as released. (4) A deferred idea counts toward the minimum only if its market is closed on the review date, and must open at the next session. Approved by Ethan on 2026-11-10. | The 10 November 10:30 UTC review met C06's minimum with two 0.25% rates longs (J001, J002) at a stated probability of 50%, opened anyway after The Opposition put each near 43-44% to work, with no other asset class considered; and it described October CPI as "released at 08:30 ET on 10 Nov" at 10:30 UTC, three hours before the 13:30 UTC release. | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing in C05 or C06 changes except what C07 adds. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -497,3 +498,70 @@ shadow files. Records made before C06 are not edited.
 **Where:** `ledger/janus.py` (`_check_min_positions`, `_check_event_reason`, `apply_proposal`, `review_status`,
 `budget_status`), `scripts/ledger_commit.sh` (exit 3), `ledger/audit.py` (`correct_janus`, Janus corrections in
 `verify_seals`), `docs/janus/daily_review.md`, `docs/janus/quick_check.md`, `tests/test_janus_c06.py`.
+
+## C07 — Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals (2026-11-10)
+
+Approved by Ethan on 2026-11-10 and effective from the first daily review after it was recorded (the 10 November
+review at 23:07 UTC). It adds to C05 and C06; nothing in either changes except where stated below.
+
+**Why.** The 10 November review at 10:30 UTC (run record seq 208) opened J001 (long US 10y) and J002 (long UK 10y),
+0.25% at risk each, to meet C06's two-position minimum:
+- both at a stated probability of **50%**, against a market probability of 50: no call at all;
+- both were opened anyway after The Opposition put each near 43-44% to work ("C06 requires two positions"), and the
+  review recorded no other candidate or asset class (both are rates);
+- its `below_budget.reasoning` said "The October CPI released at 08:30 ET on 10 Nov drives every rates idea" at
+  10:30 UTC, three hours before the release (08:30 ET is 13:30 UTC).
+
+**1. No 50% calls.** No opened position may state `probability` 50 (no view). The CLI rejects a proposal containing
+one. Deferred ideas are held to the same rule, because they must open at the next session (rule 4). A candidate that
+is not opened may be 50.
+
+**2. Wider search when the minimum binds.**
+- The minimum *binds* when the book held fewer than 2 positions before the review (after its closes) and the review
+  brings it to exactly 2 (counting deferred ideas that count under rule 4).
+- The review then lists `candidates`: at least **5** distinct instruments across at least **2** asset classes (rates,
+  FX, commodities), each with `instrument`, `direction`, `probability`, `market_probability`, `outcome` (`opened`,
+  `deferred` or `not_opened`), `opposition` (`kept`, `dropped` or `none`) and `reason`. Every opened position and every
+  deferred idea is among them, and every candidate marked opened or deferred is in the proposal.
+- A candidate the review dropped after The Opposition (`opposition: dropped`) may be reopened (opened or deferred)
+  only with a `reopen_reason` stating why no other candidate is better; it must name every candidate not opened. This
+  applies whenever `candidates` are listed.
+
+**3. Time anchor.** Every daily review gives `time_anchor`: `now_utc`, its current UTC time, and `events`, one entry per
+event cited in any reason or thesis (and in the market summary): `event`, `time_utc` (or `date` when the event is not
+on the review's own UTC date) and `occurred` (had it happened at `now_utc`). The CLI checks that:
+- `now_utc` is UTC and is the time of the review (at most 3 hours before the CLI's clock, not after it);
+- each `occurred` agrees with the event's time and `now_utc`, and no event dated after the CLI's clock is marked as
+  occurred;
+- every date and every scheduled event (CPI, PCE, PPI, HICP, payrolls, GDP, retail sales, PMI, ISM, FOMC, MPC, rate
+  decisions, OPEC, WASDE, elections, referendums, auctions) named in a reason or thesis is in `events`;
+- no reason or thesis describes an event dated in the future as released ("released", "published", "came in",
+  "printed", "showed", ...), unless the wording keeps it in the future ("is due to be released", "has not been
+  released"). This check reads the text, so it catches the plain cases; `occurred` is the review's own statement.
+
+**4. Deferrals.**
+- A deferred idea counts toward the two-position minimum only if **that instrument's market** is closed on the review
+  date: every market on a weekend; FX only on 1 January and 25 December; any other market on a weekday only with
+  `market_closed` {`holiday`, `calendar_url`}, an official or exchange holiday calendar (`OFFICIAL_CALENDAR_HOSTS`,
+  `MARKET_CALENDAR_HOSTS` in `ledger/janus.py`) that is also listed in `sources_read`. C05's use of deferred ideas
+  toward the 3% budget is unchanged.
+- It must open at the next session: the first daily review after it whose date is a session for that market opens it
+  (same instrument and direction, with The Opposition). While the market stays closed (a weekend or holiday review),
+  the review carries it forward in `deferred_ideas`. Ideas deferred before C07 are not followed up.
+
+**Rejections.** As under C06: a rejected daily review appends one failed-review record (now also carrying the
+review's `now_utc`) and nothing else, and the CLI exits 3. Errors about futures are recorded without their details,
+so no licensed settlement figure reaches public error text. `--dry-run` writes nothing.
+
+**Records.** No record is edited: J001, J002 and the run record of 10 November (seq 208-212) stand as written and keep
+their 50% probabilities. C07 judges reviews from its effective date only. The run record of each review now keeps its
+`time_anchor` and `candidates`.
+
+**Unchanged.** Everything else in C05 and C06: research in `sources_read`, the 3-10% budget, sizing, `below_budget`,
+the two-position minimum, `data_failure`, event-based reasons and their expiry, failed-review records. Every existing
+limit (2% per position, 10% in total, 8 open, capacity, costs, The Opposition, `market_probability`), the fund
+allocation rules (`docs/fund/allocation.md`) and the T25-T26 shadow files.
+
+**Where:** `ledger/janus.py` (`_check_c07`, `_check_no_coin_flips`, `_check_candidates`, `_check_time_anchor`,
+`deferred_toward_minimum`, `market_closed`, `_check_deferred_followup`; the C07 counting in `_check_min_positions`),
+`docs/janus/daily_review.md`, `docs/janus/quick_check.md`, `tests/test_janus_c07.py`.

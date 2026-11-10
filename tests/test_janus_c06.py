@@ -46,8 +46,32 @@ def c06(**over):
     return review(**{"new_positions": TWO, "sources_read": SR, "below_budget": EVENT, **over})
 
 
+CPI_UTC = datetime(2026, 11, 10, 13, 30, tzinfo=timezone.utc)      # 08:30 ET (BLS)
+FILLERS = [("EUR", "long"), ("GOLD", "long"), ("WTI", "short"), ("JPY", "long"), ("AUD", "short")]
+
+
+def c07_fields(ans, now):
+    """Config change C07 (tested in test_janus_c07.py) applies to these reviews too: a time anchor and, when the
+    two-position minimum binds, at least 5 candidates across 2 asset classes. Added only where a proposal has none."""
+    ans = dict(ans)
+    ans.setdefault("time_anchor", {"now_utc": now.isoformat(), "events": [
+        {"event": "US October CPI (BLS)", "time_utc": CPI_UTC.isoformat(), "occurred": now >= CPI_UTC}]})
+    if "candidates" not in ans:
+        c = [{"instrument": n["instrument"], "direction": n["direction"], "probability": n["probability"],
+              "market_probability": 50, "outcome": "opened", "opposition": "kept", "reason": "the best idea in the search"}
+             for n in ans.get("new_positions") or []]
+        c += [{"instrument": d["instrument"], "direction": d["direction"], "probability": d["probability"],
+               "market_probability": 50, "outcome": "deferred", "opposition": "none", "reason": "its market is closed"}
+              for d in ans.get("deferred_ideas") or []]
+        have = {x["instrument"] for x in c}
+        c += [{"instrument": i, "direction": d, "probability": 52, "market_probability": 50, "outcome": "not_opened",
+               "opposition": "none", "reason": "a smaller edge than the ideas taken"} for i, d in FILLERS if i not in have]
+        ans["candidates"] = c
+    return ans
+
+
 def run(tmp_path, ans, now=T, mk=None, name="r.jsonl"):
-    return J.apply_proposal(ans, now=now, path=tmp_path / name, marks_rows=marks() if mk is None else mk)
+    return J.apply_proposal(c07_fields(ans, now), now=now, path=tmp_path / name, marks_rows=marks() if mk is None else mk)
 
 
 # ----------------------------------------------------------------------------- rule 1: at least 2 positions

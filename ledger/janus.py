@@ -47,6 +47,13 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     the instruments affected; an event-based ``below_budget`` gives ``event_date`` and ``calendar_url`` (an official
     calendar listed in ``sources_read``) and expires at the end of the next trading day after the event; a rejected
     daily review appends a failed-review record (``status`` "failed", exit 3) and nothing else;
+  * config change C07 (2026-11-10): no opened position (or deferred idea) at probability 50; when the C06 minimum
+    binds, ``candidates`` lists at least 5 instruments across at least 2 asset classes (rates, FX, commodities), and a
+    candidate dropped after The Opposition is reopened only with a ``reopen_reason`` naming why each other candidate
+    is not better; ``time_anchor`` {now_utc, events [{event, time_utc or date, occurred}]} covers every date and
+    scheduled event named in a reason or thesis, and no event dated in the future is described as released; a
+    deferred idea counts toward the minimum only if its market is closed on the review date (weekend, FX on 1 Jan or
+    25 Dec, otherwise ``market_closed`` {holiday, calendar_url}) and must open at the next session;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -120,6 +127,22 @@ BELOW_BUDGET_EXPIRY_CORRECTIONS = {
     # 10 Nov 2026 review (seq 199): dated US CPI to 12 Nov; BLS lists 10 Nov 2026, 08:30 ET (correction K004)
     "c8cab8c4c6e3659de0c9cf8c9c896f304012af03f20f909f43f2751ba979b33d": ("K004", date(2026, 11, 11)),
 }
+# Config change C07 (approved by Ethan 2026-11-10, effective from the first daily review after it was recorded on
+# 2026-11-10; docs/config_changes.md C07): no 50% calls, a wider search when the C06 minimum binds, a time anchor,
+# and deferrals that count toward the minimum only where the instrument's market is closed
+C07_FROM = date(2026, 11, 10)
+NO_VIEW_PROBABILITY = 50.0           # an opened position's probability may not be exactly this (C07 rule 1)
+MIN_CANDIDATES, MIN_CANDIDATE_CLASSES = 5, 2   # when the C06 minimum binds (C07 rule 2)
+CANDIDATE_CLASS = {"rates": "rates", "rates spread": "rates", "fx": "fx", "future": "commodities"}
+CANDIDATE_OUTCOMES = ("opened", "deferred", "not_opened")
+OPPOSITION_OUTCOMES = ("kept", "dropped", "none")
+ANCHOR_MAX_AGE = timedelta(hours=3)  # time_anchor.now_utc: at most this old when the CLI validates the review
+ANCHOR_MAX_AHEAD = timedelta(minutes=5)
+# Exchange and market-association calendars a weekday market closure may cite (C07 rule 4), besides the official
+# calendars above. Adding one is a config change.
+MARKET_CALENDAR_HOSTS = ("cmegroup.com", "sifma.org", "theice.com", "ice.com", "eurex.com", "jpx.co.jp",
+                         "londonstockexchange.com")
+FX_CLOSED_DAYS = ((1, 1), (12, 25))  # FX trades every weekday except these (C07 rule 4)
 MIN_HORIZON_DAYS, MAX_HORIZON_DAYS = 5, 190
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
@@ -730,9 +753,15 @@ def _url_ok(u) -> bool:
     return isinstance(u, str) and re.match(r"^https?://\S+\.\S+", u) is not None
 
 
-def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date) -> tuple[list[dict], list[dict], list[str]]:
+def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date,
+             now: datetime | None = None) -> tuple[list[dict], list[dict], list[str]]:
     """Check a proposal against every rule. Returns (reviews, new positions, errors); any error rejects the whole
-    proposal (nothing is appended), so the session fixes it and proposes again."""
+    proposal (nothing is appended), so the session fixes it and proposes again. ``now`` (UTC) is the CLI's clock,
+    against which C07's time anchor is checked (default: now, or the end of ``today`` for a past date)."""
+    if now is None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        if now.date() != today:
+            now = datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc).replace(microsecond=0)
     reg = registry_rows()
     ref = CAP.load_reference()
     pos = positions(records)
@@ -903,6 +932,8 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
             held = {pos[i]["open"]["instrument"] for i in open_ids if i not in closed} | {n["instrument"] for n in new}
             errs, _ = _check_min_positions(ans, n_open, held, marks_rows, today)
             errors += errs + _check_event_reason(ans, today)
+        if today >= C07_FROM:
+            errors += _check_c07(ans, records, pos, open_ids, reviews, new, n_open, today, now)
     return reviews, new, errors
 
 
@@ -1057,7 +1088,11 @@ def _check_min_positions(ans: dict, n_after: int, held: set[str], marks_rows: li
     Returns (errors, the verified data-failure entries)."""
     deferred = [d for d in (ans.get("deferred_ideas") or [])
                 if isinstance(d, dict) and str(d.get("instrument", "")).strip().upper() in UNIVERSE]
-    have = n_after + (len(deferred) if non_trading_day(ans, today) else 0)
+    if today >= C07_FROM:
+        # C07 rule 4: a deferred idea counts only if its instrument's market is closed on the review date
+        have = n_after + len(deferred_toward_minimum(ans, today)[0])
+    else:
+        have = n_after + (len(deferred) if non_trading_day(ans, today) else 0)
     if have >= MIN_POSITIONS:
         return [], []
     short = MIN_POSITIONS - have
@@ -1105,6 +1140,379 @@ def _check_min_positions(ans: dict, n_after: int, held: set[str], marks_rows: li
                     f"{len(fresh)} other instrument(s) have current marks ({', '.join(fresh)}): open at least {short} "
                     "position(s) there")
     return errs, (ok if not errs else [])
+
+
+# ----------------------------------------------------------------------------- config change C07
+def _inst(x) -> str:
+    return str((x or {}).get("instrument", "") if isinstance(x, dict) else "").strip().upper()
+
+
+def _dir(x) -> str:
+    return str((x or {}).get("direction", "") if isinstance(x, dict) else "").strip().lower()
+
+
+def _num(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _check_no_coin_flips(ans: dict) -> list[str]:
+    """C07 rule 1: no 50% calls. Every opened position's stated probability differs from 50 (no view); so does every
+    deferred idea's, since it must open at the next session."""
+    errs = []
+    for key, what in (("new_positions", "new position"), ("deferred_ideas", "deferred idea")):
+        for i, n in enumerate(ans.get(key) or [], 1):
+            p = _num(n.get("probability")) if isinstance(n, dict) else None
+            if p is not None and abs(p - NO_VIEW_PROBABILITY) < 1e-9:
+                errs.append(f"{what} {i} ({_inst(n) or '?'}): probability 50 is not a call (C07): state the side you "
+                            "favour (for example 55 or 45 with the direction flipped), or do not open it")
+    return errs
+
+
+def market_calendar(u) -> bool:
+    """An official calendar (OFFICIAL_CALENDAR_HOSTS) or an exchange / market-association calendar
+    (MARKET_CALENDAR_HOSTS): what a weekday market closure may cite (C07 rule 4)."""
+    if official_calendar(u):
+        return True
+    if not _url_ok(u):
+        return False
+    host = re.sub(r"^https?://", "", u.strip().lower()).split("/")[0].split(":")[0]
+    return any(host == h or host.endswith("." + h) for h in MARKET_CALENDAR_HOSTS)
+
+
+def market_closed(d: dict, today: date, ans: dict) -> tuple[bool, str | None]:
+    """C07 rule 4: is this deferred idea's market closed on the review date? Every market is closed on a weekend. FX
+    trades every weekday except 1 Jan and 25 Dec. Any other market on a weekday is closed only with
+    ``market_closed`` {holiday, calendar_url}: an official or exchange calendar, listed in sources_read.
+    Returns (closed, an error when a stated closure does not hold up, else None)."""
+    if today.weekday() >= 5:
+        return True, None
+    inst = _inst(d)
+    mc = d.get("market_closed")
+    if UNIVERSE.get(inst, {}).get("asset_class") == "fx":
+        closed = (today.month, today.day) in FX_CLOSED_DAYS
+        return closed, (None if closed or not mc else
+                        f"{inst}: FX trades every weekday except 1 Jan and 25 Dec, so its market is open on {today}")
+    if not mc:
+        return False, None
+    if not isinstance(mc, dict):
+        return False, f"{inst}: market_closed must be {{\"holiday\", \"calendar_url\"}}"
+    url = str(mc.get("calendar_url") or "").strip()
+    if len(" ".join(str(mc.get("holiday") or "").split())) < 3:
+        return False, f"{inst}: market_closed.holiday is required (the holiday that closes this market on {today})"
+    if not market_calendar(url):
+        return False, (f"{inst}: market_closed.calendar_url must be the exchange's or an official holiday calendar ("
+                       + ", ".join(MARKET_CALENDAR_HOSTS) + ", or an official calendar host)")
+    if _norm_url(url) not in {_norm_url(x["url"]) for x in _valid_sources(ans.get("sources_read"))}:
+        return False, f"{inst}: market_closed.calendar_url {url} must also be listed in sources_read"
+    return True, None
+
+
+def deferred_toward_minimum(ans: dict, today: date) -> tuple[list[dict], list[str]]:
+    """C07 rule 4: the deferred ideas that count toward the C06 two-position minimum (those whose market is closed on
+    the review date), and the errors of any stated closure that does not hold up."""
+    out, errs = [], []
+    for i, d in enumerate(ans.get("deferred_ideas") or [], 1):
+        if not isinstance(d, dict) or _inst(d) not in UNIVERSE:
+            continue
+        closed, err = market_closed(d, today, ans)
+        if err:
+            errs.append(f"deferred idea {i} ({_inst(d)}): {err.split(': ', 1)[1]} (C07)")
+        if closed:
+            out.append(d)
+    return out, errs
+
+
+def _check_deferred_followup(ans: dict, records: list[dict], pos: dict[str, dict], new: list[dict],
+                             today: date) -> list[str]:
+    """C07 rule 4: an idea deferred by the latest accepted daily review before today must open at the next session:
+    this review opens it (same instrument and direction) unless its market is still closed today, in which case it is
+    carried forward in deferred_ideas."""
+    prior = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"
+             and r.get("status") != "failed" and (parse_date(r.get("date")) or date.min) >= C07_FROM
+             and parse_date(r.get("date")) < today]
+    if not prior or not prior[-1].get("deferred_ideas"):
+        return []
+    last = prior[-1]
+    since = parse_date(last["date"])
+    carried = {(_inst(d), _dir(d)) for d in deferred_toward_minimum(ans, today)[0]}
+    errs = []
+    for d in last["deferred_ideas"]:
+        key = (_inst(d), _dir(d))
+        if any((n["instrument"], str(n["direction"]).lower()) == key for n in new):
+            continue
+        if any((p["open"]["instrument"], str(p["open"]["direction"]).lower()) == key
+               and (parse_date(p["open"].get("decision_date")) or date.min) >= since for p in pos.values()):
+            continue
+        if key in carried:
+            continue
+        errs.append(f"deferred idea {key[1]} {key[0]} from the {since} review must open at the next session (C07): "
+                    "open it in new_positions (same instrument and direction), or, only while its market is still "
+                    "closed today, carry it forward in deferred_ideas")
+    return errs
+
+
+def _check_candidates(ans: dict, new: list[dict], counted_deferred: list[dict], binds: bool) -> list[str]:
+    """C07 rule 2. When the C06 two-position minimum binds, the review lists at least 5 candidates (distinct
+    instruments) across at least 2 asset classes (rates, FX, commodities), including every position it opens or
+    defers. A candidate the review dropped after The Opposition may be reopened (opened or deferred) only with a
+    reopen_reason stating why no other candidate is better, naming each candidate not opened."""
+    cands = ans.get("candidates")
+    head = ("the C06 two-position minimum binds in this review (the book held fewer than 2 and this review brings it "
+            "to exactly 2), so C07 requires a wider search: ")
+    if not cands:
+        return [head + f"list at least {MIN_CANDIDATES} candidates across at least {MIN_CANDIDATE_CLASSES} asset "
+                       "classes in candidates: [{\"instrument\", \"direction\", \"probability\", \"market_probability\", "
+                       "\"outcome\": opened|deferred|not_opened, \"opposition\": kept|dropped|none, \"reason\"}]"] \
+            if binds else []
+    if not isinstance(cands, list):
+        return ["candidates must be a list (C07)"]
+    errs, good = [], []
+    for i, c in enumerate(cands, 1):
+        inst = _inst(c)
+        tag = f"candidate {i} ({inst or '?'})"
+        if not isinstance(c, dict):
+            errs.append(f"{tag}: must be an object (C07)")
+            continue
+        out, opp = str(c.get("outcome") or "").strip().lower(), str(c.get("opposition") or "").strip().lower()
+        pr, mp = _num(c.get("probability")), _num(c.get("market_probability"))
+        bad = [m for m, ok in ((f"not in the universe", inst in UNIVERSE),
+                               ("direction is required", _dir(c)),
+                               ("probability and market_probability must be numbers in (0, 100]",
+                                pr is not None and mp is not None and 0 < pr <= 100 and 0 < mp <= 100),
+                               (f"outcome must be one of {', '.join(CANDIDATE_OUTCOMES)}", out in CANDIDATE_OUTCOMES),
+                               (f"opposition must be one of {', '.join(OPPOSITION_OUTCOMES)}", opp in OPPOSITION_OUTCOMES),
+                               ("reason is required (why it was or was not taken)",
+                                len(" ".join(str(c.get("reason") or "").split())) >= 10),
+                               ("an opened candidate went through The Opposition: opposition is kept or dropped",
+                                not (out == "opened" and opp == "none"))) if not ok]
+        if bad:
+            errs += [f"{tag}: {m} (C07)" for m in bad]
+            continue
+        good.append({**c, "_i": i, "_inst": inst, "_out": out, "_opp": opp})
+    insts = {c["_inst"] for c in good}
+    classes = {CANDIDATE_CLASS.get(UNIVERSE[i]["asset_class"], UNIVERSE[i]["asset_class"]) for i in insts}
+    if binds and len(insts) < MIN_CANDIDATES:
+        errs.append(head + f"candidates name {len(insts)} distinct instrument(s); at least {MIN_CANDIDATES} are required")
+    if binds and len(classes) < MIN_CANDIDATE_CLASSES:
+        errs.append(head + f"candidates span {len(classes)} asset class(es) ({', '.join(sorted(classes)) or 'none'}); "
+                           f"at least {MIN_CANDIDATE_CLASSES} of rates, fx and commodities are required")
+    listed = {(c["_inst"], _dir(c), c["_out"]) for c in good}
+    for n in new:
+        if (n["instrument"], str(n["direction"]).lower(), "opened") not in listed:
+            errs.append(f"candidates must list every opened position as outcome 'opened': {n['direction']} "
+                        f"{n['instrument']} is missing (C07)")
+    for d in counted_deferred:
+        if (_inst(d), _dir(d), "deferred") not in listed:
+            errs.append(f"candidates must list every deferred idea as outcome 'deferred': {_dir(d)} {_inst(d)} is "
+                        "missing (C07)")
+    opened = {(n["instrument"], str(n["direction"]).lower()) for n in new}
+    deferred = {(_inst(d), _dir(d)) for d in (ans.get("deferred_ideas") or []) if isinstance(d, dict)}
+    for c in good:
+        key = (c["_inst"], _dir(c))
+        if (c["_out"] == "opened" and key not in opened) or (c["_out"] == "deferred" and key not in deferred):
+            errs.append(f"candidate {c['_i']} ({c['_inst']}): outcome {c['_out']}, but {key[1]} {key[0]} is not in "
+                        f"{'new_positions' if c['_out'] == 'opened' else 'deferred_ideas'} (C07)")
+    others = sorted({c["_inst"] for c in good if c["_out"] == "not_opened"})
+    for c in good:
+        if c["_opp"] != "dropped" or c["_out"] == "not_opened":
+            continue
+        why = " ".join(str(c.get("reopen_reason") or "").split())
+        tag = f"candidate {c['_i']} ({c['_inst']})"
+        missing = [o for o in others if not re.search(rf"(?<![A-Z0-9-]){re.escape(o)}(?![A-Z0-9-])", why)]
+        if len(why) < 40:
+            errs.append(f"{tag}: dropped after The Opposition and reopened: reopen_reason must state why no other "
+                        "candidate is better (C07)")
+        elif missing:
+            errs.append(f"{tag}: reopen_reason must say why each other candidate is not better; it does not name "
+                        f"{', '.join(missing)} (C07)")
+    return errs
+
+
+# Time anchor (C07 rule 3)
+_MONTH = (r"(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:tember|t)?|"
+          r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)")
+_DAY_MONTH = re.compile(rf"\b(\d{{1,2}})(?:\s*[-–]\s*(\d{{1,2}}))?\s+{_MONTH}\b")
+_MONTH_DAY = re.compile(rf"\b{_MONTH}\.?\s+(\d{{1,2}})(?:\s*[-–]\s*(\d{{1,2}}))?\b(?!\s*[:.]\d)")
+_ISO_DATE = re.compile(r"\b\d{4}-(\d{2})-(\d{2})\b")
+# Scheduled events a reason or thesis may cite by name; time_anchor.events must cover each one named
+EVENT_TERMS = {
+    "CPI": (r"CPI", r"consumer prices?"), "PCE": (r"PCE",), "PPI": (r"PPI", r"producer prices?"), "HICP": (r"HICP",),
+    "payrolls": (r"payrolls?", r"NFP", r"jobs report", r"employment (report|situation)"), "GDP": (r"GDP",),
+    "retail sales": (r"retail sales",), "PMI": (r"PMIs?",), "ISM": (r"ISM",), "FOMC": (r"FOMC",), "MPC": (r"MPC",),
+    "rate decision": (r"rate decision", r"policy (decision|meeting)"), "OPEC": (r"OPEC\+?",), "WASDE": (r"WASDE",),
+    "election": (r"elections?", r"midterms?"), "referendum": (r"referendum",), "auction": (r"auctions?",)}
+_TERM_RE = {g: re.compile(r"\b(" + "|".join(ts) + r")(?![A-Za-z])", re.I) for g, ts in EVENT_TERMS.items()}
+# Words that describe an event as having happened, and words before them that keep it in the future
+_OUT_RE = re.compile(r"\b(released|published|announced|came in|printed|showed|surprised|beat|missed|topped|hiked|"
+                     r"delivered)\b", re.I)
+_NOT_YET = {"will", "to", "once", "when", "until", "before", "if", "unless", "not", "yet", "due", "scheduled",
+            "expected", "set", "await", "awaits", "awaiting", "ahead", "whether", "could", "would", "may", "might",
+            "should", "can", "never", "is", "are", "be", "being", "isn't", "aren't", "hasn't", "haven't", "won't"}
+_CLAUSE_SPLIT = re.compile(r"[,;:](?=\s)|[()]|\.(?=\s|$)|\s(?:and|but|while|whereas|although|though)\s|\s[-–—]\s")
+_MONTH_WORD = re.compile(r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\b")
+
+
+def _named_dates(text: str) -> list[set[tuple[int, int]]]:
+    """Each date written in ``text`` as a set of (month, day): '10 Nov', 'Nov 10', '2026-11-10', a range '8-9 Dec'."""
+    out = [{(int(m), int(d))} for m, d in _ISO_DATE.findall(text)]
+    for d1, d2, mon in _DAY_MONTH.findall(text):
+        out.append({(MONTHS[mon[:3].lower()], int(x)) for x in (d1, d2) if x})
+    for mon, d1, d2 in _MONTH_DAY.findall(text):
+        out.append({(MONTHS[mon[:3].lower()], int(x)) for x in (d1, d2) if x})
+    return [s for s in out if all(1 <= d <= 31 for _, d in s)]
+
+
+def _terms(text: str) -> set[str]:
+    return {g for g, rx in _TERM_RE.items() if rx.search(text)}
+
+
+def _described_as_out(clause: str) -> str | None:
+    """The word that describes an event as having happened (e.g. 'released'), unless the words just before it keep
+    it in the future or negate it ('is due to be released', 'has not been released')."""
+    for m in _OUT_RE.finditer(clause):
+        before = re.findall(r"[a-z']+", clause[:m.start()].lower())[-3:]
+        if before and (before[-1] in _NOT_YET or any(w in ("not", "yet", "never", "will", "won't", "to", "until",
+                                                          "before", "once", "if", "unless", "whether")
+                                                     for w in before)):
+            continue
+        return m.group(1)
+    return None
+
+
+def _anchor_texts(ans: dict) -> list[tuple[str, str]]:
+    """(label, text) of every reason and thesis in a review (C07 rule 3), and its market summary."""
+    out = [("market_summary", ans.get("market_summary")), ("no_trade_reasoning", ans.get("no_trade_reasoning"))]
+    bb = ans.get("below_budget")
+    if isinstance(bb, dict):
+        out += [("below_budget.condition", bb.get("condition")), ("below_budget.reasoning", bb.get("reasoning"))]
+    for r in ans.get("reviews") or []:
+        if isinstance(r, dict):
+            out.append((f"review of {str(r.get('id') or '?').strip()}", r.get("reasoning")))
+    for key, what in (("new_positions", "new position"), ("deferred_ideas", "deferred idea")):
+        for i, n in enumerate(ans.get(key) or [], 1):
+            if isinstance(n, dict):
+                out.append((f"{what} {i} ({_inst(n) or '?'}) thesis", n.get("thesis")))
+    for i, c in enumerate(ans.get("candidates") or [] if isinstance(ans.get("candidates"), list) else [], 1):
+        if isinstance(c, dict):
+            out += [(f"candidate {i} ({_inst(c) or '?'}) reason", c.get("reason")),
+                    (f"candidate {i} ({_inst(c) or '?'}) reopen_reason", c.get("reopen_reason"))]
+    return [(lbl, " ".join(str(t).split())) for lbl, t in out if t and str(t).strip()]
+
+
+def _parse_utc(s) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(str(s).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if t.tzinfo is None or t.utcoffset() != timedelta(0):
+        return None
+    return t
+
+
+def _check_time_anchor(ans: dict, now: datetime) -> list[str]:
+    """C07 rule 3. The review records its current UTC time (time_anchor.now_utc) and, for every event cited in a
+    reason or thesis, whether it had already occurred at that time (time_anchor.events: {event, time_utc (or date
+    when it is not on the review's own UTC date), occurred}). The CLI checks that now_utc is the time of the review,
+    that each occurred flag agrees with the event's time, that every date and scheduled event named in a reason or
+    thesis is in the list, and that no event dated in the future is described as released."""
+    ta = ans.get("time_anchor")
+    head = "time_anchor (C07): "
+    if not isinstance(ta, dict):
+        return [head + "required: {\"now_utc\": the review's current UTC time (YYYY-MM-DDTHH:MM:SSZ), \"events\": [{\"event\", "
+                       "\"time_utc\" (or \"date\" when not on the review's UTC date), \"occurred\": true|false}] for every "
+                       "event cited in a reason or thesis}"]
+    anchor = _parse_utc(ta.get("now_utc"))
+    if anchor is None:
+        return [head + "now_utc must be the review's current UTC time, e.g. 2026-11-10T23:07:00Z (UTC, with Z or +00:00)"]
+    errs = []
+    if anchor > now + ANCHOR_MAX_AHEAD or anchor < now - ANCHOR_MAX_AGE:
+        errs.append(head + f"now_utc {anchor.isoformat()} is not the time of this review (the CLI's clock is "
+                    f"{now.replace(microsecond=0).isoformat()}; now_utc may be at most {ANCHOR_MAX_AGE} old): check the "
+                    "time with `date -u` and re-check every event against it")
+    events = []
+    for i, e in enumerate(ta.get("events") or [] if isinstance(ta.get("events"), list) else [], 1):
+        if not isinstance(e, dict) or len(" ".join(str(e.get("event") or "").split())) < 3:
+            errs.append(head + f"event {i}: needs a name (event)")
+            continue
+        name = " ".join(str(e["event"]).split())
+        tag = head + f"event {i} ({name[:60]})"
+        when = _parse_utc(e.get("time_utc")) if e.get("time_utc") else None
+        day = when.date() if when else parse_date(e.get("date"))
+        occ = e.get("occurred")
+        if e.get("time_utc") and when is None:
+            errs.append(tag + ": time_utc must be a UTC time, e.g. 2026-11-10T13:30:00Z")
+            continue
+        if day is None:
+            errs.append(tag + ": time_utc (or date) is required")
+            continue
+        if not isinstance(occ, bool):
+            errs.append(tag + ": occurred must be true or false (had it happened at now_utc?)")
+            continue
+        if when is None and day == anchor.date():
+            errs.append(tag + f": it is on the review's own UTC date ({day}): give time_utc, so whether it has "
+                        "happened can be checked")
+            continue
+        happened = (when <= anchor) if when else (day < anchor.date())
+        if occ and ((when and when > now + ANCHOR_MAX_AHEAD) or (not when and day > now.date())):
+            errs.append(tag + f": dated in the future ({when.isoformat() if when else day}, after the CLI's clock "
+                        f"{now.replace(microsecond=0).isoformat()}), so it cannot have occurred or been released")
+        elif occ != happened:
+            errs.append(tag + f": occurred is {str(occ).lower()}, but at now_utc {anchor.isoformat()} the event "
+                        f"({when.isoformat() if when else day}) " + ("had already happened" if happened else
+                                                                     "had not yet happened"))
+        events.append({"name": name, "day": day, "when": when, "occurred": occ and happened,
+                       "terms": _terms(name)})
+    for lbl, text in _anchor_texts(ans):
+        for ds in _named_dates(text):
+            if not any((ev["day"].month, ev["day"].day) in ds for ev in events):
+                d0 = sorted(ds)[-1]
+                errs.append(head + f"{lbl} names {d0[1]} {calendar.month_abbr[d0[0]]}, but time_anchor.events has no "
+                            "event on that date: list it, with whether it had occurred at now_utc")
+        for g in sorted(_terms(text)):
+            if not any(g in ev["terms"] for ev in events):
+                errs.append(head + f"{lbl} cites {g}, but no event in time_anchor.events names it: list it, with its "
+                            "date and whether it had occurred at now_utc")
+        for clause in _CLAUSE_SPLIT.split(text):
+            word = _described_as_out(clause or "")
+            if not word:
+                continue
+            ds, gs = _named_dates(clause), _terms(clause)
+            if ds:
+                hit = [ev for ev in events if any((ev["day"].month, ev["day"].day) in s for s in ds)
+                       and (not gs or ev["terms"] & gs or not any(e2["terms"] & gs for e2 in events))]
+                future = [ev for ev in hit if not ev["occurred"]]
+            elif gs:
+                hit = [ev for ev in events if ev["terms"] & gs]
+                months = set(_MONTH_WORD.findall(clause))
+                if months and any(m in ev["name"] for ev in hit for m in months):
+                    hit = [ev for ev in hit if any(m in ev["name"] for m in months)]
+                future = hit if hit and all(not ev["occurred"] for ev in hit) else []
+            else:
+                continue
+            if future:
+                ev = future[0]
+                errs.append(head + f"{lbl} describes {ev['name'][:60]} as '{word.lower()}', but at now_utc "
+                            f"{anchor.isoformat()} it had not yet happened "
+                            f"({ev['when'].isoformat() if ev['when'] else ev['day']}): an event dated in the future "
+                            "cannot be described as released")
+    return list(dict.fromkeys(errs))
+
+
+def _check_c07(ans: dict, records: list[dict], pos: dict[str, dict], open_ids: list[str], reviews: list[dict],
+               new: list[dict], n_after: int, today: date, now: datetime) -> list[str]:
+    """Config change C07 (approved 2026-11-10): every rule, for a daily review from C07_FROM."""
+    closed = {r["id"] for r in reviews if r["action"] == "close"}
+    held_before = sum(1 for i in open_ids if i not in closed)
+    counted, errs = deferred_toward_minimum(ans, today)
+    binds = held_before < MIN_POSITIONS and n_after + len(counted) == MIN_POSITIONS
+    errs = _check_no_coin_flips(ans) + errs
+    errs += _check_candidates(ans, new, counted, binds)
+    errs += _check_time_anchor(ans, now)
+    errs += _check_deferred_followup(ans, records, pos, new, today)
+    return errs
 
 
 def _public_error(e: str) -> str:
@@ -1298,7 +1706,7 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
     v = verify(records)
     if not v["ok"]:
         return {"ok": False, "errors": [f"the Janus chain does not verify: {v['error']}"], "appended": []}
-    reviews, new, errors = validate(ans, records, marks_rows, today)
+    reviews, new, errors = validate(ans, records, marks_rows, today, now)
     if errors and not dry_run and ans.get("session") == "daily_review":
         # C06 rule 3 (closes Q004): a rejected daily review is recorded as failed, so the quick check flags it the
         # same day. Nothing else is appended; the session fixes every error and proposes again.
@@ -1308,6 +1716,9 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                "errors": [_public_error(e) for e in errors][:30],
                                "sources_read": _valid_sources(ans.get("sources_read"))[:40],
                                "proposal_sha256": hashlib.sha256(_canon(ans).encode()).hexdigest(),
+                               **({"now_utc": str(ans["time_anchor"]["now_utc"])[:40]}
+                                  if isinstance(ans.get("time_anchor"), dict) and ans["time_anchor"].get("now_utc")
+                                  else {}),
                                "note": "rejected by the CLI: nothing in the proposal was applied (C06)"}, path)
         return {"ok": False, "errors": errors, "dry_run": False, "appended": [rec["seq"]], "failed_record": rec["seq"],
                 "would_open": [n["instrument"] for n in new], "would_review": [(r["id"], r["action"]) for r in reviews]}
@@ -1326,7 +1737,8 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                                            - sum(positions(records)[r["id"]]["open"]["risk_pct"]
                                                                  for r in reviews if r["action"] == "close"), 4)}
                                   if session == "daily_review" else {}),
-                               **{k: ans[k] for k in ("below_budget", "deferred_ideas", "market_holiday", "data_failure")
+                               **{k: ans[k] for k in ("below_budget", "deferred_ideas", "market_holiday", "data_failure",
+                                                       "time_anchor", "candidates")
                                   if ans.get(k)},
                                **({"flags": mandate_flags(records, today)} if session == "quick_check" else {})},
                      path)
@@ -1466,7 +1878,33 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                                  "day after the event (until no later)"),
                                 "official_calendars": list(OFFICIAL_CALENDAR_HOSTS),
                                 "rejected_review": ("a rejected daily review appends a failed-review record (exit 3) "
-                                                    "that the quick check flags; --dry-run writes nothing")}},
+                                                    "that the quick check flags; --dry-run writes nothing")},
+                        "c07": {"from": C07_FROM.isoformat(),
+                                "no_coin_flips": ("no opened position or deferred idea may state probability 50: state "
+                                                  "the side you favour, or do not open it"),
+                                "wider_search": (f"when the C06 minimum binds (the book held fewer than "
+                                                 f"{MIN_POSITIONS} and the review brings it to exactly {MIN_POSITIONS}), "
+                                                 f"candidates lists at least {MIN_CANDIDATES} instruments across at "
+                                                 f"least {MIN_CANDIDATE_CLASSES} asset classes (rates, fx, "
+                                                 "commodities), each {instrument, direction, probability, "
+                                                 "market_probability, outcome: opened|deferred|not_opened, "
+                                                 "opposition: kept|dropped|none, reason}, including every opened "
+                                                 "position; a candidate dropped after The Opposition is reopened "
+                                                 "only with reopen_reason naming why each not-opened candidate is "
+                                                 "not better"),
+                                "time_anchor": ("every daily review gives time_anchor {now_utc: its current UTC time "
+                                                "(at most 3 hours old when proposed), events: [{event, time_utc (or "
+                                                "date when not on the review's UTC date), occurred}]} covering every "
+                                                "date and scheduled event (CPI, payrolls, FOMC, ...) named in a "
+                                                "reason, thesis or the market summary; an event dated in the future "
+                                                "cannot be described as released"),
+                                "deferrals": ("a deferred idea counts toward the 2-position minimum only if its "
+                                              "market is closed on the review date (every market on a weekend; FX "
+                                              "only on 1 Jan and 25 Dec; any other market on a weekday with "
+                                              "market_closed {holiday, calendar_url} from an official or exchange "
+                                              "calendar listed in sources_read), and must open at the next session "
+                                              "(carried forward in deferred_ideas while its market stays closed)"),
+                                "market_calendars": list(MARKET_CALENDAR_HOSTS)}},
             "daily_review_status": review_status(records, today), "risk_budget_status": budget_status(records, today),
             "flags": mandate_flags(records, today),
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
