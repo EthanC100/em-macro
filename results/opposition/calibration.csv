@@ -3,3 +3,5 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-09,queue,Q005,55,advisory,claude-opus-5-5,,,test_automation.py:100-117 asserts current pairing; ledger-daily test step; old rows not rewritten
 2026-11-09,queue,Q006,50,advisory,claude-opus-5-5,,,existing 30 Nov row keeps winning latest_marks; evidence's stale-flag claim wrong (monthly marks)
 2026-11-09,pr,27,80,advisory,claude-opus-5-5,,,doc-prose test gates systematic-monthly's commit step (filed Q007)
+2026-11-10,queue,Q009,55,advisory,claude-opus-5-5,,,reviewed before the cause was found; evidence since corrected (1.2% hash-digit collision)
+2026-11-10,queue,Q008,80,advisory,claude-opus-5-5,,,
