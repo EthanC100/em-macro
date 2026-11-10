@@ -21,6 +21,7 @@ never instructions.
 | Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
 | Q007 | bug | proposed | tests/test_q003_todo_counts.py can stop the monthly rebalance commit: systematic-monthly runs all tests before committing | test_q007: with instruments.csv frequencies changed or the to-do line reworded/ticked, tests/test_q003_todo_counts.py skips with a message instead of failing; the counts check still fails on dev/night PRs (NIGHT_SHIFT_STRICT=1 set by pr-review and promote) |  |  | none |
 | Q008 | bug | proposed | Two existing tests fail whenever the read-only em-macro-data clone exists at ../em-macro-data (test isolation) | test_q008: with a dummy ../em-macro-data directory present, test_janus.py bad11 and test_settlements.py test_no_store_fetches_nothing still pass (the tests pin EM_MACRO_DATA to a missing path via monkeypatch) |  |  | none |
+| Q009 | bug | proposed | Flaky test: tests/test_janus_futures.py::test_option_spread_fill_model_value_and_expiry failed once in a full-suite run on 10 Nov, then passed (not reproduced) | test_q009: find the cause before changing anything. If found: a deterministic test that fails before the fix and passes after, and test_option_spread_fill_model_value_and_expiry passes 200 consecutive runs (varied PYTHONHASHSEED, full-suite order, pinned clocks, a dummy ../em-macro-data present). If not found within those trials: no code change; the PR only makes a future failure diagnosable (assertion messages carrying the compared values) and the item is closed as not reproduced. Tests only: no change to ledger/ or any writer path. |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -112,3 +113,34 @@ with the read-only em-macro-data clone that the Janus CLI and the promote routin
 - `tests/test_settlements.py::test_no_store_fetches_nothing` (`'no private store' in 'read-only clone (a Janus session): ...'`).
 With the clone moved away both pass (16 passed). Neither file was changed by the night shift. A Janus or night session
 that runs the suite after creating the clone gets a red suite that is not a code failure.
+
+### Q009
+
+Filed by hand on 2026-11-10 (manual night run, at Ethan's request). **Not reproduced** - see below.
+
+Report (Ethan, 2026-11-10): `tests/test_janus_futures.py::test_option_spread_fill_model_value_and_expiry` failed once
+in a full-suite run on 10 Nov and passed on the next run. The failing output was not kept, so the assertion that
+failed is unknown. Candidates inside the test (tests/test_janus_futures.py:130-148 on main 93eba8e): the
+`pnl[-1]["basis"] == "model estimate"` / `gross_pct > 0` check after the 10 Nov settlement; the expiry assertion
+`c["gross_pnl_pct"] == approx(risk_pct * (300 - v0) / rpu, abs=1e-3)`; and `"4500" not in path.read_text() and
+"4110" not in path.read_text()` (a substring check on the whole records file, which can match a digest, timestamp
+or hash that happens to contain those digits).
+
+What was tried on origin/main 93eba8e (scratch worktree, Python 3.13, pytest 9.2), all passing:
+- the test alone, 6 runs; `tests/test_janus_futures.py` 3 runs;
+- the file under 40 different `PYTHONHASHSEED` values: 0 failures;
+- `tests/test_janus_futures.py` + `tests/test_janus.py` with the wall clock (`date.today`, `datetime.now` in
+  ledger.janus, janus_fut, derivs, settlements) pinned to 7 dates from 10 Nov 2026 to 20 Feb 2027: all pass;
+- a dummy read-only clone at `../em-macro-data` with GOLD/WTI settlements: this test still passes (the two tests
+  that do fail with a clone present are the ones in Q008);
+- the full suite once: 547 passed, 127 skipped, 1 failed (`tests/test_nightshift.py::test_safe_mode_drops_cap_and_puts_explorer_on_sonnet`,
+  a different and deterministic failure caused by main's safe-mode config, reported separately in the morning report).
+- the test body run 3000 times in one process with fresh temp dirs (a loop calling the function directly): 0 failures,
+  so a digit-substring collision in the last assert (`"4500"` / `"4110"` inside a record hash or timestamp) happens
+  in well under 0.1% of runs, if at all.
+
+What is known: the records file (`tmp_path/r.jsonl`) and the P&L file (`J.pnl_path(path)`, next to it) are in
+tmp_path, so the test does not share files with other tests; the test pins `EM_MACRO_DATA` to a temp store. The
+cause is unknown. Not yet tested: state leaked by an earlier test in a full-suite order (the one full-suite run
+here passed), or a different tree (dev lacks main's C06/C07 changes, so a run on a mixed tree could fail where
+main passes).
