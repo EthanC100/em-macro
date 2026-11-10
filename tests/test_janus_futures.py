@@ -110,7 +110,7 @@ def test_tighten_stop_only(tmp_path, store):
     path, recs = _open(tmp_path, store, fut())
     settle(store, "WTI", "2027-01", [("2026-11-09", 88.0)])
     J.process(recs, MARKS, date(2026, 11, 9), path)
-    later = datetime(2026, 11, 10, 22, tzinfo=timezone.utc)
+    later = datetime(2026, 11, 9, 22, tzinfo=timezone.utc)      # before C06: a one-position book (C06 is tested in test_janus)
     bad = review(new_positions=[], no_trade_reasoning="x",
                  reviews=[{"id": "J001", "action": "tighten_stop", "new_stop": 75.0, "reasoning": "r"}])
     assert "can only be tightened" in J.apply_proposal(bad, now=later, path=path, marks_rows=MARKS)["errors"][0]

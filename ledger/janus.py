@@ -42,6 +42,11 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     may leave the account below 3% at risk only with ``below_budget`` {condition, until, reasoning} naming a specific
     event or condition (or, on a weekend or market holiday, ``deferred_ideas`` for the next trading day); every quick
     check record carries the CLI's flags (a failed or missing daily review, risk below budget without a reason);
+  * config change C06 (2026-11-10): at least 2 open positions at all times (``below_budget`` lowers risk, never the
+    count); fewer only with ``data_failure`` [{instrument, mark, last_mark}] verified against the marks, and only for
+    the instruments affected; an event-based ``below_budget`` gives ``event_date`` and ``calendar_url`` (an official
+    calendar listed in ``sources_read``) and expires at the end of the next trading day after the event; a rejected
+    daily review appends a failed-review record (``status`` "failed", exit 3) and nothing else;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -90,6 +95,31 @@ GENERIC_REASON = re.compile(
     r"\b(no|lack of|without|absence of)\s+(an?\s+|clear\s+|real\s+|defensible\s+|obvious\s+|strong\s+|good\s+)*"
     r"(edge|view|conviction|opportunit\w*|set-?ups?|trades?|ideas?)\b|\bnothing\s+(clears|compelling|stands)|"
     r"^\s*(uncertainty|volatility|markets? (are|is) (uncertain|volatile)|wait and see)\W*$", re.I)
+# Config change C06 (approved 2026-11-10, effective from that day's daily review; docs/config_changes.md C06)
+C06_FROM = date(2026, 11, 10)
+MIN_POSITIONS = TYPICAL_POSITIONS[0]  # hard: below_budget lowers risk, never the position count
+DATA_STALE_WEEKDAYS = 2               # a mark is stale when at least this many weekdays have passed without one
+# Official calendars an event reason may cite (host or any subdomain of it): statistics offices, central banks,
+# treasuries and official bodies. Adding one is a config change.
+OFFICIAL_CALENDAR_HOSTS = (
+    "bls.gov", "bea.gov", "census.gov", "dol.gov", "federalreserve.gov", "newyorkfed.org", "treasury.gov",
+    "treasurydirect.gov", "eia.gov", "usda.gov", "cftc.gov",
+    "ecb.europa.eu", "ec.europa.eu", "bundesbank.de", "destatis.de", "insee.fr", "banque-france.fr", "aft.gouv.fr",
+    "bankofengland.co.uk", "ons.gov.uk", "dmo.gov.uk",
+    "boj.or.jp", "mof.go.jp", "stat.go.jp", "esri.cao.go.jp",
+    "snb.ch", "bfs.admin.ch", "rba.gov.au", "abs.gov.au", "bankofcanada.ca", "statcan.gc.ca", "opec.org")
+EVENT_REASON = re.compile(
+    r"\b(CPI|PCE|PPI|HICP|inflation (data|print|release|report)|payrolls?|NFP|jobs report|employment report|GDP|"
+    r"retail sales|PMI|ISM|FOMC|ECB|BoE|BoJ|SNB|RBA|BoC|MPC|central[- ]bank (decision|meeting)|rate decision|"
+    r"policy (decision|meeting)|meeting|minutes|release|print|auction|election|vote|referendum|budget|OPEC\+?|"
+    r"WASDE|testimony|speech|summit)\b|"
+    r"\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b|"
+    r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b", re.I)
+# C06 expiry of below_budget reasons recorded before C06, by the run record's hash (each with its correction-log id)
+BELOW_BUDGET_EXPIRY_CORRECTIONS = {
+    # 10 Nov 2026 review (seq 199): dated US CPI to 12 Nov; BLS lists 10 Nov 2026, 08:30 ET (correction K004)
+    "c8cab8c4c6e3659de0c9cf8c9c896f304012af03f20f909f43f2751ba979b33d": ("K004", date(2026, 11, 11)),
+}
 MIN_HORIZON_DAYS, MAX_HORIZON_DAYS = 5, 190
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
@@ -555,6 +585,8 @@ def _last_check(records: list[dict]) -> dict | None:
         elif r["type"] == "run":
             what = (f"{r.get('n_reviews', 0)} review(s), {r.get('n_new', 0)} new position(s)" if r.get("session")
                     else "weekly run (API, before sessions)")
+            if r.get("status") == "failed":
+                what = "daily review rejected by the CLI (failed-review record); nothing applied"
             best = {"time": r.get("decided_at"), "session": r.get("session") or "weekly run", "result": what,
                     "positions": None}
     return best
@@ -866,6 +898,11 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
                     "probability": prob, "horizon": hz.isoformat()})
     if session == "daily_review":
         errors += _check_mandate(ans, total, today)
+        if today >= C06_FROM:
+            closed = {r["id"] for r in reviews if r["action"] == "close"}
+            held = {pos[i]["open"]["instrument"] for i in open_ids if i not in closed} | {n["instrument"] for n in new}
+            errs, _ = _check_min_positions(ans, n_open, held, marks_rows, today)
+            errors += errs + _check_event_reason(ans, today)
     return reviews, new, errors
 
 
@@ -933,29 +970,182 @@ def _check_mandate(ans: dict, risk_after: float, today: date) -> list[str]:
     return errs
 
 
+def next_trading_day(d: date) -> date:
+    """The next weekday after ``d`` (C06: an event-based reason expires at the end of this day)."""
+    d += timedelta(days=1)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d
+
+
+def _stale_weekdays(last: date | None, today: date) -> int | None:
+    """Weekdays strictly between the latest mark and today with no mark (None: no mark at all)."""
+    if last is None:
+        return None
+    return sum(1 for k in range(1, (today - last).days) if (last + timedelta(days=k)).weekday() < 5)
+
+
+def _is_stale(last: date | None, today: date) -> bool:
+    n = _stale_weekdays(last, today)
+    return n is None or n >= DATA_STALE_WEEKDAYS
+
+
+def _norm_url(u: str) -> str:
+    return str(u or "").strip().rstrip("/").lower()
+
+
+def official_calendar(u) -> bool:
+    if not _url_ok(u):
+        return False
+    host = re.sub(r"^https?://", "", u.strip().lower()).split("/")[0].split(":")[0]
+    return any(host == h or host.endswith("." + h) for h in OFFICIAL_CALENDAR_HOSTS)
+
+
+MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
+                                      "dec"), 1)}
+
+
+def _dates_named(text: str) -> list[tuple[int, int]]:
+    """(month, day) pairs written in a reason: '12 Nov', 'Nov 12', '2026-11-12'."""
+    out = [(int(m), int(d)) for m, d in re.findall(r"\b\d{4}-(\d{2})-(\d{2})\b", text)]
+    out += [(MONTHS[m[:3].lower()], int(d)) for d, m in
+            re.findall(r"\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b", text, re.I)]
+    out += [(MONTHS[m[:3].lower()], int(d)) for m, d in
+            re.findall(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})\b", text, re.I)]
+    return out
+
+
+def _check_event_reason(ans: dict, today: date) -> list[str]:
+    """C06 rule 2: an event-based below_budget reason cites the event's date (event_date) from an official calendar
+    (calendar_url, listed in sources_read), and expires at the end of the next trading day after the event."""
+    bb = ans.get("below_budget")
+    if not isinstance(bb, dict):
+        return []
+    cond = " ".join(str(bb.get("condition") or "").split())
+    if not (str(bb.get("type") or "").lower() == "event" or bb.get("event_date") or bb.get("calendar_url")
+            or EVENT_REASON.search(cond)):
+        return []
+    errs, ed, url = [], parse_date(bb.get("event_date")), str(bb.get("calendar_url") or "").strip()
+    head = "below_budget is tied to an event (C06): "
+    if not ed:
+        errs.append(head + "event_date (YYYY-MM-DD) is required, the event's date as the official calendar lists it")
+    if not official_calendar(url):
+        errs.append(head + "calendar_url must be the official calendar that dates the event (the statistics office, "
+                    "central bank or official body: " + ", ".join(OFFICIAL_CALENDAR_HOSTS) + ")")
+    elif _norm_url(url) not in {_norm_url(x["url"]) for x in _valid_sources(ans.get("sources_read"))}:
+        errs.append(head + f"calendar_url {url} must also be listed in sources_read (read it in this review)")
+    if ed:
+        named = _dates_named(cond)
+        if named and (ed.month, ed.day) not in named:
+            errs.append(head + f"the condition dates the event differently from event_date {ed}: use the official date")
+        exp = next_trading_day(ed)
+        until = parse_date(bb.get("until"))
+        if exp < today:
+            errs.append(head + f"the event on {ed} has passed; a reason tied to it expired at the end of {exp}")
+        elif until and until > exp:
+            errs.append(head + f"below_budget.until {until} is after its expiry: an event-based reason expires at the "
+                        f"end of the next trading day after the event ({exp}); set until to {exp} or earlier")
+    return errs
+
+
+def _check_min_positions(ans: dict, n_after: int, held: set[str], marks_rows: list[dict], today: date,
+                         settle_rows: list[dict] | None = None) -> tuple[list[str], list[dict]]:
+    """C06 rule 1: at least 2 open positions at all times. below_budget may let risk fall below 3%, never the
+    position count. Fewer than 2 only for a named data failure (data_failure: which mark, how stale), verified
+    against the marks here, and only for the instruments affected: while enough other instruments have current
+    marks, the minimum stands. On a weekend or market holiday, named deferred ideas count (as for the 3% budget).
+    Returns (errors, the verified data-failure entries)."""
+    deferred = [d for d in (ans.get("deferred_ideas") or [])
+                if isinstance(d, dict) and str(d.get("instrument", "")).strip().upper() in UNIVERSE]
+    have = n_after + (len(deferred) if non_trading_day(ans, today) else 0)
+    if have >= MIN_POSITIONS:
+        return [], []
+    short = MIN_POSITIONS - have
+    head = (f"the book would hold {n_after} position(s) after this review; C06 requires at least {MIN_POSITIONS} at "
+            "all times: below_budget may let risk fall below 3% (for example two 0.25% positions) but never the "
+            "number of positions. Fewer is allowed only for a named data failure, and only for the instruments "
+            "affected")
+    df = ans.get("data_failure")
+    if not df:
+        return [head + ": open your best ideas sized small, or give data_failure: [{\"instrument\", \"mark\": which mark "
+                       "failed (source and series), \"last_mark\": the date of its latest mark or \"none\"}]"], []
+    snap = {r["instrument"]: r for r in market_snapshot(marks_rows, today, settle_rows)}
+    errs, ok = [], []
+    for i, d in enumerate(df if isinstance(df, list) else [df], 1):
+        tag = f"data_failure {i}"
+        if not isinstance(d, dict):
+            errs.append(f"{tag}: must be an object")
+            continue
+        inst = str(d.get("instrument", "")).strip().upper()
+        if inst not in UNIVERSE:
+            errs.append(f"{tag}: {inst or '?'} is not in the universe")
+            continue
+        if len(" ".join(str(d.get("mark") or "").split())) < 5:
+            errs.append(f"{tag} ({inst}): mark is required: which mark failed (its source and series)")
+        if "last_mark" not in d:
+            errs.append(f"{tag} ({inst}): last_mark is required: the date of its latest mark, or \"none\"")
+            continue
+        actual = parse_date(snap[inst].get("mark_date"))
+        stated = d.get("last_mark")
+        stated_d = None if str(stated or "").strip().lower() in ("", "none", "null") else parse_date(stated)
+        if stated_d != actual:
+            errs.append(f"{tag} ({inst}): last_mark {stated!r} does not match its latest mark "
+                        f"({actual.isoformat() if actual else 'none'})")
+            continue
+        if not _is_stale(actual, today):
+            errs.append(f"{tag} ({inst}): its latest mark ({actual}) is current, {_stale_weekdays(actual, today)} "
+                        f"weekday(s) old (stale means at least {DATA_STALE_WEEKDAYS}): not a data failure")
+            continue
+        ok.append({**d, "instrument": inst, "stale_weekdays": _stale_weekdays(actual, today)})
+    affected = {d["instrument"] for d in ok}
+    fresh = sorted(i for i, r in snap.items() if i not in held and i not in affected
+                   and not _is_stale(parse_date(r.get("mark_date")), today))
+    if len(fresh) >= short:
+        errs.append(head + f": the data failure covers only {', '.join(sorted(affected)) or 'no instrument'}, and "
+                    f"{len(fresh)} other instrument(s) have current marks ({', '.join(fresh)}): open at least {short} "
+                    "position(s) there")
+    return errs, (ok if not errs else [])
+
+
+def _public_error(e: str) -> str:
+    """An error as written to the public failed-review record: details of futures errors are withheld, because
+    their numbers can derive from licensed settlement prices (rule 7)."""
+    futs = [c for c in UNIVERSE if is_future(c)]
+    if "settlement" in e.lower() or any(f"({c})" in e or f" {c} " in f" {e} " for c in futs) or "contract" in e.lower():
+        return e.split(":")[0] + ": rejected (details not recorded: futures errors can derive from licensed settlements)"
+    return e
+
+
 def review_status(records: list[dict], today: date) -> dict:
-    """The latest daily review: failed if it recorded no sources_read (the research rule), missing if none since
-    yesterday (UTC). The quick check flags either."""
+    """The latest daily review: failed if the CLI rejected it (a failed-review record, C06) or it recorded no
+    sources_read (the research rule), missing if none since yesterday (UTC). The quick check flags either."""
     runs = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"]
     if not runs:
         return {"last_date": None, "sources_read": 0, "status": "missing", "flags": ["no daily review recorded yet"]}
     last = runs[-1]
     d, n = parse_date(last["date"]), len(_valid_sources(last.get("sources_read")))
     flags = []
-    if n == 0:
+    rejected = last.get("status") == "failed"
+    if rejected:
+        why = "; ".join(last.get("errors") or [])
+        flags.append(f"daily review {d} failed: rejected by the CLI ({why[:160] + ('...' if len(why) > 160 else '')})")
+    elif n == 0:
         flags.append(f"daily review {d} failed: empty sources_read"
                      + (f" (before the {MANDATE_FROM} research rule)" if d < MANDATE_FROM else ""))
     if d < today - timedelta(days=1):
         flags.append(f"no daily review since {d}")
-    status = "failed" if n == 0 else ("missing" if d < today - timedelta(days=1) else "ok")
+    status = "failed" if (rejected or n == 0) else ("missing" if d < today - timedelta(days=1) else "ok")
     return {"last_date": d.isoformat(), "sources_read": n, "status": status, "flags": flags}
 
 
 def budget_status(records: list[dict], today: date) -> dict:
     """Risk at risk against the 3-10% budget; below 3% is flagged unless the latest daily review gave a current
-    below_budget reason, or named deferred ideas on a non-trading day within the last 3 days."""
+    below_budget reason, or named deferred ideas on a non-trading day within the last 3 days. The reason is the
+    latest recorded (not rejected) review's; an event-based reason expires at the end of the next trading day after
+    the event (C06), and so does a pre-C06 reason dated by a correction (``BELOW_BUDGET_EXPIRY_CORRECTIONS``)."""
     risk = round(open_risk(positions(records)), 4)
-    runs = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"]
+    runs = [r for r in records if r.get("type") == "run" and r.get("session") == "daily_review"
+            and r.get("status") != "failed"]
     last = runs[-1] if runs else {}
     out = {"risk_used_pct": risk, "budget_pct": list(RISK_BUDGET), "typical_positions": list(TYPICAL_POSITIONS),
            "flags": []}
@@ -963,13 +1153,29 @@ def budget_status(records: list[dict], today: date) -> dict:
         return out
     bb, dd = last.get("below_budget"), last.get("deferred_ideas")
     until = parse_date((bb or {}).get("until")) if isinstance(bb, dict) else None
+    expiry, why = reason_expiry(last)
+    if until and expiry and expiry < until:
+        until = expiry
     if until and until >= today:
         out["reason"] = f"below budget until {until}: {bb.get('condition')}"
     elif dd and last.get("date") and parse_date(last["date"]) >= today - timedelta(days=3):
         out["reason"] = f"{len(dd)} idea(s) deferred to the next trading day by the {last['date']} review"
     else:
-        out["flags"].append(f"{risk:.2f}% at risk, below the {RISK_BUDGET[0]:g}% budget without a current specific reason")
+        out["flags"].append(f"{risk:.2f}% at risk, below the {RISK_BUDGET[0]:g}% budget without a current specific reason"
+                            + (f" (the {last.get('date')} review's reason expired at the end of {expiry}: {why})"
+                               if expiry and until == expiry else ""))
     return out
+
+
+def reason_expiry(run: dict) -> tuple[date | None, str | None]:
+    """When a review's below_budget reason expires under C06: the end of the next trading day after its event, or the
+    date a correction set for a reason recorded before C06."""
+    corr = BELOW_BUDGET_EXPIRY_CORRECTIONS.get(run.get("hash") or "")
+    if corr:
+        return corr[1], f"C06, correction {corr[0]}"
+    bb = run.get("below_budget")
+    ed = parse_date(bb.get("event_date")) if isinstance(bb, dict) else None
+    return (next_trading_day(ed), "C06, the next trading day after the event") if ed else (None, None)
 
 
 def mandate_flags(records: list[dict], today: date) -> list[str]:
@@ -1093,6 +1299,18 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
     if not v["ok"]:
         return {"ok": False, "errors": [f"the Janus chain does not verify: {v['error']}"], "appended": []}
     reviews, new, errors = validate(ans, records, marks_rows, today)
+    if errors and not dry_run and ans.get("session") == "daily_review":
+        # C06 rule 3 (closes Q004): a rejected daily review is recorded as failed, so the quick check flags it the
+        # same day. Nothing else is appended; the session fixes every error and proposes again.
+        rec = append(records, {"type": "run", "session": "daily_review", "date": today.isoformat(),
+                               "decided_at": now.isoformat(), "model": str(ans.get("model") or "").strip(),
+                               "session_url": ans.get("session_url"), "status": "failed", "n_new": 0, "n_reviews": 0,
+                               "errors": [_public_error(e) for e in errors][:30],
+                               "sources_read": _valid_sources(ans.get("sources_read"))[:40],
+                               "proposal_sha256": hashlib.sha256(_canon(ans).encode()).hexdigest(),
+                               "note": "rejected by the CLI: nothing in the proposal was applied (C06)"}, path)
+        return {"ok": False, "errors": errors, "dry_run": False, "appended": [rec["seq"]], "failed_record": rec["seq"],
+                "would_open": [n["instrument"] for n in new], "would_review": [(r["id"], r["action"]) for r in reviews]}
     if errors or dry_run:
         return {"ok": not errors, "errors": errors, "dry_run": dry_run, "appended": [],
                 "would_open": [n["instrument"] for n in new], "would_review": [(r["id"], r["action"]) for r in reviews]}
@@ -1108,7 +1326,8 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                                            - sum(positions(records)[r["id"]]["open"]["risk_pct"]
                                                                  for r in reviews if r["action"] == "close"), 4)}
                                   if session == "daily_review" else {}),
-                               **{k: ans[k] for k in ("below_budget", "deferred_ideas", "market_holiday") if ans.get(k)},
+                               **{k: ans[k] for k in ("below_budget", "deferred_ideas", "market_holiday", "data_failure")
+                                  if ans.get(k)},
                                **({"flags": mandate_flags(records, today)} if session == "quick_check" else {})},
                      path)
     pos = positions(records)
@@ -1233,7 +1452,21 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                         f"market probability (a small edge: {SMALL_EDGE_RISK[0]:g}-{SMALL_EDGE_RISK[1]:g}% "
                                         f"at risk); below {RISK_BUDGET[0]:g}% only with below_budget {{condition, until, "
                                         "reasoning}} naming a specific event or condition; weekend and holiday reviews "
-                                        "may defer entries with deferred_ideas")},
+                                        "may defer entries with deferred_ideas"),
+                        "c06": {"from": C06_FROM.isoformat(),
+                                "min_positions": (f"at least {MIN_POSITIONS} open positions at all times: below_budget "
+                                                  "may let risk fall below 3%, never the count; fewer only with "
+                                                  "data_failure [{instrument, mark, last_mark (date or 'none')}], "
+                                                  f"stale = {DATA_STALE_WEEKDAYS}+ weekdays without a mark, and only "
+                                                  "for the instruments affected (other instruments with current marks "
+                                                  "must be used)"),
+                                "event_reason": ("an event-based below_budget gives event_date (YYYY-MM-DD) and "
+                                                 "calendar_url, the official calendar that dates the event, also "
+                                                 "listed in sources_read; it expires at the end of the next trading "
+                                                 "day after the event (until no later)"),
+                                "official_calendars": list(OFFICIAL_CALENDAR_HOSTS),
+                                "rejected_review": ("a rejected daily review appends a failed-review record (exit 3) "
+                                                    "that the quick check flags; --dry-run writes nothing")}},
             "daily_review_status": review_status(records, today), "risk_budget_status": budget_status(records, today),
             "flags": mandate_flags(records, today),
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
@@ -1303,6 +1536,11 @@ def main(argv=None) -> int:
     res = apply_proposal(ans, dry_run=a.dry_run)
     print(json.dumps(res, indent=1, default=str))
     if not res["ok"]:
+        if res.get("failed_record"):
+            # exit 3: rejected, and the failed-review record (C06) was appended; scripts/ledger_commit.sh commits it
+            print(f"REJECTED: nothing in the proposal was applied; failed-review record {res['failed_record']} was "
+                  "appended (C06). Fix every error above and propose again.", file=sys.stderr)
+            return 3
         print("REJECTED: nothing was appended. Fix every error above and propose again.", file=sys.stderr)
         return 1
     return 0

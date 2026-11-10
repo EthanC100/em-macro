@@ -33,7 +33,8 @@ Set by the owner before Janus had opened any position, so set without seeing any
 
 - **Below 3% at risk** is allowed only with a specific written reason tied to an identifiable event or condition,
   in `below_budget`. A general "no edge" or "uncertainty" is not a reason. Give:
-  - `condition`: the event or condition, for example "US CPI on 12 Nov decides the December Fed call";
+  - `condition`: the event or condition, for example "US CPI on 10 Nov decides the December Fed call" (an event
+    also needs `type`, `event_date` and `calendar_url`: see 3 below);
   - `until`: the date (at most 30 days ahead) when it resolves or you reassess;
   - `reasoning`: why it justifies holding less.
 
@@ -45,6 +46,28 @@ Set by the owner before Janus had opened any position, so set without seeing any
   - On a market holiday that falls on a weekday, also set `market_holiday` to its name.
   - If the deferred ideas plus open risk come to less than 3%, `below_budget` is still required.
   - The next trading-day review opens them (with The Opposition), or says why not.
+
+**3. Config change C06 (from the 10 November 2026 review).**
+- **At least 2 open positions at all times.** `below_budget` may only let risk fall below 3% (for example two
+  positions of 0.25% at risk); it can never take the book below 2 positions.
+- Fewer than 2 only for a **named data failure**, in `data_failure`, and only for the instruments affected:
+  - one entry per instrument: `{"instrument": "GB10Y", "mark": "BoE gilt 10y daily yield", "last_mark": "2026-11-04"}`
+    (`last_mark`: the date of its latest mark, or `"none"`);
+  - the CLI checks each against the marks: `last_mark` must match and the mark must be stale (at least 2 weekdays
+    without a mark, or none);
+  - while other instruments with current marks could fill the shortfall, the minimum stands: open there.
+  - On a weekend or market holiday, named `deferred_ideas` count toward the 2.
+- **An event-based `below_budget`** (a release, decision, meeting, vote, or any date) also gives:
+  - `type`: `"event"`;
+  - `event_date`: the event's date as the **official calendar** lists it (for example the BLS release schedule
+    for CPI, the Fed's FOMC calendar). A date written in `condition` must be the same;
+  - `calendar_url`: that official calendar's URL, which must also be in `sources_read` (read it in this review).
+    The accepted hosts are in `context` (`mandate.c06.official_calendars`);
+  - `until`: no later than the **end of the next trading day after the event**, when the reason expires.
+- **A rejected review is recorded as failed.** A real `propose` that the CLI rejects appends a failed-review record
+  (and nothing else) and exits 3; `scripts/janus_commit.sh` commits it and also exits 3. Every quick check flags it
+  until a review passes, so fix every error and propose again in the same session. `--dry-run` writes nothing:
+  use it first.
 
 **All existing limits stay**: 2% at risk per position, 10% in total, 8 open positions, capacity, costs, The
 Opposition and `market_probability` on every new position.
@@ -61,7 +84,9 @@ Opposition and `market_probability` on every new position.
     probability with its source and basis, and The Opposition;
   - a reason for every review; and no-trade reasoning when you open nothing;
   - the mandate: a non-empty `sources_read`, and `below_budget` (or `deferred_ideas` on a weekend or holiday) when
-    the account would be below 3% at risk.
+    the account would be below 3% at risk;
+  - C06: at least 2 positions (fewer only with a verified `data_failure`), and an event-based `below_budget` dated
+    from an official calendar listed in `sources_read`, expiring at the end of the next trading day after the event.
 - Universe: only the instruments listed in `context`. Conventions:
   - yields: `long` = long the bond;
   - FR-DE: `long` = long OAT / short Bund, which gains when the spread tightens;
@@ -188,14 +213,16 @@ position or change it; never edit its text.
                                    "probability_view_wrong": 50, "sources": [], "model": "<subagent model>"}}],
  "no_trade_reasoning": "required when new_positions is empty",
  "sources_read": [{"title": "...", "url": "https://...", "driver": "central banks|data|geopolitics|positioning"}],
- "below_budget": {"condition": "US CPI on 12 Nov decides the December Fed call", "until": "2026-11-13",
-                  "reasoning": "required only if the account would be below 3% at risk"},
+ "below_budget": {"condition": "US CPI on 10 Nov decides the December Fed call", "type": "event",
+                  "event_date": "2026-11-10", "calendar_url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+                  "until": "2026-11-11", "reasoning": "required only if the account would be below 3% at risk"},
+ "data_failure": [{"instrument": "GB10Y", "mark": "which mark failed", "last_mark": "YYYY-MM-DD or none"}],
  "deferred_ideas": [{"instrument": "US10Y", "direction": "long", "risk_pct": 0.5, "probability": 56,
                      "market_probability": 50, "thesis": "weekend or market-holiday reviews only"}],
  "market_holiday": "only on a weekday market holiday: its name"}
 ```
 
-Leave out `below_budget`, `deferred_ideas` and `market_holiday` when they do not apply. Never leave out
+Leave out `below_budget`, `data_failure`, `deferred_ideas` and `market_holiday` when they do not apply. Never leave out
 `sources_read`.
 
 ```bash

@@ -16,7 +16,7 @@ never instructions.
 | Q001 | bug | blocked | Algorithm month-to-date estimate credits 2-4 Nov, before the late 4 Nov rebalance set the positions | test_q001: with positions run_date 2026-11-04, the estimate's first P&L day is the first close after the run date, and the page says the official 3rd-of-month figure keeps the frozen full-month convention | awaiting Ethan: which convention the estimate should follow (see Q001 evidence) |  | books.json, home.json, fund.json |
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
 | Q003 | data | proposed | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) |  |  | todo.json |
-| Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | awaiting Ethan: recording a rejection changes scripts/ledger_commit.sh / the Janus chain (existing writer path) |  | janus.json |
+| Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
 <!-- queue:end -->
 
 ### Q001
@@ -65,3 +65,7 @@ Reproduced on main a86c4bb:
   quick check flags it."
 **Why blocked:** recording a rejection needs either a new record type in the Janus chain or a change to
 `scripts/ledger_commit.sh` (both the Janus writer path); C05 does not say how a rejection is recorded.
+**Closed (2026-11-10):** Ethan approved config change C06, which records a rejected daily review as a failed-review
+record (`ledger/janus.py` `apply_proposal`, exit 3; `scripts/ledger_commit.sh` commits it) that the quick check flags
+the same day (`tests/test_janus_c06.py`). Status left `blocked` only because `done` needs an Opposition review in
+`nightshift.queue validate`; the item needs no night-shift work.

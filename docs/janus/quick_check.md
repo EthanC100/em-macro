@@ -39,9 +39,10 @@ From it, note the following. If a module is missing, run `pip install -q -r requ
   `distance_to_stop_pct_account`.
 - **`last_check`**, and your own model string (from your system prompt, e.g. `claude-opus-5-5`).
 - **`flags`**: the mandate's flags, computed by the CLI. Flags are raised for:
-  - a failed daily review (empty `sources_read`);
+  - a failed daily review: rejected by the CLI (a failed-review record, config change C06), or empty `sources_read`;
   - no daily review since yesterday;
-  - the account below 3% at risk without a current specific reason.
+  - the account below 3% at risk without a current specific reason (an event-based reason expires at the end of
+    the next trading day after the event, C06).
 
   The CLI attaches them to your check record by itself. Also start your `--result` line with `FLAG:` and the flag,
   for example `FLAG: daily review 2026-11-08 failed (empty sources_read); no change`. A quick check never opens a

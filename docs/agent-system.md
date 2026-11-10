@@ -160,7 +160,8 @@ Evidence from `data/janus/records.jsonl` (162 records), the scheduled-task list 
 6. **One gap where C05 and the code differ:** C05 says a review with empty `sources_read` "counts as failed, and the
    quick check flags it". In code a rejected proposal appends nothing, so the quick check keeps reporting the
    previous review and flags "no daily review" only after a day (queue item Q004, blocked: recording a rejection
-   changes the Janus writer path; Needs Ethan).
+   changes the Janus writer path; Needs Ethan). Closed on 2026-11-10 by config change C06: a rejected daily review
+   now writes a failed-review record that the quick check flags the same day.
 
 Where C05 is silent and nothing was invented: the model and effort of the Janus tasks; whether "normally 2-6
 positions" means an enforced upper bound (only the existing 8-position limit is enforced); what happens if the

@@ -14,7 +14,9 @@
 # stops, horizons; idempotent), run <command>, seal new or resolved decisions and forecasts
 # (`python -m ledger.audit seal`), verify both chains, commit the paths in PATHS and push to main. If the push is rejected (someone else pushed), start again from the new main and re-run the
 # command there, so two writers never append to the same chain position. A rejected proposal (exit 1) stops at once
-# with nothing committed.
+# with nothing committed. Exit 3 (config change C06): the Janus CLI rejected a daily review and appended only its
+# failed-review record; that record is committed and pushed like any other, then the script exits 3 so the session
+# still sees the rejection, fixes the proposal and proposes again.
 #
 # LEDGER_MSG_FILE: if the command writes a commit message to this file, that message is used (the clerk puts the new
 # id in it). LEDGER_BRANCH (testing only, default main): start from and push to that branch instead; Janus's
@@ -42,7 +44,7 @@ for attempt in 1 2 3 4 5; do
   "$@"
   code=$?
   set -e
-  if [ "$code" -ne 0 ]; then
+  if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then
     echo "command failed (exit $code); nothing committed" >&2
     git checkout -q -- "${PATHS[@]}" 2>/dev/null || true
     git clean -qfd -- "${PATHS[@]}" 2>/dev/null || true
@@ -54,16 +56,19 @@ for attempt in 1 2 3 4 5; do
   for p in "${PATHS[@]}"; do [ -e "$p" ] && git add -- "$p"; done
   if git diff --cached --quiet; then
     echo "nothing to commit"
-    exit 0
+    exit "$code"
   fi
-  if [ -n "${LEDGER_MSG_FILE:-}" ] && [ -s "$LEDGER_MSG_FILE" ]; then
+  if [ "$code" -eq 3 ]; then
+    git commit -q -m "Janus daily review REJECTED: failed-review record (C06); nothing applied"
+  elif [ -n "${LEDGER_MSG_FILE:-}" ] && [ -s "$LEDGER_MSG_FILE" ]; then
     git commit -q -F "$LEDGER_MSG_FILE"
   else
     git commit -q -m "$msg"
   fi
   if git push -q origin "HEAD:$BRANCH"; then
     echo "pushed $(git rev-parse --short HEAD) to $BRANCH"
-    exit 0
+    [ "$code" -eq 3 ] && echo "the proposal was REJECTED (failed-review record committed); fix it and propose again" >&2
+    exit "$code"
   fi
   echo "push rejected (attempt $attempt); retrying from the new $BRANCH" >&2
   sleep $((attempt * 4))

@@ -13,6 +13,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C03 | 2026-11-06 | the 3 December 2026 rebalance (positions effective 2026-12) | Paper capital for the algorithm (v1.0 and v1.1) set to US$500,000,000, replacing C01's US$10,000,000. Recorded before any live month is booked (no live month has been booked yet; November 2026 is booked on 3 December). | Capacity: to see the strategy at an institutional size, with capacity checks and a market-impact estimate shown beside the official P&L (diagnostic only). | None. All results stay in percentages of capital; only notional amounts change. `python -m em_macro.verify_v1` and `python -m em_macro.systematic_v11 verify` reproduce v1.0 and v1.1 byte for byte (2026-11-06). |
 | C04 | 2026-11-06 | the fund's start (the first date both members are live: 30 November 2026, v1.1's index start) | **Horizons fund view added**: a combined view of Algorithm v1.1 (risk share 90%; 80% from the 2026-11-07 amendment) and Janus (10%; 20% from the 2026-11-07 amendment), combined by risk (risk share ÷ trailing volatility, capital shares until 6 months of data). Janus's share changes only by the rule in `docs/fund/allocation.md`: 20% after 30 resolved calls with positive net P&L and a better Brier score than the market on those calls (amended 2026-11-06: every Janus position must record a market probability, 50 where none exists); 5% while its drawdown exceeds 10%. Amended 2026-11-07, before the fund starts and before any Janus call resolved: Janus starts at 20%; after 30 resolved calls, 30% with positive net P&L and a better Brier score than the market, 10% with negative net P&L or a worse Brier score; 5% while its drawdown exceeds 10%, overriding. My decisions stay outside. | To see the books as one fund without changing any of them. | None. The fund is read-only (`ledger/fund.py`): no book's record, P&L, rule or result changes, and no fund figure is written into any book. |
 | C05 | 2026-11-09 | the next Janus daily review (9 November 2026) | **Janus mandate**: (a) research is required: every daily review researches the main drivers across its universe (central banks, data, geopolitics, positioning) on the web before deciding and records what it read in `sources_read`; a review with empty `sources_read` is rejected and counts as failed, and the quick check flags it. (b) Risk budget: normally 2-6 positions and 3-10% of the account at risk, best ideas even at modest conviction (e.g. 55%), size scaled with conviction and edge over the market probability (a small edge: 0.25-0.5% at risk); below 3% only with a specific written reason tied to an identifiable event or condition; weekend and holiday reviews may defer entries but must research and name the ideas. Set blind: no Janus position had ever been opened. | The first four reviews (6-8 November) opened nothing with general "no edge" reasoning, three of them with no recorded research. | None. Janus is a separate paper book: no algorithm, frozen result or other book changes. All existing Janus limits stay (2% per position, 10% total, 8 open, capacity, costs, The Opposition, `market_probability`). |
+| C06 | 2026-11-10 | the 10 November 2026 daily review (23:07 UTC) | **Janus: hard 2-position minimum, dated event reasons, failed-review records**: (1) at least 2 open positions at all times; a dated `below_budget` reason may only let total risk fall below 3%, never the book below 2 positions; fewer than 2 only for a named data failure (which mark, how stale), and only for the instruments affected. (2) An event-based reason cites the event's date from an official calendar URL listed in `sources_read`, and expires at the end of the next trading day after the event. (3) The CLI rejects a review that breaks (1) or (2), and a rejected daily review writes a failed-review record (closes Q004). Approved by Ethan on 2026-11-10. | The 9 and 10 November reviews held no position under a `below_budget` reason, and the 10 November review dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET (correction K004). A rejected review left no record (Q004). | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing else in C05 changes. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -440,3 +441,59 @@ review, which recorded no `sources_read`, is shown as failed "before the researc
 **Where:** `docs/janus/daily_review.md` (Mandate), `docs/janus/quick_check.md` (flags), `ledger/janus.py`
 (`_check_mandate`, `review_status`, `budget_status`, `mandate_flags`) and `tests/test_janus.py`.
 
+## C06 — Janus: hard 2-position minimum, dated event reasons, failed-review records (2026-11-10)
+
+Approved by Ethan on 2026-11-10 and effective from that day's daily review (23:07 UTC). It amends C05 (b) only
+where stated below; nothing else in C05 changes.
+
+**Why.** Under C05 the 9 and 10 November reviews held no position, each with a `below_budget` reason tied to US CPI
+"on 12 Nov". The Bureau of Labor Statistics lists the October 2026 CPI for **10 November 2026, 08:30 ET**
+(<https://www.bls.gov/schedule/news_release/cpi.htm>), so the reason rested on a wrong date (correction K004). And a
+rejected review left no record, so the quick check could not flag it the same day (queue item Q004).
+
+**1. The minimum of 2 open positions is hard.**
+- C05's "normally 2-6 positions": the lower bound of 2 now holds at all times.
+- A dated `below_budget` reason may only let total risk fall below 3% (for example two positions of 0.25% at risk).
+  It can never take the book below 2 positions.
+- Fewer than 2 is allowed only for a **named data failure**, in `data_failure`: one entry per instrument affected,
+  each with `instrument`, `mark` (which mark failed: its source and series) and `last_mark` (the date of its latest
+  mark, or `none`). The CLI checks each entry against the marks (the private settlements for futures): `last_mark`
+  must match, and the mark must be stale, meaning at least 2 weekdays without a mark (or no mark at all).
+- Only for the instruments affected: while at least as many other instruments as the shortfall have current marks,
+  the minimum stands and the review must open positions there.
+- On a weekend or market holiday, named `deferred_ideas` count toward the minimum, as they already count toward
+  the 3% budget under C05.
+
+**2. Event-based reasons cite an official calendar and expire.**
+- A `below_budget` reason tied to an event (`type` `event`, or a condition naming a release, decision, meeting,
+  vote or date) gives `event_date` (YYYY-MM-DD) and `calendar_url`: the official calendar that dates the event
+  (the statistics office, central bank or official body; the list is `OFFICIAL_CALENDAR_HOSTS` in
+  `ledger/janus.py`), which must also be listed in `sources_read`.
+- A date written in the condition must be the official one.
+- The reason expires at the **end of the next trading day after the event** (the next weekday): `until` may be no
+  later. The quick check flags the account below 3% once the reason has expired.
+
+**3. The CLI enforces 1 and 2, and records rejections.**
+- `python -m ledger.janus propose` rejects a daily review that breaks rule 1 or rule 2, as it rejects any other
+  broken rule.
+- A rejected daily review appends one **failed-review record** to Janus's chain (`type` `run`, `status` `failed`,
+  with the errors, the `sources_read` and the proposal's SHA-256) and nothing else, and the CLI exits 3.
+  `scripts/ledger_commit.sh` commits and pushes that record and still exits 3, so the session fixes the proposal
+  and proposes again. Errors about futures are recorded without their details, which can derive from licensed
+  settlements. `--dry-run` writes nothing.
+- The quick check flags the failed review the same day ("rejected by the CLI") until a review passes. This closes
+  Q004.
+
+**The 10 November review.** Its record (seq 199) is not edited. Correction K004 in the corrections log
+(`data/ledger/seals.jsonl`) notes that it dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET, and that under
+C06 its `below_budget` entry expires at the end of 11 Nov (not 13 Nov). The quick check applies that expiry
+(`BELOW_BUDGET_EXPIRY_CORRECTIONS` in `ledger/janus.py`).
+
+**Unchanged.** Everything else in C05: research in `sources_read`, the 3-10% budget, sizing, the 30-day limit on
+`until`, weekend and holiday deferrals. Every existing limit (2% per position, 10% in total, 8 open, capacity,
+costs, The Opposition, `market_probability`), the fund allocation rules (`docs/fund/allocation.md`) and the T25-T26
+shadow files. Records made before C06 are not edited.
+
+**Where:** `ledger/janus.py` (`_check_min_positions`, `_check_event_reason`, `apply_proposal`, `review_status`,
+`budget_status`), `scripts/ledger_commit.sh` (exit 3), `ledger/audit.py` (`correct_janus`, Janus corrections in
+`verify_seals`), `docs/janus/daily_review.md`, `docs/janus/quick_check.md`, `tests/test_janus_c06.py`.

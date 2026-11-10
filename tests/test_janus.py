@@ -87,7 +87,10 @@ def test_rule_breaking_proposals_are_rejected_whole(tmp_path, bad, expect):
     path = tmp_path / "r.jsonl"
     res = J.apply_proposal(review(**bad), now=NOW, path=path, marks_rows=MARKS)
     assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
-    assert not path.exists()                                       # nothing appended, not even the account record
+    if bad.get("session") == "weekly":
+        assert not path.exists()                                   # not a daily review: nothing appended
+    else:                                                          # C06: only a failed-review record, nothing applied
+        assert [(r["type"], r["status"]) for r in J.load(path)] == [("run", "failed")]
 
 
 def test_total_risk_and_position_count_limits(tmp_path):
@@ -250,7 +253,7 @@ def idea(**over):
 def test_daily_review_without_research_is_rejected(tmp_path, sr):
     res = J.apply_proposal(review(sources_read=sr), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
     assert not res["ok"] and any("sources_read is empty" in e and "counts as failed" in e for e in res["errors"])
-    assert not (tmp_path / "r.jsonl").exists()
+    assert [(r["type"], r["status"]) for r in J.load(tmp_path / "r.jsonl")] == [("run", "failed")]   # C06 / Q004
 
 
 @pytest.mark.parametrize("bb, expect", [
