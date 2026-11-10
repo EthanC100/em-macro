@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-09",
- "runs_used": 1,
- "last_kind": "worker",
+ "night": "2026-11-10",
+ "runs_used": 0,
+ "last_kind": null,
  "chain_stopped": {
-  "reason": "dry run (setup session): one worker run only; guard next said night-explorer",
-  "at": "2026-11-09T23:07:59+08:00"
+  "reason": "dev conflicts with main: docs/queue.md (main closed Q004; dev has Q003 done and Q005-Q009). Not resolved by hand, per night-start step 2",
+  "at": "2026-11-10T22:41:59+08:00"
  },
  "log": [
   {
