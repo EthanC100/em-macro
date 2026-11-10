@@ -1,0 +1,58 @@
+# Protected paths (docs/agent-system.md, "Protected paths"). A pull request that touches any of these needs
+# EthanC100's review under the main ruleset (docs/rulesets/main.json, require_code_owner_review). The night shift's
+# promotion check (nightshift/promote.py, check c) refuses any dev -> main promotion that touches them, and
+# nightshift/protected.py reads this block, so this file is the single list.
+# Existing writers that push directly to main (docs/agent-system.md, inventory) are not affected by CODEOWNERS.
+#
+# protected:start
+
+# Frozen v1.0 (docs/v1.0_freeze.md, hash tables at commit 7886867 = tag v1.0-frozen)
+/em_macro/systematic.py @EthanC100
+/em_macro/risk_model.py @EthanC100
+/em_macro/carry.py @EthanC100
+/em_macro/sources.py @EthanC100
+/em_macro/panel_sources.py @EthanC100
+/results/systematic/fit/ @EthanC100
+/results/risk_model/fit/frozen_params.json @EthanC100
+/results/systematic/test/ @EthanC100
+/docs/v1.0_freeze.md @EthanC100
+
+# Frozen v1.1 (docs/v1.1_freeze.md, hash tables; tag v1.1-frozen = ffdb5c8)
+/em_macro/systematic_v11.py @EthanC100
+/em_macro/t18_rebal.py @EthanC100
+/em_macro/tstrend.py @EthanC100
+/em_macro/t1619.py @EthanC100
+/em_macro/t01.py @EthanC100
+/em_macro/holdout.py @EthanC100
+/em_macro/verify_v1.py @EthanC100
+/em_macro/cost_audit.py @EthanC100
+/results/T16-T19/performance.csv @EthanC100
+/results/T16-T19/monthly_net.csv @EthanC100
+/results/cost_audit/cost_estimates.csv @EthanC100
+/results/systematic_v1.1/freeze/ @EthanC100
+/docs/v1.1_freeze.md @EthanC100
+
+# T25-T26 live shadows: pre-registration with Amendments 1-2 (in docs/prereg/T25-T26_live_shadows.md), the
+# availability evidence it cites, the go-live record and the pre-live check records
+/results/shadows/GO_LIVE.json @EthanC100
+/results/shadows/prelive.json @EthanC100
+/results/shadows/prelive_amendment2.json @EthanC100
+/results/T25-T26/ @EthanC100
+
+# Pre-registrations (all trials)
+/docs/prereg/ @EthanC100
+
+# Corrections log (K-series: K001-K003 are records in the audit chain)
+/data/ledger/seals.jsonl @EthanC100
+
+# Configuration changes (C01-C05), private-value commitments, the trial ledger
+/docs/config_changes.md @EthanC100
+/ledger/commitments.py @EthanC100
+/trials.csv @EthanC100
+
+# The agents' own rules, this file and the rulesets
+/.claude/ @EthanC100
+/.github/CODEOWNERS @EthanC100
+/docs/rulesets/ @EthanC100
+
+# protected:end

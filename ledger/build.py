@@ -1131,6 +1131,15 @@ def write_json(path: Path, obj) -> None:
                     encoding="utf-8")
 
 
+def build_lab(today: date) -> dict:
+    """The Lab book (lab/book.py). A failure there never stops the Ledger build: the page shows the error."""
+    try:
+        from lab.book import build as lab_build
+        return lab_build(today)
+    except Exception as e:  # noqa: BLE001 - the Lab is experimental; the rest of the app must still build
+        return {"label": "Lab - experimental", "series": [], "sleeves": [], "proposed": [], "errors": [repr(e)[:300]]}
+
+
 def build(out_dir: Path, today: date | None = None, now: datetime | None = None) -> dict:
     today = today or date.today()
     now = now or datetime.now(timezone.utc)
@@ -1159,6 +1168,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     changes = json.loads((ROOT / "data/ledger/changes.json").read_text(encoding="utf-8")) \
         if (ROOT / "data/ledger/changes.json").exists() else {"items": []}
     postmortems = {"items": PM.load_all()}
+    lab = build_lab(today)                        # "Lab - experimental": its own book, never read by any other
     audit = AUD.verify_all()
     commit = git("rev-parse", "--short", "HEAD")
     meta = {
@@ -1191,7 +1201,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
                       ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener),
                       ("todo", todo), ("books", books), ("janus", janus), ("calendar", calendar), ("stress", stress),
-                      ("changes", changes), ("postmortems", postmortems), ("fund", fund)):
+                      ("changes", changes), ("postmortems", postmortems), ("fund", fund), ("lab", lab)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

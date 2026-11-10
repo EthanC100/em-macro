@@ -593,6 +593,7 @@
           <a href="#/reports" style="--item:var(--c-reports)"><span><span class="t">Reports</span><br><span class="d">Archive by date, type and country</span></span><span class="chev">›</span></a>
           <a href="#/screener" style="--item:var(--c-algorithm)"><span><span class="t">Screener</span><br><span class="d">Every country after the monthly rebalance: signals, ranks, positions, catalysts</span></span><span class="chev">›</span></a>
           <a href="#/marks" style="--item:var(--c-decisions)"><span><span class="t">Marks</span><br><span class="d">Daily marks of every instrument and their sources</span></span><span class="chev">›</span></a>
+          <a href="#/lab" style="--item:var(--c-trials)"><span><span class="t">Lab - experimental</span><br><span class="d">Night-shift paper sleeves; a separate book, never in any other P&L</span></span><span class="chev">›</span></a>
           <a href="#/todo" style="--item:var(--c-more)"><span><span class="t">To do</span><br><span class="d">Technical, automation and algorithm items from docs/todo.md</span></span><span class="chev">›</span></a>
         </div>
       </section>
@@ -1263,15 +1264,34 @@
       ${attributionSection('janus', b.janus.attribution, 'Janus: net P&L by country and asset class, % of account.')}`;
   }
 
+  async function pageLab() {
+    const lab = await load('lab');
+    setHead(lab.label || 'Lab - experimental', 'A separate paper book: never mixed into Me, the algorithm, Janus, the shadows or the fund');
+    const sl = lab.sleeves || [];
+    const row = (s) => `<tr><td>${esc(s.id)}</td><td class="wrap">${esc(s.title)}</td><td>${esc(s.instrument)} ${esc(s.direction)}</td><td class="num">${fmtPct(s.risk_pct, 2)}</td><td>${esc(s.status)}</td><td>${esc(s.retire_on)}</td><td class="num ${signClass(s.pnl_pct)}">${fmtPct(s.pnl_pct, 2, true)}</td></tr>`;
+    view.innerHTML = `
+      <section class="section"><div class="card"><p class="small">${esc(lab.note || '')}</p>
+        <p class="small muted">At risk ${fmtPct(lab.risk_used_pct || 0, 2)} of ${fmtPct((lab.limits || {}).total_pct || 5, 1)} (${fmtPct((lab.limits || {}).per_sleeve_pct || 0.5, 1)} per sleeve).</p></div></section>
+      <section class="section"><h2>Lab account (start = 100)</h2>${(lab.series || []).length ? '<div class="chart"><canvas id="lab-chart"></canvas></div>' : '<p class="empty">No sleeve has filled yet.</p>'}</section>
+      <section class="section"><h2>Sleeves</h2>${sl.length ? `<div class="table-wrap"><table><thead><tr><th>Id</th><th>Idea</th><th>Position</th><th class="num">Risk</th><th>Status</th><th>Retires</th><th class="num">P&L</th></tr></thead><tbody>${sl.map(row).join('')}</tbody></table></div>` : '<p class="empty">No sleeve launched yet.</p>'}
+        ${(lab.proposed || []).length ? `<p class="small muted">Not launched: ${(lab.proposed || []).map(esc).join(', ')}</p>` : ''}
+        ${(lab.errors || []).length ? `<p class="small bad">${(lab.errors || []).map(esc).join('<br>')}</p>` : ''}</section>`;
+    if ((lab.series || []).length) {
+      mkChart('lab-chart', { type: 'line', data: { labels: lab.series.map((p) => p[0]),
+        datasets: [{ label: 'Lab - experimental', data: lab.series.map((p) => p[1]), borderColor: cssVar('--c-trials'), pointRadius: 0, borderWidth: 2 }] },
+        options: { responsive: true, maintainAspectRatio: false } });
+    }
+  }
+
   // ------------------------------------------------------------------ router
   const routes = {
     home: pageHome, me: pageMe, decisions: (id) => (id ? pageDecisions(id) : pageMe()), algorithm: pageAlgorithm,
     janus: pageJanus, fund: pageFund, position: pagePosition, calendar: pageCalendar, risk: pageRisk, postmortems: pagePostmortems,
     forecasts: pageForecasts, trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
-    evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo,
+    evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo, lab: pageLab,
   };
   const TAB_OF = { decisions: 'me', position: '', trials: 'more', elections: 'more', reports: 'more', evidence: 'more',
-                   marks: 'more', screener: 'algorithm', todo: 'more', forecasts: 'more', calendar: 'more', risk: 'more',
+                   marks: 'more', screener: 'algorithm', todo: 'more', lab: 'more', forecasts: 'more', calendar: 'more', risk: 'more',
                    postmortems: 'more' };
 
   async function render() {

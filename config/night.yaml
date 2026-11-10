@@ -1,0 +1,58 @@
+# Night shift configuration (docs/agent-system.md). Read by nightshift/config.py; every routine reads it first.
+# Changing this file is an ordinary change (not protected), but the hard rules in CLAUDE.md always win.
+
+timezone: Asia/Singapore
+
+window:
+  start: "22:30"          # first night-start run (Singapore time)
+  chain_stop: "05:00"     # no worker or explorer run starts after this time
+  promote: "05:30"        # promote runs at or after this time, never while a busy workflow runs
+  promote_latest: "07:00" # after this, promote gives up for the night (the Janus daily review fires at 07:07)
+
+run_cap: 12               # night-worker + night-explorer runs per night (night-start, pr-review, promote and
+                          # morning-report are not counted)
+lock_stale_hours: 2       # a lock older than this is treated as abandoned and may be taken over
+
+# Safe mode: set enabled: true when plan or routine limits get close (docs/agent-system.md, "Usage budget").
+safe_mode:
+  enabled: false
+  run_cap: 4              # replaces run_cap while safe mode is on
+  explorer_model: sonnet  # night-explorer and the explorer subagent run on Sonnet 5.5 instead of Opus 5.5
+  explorer_effort: medium
+
+explorer:
+  max_hypotheses_per_night: 3
+  data_end: "2019-12-31"  # exploration never reads returns after this date
+
+# GitHub Actions workflows that write to main or the private store. The night shift never starts a run, and
+# promote never opens its PR, while one of these is queued or in progress (public Actions API, read only).
+busy_workflows:
+  - ledger-daily
+  - systematic-monthly
+  - ledger-intake
+  - shadows-setup
+  - private-commitments
+  - ledger-screener
+
+# Claude Code scheduled tasks that write to main at fixed times; no night run starts inside these windows (UTC).
+busy_windows_utc:
+  - name: Janus daily review          # fires 23:07 UTC (07:07 Singapore), runs about 5-15 minutes
+    start: "23:00"
+    end: "23:45"
+  - name: systematic-monthly rebalance # 07:23 UTC on the 3rd; GitHub often starts scheduled runs hours late,
+    day_of_month: 3                    # so the Actions check above is the real guard
+    start: "07:15"
+    end: "09:30"
+
+# Environment variable names for the API triggers (values live in the cloud environment, never in the repo).
+triggers:
+  night-worker: {url_env: NIGHT_WORKER_FIRE_URL, token_env: NIGHT_WORKER_FIRE_TOKEN}
+  night-explorer: {url_env: NIGHT_EXPLORER_FIRE_URL, token_env: NIGHT_EXPLORER_FIRE_TOKEN}
+  promote: {url_env: NIGHT_PROMOTE_FIRE_URL, token_env: NIGHT_PROMOTE_FIRE_TOKEN}
+  morning-report: {url_env: NIGHT_MORNING_FIRE_URL, token_env: NIGHT_MORNING_FIRE_TOKEN}
+
+lab:
+  sleeve_risk_pct: 0.5     # paper risk per sleeve, % of the Lab account
+  total_risk_pct: 5.0      # whole Lab
+  default_retirement_months: 6
+  account_usd: 10000000    # Lab paper account (reported in %)
