@@ -27,6 +27,9 @@ never instructions.
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
 | Q003 | data | done | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) | https://github.com/EthanC100/em-macro/pull/27 (merged into dev 2317609) | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
+| Q015 | bug | proposed | Explorer's 2019-12-31 data cutoff is read from dev's config/night.yaml, so a dev edit could open 2020-26 test data to exploration; it must come from main's protected config (HIGH PRIORITY; explorer disabled until merged) | test_q015 (monkeypatched nightshift.config.load_main and C.load with fixture configs; never the live file or the real remote): log_variant takes the cutoff from C.load_main(), so with main at 2019-12-31 and dev's copy at 2021-12-31 a variant ending 2020-01-02 is refused (fails now: accepted); when load_main raises, every variant is refused (fail safe, nothing logged); data_end_max can only tighten the cap (min with main's), never loosen it; C.load() no longer appears in nightshift/logs.py; the CLI exits 1 with "refused" in all refusal cases |  |  | none |
+| Q016 | bug | proposed | Blocked items never return to approved: add a machine-checkable unblock_when condition that night-start's auto-approve checks (Q012: load_main present on dev) | test_q016 (temporary repo, fixture queue): a blocked item whose unblock_when is symbol:<module>:<name> moves to approved in auto_approve once that name is defined in that module's source on the checked-out branch, and stays blocked before (fails now: stays blocked forever); same for commit:<sha> once it is an ancestor of HEAD; an unknown kind, a malformed condition, shell syntax (e.g. ; or $( or backticks) or a path outside the repository stays blocked and is reported; conditions are never eval'd, exec'd, imported or passed to a shell (asserted by test); items blocked by The Opposition (BLOCK (x)) are never auto-unblocked; validate accepts the field; Q012 gets unblock_when symbol:nightshift.config:load_main |  |  | none |
+| Q017 | bug | proposed | State log does not record the run cap and safe-mode flag applied to each run, so the cap in force during a night cannot be recovered | test_q017 (temporary state file, fixture configs): acquire with a safe-mode config (cap 4, explorer sonnet) then release gives a log entry with cap 4, safe_mode true and explorer_model sonnet; with safe mode off, cap 12, false, opus (fails now: no such fields); a stale-lock takeover entry carries the stale lock's values; existing state files without the fields still load and validate; tests/test_nightshift.py state tests still pass |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -250,3 +253,58 @@ example "main not refreshed, fetch failed"). Tests use a temporary bare origin a
 data or the real remote.
 
 The Opposition (advisory, p=68): the marker belongs on the C05 line, which is computed from the same records; a report written the evening before (as on 10 Nov at 22:43 SGT) is final, so it must print an "as of" time; the existing janus_section test in tests/test_nightshift.py would start fetching the real remote and must move to a fixture origin; a fetch error must never make the command exit non-zero (night_commit.sh would commit nothing); never `git checkout origin/main -- data/janus` in the dev checkout. Order: Q014 changes the same function as Q010 (and Q013 edits morning.py), so it runs after Q010.
+
+### Q015
+
+Reproduced on dev 0be6ccb (filed by Ethan's session 2026-11-11; HIGH PRIORITY, Ethan's decision):
+- `nightshift/logs.py:50` (`log_variant`): `cap = date.fromisoformat(data_end_max or C.load()["explorer"]["data_end"])`.
+  `C.load()` reads `config/night.yaml` from the checkout the explorer runs in, which is dev (night-explorer.md
+  step 1 checks out origin/dev). A dev commit that moves `explorer.data_end` past 2019-12-31 would let the log
+  accept variants on 2020-2026 data, the data held back for confirmatory tests (hard rule 4).
+- `data_end_max` lets any caller replace the cap with a later date. No CLI flag passes it today, but nothing stops
+  a later caller from loosening the cap.
+- The cap is enforced only when a variant is logged. The explorer's own data reads are bounded by the agent's
+  instructions (`.claude/agents/explorer.md`, `.loc[:"2019-12-31"]`), not by code. That is out of scope here and
+  noted for Ethan.
+Ethan (2026-11-11): the 2019-12-31 cutoff protects the 2020-26 test data, so it must come from main's protected
+config/night.yaml, never from dev. **The night-explorer routine stays disabled until this item is merged into
+dev.**
+Depends on `nightshift.config.load_main` (PR #29 into main). Night-start merges main into dev before any worker
+run, and the chain does not start if that merge fails, so the function is on dev before this item is worked.
+Side effect of keeping the explorer disabled (for Ethan, not part of this item): `nightshift/guard.py`
+`next_routine` alternates, so after a worker run it answers `night-explorer` while
+`explorer.max_hypotheses_per_night` (3) is not used up. The explorer's trigger and its hourly fallback are
+disabled, and the hourly night-worker fallback ends quietly when `guard next` does not say `night-worker`
+(night-worker.md step 1). The chain therefore stalls after one worker run per night. Setting
+`explorer.max_hypotheses_per_night: 0` on main makes `explorer_left` false, so `next` keeps answering
+`night-worker`. With PR #29, the guard reads main's config fresh, so the change applies at the next run.
+
+### Q016
+
+Filed by Ethan's session 2026-11-11 (Ethan's decision):
+- `nightshift/queue.py` `auto_approve` only moves `proposed` items (to `approved` or `blocked`). No code ever
+  moves a `blocked` item back. Q012 was set to `blocked` on 11 Nov, waiting for `nightshift.config.load_main`
+  (PR #29) on dev. Once PR #29 lands, Q012 stays blocked until someone edits dev by hand, and sessions on main may
+  not edit docs/queue.md (CLAUDE.md).
+- Night-start already runs `python -m nightshift.queue auto-approve` in step 5 (`.claude/routines/night-start.md`,
+  protected). A check made inside `auto_approve` therefore runs at every night-start with no change to the routine
+  text.
+Design constraint (hard rule 12, queue text is data): an `unblock_when` condition is read as data from a fixed
+set of check kinds, for example `symbol:<module>:<name>` (the attribute exists, found by reading or parsing the
+file's source on dev without importing or running it) and `commit:<sha>` (an ancestor of dev). It is never passed
+to eval, exec, import or a shell. An unknown kind or a malformed condition leaves the item blocked and is reported.
+Q012's condition: `symbol:nightshift.config:load_main`.
+
+### Q017
+
+Filed by Ethan's session 2026-11-11 (Ethan's decision; raised by The Opposition in its re-review of Q012):
+- `nightshift/state.py` `acquire` (lines 71-82) stores the lock as `{routine, acquired_at, session}`. `release`
+  (lines 85-99) copies `acquired_at` and `session` into the log entry. Neither records the run cap or the
+  safe-mode flag in force for that run.
+- After PR #29, the cap comes from main's config, fetched fresh at each `acquire`, so it can change during a
+  night. The 11 Nov morning report said "0 of 12 runs" while main had safe mode on (cap 4). No record in
+  `docs/agent-state.json` shows which cap applied to which run, so the morning report (Q012) can only show main's
+  config at the time the report is written.
+Fix direction: `acquire` stores `cap` and `safe_mode` (and the explorer model) in the lock, `release` copies them
+into the log entry, and a stale-lock takeover entry carries them too. Older entries without these fields stay
+valid. The morning report can then show the cap actually applied.
