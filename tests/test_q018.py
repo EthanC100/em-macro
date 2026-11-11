@@ -57,6 +57,15 @@ def test_windows_before_the_task_existed_or_still_open_are_not_judged():
     assert W.kick_windows(datetime(2026, 11, 11, 20, 0, tzinfo=UTC)) == []                     # before the task
 
 
+def test_a_successful_late_run_does_not_close_the_lateness_alert():
+    """ledger-daily's success step closes every open alert whose title starts with "[ALERT] ledger-daily"; the lateness
+    alert must not match, or a late run would close the alert about its own lateness."""
+    doc, _ = wf("ledger-daily.yml")
+    close = next(s["run"] for s in doc["jobs"]["daily"]["steps"] if s.get("name") == "Close alert issues after a successful run")
+    prefix = close.split('startswith("', 1)[1].split('"', 1)[0]
+    assert prefix == "[ALERT] ledger-daily" and not W.LATE_TITLE.startswith(prefix)
+
+
 def test_the_job_summary_states_how_late_the_run_started():
     line = W.lateness("schedule", datetime(2026, 11, 10, 13, 48, 23, tzinfo=UTC), "52 5 * * *")
     assert "476 minutes after 05:52 UTC" in line and "LATE" in line

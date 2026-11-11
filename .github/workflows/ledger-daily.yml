@@ -17,7 +17,7 @@ name: ledger-daily
 # opens "[ALERT] Ledger marks stale" when the newest mark is more than 2 days old.
 # 2026-11-11 (Q018, approved by Ethan): GitHub creates this repository's schedule events 5.5-10.5 hours late, so the
 # "ledger-daily kick" Claude Code scheduled task dispatches this workflow at 06:07 and 22:07 UTC (docs/agent-system.md).
-# The crons stay as backups; the watchdog step alerts ("[ALERT] ledger-daily late") when a kick window had no run.
+# The crons stay as backups; the watchdog step alerts ("[ALERT] Kick window missed: ledger-daily late") when a kick window had no run.
 on:
   schedule:
     - cron: "52 5 * * *"      # backup (Q018): 05:52 UTC daily, before the 06:41 app build
@@ -251,7 +251,7 @@ jobs:
           git fetch -q origin main && git checkout -q FETCH_HEAD -- data/ledger/marks.csv || true
           python -m ledger.watchdog --out "$RUNNER_TEMP/watchdog.json"
           bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/watchdog.json"
-          # Q018: a kick window (06:07, 22:07 UTC) with no ledger-daily run opens "[ALERT] ledger-daily late"
+          # Q018: a kick window (06:07, 22:07 UTC) with no ledger-daily run opens "[ALERT] Kick window missed: ledger-daily late"
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json" \
             && python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json" \
             && bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json" || echo "lateness check could not run"

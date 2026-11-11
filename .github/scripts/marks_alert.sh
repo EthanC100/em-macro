@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Open, update or close "[ALERT] Ledger marks stale" (or, with --late-runs, "[ALERT] ledger-daily late", Q018)
+# Open, update or close "[ALERT] Ledger marks stale" (or, with --late-runs, "[ALERT] Kick window missed: ledger-daily late", Q018)
 # from the JSON written by `python -m ledger.watchdog`.
 # Usage: marks_alert.sh <watchdog.json>     (needs GH_TOKEN and GITHUB_REPOSITORY)
 set -euo pipefail

@@ -27,7 +27,9 @@ TITLE = "[ALERT] Ledger marks stale"
 # Claude Code scheduled task ("ledger-daily kick", docs/agent-system.md) dispatches ledger-daily at 06:07 and 22:07
 # UTC, with the crons kept as backups. A kick window counts as missed when no ledger-daily run (any event) started
 # from 15 minutes before to 45 minutes after it.
-LATE_TITLE = "[ALERT] ledger-daily late"
+# Not "[ALERT] ledger-daily ...": ledger-daily closes every open alert with that prefix when a run succeeds, which
+# would close this one straight after a late run.
+LATE_TITLE = "[ALERT] Kick window missed: ledger-daily late"
 KICK_TIMES = ((6, 7), (22, 7))                       # UTC (hour, minute)
 KICK_EARLY, KICK_LATE = timedelta(minutes=15), timedelta(minutes=45)
 KICK_FROM = datetime(2026, 11, 11, 22, 7, tzinfo=timezone.utc)   # the task's first scheduled firing
@@ -81,7 +83,7 @@ def late_check(runs, now: datetime, lookback_hours: float = 48) -> dict:
     """Q018: which closed kick windows had no ledger-daily run start inside them. ``runs`` is the Actions API's
     ``list workflow runs`` answer (``{"workflow_runs": [...]}``) or its list; a run's start is ``run_started_at``
     (else ``created_at``). The JSON matches the marks check, so .github/scripts/marks_alert.sh opens and closes
-    "[ALERT] ledger-daily late" from it."""
+    "[ALERT] Kick window missed: ledger-daily late" from it."""
     runs = runs.get("workflow_runs", []) if isinstance(runs, dict) else list(runs or [])
     starts = sorted(t for t in (_utc(r.get("run_started_at") or r.get("created_at")) for r in runs) if t)
     missed = [t for t in kick_windows(now, lookback_hours)

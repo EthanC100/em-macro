@@ -1,7 +1,7 @@
 # Independent check that the Ledger's daily marks are fresh. Opens "[ALERT] Ledger marks stale" when the newest
 # mark in data/ledger/marks.csv was fetched more than 2 days ago, and closes it once marks are fresh. Runs on its
 # own schedule so it still fires when ledger-daily itself never starts (a dropped schedule, a disabled workflow).
-# From Q018 (2026-11-11) it also opens "[ALERT] ledger-daily late" when a kick window (06:07, 22:07 UTC) had no run.
+# From Q018 (2026-11-11) it also opens "[ALERT] Kick window missed: ledger-daily late" when a kick window (06:07, 22:07 UTC) had no run.
 name: ledger-watchdog
 
 on:
