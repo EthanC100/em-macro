@@ -14,7 +14,7 @@ import pytest
 from ledger import v1_rules as V
 
 NOW = datetime(2026, 12, 3, 9, 0, tzinfo=timezone.utc)
-THR = {"threshold_pp": 0.5202}
+THR = {"threshold_pp": 2.7299}
 PNL_COLS = ["month", "net", "sample", "final_net"]
 
 
@@ -61,15 +61,15 @@ def status(res: dict, n: int) -> str:
 
 
 # ----------------------------------------------------------------------------- building blocks
-def test_carry_spread_is_position_weighted_per_unit_of_gross():
-    # (3 x 4 + 1 x 2 - 2 x 1) / (3 + 1 + 2) = 12 / 6
-    assert V.carry_spread([("A", 3.0, 4.0), ("B", 1.0, 2.0), ("C", -2.0, 1.0)]) == pytest.approx(2.0)
-    assert V.carry_spread([("A", 1.0, 4.0)]) == pytest.approx(4.0)               # one side only is still defined
+def test_book_carry_is_signed_weight_times_carry_not_divided_by_gross():
+    # weights are fractions of capital: 3 x 4 + 1 x 2 - 2 x 1 = 12pp a year on capital
+    assert V.carry_spread([("A", 3.0, 4.0), ("B", 1.0, 2.0), ("C", -2.0, 1.0)]) == pytest.approx(12.0)
+    assert V.carry_spread([("A", 0.5, 4.0)]) == pytest.approx(2.0)               # one side only is still defined
     assert V.carry_spread([("A", 0.0, 4.0)]) is None                            # nothing held
     assert V.carry_spread([("A", 1.0, 4.0), ("C", -1.0, None)]) is None         # a held position without carry
     assert V.carry_spread([("A", None, 4.0)]) is None                           # a held position without a weight
-    # a small high-carry position no longer dominates: equal weights would give (30 + 1) / 2 - 1 = 14.5
-    assert V.carry_spread([("TRY", 0.1, 30.0), ("X", 2.0, 1.0), ("Y", -1.9, 1.0)]) == pytest.approx((3.0 + 2.0 - 1.9) / 4.0)
+    # a large low-carry position adds its own carry and no longer dilutes the rest (per gross: (0.3 + 0.35) / 3.5)
+    assert V.carry_spread([("TRY", 0.1, 3.0), ("FR-DE", 3.4, 0.1)]) == pytest.approx(0.3 + 0.34)
 
 
 def test_percentile_matches_numpy():
@@ -82,7 +82,7 @@ def test_no_live_month_yet_is_index_100_and_no_flag(tmp_path):
     make_repo(tmp_path, [], as_of="2026-10")
     res = V.evaluate(tmp_path, NOW, THR, previous=[])
     assert res["live_months"] == 0 and res["index"] == 100.0 and res["drawdown_pct"] == 0.0
-    assert res["carry_spread_pp"] == pytest.approx((100 * 30 + 50 * 10 - 50 * 2 - 50 * -1) / 250)
+    assert res["carry_spread_pp"] == pytest.approx((100 * 30 + 50 * 10 - 50 * 2 - 50 * -1) / 100)   # % -> fraction
     assert res["flags"] == [] and not res["flagged"]
     assert [status(res, n) for n in range(1, 6)] == ["ok"] * 5
 
@@ -175,13 +175,13 @@ def test_rule4_unheld_currency_does_not_trigger(tmp_path):
 
 
 # ----------------------------------------------------------------------------- rule 5
-LOW = {"TRY": 0.5, "BRL": 0.5, "MXN": 0.5, "TR10Y": 0.5}      # spread (50 + 25 - 25 - 25) / 250 = 0.1pp < 0.5202
+LOW = {"TRY": 0.5, "BRL": 0.5, "MXN": 0.5, "TR10Y": 0.5}      # book carry (50 + 25 - 25 - 25) / 100 = 0.25pp < 2.7299
 
 
 def test_rule5_one_month_below_is_a_watch_two_consecutive_is_a_review(tmp_path):
     make_repo(tmp_path, [0.01], carry=LOW)
     res = V.evaluate(tmp_path, NOW, THR, previous=[{"as_of": "2026-10", "carry_below": "False"}])
-    assert res["carry_spread_pp"] == pytest.approx(0.1) and status(res, 5) == "watch" and res["carry_streak"] == 1
+    assert res["carry_spread_pp"] == pytest.approx(0.25) and status(res, 5) == "watch" and res["carry_streak"] == 1
     assert res["flags"] == []
     res = V.evaluate(tmp_path, NOW, THR, previous=[{"as_of": "2026-10", "carry_below": "True"}])
     assert status(res, 5) == "triggered" and res["carry_streak"] == 2
@@ -211,23 +211,39 @@ def test_rule5_missing_screener_or_changed_threshold_is_flagged_not_silent(tmp_p
 def test_live_sign_follows_the_side_and_a_missing_size_is_an_error(tmp_path):
     make_repo(tmp_path, [0.01], positions=[("TRY", "long", 100.0), ("MXN", "short", 50.0)])   # short written unsigned
     res = V.evaluate(tmp_path, NOW, THR, previous=[])
-    assert res["carry_spread_pp"] == pytest.approx((100 * 30 - 50 * 2) / 150, abs=1e-4)
+    assert res["carry_spread_pp"] == pytest.approx((100 * 30 - 50 * 2) / 100, abs=1e-4)
     assert [h["weight_pct"] for h in res["carry_holdings"]] == [100.0, -50.0]
     make_repo(tmp_path, [0.01], positions=[("TRY", "long", ""), ("MXN", "short", -50.0)])
     res = V.evaluate(tmp_path, NOW, THR, previous=[])
     assert status(res, 5) == "error" and "no size_pct_of_capital for held TRY" in res["rules"][4]["detail"]
 
 
-def test_superseded_equal_weight_threshold_is_kept_unchanged():
-    assert V.sha256_file(V.SUPERSEDED_THRESHOLD_FILE) == V.SUPERSEDED_THRESHOLD_SHA256
-    old = json.loads(V.SUPERSEDED_THRESHOLD_FILE.read_text(encoding="utf-8"))
-    assert old["threshold_pp"] == 3.176 and "equal-weighted" in old["method"]
-    assert V.SUPERSEDED_HISTORY_FILE.exists()
+def test_both_superseded_thresholds_are_kept_unchanged_and_the_changes_recorded():
+    assert len(V.SUPERSEDED) == 2
+    olds = []
+    for f, hist, sha, _ in V.SUPERSEDED:
+        assert V.sha256_file(f) == sha and hist.exists(), f
+        olds.append(json.loads(f.read_text(encoding="utf-8")))
+    assert olds[0]["threshold_pp"] == 3.176 and "equal-weighted" in olds[0]["method"]
+    assert olds[1]["threshold_pp"] == 0.5202 and "divided by gross exposure" in olds[1]["method"]
     new = json.loads(V.THRESHOLD_FILE.read_text(encoding="utf-8"))
-    ch = new["definition_change"]
-    assert ch["before_first_live_evaluation"] is True and "TRY" in ch["why"]
-    assert ch["previous_file_sha256"] == V.SUPERSEDED_THRESHOLD_SHA256 and ch["previous_threshold_pp"] == 3.176
-    assert "divided by gross exposure" in new["method"]
+    assert new["final"] is True and new["no_live_month_evaluated"] is True and new["live_months_evaluated"] == 0
+    ch = new["definition_changes"]
+    assert [c["n"] for c in ch] == [1, 2] and all(c["before_first_live_evaluation"] for c in ch)
+    assert [c["superseded_threshold_pp"] for c in ch] == [3.176, 0.5202]
+    assert [c["superseded_file_sha256"] for c in ch] == [x[2] for x in V.SUPERSEDED]
+    assert "TRY" in ch[0]["why"] and "low-volatility euro positions" in ch[1]["why"]
+    assert "NOT divided by gross exposure" in new["method"] and "D005" in new["method"]
+
+
+def test_live_uses_the_raw_positions_file_never_adjustments(tmp_path):
+    make_repo(tmp_path, [0.01])
+    _write_csv(tmp_path / "results/systematic/position_adjustments.csv", ["instrument", "start", "end", "scale"],
+               [{"instrument": "TRY", "start": "2026-11-01", "scale": "0"}])           # e.g. a later D005 cut
+    res = V.evaluate(tmp_path, NOW, THR, previous=[])
+    assert res["carry_spread_pp"] == pytest.approx(34.5)                                  # TRY still at 100%
+    src = (V.ROOT / "ledger/v1_rules.py").read_text(encoding="utf-8")
+    assert "position_adjustments.csv\"" not in src and "load_overrides" not in src
 
 
 def test_threshold_file_is_frozen_pinned_and_uses_2005_2019_only():
@@ -281,7 +297,7 @@ def test_monitor_never_touches_frozen_or_exposure_files():
     # it writes with write_text / open("w") only in write() and freeze(); the frozen v1.0 paths never appear as targets
     for frozen in ("em_macro/systematic.py", "frozen_design.json", "frozen_params.json"):
         assert f'"{frozen}").write' not in src and f"'{frozen}').write" not in src
-    assert "overrides.yaml" not in src and "positions.csv\").write" not in src
+    assert '"overrides.yaml"' not in src and 'positions.csv").write' not in src   # mentioned in the docstring only
 
 
 def test_summary_lines_and_morning_section():
