@@ -113,15 +113,27 @@ def _ecb_exr_series(ccy: str, get) -> dict[date, float]:
     return out
 
 
+def _ecb_ident(ident: str) -> tuple[str, bool]:
+    """``CCY`` (local currency per USD) or ``CCY/USD`` (US dollars per one unit of CCY, the inverted cross, e.g.
+    GBP/USD from config change C10)."""
+    ccy, _, quote = str(ident).strip().upper().partition("/")
+    if quote and quote != "USD":
+        raise ValueError(f"ecb_exr ident {ident!r}: only CCY or CCY/USD")
+    return ccy, bool(quote)
+
+
 def fetch_ecb_exr(ccy: str, get=http_get):
-    """Local currency per USD from the ECB euro reference rates (USD per EUR for ``USD``)."""
+    """Local currency per USD from the ECB euro reference rates (USD per EUR for ``USD``); for ``CCY/USD``, US
+    dollars per unit of CCY (USD per EUR divided by CCY per EUR, on the dates both are published)."""
+    ccy, inverted = _ecb_ident(ccy)
     usd = _ecb_exr_series("USD", get)
     url = f"https://data-api.ecb.europa.eu/service/data/EXR/D.{ccy}.EUR.SP00.A?format=csvdata&lastNObservations=15"
     if ccy == "USD":
         d, v = _last(list(usd.items()))
         return d, v, url
     loc = _ecb_exr_series(ccy, get)
-    common = [(d, loc[d] / usd[d]) for d in loc if d in usd and usd[d]]
+    common = [(d, (usd[d] / loc[d]) if inverted else (loc[d] / usd[d])) for d in loc
+              if d in usd and usd[d] and loc[d]]
     d, v = _last(common)
     return d, round(v, 6), url
 
@@ -377,11 +389,13 @@ def ecb_exr_history(ccy: str, start: date, get=http_get):
             if d and v is not None:
                 out[d] = v
         return out, url
+    ccy, inverted = _ecb_ident(ccy)
     usd, url = series("USD")
     if ccy == "USD":
         return sorted(usd.items()), url
     loc, url = series(ccy)
-    return sorted((d, round(loc[d] / usd[d], 6)) for d in loc if d in usd and usd[d]), url
+    return sorted((d, round((usd[d] / loc[d]) if inverted else (loc[d] / usd[d]), 6)) for d in loc
+                  if d in usd and usd[d] and loc[d]), url
 
 
 HISTORY = {"riksbank": riksbank_history, "fred": fred_history, "bundesbank": bundesbank_history,

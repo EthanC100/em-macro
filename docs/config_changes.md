@@ -17,6 +17,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C07 | 2026-11-10 | the first Janus daily review after it was recorded (10 November 2026, 23:07 UTC) | **Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals only where the market is closed**: (1) no opened position may state a probability of 50%; the CLI rejects a proposal containing one. (2) When the C06 two-position minimum binds, the review lists at least 5 candidates across at least 2 asset classes; a candidate it dropped after The Opposition may be reopened only if it states why no other candidate is better. (3) Every review records its current UTC time and, for each event cited in a reason or thesis, whether it had already occurred; an event dated in the future cannot be described as released. (4) A deferred idea counts toward the minimum only if its market is closed on the review date, and must open at the next session. Approved by Ethan on 2026-11-10. *Rules 1, 2 and 4 superseded by C08 from 11 Nov 2026; rule 3 kept.* | The 10 November 10:30 UTC review met C06's minimum with two 0.25% rates longs (J001, J002) at a stated probability of 50%, opened anyway after The Opposition put each near 43-44% to work, with no other asset class considered; and it described October CPI as "released at 08:30 ET on 10 Nov" at 10:30 UTC, three hours before the 13:30 UTC release. | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing in C05 or C06 changes except what C07 adds. |
 | C08 | 2026-11-11 | the 11 November 2026 daily review (23:07 UTC) | **Janus: forced forecasts and a mechanical book, replacing discretionary position selection**: (1) a watchlist, `janus/watchlist.yaml`: US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY and AUD, each with a precise question (direction, 20 trading days, resolution source); (2) every daily review gives every instrument a probability, a whole number from 1 to 99 and never 50, before and after The Opposition; every forecast is logged and resolved automatically with Brier scores; (3) the CLI sets the book: each instrument on the side of its final forecast, risk proportional to \|p − 50\| inside C05's 3-10% band, rebalanced at each daily review with a 25% no-trade band; only a named data failure excludes an instrument; (4) The Opposition is advisory; (5) J001 and J002 are closed by the first C08 review; (6) a fund resolved call is one forecast per instrument per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | The 10 November 23:07 UTC review (run record seq 238) held only J001 and J002, two rates longs stated at 50%, 0.5% at risk, under a `below_budget` reason tied to the FOMC a month away (9 Dec). Its other candidates sat at 48-50% with "no edge", and the one fresh idea (short US10Y) was dropped after The Opposition. Discretionary selection kept the book at the minimum, and it yields too few scored calls to judge Janus. | None on any other book: no algorithm, frozen result or other book changes. The fund allocation rule's thresholds and shares are unchanged; only what counts as a Janus resolved call is defined (`docs/fund/allocation.md`). The rules of C05, C06 and C07 that C08 supersedes are marked in their sections. |
 | C09 | 2026-11-11 | the same first C08 review (11 November 2026, 23:07 UTC); the mark sources from the next ledger-daily run | **Janus watchlist widened, faster rate marks, clustered fund calls** (amends C08 before any C08 forecast was made): (1) US10Y marked from US Treasury's daily par yield curve (the series FRED republishes as DGS10 a business day later; FRED kept as fallback) and GB10Y from the Riksbank's benchmark gilt yield (GBGVB10Y) instead of the Bank of England's IUDMNPY; (2) BRL (BCB PTAX) and MXN (Banxico FIX) added to `janus/watchlist.yaml`, 10 instruments; gold not added, as no free, republishable daily gold mark exists; (3) the fund rule counts one call per correlation cluster (G10 yields, USD vs G10 FX, EM FX, gold; defined in the watchlist) per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | US10Y and GB10Y marks were two to three business days behind when ledger-daily ran: FRED and the BoE had not yet published the later days, and the BoE database refuses cloud clients. The C08 watchlist was two correlated bets (global yields, the dollar), so counting each forecast as a call overstated the evidence. | None on any other book. The GB-DE display spread now uses the Riksbank gilt leg. The fund rule's thresholds and shares are unchanged; only how Janus's calls are counted changes. |
+| C10 | 2026-11-11 | the next ledger-daily run (11 November 2026), before C08's first daily review (23:07 UTC) | **GBP marked on the ECB cross**: US dollars per pound = the ECB's US dollars per euro divided by its pounds per euro (as JPY and AUD), replacing the Bank of England's XUDLUSS; the watchlist's GBP question resolves on it. Approved by Ethan on 2026-11-11. | The Bank of England's XUDLUSS arrived one business day late on every run, and its database refused at least one run from GitHub's servers (6 Nov 03:57 UTC: "no observations", FRED fallback) and refuses cloud sessions outright. The ECB reference rates are published the same day (16:00 CET). | None on any other book: no decision, forecast or position uses GBP. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -801,3 +802,31 @@ no-trade band are unchanged.
 `ledger/janus.py` (`UNIVERSE` BRL and MXN, `load_clusters`, `fund_calls`, the forecast record's `cluster`);
 `ledger/fund.py`; `docs/fund/allocation.md`; `docs/janus/daily_review.md`; `data/janus/README.md`;
 `tests/test_janus_c09.py` and `tests/test_janus_c08.py` (10 instruments, cluster calls).
+
+## C10 — Janus: GBP marked on the ECB cross (2026-11-11)
+
+Approved by Ethan on 2026-11-11. Recorded before C08's first daily review (23:07 UTC) and applied by a ledger-daily
+run before it, so no forecast resolves on the Bank of England source.
+
+**Why.**
+- The Bank of England's XUDLUSS (spot US dollars per pound) arrived one business day late on every ledger-daily run
+  since 4 November.
+- Its database answered "no observations" to one run from GitHub's servers (6 November, 03:57 UTC; the run fell
+  back to FRED's older DEXUSUK), and it refuses cloud sessions outright ("Access denied").
+- GBP was not stale for tonight (latest mark 9 November), but the source can fail without warning.
+
+**What changes.**
+- **Source:** GBP (`data/ledger/instruments.csv`) is now `ecb_exr GBP/USD`: the ECB's US dollars per euro divided by
+  its pounds per euro, on the dates both are published, rounded to 6 decimals. This is the same construction as JPY
+  and AUD, inverted because GBP is quoted in dollars per pound. `ledger/marks.py` reads `CCY/USD` as that inverted
+  cross (`_ecb_ident`, `fetch_ecb_exr`, `ecb_exr_history`).
+- **Fallback:** FRED's DEXUSUK, unchanged (it is never used when older than the previous daily mark).
+- **Watchlist:** GBP's question in `janus/watchlist.yaml` is unchanged; it now resolves on the ECB cross.
+- **History:** each run stores the source's last 15 observations, newest fetch winning, so recent GBP marks become one
+  consistent ECB series. The two sources differ by about 0.1% because they fix at different times (9 November: BoE
+  1.3403, ECB 1.341604).
+
+**Unchanged.** Everything else in C08 and C09. No decision, forecast or position uses GBP.
+
+**Where:** `data/ledger/instruments.csv`, `ledger/marks.py`, `janus/watchlist.yaml`, `data/janus/README.md`,
+`tests/test_janus_c10.py`.

@@ -65,7 +65,7 @@ the notional traded.
 | GB10Y | UK 10y gilt | Riksbank SWEA GBGVB10Y, benchmark 10y gilt (from C09; before it, Bank of England IUDMNPY, published two to three business days late) |
 | JP10Y | Japan 10y JGB | Japan Ministry of Finance JGB curve CSV; fallback Riksbank JPGVB10Y |
 | FR-DE | France 10y over the Bund | Riksbank SWEA FRGVB10Y − DEGVB10Y |
-| EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP: Bank of England) |
+| EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP from C10; before it, Bank of England XUDLUSS) |
 | BRL, MXN | EM FX (from C09) | BCB PTAX sell rate (SGS 1); Banxico FIX (SIE SF43718) |
 
 **Futures and options (from 2026-11-06; code `ledger/janus_fut.py`, settlements `ledger/settlements.py`).**
