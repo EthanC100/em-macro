@@ -39,6 +39,8 @@ into `data/raw/`: `python -m em_macro.archive_raw check <asset> && tar -xzf <ass
 | T23-T24 | AQR `Commodities-for-the-Long-Run-Index-Level-Data-Monthly.xlsx` | 454950 | `eeb89c65fa7dca2bfbbebb7af2cbecade7b470d6a4da52883e9413a162b5fe75` | public AQR data set (D3 benchmark: equal-weight excess return), downloaded 2026-11-06 from aqr.com; copy in the private repo `EthanC100/em-macro-data` under `norgate/derived/T23-T24/aqr/` | 2026-11-06 | kept privately (as Build 0's AQR files) |
 | T23-T24 | AQR `Century-of-Factor-Premia-Monthly.xlsx` | 1784414 | `0bf8ba978e64964282ead98a6a25691218d4517d07c98c89e2716706f6f0a127` | public AQR data set, read by Build 0's `load_aqr` alongside the first (not used by any T23-T24 statistic); same location | 2026-11-06 | kept privately |
 | T23-T24 | Norgate snapshots `2026-11_futures`, `2026-11_financials`, `2026-11_metadata` | — | as the T20-T22 rows above (re-checked 2026-11-06) | the same licensed inputs as T20-T22; nothing new exported | 2026-11-06 | kept privately |
+| T27 | `T27_imf_areaer_raw_2026-11-11.tar.gz` | 37901352 | `f35b2e39e33fd6aa7bbee7d232156d9eefd63b588480126d94dfbd279b122f96` | `data/raw/imf_areaer`, 15 files | 2026-11-11 | kept in repository (`data/kept/T27/T27_imf_areaer_raw_2026-11-11.tar.gz`) |
+| T27 | `T27_imf_areaer_raw_2026-11-11_manifest.csv` | 1631 | `4a00b7889702373635e159e98a390a436fca06946f306ae9a0511ed8f4dec80f` | per-file SHA-256 of T27_imf_areaer_raw_2026-11-11.tar.gz | 2026-11-11 | kept in repository (`data/kept/T27/T27_imf_areaer_raw_2026-11-11_manifest.csv`) |
 
 ## Notes on what is and is not archived (2026-11-04)
 
