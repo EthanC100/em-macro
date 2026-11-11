@@ -15,7 +15,7 @@ lock_stale_hours: 2       # a lock older than this is treated as abandoned and m
 
 # Safe mode: set enabled: true when plan or routine limits get close (docs/agent-system.md, "Usage budget").
 safe_mode:
-  enabled: false
+  enabled: true
   run_cap: 4              # replaces run_cap while safe mode is on
   explorer_model: sonnet  # night-explorer and the explorer subagent run on Sonnet 5.5 instead of Opus 5.5
   explorer_effort: medium

@@ -26,6 +26,12 @@ K001, K002, ...) with the old and new value, the reason, and the entry's digest 
 (``digest``). Verification accepts a changed entry only through such a chain of corrections: each correction's
 ``old_digest`` must equal the entry's sealed digest at that point, and the current row with the corrected field
 set back to its old value must hash to ``old_digest`` (so the correction changed that field and nothing else).
+
+Janus records (from K004, config change C06). Janus's chain (data/janus/records.jsonl) is append-only and is never
+edited, so a correction to a Janus record changes nothing in it: ``python -m ledger.audit correct-janus spec.json``
+appends a ``correction`` seal of kind ``janus`` naming the record (``janus_seq``, ``janus_hash``) and, for each field
+(a dotted path such as ``below_budget.until``), the value as recorded (``old``) and the correct value or its effect
+(``new``). Verification checks that the record still exists with that hash and still holds every ``old`` value.
 """
 from __future__ import annotations
 
@@ -115,8 +121,29 @@ def seal(path: Path = SEALS, now: str | None = None) -> list[dict]:
     return new
 
 
-def verify_seals(path: Path = SEALS) -> dict:
+def _dotted(rec: dict, field: str):
+    cur = rec
+    for k in field.split("."):
+        if not isinstance(cur, dict) or k not in cur:
+            return None
+        cur = cur[k]
+    return cur
+
+
+def _check_janus_correction(s: dict, janus: list[dict]) -> str | None:
+    """None if a Janus correction seal matches its record (same hash, every old value as recorded), else the error."""
+    rec = next((r for r in janus if r.get("seq") == s.get("janus_seq")), None)
+    if rec is None or rec.get("hash") != s.get("janus_hash"):
+        return f"correction {s.get('correction_id')}: Janus record {s.get('janus_seq')} is missing or changed"
+    for f, v in (s.get("fields") or {}).items():
+        if str(_dotted(rec, f)) != str(v.get("old")):
+            return f"correction {s.get('correction_id')}: Janus record {s.get('janus_seq')} {f} is not {v.get('old')!r}"
+    return None
+
+
+def verify_seals(path: Path = SEALS, janus_path: Path | None = None) -> dict:
     seals = load(path)
+    janus = None
     prev = GENESIS
     expected: dict[tuple, str] = {}           # (kind, id) -> the entry digest the chain says is current
     last_corr: dict[tuple, dict] = {}
@@ -128,6 +155,12 @@ def verify_seals(path: Path = SEALS) -> dict:
             return {"ok": False, "error": f"seal {i}: content does not match its hash"}
         prev = s["hash"]
         key = (s["kind"], s["id"])
+        if s["part"] == "correction" and s["kind"] == "janus":
+            janus = JN.load(janus_path or JN.RECORDS) if janus is None else janus
+            err = _check_janus_correction(s, janus)
+            if err:
+                return {"ok": False, "error": err}
+            continue
         if s["part"] == "entry":
             expected[key] = s["digest"]
         elif s["part"] == "correction":
@@ -237,6 +270,45 @@ def correct_many(changes: list[tuple[str, str, dict]], reason: str, path: Path =
     return linked
 
 
+def correct_janus(seq: int, new_fields: dict, reason: str, path: Path = SEALS, janus_path: Path | None = None,
+                  now: str | None = None) -> dict:
+    """Append a correction seal for one Janus record without editing it (see the module docstring). ``new_fields``:
+    {dotted field: correct value or its effect}; the old value is read from the record."""
+    if not (reason or "").strip():
+        raise ValueError("a correction needs a reason")
+    if not new_fields:
+        raise ValueError("no fields")
+    janus = JN.load(janus_path or JN.RECORDS)
+    jv = JN.verify(janus)
+    if not jv["ok"]:
+        raise ValueError(f"the Janus chain does not verify ({jv['error']})")
+    v = verify_seals(path, janus_path)
+    if not v["ok"]:
+        raise ValueError(f"the seal chain does not verify ({v['error']}); fix that first")
+    rec = next((r for r in janus if r.get("seq") == int(seq)), None)
+    if rec is None:
+        raise ValueError(f"Janus record {seq} not found")
+    flds = {}
+    for f, new in new_fields.items():
+        old = _dotted(rec, f)
+        if old is None:
+            raise ValueError(f"Janus record {seq} has no field {f}")
+        if str(old) == str(new):
+            raise ValueError(f"{f}: the new value equals the recorded one")
+        flds[f] = {"old": str(old), "new": " ".join(str(new).split())}
+    seals = load(path)
+    n = len({s["correction_id"] for s in seals if s["part"] == "correction"}) + 1
+    out = _link(seals, {"kind": "janus", "id": f"{rec['type']}-{rec['seq']}", "part": "correction",
+                        "correction_id": f"K{n:03d}", "janus_seq": rec["seq"], "janus_hash": rec["hash"],
+                        "digest": rec["hash"],
+                        "record_edited": False, "fields": flds, "field": ", ".join(flds),
+                        "reason": " ".join(reason.split()),
+                        "sealed_at": now or datetime.now(timezone.utc).replace(microsecond=0).isoformat()})
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(out, sort_keys=True, separators=(",", ":")) + "\n")
+    return out
+
+
 def correct(kind: str, rid: str, field: str, new_value: str, reason: str, path: Path = SEALS,
             now: str | None = None) -> dict:
     """Change one logged field of a sealed entry and append the correction record (see the module docstring)."""
@@ -320,6 +392,11 @@ def main(argv=None) -> int:
         spec = json.loads(Path(args[1]).read_text(encoding="utf-8"))
         recs = correct_many([(c["kind"], c["id"], c["fields"]) for c in spec["changes"]], spec["reason"])
         print(json.dumps([{k: r[k] for k in ("correction_id", "kind", "id", "fields")} for r in recs], indent=1))
+    if cmd == "correct-janus":
+        # {"seq": 199, "reason": "...", "fields": {"below_budget.until": "the correct value or its effect"}}
+        spec = json.loads(Path(args[1]).read_text(encoding="utf-8"))
+        rec = correct_janus(spec["seq"], spec["fields"], spec["reason"])
+        print(json.dumps({k: rec[k] for k in ("correction_id", "kind", "id", "janus_seq", "fields")}, indent=1))
     if cmd == "seal":
         new = seal()
         print(f"{len(new)} new seal(s)")

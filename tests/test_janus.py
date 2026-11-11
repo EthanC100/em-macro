@@ -87,7 +87,10 @@ def test_rule_breaking_proposals_are_rejected_whole(tmp_path, bad, expect):
     path = tmp_path / "r.jsonl"
     res = J.apply_proposal(review(**bad), now=NOW, path=path, marks_rows=MARKS)
     assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
-    assert not path.exists()                                       # nothing appended, not even the account record
+    if bad.get("session") == "weekly":
+        assert not path.exists()                                   # not a daily review: nothing appended
+    else:                                                          # C06: only a failed-review record, nothing applied
+        assert [(r["type"], r["status"]) for r in J.load(path)] == [("run", "failed")]
 
 
 def test_total_risk_and_position_count_limits(tmp_path):
@@ -201,7 +204,8 @@ def test_cli_rejects_a_bad_proposal_with_exit_1(tmp_path):
     env.pop("DATA_REPO_READ_TOKEN", None)
     out = subprocess.run([sys.executable, "-m", "ledger.janus", "propose", "--file", str(f), "--dry-run"], cwd=ROOT,
                          capture_output=True, text=True, env=env)
-    assert out.returncode == 1 and "REJECTED" in out.stderr and "per-position limit" in out.stdout
+    # the CLI's clock is past C08 (11 Nov 2026), under which a daily review may not open a position at all
+    assert out.returncode == 1 and "REJECTED" in out.stderr and "new_positions is not used under C08" in out.stdout
 
 
 def test_no_janus_trigger_workflows():
@@ -234,8 +238,10 @@ def test_market_probability_is_recorded(tmp_path):
 
 
 # ----------------------------------------------------------------------------- mandate of 2026-11-09
-SAT = datetime(2026, 11, 14, 23, 7, tzinfo=timezone.utc)
-MON = datetime(2026, 11, 16, 23, 7, tzinfo=timezone.utc)
+# the C05 deferral rule alone: the weekend before C06 and C07 (their deferral rules are tested in test_janus_c06.py
+# and test_janus_c07.py)
+SAT = datetime(2026, 11, 7, 23, 7, tzinfo=timezone.utc)
+MON = datetime(2026, 11, 9, 23, 7, tzinfo=timezone.utc)
 NO_TRADE = dict(new_positions=[], no_trade_reasoning="Waiting for CPI on the rates ideas.")
 
 
@@ -250,7 +256,7 @@ def idea(**over):
 def test_daily_review_without_research_is_rejected(tmp_path, sr):
     res = J.apply_proposal(review(sources_read=sr), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
     assert not res["ok"] and any("sources_read is empty" in e and "counts as failed" in e for e in res["errors"])
-    assert not (tmp_path / "r.jsonl").exists()
+    assert [(r["type"], r["status"]) for r in J.load(tmp_path / "r.jsonl")] == [("run", "failed")]   # C06 / Q004
 
 
 @pytest.mark.parametrize("bb, expect", [

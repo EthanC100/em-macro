@@ -1,0 +1,21 @@
+# Test fixture for nightshift/brief.py, NOT the live config/brief.yaml. Tests read this file so that delivery and
+# verification switches in the live file (auto_send, on_unverified_level, mailing list) can change without turning
+# the suite red.
+schedule: "Saturday 08:00 Asia/Singapore"
+byline: "Ethan Cukierman, Horizons"
+audience: beginner
+output_dir: briefs
+min_sources_per_level: 2
+on_unverified_level: flag
+licensed_terms_forbidden:
+  - settlement
+  - Databento
+  - Norgate
+
+delivery:
+  gmail_draft: true
+  mailing_list: ""
+  auto_send: false
+  service:
+    name: buttondown
+    api_key_env: BRIEF_MAILER_API_KEY

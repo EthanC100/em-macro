@@ -1,0 +1,53 @@
+# Test fixture for nightshift/config.py, NOT the live config/night.yaml. Tests read this file so that operational
+# switches in the live file (safe mode, caps, windows) can change without turning the suite red. Values here are
+# fixed on purpose: safe mode OFF, normal cap 12, safe-mode cap 4.
+
+timezone: Asia/Singapore
+
+window:
+  start: "22:30"
+  chain_stop: "05:00"
+  promote: "05:30"
+  promote_latest: "07:00"
+
+run_cap: 12
+lock_stale_hours: 2
+
+safe_mode:
+  enabled: false
+  run_cap: 4
+  explorer_model: sonnet
+  explorer_effort: medium
+
+explorer:
+  max_hypotheses_per_night: 3
+  data_end: "2019-12-31"
+
+busy_workflows:
+  - ledger-daily
+  - systematic-monthly
+  - ledger-intake
+  - shadows-setup
+  - private-commitments
+  - ledger-screener
+
+busy_windows_utc:
+  - name: Janus daily review
+    start: "23:00"
+    end: "23:45"
+  - name: systematic-monthly rebalance
+    day_of_month: 3
+    start: "07:15"
+    end: "09:30"
+
+triggers:
+  night-worker: {url_env: NIGHT_WORKER_FIRE_URL, token_env: NIGHT_WORKER_FIRE_TOKEN}
+  night-explorer: {url_env: NIGHT_EXPLORER_FIRE_URL, token_env: NIGHT_EXPLORER_FIRE_TOKEN}
+  promote: {url_env: NIGHT_PROMOTE_FIRE_URL, token_env: NIGHT_PROMOTE_FIRE_TOKEN}
+  morning-report: {url_env: NIGHT_MORNING_FIRE_URL, token_env: NIGHT_MORNING_FIRE_TOKEN}
+
+lab:
+  sleeve_risk_pct: 0.5
+  total_risk_pct: 5.0
+  default_retirement_months: 6
+  account_usd: 10000000

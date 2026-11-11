@@ -46,7 +46,9 @@ def candidates(marks_rows: list[dict]) -> list[dict]:
         if (d.get("status") or "").lower() == "resolved" and d.get("action") in ("Buy", "Sell"):
             out.append({"book": "me", "id": d["id"], "record": d})
     for pid, p in JN.positions(JN.load()).items():
-        if p["close"]:
+        # C08: a resize closes one segment and continues the same view in its replacement, like the algorithm's
+        # resizes; post-mortems are due for real closes (stops, side flips, exclusions, C08 rule 5), as for the algorithm
+        if p["close"] and p["close"].get("reason") != "C08 rebalance":
             o = p["open"]
             hist = [(x[0].isoformat(), x[1]) for x in JN.series(marks_rows, o["instrument"])
                     if p["fill"]["entry_date"] <= x[0].isoformat() <= p["close"]["date"]]

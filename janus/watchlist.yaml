@@ -1,0 +1,136 @@
+# Janus watchlist: config change C08 (approved by Ethan on 11 November 2026; docs/config_changes.md C08).
+#
+# Every Janus daily review gives a probability for EVERY instrument below: a whole number from 1 to 99, never 50,
+# both before The Opposition (p_initial) and after it (p_final). The probability is that the question resolves YES.
+# The CLI (python -m ledger.janus propose), not Janus, then sets the book: each instrument goes to the side of its
+# final forecast (YES = the long side below, NO = the short side), with risk proportional to |p_final - 50|
+# (ledger/janus.py, C08_* constants). Every forecast is logged and resolved automatically with a Brier score,
+# whether or not a position results.
+#
+# How every question resolves (the same for all instruments):
+#   * base mark: the instrument's first first-hand daily mark (data/ledger/marks.csv, `mark_can_act`: a daily
+#     observation, never a fallback flagged stale, a carried-forward mark or a monthly average) dated on or after
+#     the forecast's date (its UTC date);
+#   * horizon: 20 trading days, counted as 20 weekdays (Monday to Friday) after the base mark's date; that weekday
+#     is the target date;
+#   * end mark: the first first-hand daily mark dated on or after the target date (on a market holiday, the next
+#     session's mark);
+#   * YES if the end mark is strictly beyond the base mark in the `yes_if` direction; otherwise NO (an unchanged
+#     mark resolves NO);
+#   * Brier score = (p / 100 - outcome)^2, with outcome 1 for YES and 0 for NO, for p_final, p_initial and the
+#     market's probability.
+#
+# Only instruments with a free public daily mark are listed: futures are left out because their settlements are
+# licensed (CLAUDE.md rule 7), so a resolution derived from them could not be published.
+#
+# stop: the mechanical stop of a C08 position, set from the latest mark when the order is placed, on the losing
+# side, about twice a typical 20-trading-day standard deviation of the mark (percentage points of yield for rates,
+# per cent of the rate for FX). It defines the % of the account at risk, as for every Janus position.
+#
+# Changing this file (an instrument, a question, a stop) is a new config change, recorded before it takes effect.
+
+horizon_trading_days: 20
+
+instruments:
+  - instrument: US10Y
+    name: US 10-year Treasury
+    asset_class: rates
+    question: >-
+      Will the US 10-year Treasury constant-maturity yield be lower at the end mark (20 trading days after the
+      base mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the bond (gains when the yield falls)
+    resolution_source: >-
+      FRED DGS10 (Federal Reserve H.15 10-year constant-maturity yield, % a year),
+      https://fred.stlouisfed.org/series/DGS10, as marked in data/ledger/marks.csv (registry row US10Y)
+    stop: {distance: 0.55, unit: yield_points}
+
+  - instrument: GB10Y
+    name: UK 10-year gilt
+    asset_class: rates
+    question: >-
+      Will the UK 10-year nominal par gilt yield be lower at the end mark (20 trading days after the base mark)
+      than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the gilt (gains when the yield falls)
+    resolution_source: >-
+      Bank of England IUDMNPY (10-year nominal par gilt yield, % a year), Bank of England database, as marked in
+      data/ledger/marks.csv (registry row GB10Y)
+    stop: {distance: 0.60, unit: yield_points}
+
+  - instrument: DE10Y
+    name: German 10-year Bund
+    asset_class: rates
+    question: >-
+      Will the German 10-year Federal securities yield be lower at the end mark (20 trading days after the base
+      mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the Bund (gains when the yield falls)
+    resolution_source: >-
+      Bundesbank daily 10-year Federal securities yield (BBSIS D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A,
+      % a year), as marked in data/ledger/marks.csv (registry row DE10Y)
+    stop: {distance: 0.45, unit: yield_points}
+
+  - instrument: JP10Y
+    name: Japan 10-year JGB
+    asset_class: rates
+    question: >-
+      Will the Japan 10-year JGB constant-maturity yield be lower at the end mark (20 trading days after the base
+      mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the JGB (gains when the yield falls)
+    resolution_source: >-
+      Japan Ministry of Finance JGB constant-maturity yield, 10 years (jgbcme.csv, % a year), as marked in
+      data/ledger/marks.csv (registry row JP10Y)
+    stop: {distance: 0.30, unit: yield_points}
+
+  - instrument: EUR
+    name: EUR/USD
+    asset_class: fx
+    question: >-
+      Will EUR/USD (US dollars per euro) be higher at the end mark (20 trading days after the base mark) than at
+      the base mark?
+    yes_if: higher
+    yes_position: long        # long the euro
+    resolution_source: >-
+      ECB euro reference rate, US dollars per euro (EXR D.USD.EUR.SP00.A), as marked in data/ledger/marks.csv
+      (registry row EUR)
+    stop: {distance: 4.0, unit: percent}
+
+  - instrument: GBP
+    name: GBP/USD
+    asset_class: fx
+    question: >-
+      Will GBP/USD (US dollars per pound) be higher at the end mark (20 trading days after the base mark) than at
+      the base mark?
+    yes_if: higher
+    yes_position: long        # long sterling
+    resolution_source: >-
+      Bank of England XUDLUSS (spot US dollars per pound), as marked in data/ledger/marks.csv (registry row GBP)
+    stop: {distance: 4.5, unit: percent}
+
+  - instrument: JPY
+    name: USD/JPY (yen per dollar)
+    asset_class: fx
+    question: >-
+      Will the yen be stronger against the dollar, that is, will USD/JPY (yen per US dollar) be lower at the end
+      mark (20 trading days after the base mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the yen
+    resolution_source: >-
+      ECB euro reference rates, yen per euro (EXR D.JPY.EUR.SP00.A) divided by US dollars per euro, as marked in
+      data/ledger/marks.csv (registry row JPY)
+    stop: {distance: 5.0, unit: percent}
+
+  - instrument: AUD
+    name: AUD/USD (Australian dollars per US dollar)
+    asset_class: fx
+    question: >-
+      Will the Australian dollar be stronger against the US dollar, that is, will the AUD-per-USD rate be lower at
+      the end mark (20 trading days after the base mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the Australian dollar
+    resolution_source: >-
+      ECB euro reference rates, Australian dollars per euro (EXR D.AUD.EUR.SP00.A) divided by US dollars per euro,
+      as marked in data/ledger/marks.csv (registry row AUD)
+    stop: {distance: 6.0, unit: percent}

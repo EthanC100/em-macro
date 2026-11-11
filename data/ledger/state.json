@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-09",
- "at": "2026-11-09T14:41:23+00:00",
+ "as_of": "2026-11-10",
+ "at": "2026-11-10T17:17:01+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -56,12 +56,27 @@
   }
  },
  "index": {
-  "algorithm v1.0": 101.023,
+  "algorithm v1.0": 101.3857,
   "algorithm v1.1": 100.0,
   "janus": 100.0,
-  "me": 99.717
+  "me": 99.0417
  },
- "janus": {},
- "janus_no_trades": 5,
+ "janus": {
+  "J001": {
+   "direction": "long",
+   "instrument": "US10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J002": {
+   "direction": "long",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  }
+ },
+ "janus_no_trades": 7,
  "latest_mark": "2026-11-30"
 }

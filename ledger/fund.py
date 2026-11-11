@@ -17,7 +17,9 @@ P&L.
   from its peak exceeds 10%, overriding everything else. Otherwise, once Janus has at least 30 resolved calls
   (every position records a market probability, 50 where no market-implied one exists): 30% if its total net P&L
   (after costs) on those calls is positive and its Brier score is lower than the market's; 10% if that P&L is
-  negative or its Brier score is higher than the market's. Otherwise (fewer than 30 calls, or a tie on either
+  negative or its Brier score is higher than the market's. From config change C08 (2026-11-11) a resolved call is a
+  forced forecast: one per instrument per non-overlapping 20-trading-day window (``fund_calls`` in Janus's
+  summary), and the P&L on those calls is Janus's net P&L from 10 November 2026. Otherwise (fewer than 30 calls, or a tie on either
   measure without a failure on the other) it stays at its starting 20%. The algorithm takes the rest.
 - **Start.** The fund starts on the first date every member is live (v1.1: the 3 December 2026 rebalance, index
   100 on 30 November 2026).
@@ -32,6 +34,10 @@ from datetime import date, timedelta
 SHARES = {"algorithm v1.1": 0.80, "janus": 0.20}          # starting risk shares (C04 as amended 2026-11-07)
 JANUS_START, JANUS_UP, JANUS_LOW, JANUS_DOWN = 0.20, 0.30, 0.10, 0.05
 MIN_RESOLVED_CALLS = 30
+# Config change C08 (2026-11-11): Janus's resolved calls are its forced forecasts, one per instrument per
+# non-overlapping 20-trading-day window (ledger/janus.py fund_calls), and the P&L on them is Janus's net P&L after
+# costs from the end of the day before C08 (10 November 2026) to the evaluation date
+C08_FROM = date(2026, 11, 11)
 DRAWDOWN_LIMIT_PCT = 10.0
 MIN_MONTHS_FOR_VOL, VOL_WINDOW_MONTHS = 6, 12
 MIN_MONTHS_FOR_CORR = 6
@@ -124,9 +130,27 @@ def janus_record(closed: list[dict], upto: date) -> dict:
             "brier_market": round(bm, 4) if bm is not None else None}
 
 
-def janus_share(closed: list[dict], janus_series: list[list], upto: date) -> dict:
-    """Janus's risk share at a month start (docs/fund/allocation.md, C04 as amended 2026-11-07)."""
-    rec = janus_record(closed, upto)
+def janus_record_c08(calls: list[dict], janus_series: list[list], upto: date) -> dict:
+    """The rule's inputs under C08 (docs/fund/allocation.md): the resolved calls are the counted forecasts whose end
+    mark is dated on or before ``upto``; Janus's Brier uses p_final, the market's its market_probability; the net P&L
+    is the change in Janus's equity index (net of costs, % of the starting account) from 10 November 2026 to ``upto``."""
+    cs = [c for c in calls if c.get("end_date") and _d(c["end_date"]) <= upto]
+    def brier(p, c):
+        return (float(p) / 100.0 - float(c["outcome"])) ** 2
+    bj = sum(brier(c["p_final"], c) for c in cs) / len(cs) if cs else None
+    bm = sum(brier(c["market_probability"], c) for c in cs) / len(cs) if cs else None
+    a, b = level_on(janus_series, C08_FROM - timedelta(days=1)), level_on(janus_series, upto)
+    net = (b - a) if (a is not None and b is not None) else 0.0
+    return {"resolved_calls": len(cs), "calls_with_market_probability": len(cs),
+            "net_pnl_pct_on_those_calls": round(net, 4), "brier_janus": round(bj, 4) if bj is not None else None,
+            "brier_market": round(bm, 4) if bm is not None else None,
+            "definition": "C08: one forecast per instrument per non-overlapping 20-trading-day window"}
+
+
+def janus_share(closed: list[dict], janus_series: list[list], upto: date, calls: list[dict] | None = None) -> dict:
+    """Janus's risk share at a month start (docs/fund/allocation.md, C04 as amended 2026-11-07). ``calls``: the C08
+    resolved calls (``fund_calls`` in Janus's summary); when given they replace the closed positions (C08)."""
+    rec = janus_record(closed, upto) if calls is None else janus_record_c08(calls, janus_series, upto)
     dd = drawdown_pct(janus_series, upto) if janus_series else 0.0
     n, net, bj, bm = (rec["calls_with_market_probability"], rec["net_pnl_pct_on_those_calls"], rec["brier_janus"],
                       rec["brier_market"])
@@ -163,6 +187,7 @@ def build_fund(books: dict, today: date) -> dict:
                "janus": {"series": books["janus"].get("series") or [], "live_start": books["janus"].get("live_start"),
                          "is_live": bool(books["janus"].get("series"))}}
     closed = (books["janus"].get("summary") or {}).get("closed") or []
+    calls = (books["janus"].get("summary") or {}).get("fund_calls")         # C08: forced forecasts, when present
     base = {"name": "Horizons fund", "members": list(SHARES), "outside": ["me"], "rule_doc": RULE_DOC,
             "initial_shares": SHARES, "note": __doc__.split("\n\n", 1)[1].strip()}
     starts = [m["live_start"] for m in members.values()]
@@ -170,12 +195,14 @@ def build_fund(books: dict, today: date) -> dict:
         pending = [k for k, m in members.items() if not m["is_live"] or not m["live_start"]]
         return {**base, "live": False, "live_start": max((s for s in starts if s), default=None), "series": [],
                 "status": f"waiting for {', '.join(pending)} to go live",
-                "allocation": _allocation(members, closed, books, today, None), "correlation": correlations(books, today)}
+                "allocation": _allocation(members, closed, books, today, None, calls),
+                "correlation": correlations(books, today)}
     start = max(_d(s) for s in starts)
     if start > today:
         return {**base, "live": False, "live_start": start.isoformat(), "series": [],
                 "status": f"starts {start.isoformat()} (when every member is live)",
-                "allocation": _allocation(members, closed, books, today, None), "correlation": correlations(books, today)}
+                "allocation": _allocation(members, closed, books, today, None, calls),
+                "correlation": correlations(books, today)}
     days = bdays(start, today)
     idx, series, history = 100.0, [[start.isoformat(), 100.0]], []
     months = _month_starts(start, today)
@@ -183,7 +210,7 @@ def build_fund(books: dict, today: date) -> dict:
     for d0, d1 in zip(days, days[1:]):
         ms = max(m for m in months if m <= d1)
         if not history or history[-1]["from"] != ms.isoformat():
-            alloc = _weights(members, closed, ms - timedelta(days=1) if ms > start else start, start)
+            alloc = _weights(members, closed, ms - timedelta(days=1) if ms > start else start, start, calls)
             history.append({"from": ms.isoformat(), **alloc})
             w = alloc["weights"]
         r = 0.0
@@ -198,12 +225,12 @@ def build_fund(books: dict, today: date) -> dict:
     mtd = round(series[-1][1] - (before[-1][1] if before else 100.0), 4)
     return {**base, "live": True, "live_start": start.isoformat(), "series": series, "index": series[-1][1],
             "mtd_pct": mtd, "since_start_pct": round(series[-1][1] - 100, 4), "history": history,
-            "allocation": history[-1] if history else _allocation(members, closed, books, today, start),
+            "allocation": history[-1] if history else _allocation(members, closed, books, today, start, calls),
             "correlation": correlations(books, today), "status": "live"}
 
 
-def _weights(members: dict, closed: list[dict], upto: date, start: date) -> dict:
-    js = janus_share(closed, members["janus"]["series"], upto)
+def _weights(members: dict, closed: list[dict], upto: date, start: date, calls: list[dict] | None = None) -> dict:
+    js = janus_share(closed, members["janus"]["series"], upto, calls)
     shares = {"algorithm v1.1": round(1 - js["share"], 4), "janus": js["share"]}
     vols = {}
     for k, m in members.items():
@@ -222,10 +249,11 @@ def _weights(members: dict, closed: list[dict], upto: date, start: date) -> dict
             "janus_rule": js}
 
 
-def _allocation(members: dict, closed: list[dict], books: dict, today: date, start: date | None) -> dict:
+def _allocation(members: dict, closed: list[dict], books: dict, today: date, start: date | None,
+                calls: list[dict] | None = None) -> dict:
     """The allocation the rule gives today (shown before the fund starts)."""
     out = _weights({k: {**m, "live_start": m["live_start"] or today.isoformat()} for k, m in members.items()},
-                   closed, today, start or today)
+                   closed, today, start or today, calls)
     return {"from": None, **out}
 
 
