@@ -3,6 +3,10 @@
 - **Pasted ledger blocks.** If I paste a block that starts with `DECISION RECORD`, `FORECAST` or `RESOLVE`, follow
   [docs/ledger/clerk.md](docs/ledger/clerk.md). Show me the Risk Manager result (`python -m ledger.clerk check`), then
   log it with `python -m ledger.clerk log` and give me the new id. Never edit `data/ledger/` by hand.
+- **Night-shift files are dev's.** Sessions working on main must not edit `docs/queue.md`, `docs/agent-state.json`
+  or `results/opposition/calibration.csv`. Record a queue change (an item closed, reprioritised or found) in the
+  commit message or PR description instead; the night shift applies it on dev. Editing them on main makes dev
+  conflict with main, which stops the night.
 - **Janus sessions** follow [docs/janus/quick_check.md](docs/janus/quick_check.md) and
   [docs/janus/daily_review.md](docs/janus/daily_review.md). The forecast resolver follows
   [docs/ledger/forecast_resolver.md](docs/ledger/forecast_resolver.md). In a Janus session, the CLI reads futures
