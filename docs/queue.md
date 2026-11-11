@@ -488,6 +488,16 @@ Overlaps Q017 (both edit acquire), so this item goes first.
 
 ### Q021
 
+**Restore approved by Ethan on 2026-11-11** (recorded from his session "N Janus C08"): once Q021's code fix is on
+main, the 6 downgraded rows are restored:
+- through the fetch code (`ledger/marks.py`, re-run for those instruments and dates), never by hand-editing
+  `data/ledger/marks.csv`;
+- with a corrections-log entry (`python -m ledger.audit`, a K-series correction in `data/ledger/seals.jsonl`)
+  recording each row's before (the downgraded note and fetched_at) and after (first-hand, same value).
+
+The rows: MXN 2026-11-06; BRENT, HEATOIL, NATGAS, RBOB, WTI 2026-11-03. The corrections log is a protected path (hard
+rule 2), so the restore runs in Ethan's session, not the night shift. The night shift's part is the code fix only.
+
 Filed by Ethan's session "N Janus C08" on 2026-11-11 (HIGH PRIORITY, Ethan's decision). Reproduced on main 764d2ea
 from the history of `data/ledger/marks.csv`. A row counts as downgraded when a commit turned a row that
 `mark_can_act` accepted into one it rejects, for the same instrument and date.
