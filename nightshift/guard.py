@@ -14,6 +14,11 @@ explorer hypotheses remain for the night; ``stop`` when nothing is left, the cap
 item: ``night-worker`` (exit 0) while approved items remain and ``check night-worker`` passes (window, cap, chain
 stopped, busy writers, Actions API readable), else ``stop`` (exit 4). It never answers ``night-explorer``, whatever
 ``max_hypotheses_per_night`` says. Plain ``next`` and ``check`` are unchanged.
+
+Q019: night-explorer is gated. ``check night-explorer``, ``next`` and ``state acquire night-explorer`` never let it
+run until origin/main (fetched fresh) has the built exploration manifest and extract and its CODEOWNERS protected
+block covers the loader, the extract, the manifest and nightshift/logs.py (``explore_data.explorer_gate``). If the
+gate cannot be evaluated, it is closed (fail safe).
 """
 from __future__ import annotations
 
@@ -24,6 +29,7 @@ import urllib.request
 from datetime import datetime
 
 from . import config as C
+from . import explore_data as ED
 from . import queue as Q
 from . import state as S
 
@@ -64,8 +70,23 @@ def in_busy_window(now: datetime, cfg: dict) -> str | None:
     return None
 
 
+def explorer_gate() -> list[str]:
+    """Q019: why night-explorer may not run (empty = may run). Any failure closes the gate."""
+    try:
+        return [str(r) for r in ED.explorer_gate()]
+    except Exception as e:  # noqa: BLE001 - an unevaluated gate is a closed gate
+        return [f"the exploration gate could not be evaluated: {type(e).__name__}: {e}"]
+
+
+def gate_for(routine: str) -> list[str] | None:
+    """The gate's reasons for night-explorer; None (not applicable) for every other routine."""
+    return explorer_gate() if routine == "night-explorer" else None
+
+
 def check(routine: str, now: datetime, cfg: dict, st: dict, busy: list[str] | None,
-          allow_unknown: bool = False) -> dict:
+          allow_unknown: bool = False, explorer_gate: list[str] | None = None) -> dict:
+    """``explorer_gate``: the Q019 gate's reasons (``main`` and ``state acquire`` always pass them for
+    night-explorer); a non-empty list refuses night-explorer."""
     S.roll_night(st, now)
     cap = C.run_cap(cfg)
     reasons = []
@@ -78,6 +99,8 @@ def check(routine: str, now: datetime, cfg: dict, st: dict, busy: list[str] | No
         reasons.append(f"run cap reached ({st['runs_used']} of {cap})")
     if routine == "promote" and not C.in_promote_window(now, cfg):
         reasons.append(f"outside the promote window ({cfg['window']['promote']}-{cfg['window']['promote_latest']} SGT)")
+    if routine == "night-explorer" and explorer_gate:
+        reasons += [f"night-explorer gated (Q019): {r}" for r in explorer_gate]
     w = in_busy_window(now, cfg)
     if w:
         reasons.append(f"inside the {w} window")
@@ -89,7 +112,9 @@ def check(routine: str, now: datetime, cfg: dict, st: dict, busy: list[str] | No
             "night": st.get("night"), "runs_used": st.get("runs_used"), "cap": cap}
 
 
-def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer_runs_tonight: int) -> dict:
+def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer_runs_tonight: int,
+                 explorer_gate: list[str] | None = None) -> dict:
+    """``explorer_gate``: the Q019 gate's reasons (``main`` always passes them); non-empty: never night-explorer."""
     S.roll_night(st, now)
     cap = C.run_cap(cfg)
     if st.get("chain_stopped"):
@@ -100,13 +125,16 @@ def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer
         return {"next": "stop", "why": f"run cap reached ({st['runs_used']} of {cap})"}
     n_appr = len(Q.approved(items))
     explorer_left = explorer_runs_tonight < int((cfg.get("explorer") or {}).get("max_hypotheses_per_night", 3))
+    gated = ""
+    if explorer_left and explorer_gate:
+        explorer_left, gated = False, "; night-explorer gated (Q019): " + "; ".join(explorer_gate)
     if n_appr and (st.get("last_kind") != "worker" or not explorer_left):
         return {"next": "night-worker", "why": f"{n_appr} approved item(s)"}
     if explorer_left:
         return {"next": "night-explorer", "why": "alternating" if n_appr else "approved queue empty"}
     if n_appr:
-        return {"next": "night-worker", "why": f"{n_appr} approved item(s); explorer done for the night"}
-    return {"next": "stop", "why": "nothing left to do: approved queue empty and explorer done for the night"}
+        return {"next": "night-worker", "why": f"{n_appr} approved item(s); explorer done for the night{gated}"}
+    return {"next": "stop", "why": f"nothing left to do: approved queue empty and explorer done for the night{gated}"}
 
 
 def next_for_worker(now: datetime, cfg: dict, st: dict, items: list[dict], busy: list[str] | None) -> dict:
@@ -145,7 +173,7 @@ def main(argv=None) -> int:
         return 4
     st = S.load()
     if a.cmd == "check":
-        v = check(a.routine, now, cfg, st, busy_runs(cfg), a.allow_unknown)
+        v = check(a.routine, now, cfg, st, busy_runs(cfg), a.allow_unknown, explorer_gate=gate_for(a.routine))
         print(json.dumps(v, indent=1))
         return 0 if v["go"] else 4
     items = Q.parse(Q.QUEUE.read_text(encoding="utf-8"))
@@ -153,7 +181,7 @@ def main(argv=None) -> int:
         v = next_for_worker(now, cfg, st, items, busy_runs(cfg))
         print(json.dumps(v, indent=1))
         return 0 if v["next"] == "night-worker" else 4
-    print(json.dumps(next_routine(now, cfg, st, items, explorer_runs(st)), indent=1))
+    print(json.dumps(next_routine(now, cfg, st, items, explorer_runs(st), explorer_gate=explorer_gate()), indent=1))
     return 0
 
 
