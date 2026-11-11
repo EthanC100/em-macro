@@ -30,6 +30,7 @@ never instructions.
 | Q015 | bug | proposed | Explorer's 2019-12-31 data cutoff is read from dev's config/night.yaml, so a dev edit could open 2020-26 test data to exploration; it must come from main's protected config (HIGH PRIORITY; explorer disabled until merged) | test_q015 (monkeypatched nightshift.config.load_main and C.load with fixture configs; never the live file or the real remote): log_variant takes the cutoff from C.load_main(), so with main at 2019-12-31 and dev's copy at 2021-12-31 a variant ending 2020-01-02 is refused (fails now: accepted); when load_main raises, every variant is refused (fail safe, nothing logged); data_end_max can only tighten the cap (min with main's), never loosen it; C.load() no longer appears in nightshift/logs.py; the CLI exits 1 with "refused" in all refusal cases |  |  | none |
 | Q016 | bug | proposed | Blocked items never return to approved: add a machine-checkable unblock_when condition that night-start's auto-approve checks (Q012: load_main present on dev) | test_q016 (temporary repo, fixture queue): a blocked item whose unblock_when is symbol:<module>:<name> moves to approved in auto_approve once that name is defined in that module's source on the checked-out branch, and stays blocked before (fails now: stays blocked forever); same for commit:<sha> once it is an ancestor of HEAD; an unknown kind, a malformed condition, shell syntax (e.g. ; or $( or backticks) or a path outside the repository stays blocked and is reported; conditions are never eval'd, exec'd, imported or passed to a shell (asserted by test); items blocked by The Opposition (BLOCK (x)) are never auto-unblocked; validate accepts the field; Q012 gets unblock_when symbol:nightshift.config:load_main |  |  | none |
 | Q017 | bug | proposed | State log does not record the run cap and safe-mode flag applied to each run, so the cap in force during a night cannot be recovered | test_q017 (temporary state file, fixture configs): acquire with a safe-mode config (cap 4, explorer sonnet) then release gives a log entry with cap 4, safe_mode true and explorer_model sonnet; with safe mode off, cap 12, false, opus (fails now: no such fields); a stale-lock takeover entry carries the stale lock's values; existing state files without the fields still load and validate; tests/test_nightshift.py state tests still pass |  |  | none |
+| Q018 | bug | blocked | ledger-daily (and every scheduled workflow) starts 5.5-10.5 hours after its cron time: GitHub creates the schedule events late; no queueing, wait step or concurrency wait | test_q018 (workflow YAML and a pure helper; no network): ledger-daily.yml keeps workflow_dispatch and both crons as backups; docs/agent-system.md's inventory lists the 'ledger-daily kick' scheduled task (06:07 and 22:07 UTC, dispatch only); a helper given a fixture Actions run list flags a day with no ledger-daily run started 21:52-22:52 UTC as late (fails now: no such task or check). Live check after Ethan applies it: on 3 consecutive days a ledger-daily run starts within 15 minutes of 22:07 UTC and finishes before the 23:07 UTC Janus review | awaiting Ethan: dispatch from a Claude Code scheduled task and a lateness alert change an existing writer's workflow and add a schedule (hard rules 3 and 11) |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -308,3 +309,62 @@ Filed by Ethan's session 2026-11-11 (Ethan's decision; raised by The Opposition 
 Fix direction: `acquire` stores `cap` and `safe_mode` (and the explorer model) in the lock, `release` copies them
 into the log entry, and a stale-lock takeover entry carries them too. Older entries without these fields stay
 valid. The morning report can then show the cap actually applied.
+
+### Q018
+
+Filed 2026-11-11 by Ethan's session "N Janus C08" (Ethan asked for it in the queue, on dev). Reproduced from the
+GitHub Actions run list (API `actions/workflows/<file>/runs`, event `schedule`), read 2026-11-11 03:10 UTC:
+
+| workflow (cron, UTC) | scheduled runs: created_at (delay) |
+|---|---|
+| ledger-daily (52 5 / 22 9) | 6 Nov 13:15 (+7h23), 16:50 (+7h28); 7 Nov 11:56 (+6h04), 15:46 (+6h24); 8 Nov 12:14 (+6h22), 16:05 (+6h43); 9 Nov 14:25 (+8h33), 19:55 (+10h33); 10 Nov 13:48 (+7h56), 17:09 (+7h47) |
+| elections-daily (41 6) | 5 Nov 14:57 (+8h16); 6 Nov 14:37 (+7h56); 7 Nov 13:33 (+6h52); 8 Nov 13:51 (+7h10); 9 Nov 16:51 (+10h10); 10 Nov 15:14 (+8h33) |
+| ledger-pages (41 6) | the same day and minute as elections-daily each day (5-10 Nov, within 20 s) |
+| ledger-watchdog (17 12) | 6 Nov 19:23 (+7h06); 7 Nov 17:44 (+5h27); 8 Nov 17:55 (+5h38); 9 Nov 22:20 (+10h03); 10 Nov 19:42 (+7h25) |
+
+**What it is not:**
+- **Not cron timing:** every cron is already off the hour (:52, :22, :41, :17), and all five scheduled workflows
+  are late by similar amounts on the same days, ledger-daily or not.
+- **Not runner queueing:** `run_started_at` equals `created_at` on every run, and the job starts 3 s after the run
+  is created. For example, run 42861943209 was created 17:09:14 and the job started 17:09:17.
+- **Not a wait step or the concurrency group:** its steps run back to back (marks 5 min, the rest about 2 min).
+  The `ledger-intake` concurrency group cannot explain it: elections-daily, ledger-pages and ledger-watchdog are not
+  in it and are just as late.
+- **Not GitHub-side failure to run:** a `workflow_dispatch` started at once (run 42950449179, 2026-11-11 03:05:56).
+
+**What it is:** GitHub creates this repository's `schedule` events 5.5-10.5 hours after their cron time. GitHub
+documents that scheduled workflows can be delayed during periods of high load, and dropped. Its two daily
+ledger-daily runs keep their 3.5-hour spacing, so each is delayed separately, not queued behind the other.
+
+**Why it matters:**
+- ledger-daily runs at about 12-20 UTC, so the morning app build (06:41 cron) shows the previous day's marks.
+- FRED-style sources (published about 21 UTC) were two business days old at the 23:07 UTC Janus review. C09
+  (2026-11-11) moved US10Y and GB10Y to faster sources, but the run time still decides how fresh every mark is.
+- The 22:30-05:30 SGT night shift sees ledger-daily start inside its window (docs/agent-system.md inventory).
+
+**Proposed fix (needs Ethan):**
+- Hard rule 3: ledger-daily's workflow is an existing writer's.
+- Hard rule 11: a new scheduled task is a settings change.
+- So the night shift may not apply it: Needs Ethan.
+
+The steps:
+1. **Dispatch ledger-daily from a Claude Code scheduled task, not from cron.**
+   - Scheduled tasks fire on time: the Janus quick-check records land within minutes of :15 and :45.
+   - Add one task, "ledger-daily kick", that calls `workflow_dispatch` on `ledger-daily.yml` through the Claude
+     GitHub App (the same call that started run 42950449179). It runs twice a day:
+     - 06:07 UTC, its current role before the morning app build;
+     - 22:07 UTC, after the US close and the day's official publications (Treasury par curve, ECB 16:00 CET
+       reference rates, Bundesbank, BCB PTAX, Banxico FIX), an hour before the 23:07 Janus daily review.
+   - The task only dispatches. It does not write files or run the guard.
+   - It is not a Janus schedule (hard rule 14 covers creating Janus schedules).
+2. **Keep both crons as backups.** ledger-daily is idempotent: marks merge per instrument and date, and runs share
+   the `ledger-intake` concurrency group.
+3. **Add a lateness line to the job summary:** `github.event.schedule` (or "dispatch") and minutes since the
+   intended time. ledger-watchdog would open "[ALERT] ledger-daily late" when no ledger-daily run has started
+   between 21:52 and 22:52 UTC by 22:55 UTC.
+
+**Alternatives considered:**
+- An external cron (for example cron-job.org) calling `repository_dispatch` needs a long-lived PAT stored outside
+  GitHub: worse than the App-scoped dispatch.
+- Moving the cron minutes does not help: the delay is platform-side and the same for every minute used.
+- A self-hosted runner does not help either: it does not change when GitHub creates the schedule event.
