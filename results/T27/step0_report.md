@@ -2,7 +2,8 @@
 
 Run 2026-11-11 under `docs/prereg/T27_managed_fx_vol_floor.md` §3.3 (`python -m em_macro.t27_floor step0`).
 Outputs: `STEP0.json`, `step0_managed_matrix.csv`, `step0_managed_months.csv`. Inputs: `data/kept/T27/`
-(classification, editions, Annual Report cross-check; source PDFs in `T27_imf_areaer_raw_2026-11-11.tar.gz`).
+(classification, editions, Annual Report cross-check, and the manifest of the source PDFs; the PDFs themselves are
+in `T27_imf_areaer_raw_2026-11-11.tar.gz` in the private repository `EthanC100/em-macro-data`, `kept/T27/`).
 v1.0 reproduced byte for byte on its frozen input snapshots before the count. No T27 weight or return was computed.
 The counts use v1.0's own 36-month σ and FX selections.
 

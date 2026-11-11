@@ -247,8 +247,10 @@ no power to test the hypothesis; and TRY's 2018 and 2021 devaluations occurred w
 
 - **What was computed:** only Step 0 (§3.3): the IMF classification tables, v1.0's own 36-month volatilities and
   FX selections, and the count of binding currency-months (`results/T27/step0_report.md`, `results/T27/STEP0.json`,
-  commits `92d8c91`, `ff631e9`, `f29488d`). No exploration (§4) and no confirmatory test (§5) was run, and none will be.
-- **Kept:** the Step 0 outputs in `results/T27/` and the archived IMF PDFs in `data/kept/T27/`.
+  commits `734e054`, `326e398`, `ddadbc0`). No exploration (§4) and no confirmatory test (§5) was run, and none will be.
+- **Kept:** the Step 0 outputs in `results/T27/`. The archived IMF PDFs are in the private repository
+  `EthanC100/em-macro-data` (`kept/T27/`, commit `acee790`); `data/kept/T27/` keeps their manifest (source URL,
+  SHA-256) with a pointer to that copy.
 - **Multiple testing:** T27 stays counted in the spec-convention N (§6): the next trial that uses a deflated Sharpe
   counts it, so N = 21 after T27.
 - **Not resolved, now moot:** the AREAER editions that could not be obtained (2003–2011, 2020, 2021) and the
