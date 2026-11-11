@@ -1,19 +1,18 @@
 {
- "since": "2026-11-11T03:18:23+00:00",
- "at": "2026-11-11T07:01:34+00:00",
+ "since": "2026-11-11T07:01:34+00:00",
+ "at": "2026-11-11T07:13:31+00:00",
  "items": [
   {
-   "book": "janus",
-   "kind": "pnl",
-   "label": "janus",
-   "change": -0.0207,
-   "text": "janus: -0.02 index points (to 99.98)"
+   "book": "me",
+   "kind": "trade",
+   "link": "#/position/me/D005",
+   "text": "New decision D005: No trade v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)"
   },
   {
-   "book": "janus",
+   "book": "me",
    "kind": "trade",
-   "link": "#/position/janus/J001",
-   "text": "Janus J001 filled: long US10Y"
+   "link": "#/position/me/D006",
+   "text": "New decision D006: No trade v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)"
   }
  ]
 }

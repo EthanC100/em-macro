@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-11",
- "at": "2026-11-11T07:01:34+00:00",
+ "at": "2026-11-11T07:13:31+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -30,6 +30,20 @@
   "D004": {
    "action": "No trade",
    "instrument": "v1.0 systematic book (frozen, commit 7886867)",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  },
+  "D005": {
+   "action": "No trade",
+   "instrument": "v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  },
+  "D006": {
+   "action": "No trade",
+   "instrument": "v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)",
    "note": "",
    "outcome": "",
    "status": "open"
