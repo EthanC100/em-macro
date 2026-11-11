@@ -329,6 +329,15 @@ def algo_book(alg: dict, mb: MarkBook, today: date) -> dict:
             end = date(yy + (m2 == 12), m2 % 12 + 1, 1) - timedelta(days=1)
             series.append([end.isoformat(), round(idx, 4), "official"])
             imp_series.append([end.isoformat(), round(idx_imp, 4)])
+        # D005: v1.0 without the volatility floor (net_before_d005), official month-ends, as a comparison line
+        unadj_series = []
+        if vid == "v1.0" and (alg.get("d005") or {}).get("applied"):
+            ui = 100.0
+            unadj_series = [[start_day.isoformat(), 100.0]]
+            for m in live_months:
+                ui *= 1 + (m["net_before_d005"] if m.get("net_before_d005") is not None else (m["net"] or 0.0))
+                yy, m2 = int(m["month"][:4]), int(m["month"][5:7])
+                unadj_series.append([(date(yy + (m2 == 12), m2 % 12 + 1, 1) - timedelta(days=1)).isoformat(), round(ui, 4)])
         is_live = bool(eff and eff >= live_start)
         booked = {m["month"] for m in live_months}
         mtd_imp = 0.0
@@ -348,6 +357,7 @@ def algo_book(alg: dict, mb: MarkBook, today: date) -> dict:
             "id": vid, "label": "v1.0 (frozen control)" if vid == "v1.0" else "v1.1 (v1.0 + T18 turnover rule)",
             "live_start_month": live_start, "live_start": start_day.isoformat(), "is_live": is_live,
             "series": series if is_live or live_months else [], "impact_series": imp_series if (is_live or live_months) else [],
+            "unadjusted_series": unadj_series,
             "estimate": est, "mtd_pct": mtd, "mtd_impact_pct": round(mtd_imp, 4) if is_live else None,
             "pre_live_estimate_pct": est["mtd_pct"] if (est and not is_live) else None,
             "index": series[-1][1] if (is_live or live_months) else 100.0, "official_index": round(idx, 4),

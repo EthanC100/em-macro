@@ -874,7 +874,7 @@
 
   // ------------------------------------------------------------------ Home: the cockpit
   // ------------------------------------------------------------------ D004: v1.0 cut and stop rules (ledger/v1_rules.py, flags only)
-  const V1_STATUS = { triggered: 'bad', 'in force': 'warn', watch: 'warn', error: 'warn', ok: 'good', passed: 'good' };
+  const V1_STATUS = { triggered: 'bad', 'in force': 'warn', watch: 'warn', error: 'warn', ok: 'good', passed: 'good', superseded: '' };
   function v1RulesFlags(vr) {
     if (!vr || !(vr.flags || []).length) return '';
     return `<section class="section"><div class="card notice"><b class="bad">v1.0 rules (D004): ${vr.flags.length} flag${vr.flags.length > 1 ? 's' : ''} at the ${esc(vr.as_of || '')} month-end.</b>
@@ -894,7 +894,34 @@
         <div class="stat"><span class="k">Book carry</span><span class="v">${isNum(vr.carry_spread_pp) ? fmtNum(vr.carry_spread_pp, 2) : '—'}pp</span><span class="s">a year at constant risk · review below ${isNum(vr.carry_threshold_pp) ? fmtNum(vr.carry_threshold_pp, 2) : '—'}pp twice</span></div>
       </div>
       <div class="table-wrap"><table class="compact"><thead><tr><th>Rule</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${(vr.managed_fx || []).length ? `<p class="small">Rule 4 is superseded by ${esc(vr.rule4_superseded_by || 'D005')}. Managed list: ${vr.managed_fx.map((m) => `<b>${esc(m.currency)}</b> (${esc(m.imf_classification)}, listed ${fmtDate(m.date)}${m.held ? ', held' : ''})`).join('; ')}.</p>` : ''}
       <p class="small muted">Evaluated ${fmtDateTime(vr.evaluated_at)}. ${esc(vr.note || '')}</p></div></section>`;
+  }
+  // ------------------------------------------------------------------ D005: volatility floor for managed currencies (em_macro/d005.py)
+  function d005Section(d) {
+    if (!d) return '';
+    const head = `<div class="section-head"><h2>Volatility floor (D005)</h2>${info('Decision D005 supersedes D004 rule 4. For each currency on the managed list (IMF de facto classification: crawl-like, stabilised, crawling peg or conventional peg), its volatility estimate is floored at the median volatility of v1.0\'s emerging-market currencies that month, that leg\'s inverse-volatility weight is recomputed, and the whole book is rescaled to v1.0\'s 10% volatility target. Applied after v1.0 computes its positions and before they are booked, from the 3 December 2026 rebalance. Frozen v1.0 code, configs and tags are unchanged. The booked line includes D005; the unadjusted line is v1.0 without it. Rules: docs/ledger/d005_vol_floor.md.')}</div>`;
+    const managed = (d.managed || []).map((m) => `<li><b>${esc(m.currency)}</b>: ${esc(m.imf_classification)} (IMF de facto), listed ${fmtDate(m.date)}<br><span class="small muted">${esc(m.source)}</span></li>`).join('');
+    const sgn = (x) => (isNum(x) ? `${x > 0 ? '+' : ''}${fmtNum(x, 1)}` : '—');
+    const cur = (d.current || []).map((p) => `<tr><td>${esc(p.instrument)} <span class="muted small">${esc(p.side)}</span>${p.floored ? `<br>${pill('floored', 'warn')}` : ''}</td>
+      <td class="num">${fmtNum(p.instrument_vol_pct, 1)}${p.floored ? `<br><b>${fmtNum(p.vol_used_pct, 1)}</b>` : ''}</td>
+      <td class="num">${sgn(p.v10_size_pct_of_capital)}</td><td class="num"><b>${sgn(p.d005_size_pct_of_capital)}</b></td></tr>`).join('');
+    const last = (d.comparison || []).slice(-1)[0];
+    const failed = d.failed_this_month ? `<div class="card notice"><b class="bad">D005 did not run for the ${esc(fmtMonth(d.status.as_of))} positions: this month is booked as v1.0 unadjusted (fail-safe).</b>
+      <ul class="small">${(d.status.errors || []).map((e) => `<li>${esc(e)}</li>`).join('')}</ul><p class="small muted">An alert issue was opened by the monthly run. Re-running the workflow after the fix books the month with D005.</p></div>` : '';
+    return `<section class="section">${head}${failed}<div class="card">
+      ${last ? `<div class="stats">
+        <div class="stat"><span class="k">Booked (with D005)</span><span class="v">${fmtNum(last.booked_index, 2)}</span><span class="s">${fmtMonth(last.month)} month-end</span></div>
+        <div class="stat"><span class="k">v1.0 unadjusted</span><span class="v">${fmtNum(last.unadjusted_index, 2)}</span><span class="s">comparison line, not booked</span></div>
+        <div class="stat"><span class="k">Effect of D005</span><span class="v ${signClass(d.live_effect_pct)}">${fmtPct(d.live_effect_pct, 2, true)}</span><span class="s">booked / unadjusted − 1</span></div>
+      </div>` : ''}
+      ${cur ? `<h3 class="sub">Book as of ${fmtMonth(d.as_of)} (floor ${fmtNum(d.vol_floor_pct, 2)}%)</h3>
+      <div class="table-wrap"><table class="compact"><thead><tr><th>Instrument</th><th class="num">Vol %</th><th class="num">v1.0 %</th><th class="num">D005 %</th></tr></thead><tbody>${cur}</tbody></table></div>
+      <p class="small muted">Sizes in % of capital. Vol: v1.0's estimate, then the floored value used (median EM-currency volatility).</p>`
+        : `<p class="small">First applied at the ${fmtDate(d.first_rebalance)} rebalance (positions as of ${fmtMonth(d.first_as_of)}). Until then v1.0 is booked unchanged.</p>`}
+      <h3 class="sub">Managed list</h3>
+      ${managed ? `<ul>${managed}</ul>` : '<p class="empty">Empty.</p>'}
+    </div></section>`;
   }
 
   async function pageHome() {
@@ -1033,7 +1060,7 @@
           <div class="stat">${gauge(v.gross_leverage, v.leverage_cap, 'gross leverage, x')}</div>
         </div>
         ${v.series.length ? `<div class="card"><div class="chart"><canvas id="c-${v.id.replace('.', '')}"></canvas></div>
-          ${legendRow([['Official monthly P&L, then estimate (excess of cash)', '--book-algo'], ['Estimated P&L with impact', '--book-algo-2', true], ['Total return (incl. T-bill)', '--book-algo', true]])}
+          ${legendRow([['Official monthly P&L, then estimate (excess of cash)', '--book-algo'], ['Estimated P&L with impact', '--book-algo-2', true], ...((v.unadjusted_series || []).length ? [['v1.0 unadjusted (without D005), official month-ends', '--muted', true]] : []), ['Total return (incl. T-bill)', '--book-algo', true]])}
           ${totalLine(v)}${tbillTable(v)}
           ${info(`${withNote('', v)} ${(est.note || '')} The official P&L keeps the frozen cost model; the dashed line subtracts the square-root market-impact estimate of each rebalance's trades at that month's paper capital (US$100,000 to Nov 2026, US$500,000,000 from Dec 2026).`)}</div>` : `<div class="card"><p class="empty">${esc(liveTxt)}. The chart starts at 100 then.</p></div>`}
         <h3 class="sub">Positions (effective ${fmtMonth(v.effective_from)}, set ${fmtDate(v.positions_set)})</h3>
@@ -1080,6 +1107,7 @@
       ${v1RulesFlags(vr)}
       ${verBlock(v10, alg.capacity)}
       ${v1RulesSection(vr)}
+      ${d005Section(alg.d005)}
       ${verBlock(v11, alg.v11 && alg.v11.capacity)}
       ${shadowsHtml}
       <section class="section">
@@ -1104,6 +1132,7 @@
       dateChart(`c-${v.id.replace('.', '')}`, [
         { label: `${v.id} (official, then estimate)`, data: v.series.map((p) => [p[0], p[1]]), color: '--book-algo', fill: true },
         { label: `${v.id} with impact`, data: v.impact_series, color: '--book-algo-2', dash: [5, 4], width: 1.6 },
+        ...((v.unadjusted_series || []).length ? [{ label: `${v.id} unadjusted (without D005)`, data: v.unadjusted_series, color: '--muted', dash: [2, 3], width: 1.4 }] : []),
         ...totalDataset(v, v.id, '--book-algo'),
       ], { fmt: (x) => fmtNum(x, 2) });
     }

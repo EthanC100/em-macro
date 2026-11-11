@@ -84,7 +84,7 @@ def test_no_live_month_yet_is_index_100_and_no_flag(tmp_path):
     assert res["live_months"] == 0 and res["index"] == 100.0 and res["drawdown_pct"] == 0.0
     assert res["carry_spread_pp"] == pytest.approx((100 * 30 + 50 * 10 - 50 * 2 - 50 * -1) / 100)   # % -> fraction
     assert res["flags"] == [] and not res["flagged"]
-    assert [status(res, n) for n in range(1, 6)] == ["ok"] * 5
+    assert [status(res, n) for n in range(1, 6)] == ["ok", "ok", "ok", "superseded", "ok"]   # rule 4: D005
 
 
 def test_pre_live_month_never_enters_the_index(tmp_path):
@@ -157,21 +157,37 @@ def test_sharpe_is_the_apps_figure(tmp_path):
     assert res["sharpe"] == pytest.approx(perf_stats(nets)["sharpe"], abs=1e-3)
 
 
-# ----------------------------------------------------------------------------- rule 4
-def test_rule4_a_listed_currency_covers_its_fx_and_its_bond(tmp_path):
+# ----------------------------------------------------------------------------- rule 4 (superseded by D005)
+MANAGED_COLS = ["currency", "imf_classification", "source", "date", "evidence"]
+
+
+def test_rule4_is_superseded_by_d005_and_never_flags(tmp_path):
+    """D005 supersedes rule 4: a currency on the old rule-4 list no longer triggers a drop."""
     make_repo(tmp_path, [0.01], rule4=[
-        {"currency": "TRY", "event": "capital controls", "start": "2026-11-15", "source": "CBRT"},
-        {"instrument": "BRL", "event": "managed peg", "start": "2026-11-01", "end": "2026-11-20", "source": "x"},  # ended
-        {"currency": "MXN", "event": "closed market", "start": "2027-01-05", "source": "y"}]) # after the month-end
+        {"currency": "TRY", "event": "capital controls", "start": "2026-11-15", "source": "CBRT"}])
+    _write_csv(tmp_path / "config/v1_managed_fx.csv", MANAGED_COLS,
+               [{"currency": "TRY", "imf_classification": "crawl-like arrangement", "source": "IMF", "date": "2026-11-11"},
+                {"currency": "COP", "imf_classification": "stabilized arrangement", "source": "IMF", "date": "2026-11-11"}])
     res = V.evaluate(tmp_path, NOW, THR, previous=[])
-    assert status(res, 4) == "triggered"
-    assert sorted(h["instrument"] for h in res["rule4_hits"]) == ["TR10Y", "TRY"]
-    assert "drop TR10Y, TRY at the next rebalance" in res["flags"][0]
+    assert status(res, 4) == "superseded"
+    assert res["flags"] == [] and res["rule4_hits"] == [] and res["rule4_superseded_by"] == "D005"
+    assert [(m["currency"], m["held"]) for m in res["managed_fx"]] == [("TRY", True), ("COP", False)]
+    detail = next(r["detail"] for r in res["rules"] if r["rule"] == 4)
+    assert "superseded by D005" in detail and "TRY (crawl-like arrangement, listed 2026-11-11, held)" in detail
 
 
-def test_rule4_unheld_currency_does_not_trigger(tmp_path):
-    make_repo(tmp_path, [0.01], rule4=[{"currency": "COP", "event": "crawl", "start": "2026-01-01", "source": "z"}])
-    assert status(V.evaluate(tmp_path, NOW, THR, previous=[]), 4) == "ok"
+def test_rule4_superseded_with_an_empty_managed_list(tmp_path):
+    make_repo(tmp_path, [0.01])
+    res = V.evaluate(tmp_path, NOW, THR, previous=[])
+    assert status(res, 4) == "superseded" and res["managed_fx"] == []
+    assert "managed list empty" in next(r["detail"] for r in res["rules"] if r["rule"] == 4)
+
+
+def test_live_managed_list_is_shown_by_the_monitor():
+    """The repository's own list: TRY, crawl-like (IMF de facto)."""
+    res = V.managed_list([{"instrument": "TRY", "side": "long"}])
+    assert [m["currency"] for m in res] == ["TRY"] and res[0]["held"]
+    assert res[0]["imf_classification"] == "crawl-like arrangement"
 
 
 # ----------------------------------------------------------------------------- rule 5

@@ -13,7 +13,10 @@ v1.0-frozen, commit 7886867), measured on the official month-end v1.0 index from
    pre-registered version.
 3. Time: live Sharpe after costs below zero at 24 months -> stop v1.0.
 4. Instrument: capital controls, a closed market, or a managed peg or crawl in a held currency -> drop it at the
-   next rebalance.
+   next rebalance. **Superseded by decision D005** (em_macro/d005.py, docs/ledger/d005_vol_floor.md): a currency on
+   the managed list (config/v1_managed_fx.csv) is no longer dropped; its volatility is floored at the month's median
+   EM-currency volatility and the book is rescaled to 10%. The monitor shows the managed list for rule 4 and never
+   flags it.
 5. Carry-spread review: the long-minus-short carry spread below its 2005-2019 10th percentile at two consecutive
    month-ends -> a written review within 7 days. No automatic cut.
 
@@ -52,8 +55,8 @@ Definitions (all fixed with D004; docs/ledger/v1_rules.md):
   long-minus-short spread was dominated by TRY; (2) the position-weighted spread per unit of gross exposure let large
   low-volatility euro positions drag the measure down, so its threshold was out of reach for the live book. Both
   superseded thresholds are kept byte-identical in results/v1_rules/superseded/ (SUPERSEDED, pinned) and never used.
-* **Rule 4:** a held instrument listed in config/v1_rules_rule4.csv (Ethan's list of capital controls, closed
-  markets and managed pegs or crawls, with a date and a source) with a start on or before the month-end and no end.
+* **Rule 4 (superseded by D005):** was a held instrument listed in config/v1_rules_rule4.csv. Now status
+  "superseded", with the D005 managed list (config/v1_managed_fx.csv) and which listed currencies v1.0 holds.
 """
 from __future__ import annotations
 
@@ -92,6 +95,8 @@ SUPERSEDED = [
 RULE4_FILE = ROOT / "config/v1_rules_rule4.csv"
 RULE4_COLUMNS = ["instrument", "currency", "event", "start", "end", "source", "note"]
 RULE4_EVENTS = ("capital controls", "closed market", "managed peg", "crawl")
+SUPERSEDED_BY = "D005"                # rule 4 -> D005 volatility floor (em_macro/d005.py)
+MANAGED_FILE = ROOT / "config/v1_managed_fx.csv"
 STATE_FILE = ROOT / "data/ledger/v1_rules.json"
 HISTORY_FILE = ROOT / "data/ledger/v1_rules_history.csv"
 HISTORY_COLUMNS = ["as_of", "evaluated_at", "live_months", "index", "peak", "drawdown_pct", "halved", "sharpe",
@@ -268,6 +273,24 @@ def rule4_hits(positions: list[dict], as_of: str, root: Path = ROOT) -> list[dic
     return hits
 
 
+def managed_list(positions: list[dict], root: Path = ROOT) -> list[dict]:
+    """D005's managed list (config/v1_managed_fx.csv) with whether v1.0 holds each currency at the month-end."""
+    held = {(p.get("instrument") or "").upper() for p in positions if (p.get("side") or "").lower() in ("long", "short")}
+    return [{"currency": (r.get("currency") or "").strip().upper(),
+             "imf_classification": (r.get("imf_classification") or "").strip(),
+             "date": (r.get("date") or "").strip(), "source": (r.get("source") or "").strip(),
+             "held": (r.get("currency") or "").strip().upper() in held}
+            for r in _rows(root / MANAGED_FILE.relative_to(ROOT)) if (r.get("currency") or "").strip()]
+
+
+def managed_text(managed: list[dict]) -> str:
+    if not managed:
+        return "managed list empty (config/v1_managed_fx.csv)"
+    return "managed list: " + "; ".join(
+        f"{m['currency']} ({m['imf_classification']}, listed {m['date']}{', held' if m['held'] else ', not held'})"
+        for m in managed)
+
+
 # ----------------------------------------------------------------------------- the evaluation
 def evaluate(root: Path = ROOT, now: datetime | None = None, threshold: dict | None = None,
              previous: list[dict] | None = None) -> dict:
@@ -301,7 +324,7 @@ def evaluate(root: Path = ROOT, now: datetime | None = None, threshold: dict | N
                 break
             streak, expect = streak + 1, r["as_of"]
 
-    hits4 = rule4_hits(positions, as_of, root) if as_of else []
+    managed = managed_list(positions, root)
     next_rebalance = f"{next_month(as_of)}-03" if as_of else None   # the next scheduled monthly run (3rd)
     rules, flags = [], []
 
@@ -343,13 +366,10 @@ def evaluate(root: Path = ROOT, now: datetime | None = None, threshold: dict | N
     else:
         rule(3, "time", "ok", f"{n} of 24 live months; live Sharpe after costs "
                               + (f"{sr:.2f}" if sr is not None else "n/a (needs 2 months)") + "; evaluated at 24 months")
-    # rule 4: instrument
-    if hits4:
-        rule(4, "instrument", "triggered",
-             "; ".join(f"{h['instrument']}: {h['event']} since {h['start']} ({h['source']})" for h in hits4),
-             "drop " + ", ".join(sorted({h['instrument'] for h in hits4})) + " at the next rebalance")
-    else:
-        rule(4, "instrument", "ok", "no held instrument on the rule-4 list (config/v1_rules_rule4.csv)")
+    # rule 4: superseded by D005 (volatility floor instead of a drop); never flags
+    rule(4, "instrument", "superseded",
+         f"superseded by {SUPERSEDED_BY}: a managed currency's volatility is floored at the month's median "
+         f"EM-currency volatility and the book rescaled to 10% (em_macro/d005.py); {managed_text(managed)}")
     # rule 5: carry-spread review
     if threshold.get("error"):
         rule(5, "carry-spread review", "error", threshold["error"])
@@ -379,7 +399,8 @@ def evaluate(root: Path = ROOT, now: datetime | None = None, threshold: dict | N
         "sharpe": round(sr, 3) if sr is not None else None,
         "carry_spread_pp": round(spread, 4) if spread is not None else None,
         "carry_threshold_pp": round(thr, 4) if thr is not None else None, "carry_below": below,
-        "carry_streak": streak, "carry_holdings": carry.get("holdings", []), "rule4_hits": hits4,
+        "carry_streak": streak, "carry_holdings": carry.get("holdings", []), "rule4_hits": [],
+        "rule4_superseded_by": SUPERSEDED_BY, "managed_fx": managed,
         "rules": rules, "flags": flags, "flagged": bool(flags),
         "note": ("Flags only: this monitor never changes exposure and never touches frozen v1.0 code, configs or tags. "
                  "Ethan acts on the flags. Rules and definitions: docs/ledger/v1_rules.md."),

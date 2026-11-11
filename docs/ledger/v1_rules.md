@@ -14,7 +14,7 @@ Measured on the official month-end v1.0 index from the 1 Nov 2026 live start.
 | 1 | Halve | index 20% or more below its live peak | halve gross exposure; restore full exposure once the drawdown is back within 10% |
 | 2 | Stop | index 27% or more below its live peak | close v1.0 entirely; restart only as a new pre-registered version |
 | 3 | Time | live Sharpe after costs below zero at 24 months | stop v1.0 |
-| 4 | Instrument | capital controls, a closed market, or a managed peg or crawl in a held currency | drop that instrument |
+| 4 | Instrument | capital controls, a closed market, or a managed peg or crawl in a held currency | drop that instrument. **Superseded by D005**: no drop; a managed currency's volatility is floored and the book rescaled ([d005_vol_floor.md](d005_vol_floor.md)) |
 | 5 | Carry-spread review | book carry at constant risk below its 2005-2019 10th percentile (2.7299pp) at two consecutive month-ends | a written review within 7 days; no automatic cut |
 
 ## The monitor (flags only)
@@ -77,7 +77,10 @@ restores, and shows "in force" in between).
   that no live month had been evaluated (`live_months_evaluated: 0`). The superseded files are kept unchanged in
   `results/v1_rules/superseded/` (`*_equal_weight.*`, `*_per_gross.*`) and are never used. The 2026-10 baseline was
   re-run: 40.10pp against 2.73pp, of which TRY 31.67pp (79%).
-- **Rule 4:** no free source flags capital controls, closed markets or managed pegs and crawls reliably, so the
+- **Rule 4 (superseded by D005, 11 Nov 2026):** the monitor no longer reads `config/v1_rules_rule4.csv` and never
+  flags rule 4. It reports rule 4 as "superseded" with D005's managed list (`config/v1_managed_fx.csv`: currency,
+  IMF de facto classification, source, date, and whether v1.0 holds it). The text below is D004's original rule.
+- **Rule 4 (D004, original):** no free source flags capital controls, closed markets or managed pegs and crawls reliably, so the
   monitor reads Ethan's list, `config/v1_rules_rule4.csv` (`instrument` or `currency`, `event`, `start`, `end`,
   `source`, `note`). A listed currency covers its FX instrument and its country's bond or spread. A held instrument
   listed with a start on or before the month-end, and no end, triggers rule 4.
