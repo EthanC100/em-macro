@@ -1,0 +1,22 @@
+edition,scheme,as_of,published_used,obtained,file,url,publication_sources_and_notes
+2003,1999,not verified,2003-09-03,no,,,imf.org edition page (https://www.imf.org/en/publications/annual-report-on-exchange-arrangements-and-exchange-restrictions/issues/2016/12/30/...-2003-16385); PDF not reachable from the session (IMF eLibrary 403)
+2004,1999,not verified,2004-09-23,no,,,imf.org edition page (...-2004-17223); PDF not reachable
+2005,1999,not verified,2005-09-19,no,,,imf.org edition page (...-2005-18087); PDF not reachable
+2006,1999,not verified,2006-09-25,no,,,imf.org edition page (...-2006-19313); PDF not reachable
+2007,1999,not verified,2007-10-16,no,,,imf.org edition page (...-2007-20272); PDF not reachable
+2008,1999,not verified,2008-10-09,no,,,imf.org edition page (...-2008-21919); PDF not reachable
+2009,2009,2009-04-30,2009-11-30,no,,,imf.org edition page (...-2009-22924); PDF not reachable
+2010,2009,2010-04-30,2010-10-08,no,,,imf.org edition page (...-2010-23953); PDF not reachable
+2011,2009,2011-04-30,2011-11-01,no,,,imf.org edition page (...-2011-24976); PDF not reachable
+2012,2009,2012-04-30,2012-10-31,yes,areaer_2012.pdf,https://www.imf.org/external/pubs/nft/2012/eaer/ar2012.pdf,imf.org page 2012-09-14; PDF footer October 2012; latest documented date used (month end)
+2013,2009,2013-04-30,2014-05-22,yes,areaer_2013.pdf,https://www.imf.org/external/pubs/nft/2013/areaers/ar2013.pdf,"imf.org page 2013-12-15 (footer October 2013); the obtained PDF is the corrected online version (errata: Table 1 errors corrected May 2014; PDF created 2014-05-22), so its table counts from May 2014"
+2014,2009,2014-04-30,2014-10-17,yes,areaer_2014.pdf,https://www.imf.org/external/pubs/nft/2014/areaers/ar2014.pdf,imf.org page 2014-10-17
+2015,2009,2015-04-30,2015-10-01,yes,areaer_2015.pdf,https://www.imf.org/-/media/files/publications/areaer/areaer_2015_overview.pdf,imf.org page 2015-10-01
+2016,2009,2016-04-30,2016-11-11,yes,areaer_2016.pdf,https://www.imf.org/-/media/files/publications/areaer/areaer_2016_overview.pdf,imf.org page 2016-11-11
+2017,2009,2017-04-30,2018-09-30,yes,areaer_2017.pdf,https://www.imf.org/-/media/files/publications/areaer/areaer-2017-overview.pdf,"sources disagree: imf.org datePublished 2018-04-30, page URL 2018/08/10, IMF Bookstore September 2018, PDF created 2018-05-09; latest documented date used (September 2018, month end)"
+2018,2009,2018-04-30,2019-04-24,yes,areaer_2018.pdf,https://www.imf.org/-/media/files/publications/areaer/areaer-2018-overview.pdf,imf.org datePublished 2019-04-16; page URL and PDF modification 2019-04-24; latest used
+2019,2009,2019-04-30,2020-08-10,yes,areaer_2019.pdf,https://www.imf.org/-/media/files/publications/areaer/aeiea2019001-overview.pdf,imf.org page 2020-08-10
+2020,2009,2020-04-30,2021-08-25,no,,,"imf.org page 2021-08-25; no PDF link on imf.org, eLibrary 403"
+2021,2009,2021-04-30,2022-07-19,no,,,"imf.org datePublished 2022-07-07, page URL 2022/07/19; latest used; no PDF link on imf.org, eLibrary 403"
+2022,2009,2022-04-30,2023-07-26,yes,areaer_2022.pdf,https://www.elibrary.imf.org/supplemental/book/9798400235269/9798400235269.xml/AEIEA2022001-S001_SOURCE_PDF.pdf,imf.org page 2023-07-26
+2023,2009,2023-04-30,2024-12-19,yes,areaer_2023.pdf,https://www.elibrary.imf.org/fileasset/downloads/AEIEA2023001-S001.pdf,"imf.org page 2024-12-19; no later AREAER edition published as of 2026-11-11 (no DOI, no imf.org page)"
