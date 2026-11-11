@@ -4,7 +4,10 @@
  "night": "2026-11-11",
  "runs_used": 4,
  "last_kind": "worker",
- "chain_stopped": null,
+ "chain_stopped": {
+  "reason": "run cap reached (4 of 4); PR #40 (Q019) awaits review and merge",
+  "at": "2026-11-12T00:25:40+08:00"
+ },
  "log": [
   {
    "routine": "night-start",
