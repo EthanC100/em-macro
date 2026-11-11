@@ -183,7 +183,7 @@ on main (the test checks each exists):
 | pre-registrations | `docs/prereg/` |
 | corrections log (K001-K003) | `data/ledger/seals.jsonl` (the corrections are records in the audit chain) |
 | config changes, commitments, trials | `docs/config_changes.md`, `ledger/commitments.py`, `trials.csv` |
-| D005 volatility floor (supersedes D004 rule 4) | `config/v1_managed_fx.csv` (managed-currency list), `em_macro/d005.py` (the override); both also always protected in `nightshift/protected.py` |
+| D005 volatility floor (supersedes D004 rule 4) | `config/v1_managed_fx.csv` (managed-currency list), `em_macro/d005.py`, `em_macro/d005_fallback.py` (the override and its fail-safe); all three also always protected in `nightshift/protected.py` |
 | the agents' own rules and switches | `.claude/`, `config/night.yaml` (also always protected in `nightshift/protected.py`), `.github/CODEOWNERS`, `docs/rulesets/` |
 
 Tags cannot be covered by CODEOWNERS: `docs/rulesets/frozen-tags.json` blocks updating or deleting both tags.

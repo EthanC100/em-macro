@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -226,8 +227,16 @@ def book_paper_pnl(adj_month: pd.Series, path: Path = PAPER_PNL) -> pd.DataFrame
     pnl["d005_adj"] = adj_month.reindex(m).fillna(0.0).values
     pnl["final_net"] = pnl["net_before_d005"] + pnl["d005_adj"]
     pnl["cumulative_final"] = (1 + pnl["final_net"]).cumprod()
-    pnl.to_csv(path, index=False, float_format="%.6f")
+    _atomic_csv(pnl, path, float_format="%.6f")
     return pnl
+
+
+def _atomic_csv(df: pd.DataFrame, path: Path, **kw) -> None:
+    """Write to a temporary file, then rename: a failure never leaves a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    df.to_csv(tmp, index=False, **kw)
+    tmp.replace(path)
 
 
 def read_log(path: Path = WEIGHTS_FILE) -> pd.DataFrame:
@@ -236,36 +245,99 @@ def read_log(path: Path = WEIGHTS_FILE) -> pd.DataFrame:
     return pd.read_csv(path, dtype={"as_of": str, "instrument": str, "book": str})
 
 
-def write_log(log: pd.DataFrame, adj: pd.DataFrame, as_of: str, path: Path = WEIGHTS_FILE) -> pd.DataFrame:
+def merge_log(log: pd.DataFrame, adj: pd.DataFrame, as_of: str) -> pd.DataFrame:
+    """The booked record with ``as_of`` replaced by this adjustment (pure)."""
     held = adj[(adj["v10_weight"].abs() > 1e-12) | (adj["d005_weight"].abs() > 1e-12)]
     new = pd.DataFrame({"as_of": as_of, "instrument": held.index, "book": held["book"].values,
                         "v10_weight": held["v10_weight"].values, "d005_weight": held["d005_weight"].values})
-    log = pd.concat([log[log["as_of"] != as_of], new], ignore_index=True).sort_values(["as_of", "book", "instrument"])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    log.reindex(columns=WEIGHT_COLUMNS).to_csv(path, index=False, float_format="%.8f")
+    return (pd.concat([log[log["as_of"] != as_of], new], ignore_index=True)
+            .sort_values(["as_of", "book", "instrument"]).reindex(columns=WEIGHT_COLUMNS))
+
+
+def write_log(log: pd.DataFrame, adj: pd.DataFrame, as_of: str, path: Path = WEIGHTS_FILE) -> pd.DataFrame:
+    log = merge_log(log, adj, as_of)
+    _atomic_csv(log, path, float_format="%.8f")
     return log
 
 
 # ----------------------------------------------------------------------------- stages
-def stage_update() -> None:
-    managed = load_managed()
-    st = v10_state()
-    as_of = str(st["inp"]["months"][-1])
-    log = read_log()
-    if as_of >= FIRST_AS_OF:
-        adj = month_adjustment(st, as_of, [r["currency"] for r in managed])
-        OUT.mkdir(parents=True, exist_ok=True)
-        positions_table(adj, as_of).to_csv(POSITIONS_FILE, index=False)
-        log = write_log(log, adj, as_of)
-        fl = adj[adj["floored"]]
-        print(f"D005 {as_of}: floor {100 * adj.attrs['floor']:.2f}% (median EM FX vol); floored "
-              f"{', '.join(fl.index) or 'none'}; book scale {adj.attrs['scale']:.4f}; pro-forma vol "
-              f"{100 * adj.attrs['pro_forma_vol_after']:.2f}%")
-    else:
-        print(f"D005: positions as of {as_of} precede the first D005 rebalance ({FIRST_AS_OF}); v1.0 booked unchanged")
-    pnl = book_paper_pnl(pnl_adjustment(log, st))
-    live = pnl[pnl["sample"].astype(str).str.startswith("live")]
-    print(f"D005 P&L vs unadjusted v1.0 over {len(live)} live month(s): {live['d005_adj'].sum():+.4%}")
+def _v10_as_of(path: Path) -> str | None:
+    try:
+        return str(pd.read_csv(path, dtype=str)["as_of"].iloc[0])
+    except Exception:  # noqa: BLE001 - the as_of is only needed to drop this month's D005 rows
+        return None
+
+
+def stage_update(state_fn=None, out: Path = OUT, paper_pnl: Path = PAPER_PNL, managed_file: Path = MANAGED_FILE,
+                 v10_positions: Path = SY.OUT / "positions.csv", git_root: Path = ROOT, now=None) -> int:
+    """The monthly step. Fail-safe: everything is computed before anything is written. Any error books the current
+    month as v1.0 unadjusted (no D005 row for it), keeps the D005 P&L of months already booked (recomputed from the
+    booked record, else carried forward from the committed paper_pnl.csv), writes status.json and returns 1, so the
+    workflow raises its alert while v1.0 still rebalances and is committed. v1.0's own files are never written."""
+    from . import d005_fallback as FB
+    now = now or pd.Timestamp.now(tz="UTC").floor("s").to_pydatetime()
+    errors: list[str] = []
+    positions_file, weights_file, status_file = out / "positions.csv", out / "weights.csv", out / "status.json"
+    st = None
+    try:
+        st = (state_fn or v10_state)()
+    except Exception as e:  # noqa: BLE001 - fail safe: log and book unadjusted
+        errors.append(f"v1.0 state: {type(e).__name__}: {e}")
+    as_of = str(st["inp"]["months"][-1]) if st else _v10_as_of(v10_positions)
+    log = read_log(weights_file)
+    table, adj = None, None
+    if as_of and as_of >= FIRST_AS_OF:
+        try:
+            if st is None:
+                raise RuntimeError("no v1.0 state")
+            managed = [r["currency"] for r in load_managed(managed_file)]
+            adj = month_adjustment(st, as_of, managed)
+            table = positions_table(adj, as_of)
+            log = merge_log(log, adj, as_of)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{as_of} adjustment: {type(e).__name__}: {e}")
+            table, adj = None, None
+            log = log[log["as_of"] != as_of]                       # this month books v1.0 unadjusted
+    pnl_source = "recomputed from the booked record (weights.csv)"
+    try:
+        if st is None:
+            raise RuntimeError("no v1.0 state")
+        adj_month = pnl_adjustment(log, st)
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"D005 P&L: {type(e).__name__}: {e}")
+        carried = FB.committed_d005_adj(git_root)
+        adj_month = pd.Series({pd.Period(m, "M"): v for m, v in carried.items()}, dtype=float)
+        pnl_source = "carried forward from the committed paper_pnl.csv (HEAD)"
+    # ---- writes (atomic per file)
+    if table is not None:
+        _atomic_csv(table, positions_file)
+    elif positions_file.exists():
+        cur = pd.read_csv(positions_file, dtype=str)
+        if (cur.get("as_of") == as_of).any():                     # never show a D005 book for an unadjusted month
+            _atomic_csv(cur[cur["as_of"] != as_of], positions_file)
+    if len(log) or weights_file.exists():
+        _atomic_csv(log.reindex(columns=WEIGHT_COLUMNS), weights_file, float_format="%.8f")
+    pnl = book_paper_pnl(adj_month, paper_pnl)
+    status = {"decision": DECISION_ID, "as_of": as_of, "status": "failed" if errors else "ok",
+              "applied": table is not None, "errors": errors, "pnl_source": pnl_source,
+              "booked": ("D005 book" if table is not None else
+                         "v1.0 unadjusted for this month (fail-safe)" if errors else
+                         f"v1.0 unchanged (before the first D005 rebalance, {FIRST_AS_OF})"),
+              "evaluated_at": now.isoformat().replace("+00:00", "Z")}
+    if adj is not None:
+        status.update({"floor_pct": round(100 * adj.attrs["floor"], 4), "book_scale": round(adj.attrs["scale"], 6),
+                       "floored": list(adj.index[adj["floored"]])})
+    if as_of and (as_of >= FIRST_AS_OF or errors):
+        status_file.parent.mkdir(parents=True, exist_ok=True)
+        status_file.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    live = pnl[pnl["sample"].astype(str).str.startswith("live")] if "sample" in pnl else pnl.iloc[0:0]
+    print(f"D005 {as_of}: {status['booked']}"
+          + (f"; floor {status['floor_pct']:.2f}%, floored {', '.join(status['floored']) or 'none'}, "
+             f"book scale {status['book_scale']:.4f}" if adj is not None else ""))
+    print(f"D005 P&L vs unadjusted v1.0 over {len(live)} live month(s): {live['d005_adj'].sum():+.4%} ({pnl_source})")
+    for e in errors:
+        print(f"D005 ERROR: {e}", file=sys.stderr)
+    return 1 if errors else 0
 
 
 def dry_run(as_of: str | None = None, managed: list[str] | None = None) -> pd.DataFrame:
@@ -292,7 +364,7 @@ def main(argv=None) -> int:
     d.add_argument("--as-of", default=None, help="month of the positions (YYYY-MM); default the latest")
     a = ap.parse_args(argv)
     if a.cmd == "update":
-        stage_update()
+        return stage_update()
     else:
         dry_run(a.as_of)
     return 0

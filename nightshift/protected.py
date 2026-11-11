@@ -18,7 +18,7 @@ CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
 # threshold and the rule-4 list (docs/ledger/v1_rules.md), and decision D005's managed-currency list and the
 # override that applies it to the booked v1.0 book (docs/ledger/d005_vol_floor.md).
 ALWAYS = ["/config/night.yaml", "/ledger/v1_rules.py", "/results/v1_rules/", "/config/v1_rules_rule4.csv",
-          "/config/v1_managed_fx.csv", "/em_macro/d005.py"]
+          "/config/v1_managed_fx.csv", "/em_macro/d005.py", "/em_macro/d005_fallback.py"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:

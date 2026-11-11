@@ -515,6 +515,7 @@ def side_by_side(v10_months: list[dict], v11: dict) -> dict:
 
 D005_POSITIONS = "results/systematic/d005/positions.csv"
 D005_MANAGED = "config/v1_managed_fx.csv"
+D005_STATUS = "results/systematic/d005/status.json"
 
 
 def build_d005(positions: list[dict], months: list[dict], root: Path = ROOT) -> dict:
@@ -532,6 +533,7 @@ def build_d005(positions: list[dict], months: list[dict], root: Path = ROOT) -> 
                 "instrument_vol_pct": fnum(r.get("instrument_vol_pct"), 3), "vol_used_pct": fnum(r.get("vol_used_pct"), 3)}
                for r in rows if r.get("as_of") == as_of]
     floor = fnum(rows[0].get("vol_floor_pct"), 3) if rows and current else None
+    status = json.loads((root / D005_STATUS).read_text(encoding="utf-8")) if (root / D005_STATUS).exists() else None
     live = [m for m in months if m["live"]]
     idx_booked, idx_unadj, comparison = 100.0, 100.0, []
     for m in live:
@@ -544,6 +546,8 @@ def build_d005(positions: list[dict], months: list[dict], root: Path = ROOT) -> 
             "managed": managed, "as_of": as_of if current else None, "vol_floor_pct": floor, "current": current,
             "booked_sizes": {c["instrument"]: c["d005_size_pct_of_capital"] for c in current},
             "applied": bool(current) or any(abs(m.get("d005_adj") or 0) > 0 for m in live),
+            "status": status,
+            "failed_this_month": bool(status and status.get("status") == "failed" and status.get("as_of") == as_of),
             "comparison": comparison,
             "live_effect_pct": round(100 * (idx_booked / idx_unadj - 1), 4) if live else 0.0,
             "doc": "docs/ledger/d005_vol_floor.md"}

@@ -42,6 +42,7 @@
 # D005 volatility floor on the v1.0 book (supersedes D004 rule 4): the managed-currency list and the override code
 /config/v1_managed_fx.csv @EthanC100
 /em_macro/d005.py @EthanC100
+/em_macro/d005_fallback.py @EthanC100
 
 # Pre-registrations (all trials)
 /docs/prereg/ @EthanC100

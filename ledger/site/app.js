@@ -907,7 +907,9 @@
       <td class="num">${fmtNum(p.instrument_vol_pct, 1)}${p.floored ? `<br><b>${fmtNum(p.vol_used_pct, 1)}</b>` : ''}</td>
       <td class="num">${sgn(p.v10_size_pct_of_capital)}</td><td class="num"><b>${sgn(p.d005_size_pct_of_capital)}</b></td></tr>`).join('');
     const last = (d.comparison || []).slice(-1)[0];
-    return `<section class="section">${head}<div class="card">
+    const failed = d.failed_this_month ? `<div class="card notice"><b class="bad">D005 did not run for the ${esc(fmtMonth(d.status.as_of))} positions: this month is booked as v1.0 unadjusted (fail-safe).</b>
+      <ul class="small">${(d.status.errors || []).map((e) => `<li>${esc(e)}</li>`).join('')}</ul><p class="small muted">An alert issue was opened by the monthly run. Re-running the workflow after the fix books the month with D005.</p></div>` : '';
+    return `<section class="section">${head}${failed}<div class="card">
       ${last ? `<div class="stats">
         <div class="stat"><span class="k">Booked (with D005)</span><span class="v">${fmtNum(last.booked_index, 2)}</span><span class="s">${fmtMonth(last.month)} month-end</span></div>
         <div class="stat"><span class="k">v1.0 unadjusted</span><span class="v">${fmtNum(last.unadjusted_index, 2)}</span><span class="s">comparison line, not booked</span></div>

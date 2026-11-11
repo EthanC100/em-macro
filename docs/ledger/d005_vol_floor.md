@@ -41,14 +41,26 @@ Report 2026, Appendix II.9) classes Türkiye as **crawl-like** (de facto US doll
 Colombia, Indonesia and South Africa as floating, and Mexico, Poland, the United Kingdom and the euro area as free
 floating. The list therefore holds **TRY** only.
 
-The list and the override code are protected paths (`.github/CODEOWNERS`, `nightshift/protected.py`). Changing them
+The list and the override code (`em_macro/d005.py`, `em_macro/d005_fallback.py`) are protected paths (`.github/CODEOWNERS`, `nightshift/protected.py`). Changing them
 needs Ethan's review.
 
 ## Where it runs and what it writes
 
 `python -m em_macro.d005 update` is a step of the `systematic-monthly` workflow, after the political-risk overlay and
-manual overrides (`em_macro.overlay update`) and before the screener, v1.1, tests and commit. It is not
-continue-on-error: if it fails, the month is not booked and the alert issue names the D005 step.
+manual overrides (`em_macro.overlay update`) and before the screener, v1.1, tests and commit.
+
+**Fail-safe.** The step is `continue-on-error`. If D005 errors, v1.0 still rebalances and the month is committed
+**as v1.0, unadjusted**, and the run opens the `[ALERT] systematic-monthly failed <date>` issue naming the D005 step:
+
+- `em_macro.d005 update` computes everything before it writes anything, and writes each file atomically. On any
+  error it drops this month's D005 rows (so the month is v1.0's everywhere, including the Ledger's positions), keeps
+  the D005 P&L of months already booked (recomputed from `weights.csv`, or carried forward from the committed
+  `paper_pnl.csv` if that also fails), writes `results/systematic/d005/status.json` with `"status": "failed"` and the
+  errors, and exits 1.
+- If the process dies before writing (an import error, say), the next step, `python -m em_macro.d005_fallback`
+  (standard library only, run only when the D005 step failed), does the same from the committed `paper_pnl.csv`.
+- The alert is not closed by a later step while D005 is failing. The Ledger's D005 section shows the failure.
+  Re-running the workflow after the fix books the month with D005.
 
 - It imports the frozen v1.0 code (`em_macro/systematic.py`) read-only and checks the frozen design. It never edits
   frozen code, configs, results or tags.
@@ -56,6 +68,8 @@ continue-on-error: if it fails, the month is not booked and the alert issue name
   `position_adjustments.csv` and `overrides_log.csv` are v1.0's output as before.
 - `results/systematic/d005/positions.csv`: the current book, with every leg's v1.0 size, D005 size, change,
   volatility estimate, the floor, the volatility used and the book scale.
+- `results/systematic/d005/status.json`: the month's result (`ok` or `failed`, with errors, the floor, the book
+  scale and the floored currencies).
 - `results/systematic/d005/weights.csv`: the booked record, one row per (as_of, instrument), append-only (a re-run of
   the same month replaces that month). D005's P&L is computed from it, so booked months never change.
 - `results/systematic/paper_pnl.csv`: adds `d005_adj` (the D005 book's net return minus v1.0's, with v1.0's timing
