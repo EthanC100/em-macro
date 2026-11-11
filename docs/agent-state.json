@@ -43,6 +43,16 @@
    "commits": [],
    "note": "check only (dry run): refused on (c) protected paths and (b) app.js/lab.json, both from the unmerged setup PR; as if merged: all checks pass, only todo.json (Q003) differs",
    "session": null
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-11T22:38:19+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (1b4b29c, no auto_resolved); filed Q023 (data, approved p=80) and Q024 (research, waits for Ethan); Q021 reviewed no block p=72 and approved; 0 blocked; night-worker not fired (exit 6, no API trigger; hourly schedule picks it up). Triage: Actions API 403, run reports not audited; Q005 should also cover GB-DE and PL-DE (marks.csv:799, :807)",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
