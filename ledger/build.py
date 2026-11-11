@@ -1278,6 +1278,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
                       ("changes", changes), ("postmortems", postmortems), ("fund", fund), ("lab", lab),
                       ("v1_rules", v1_rules)):
         write_json(data / f"{name}.json", obj)
+    from .commodities import build_safe as build_commodities     # the Commodities book (C12); never stops the build
+    write_json(data / "commodities.json", build_commodities(today))
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")
                    if p.is_file() and p.name not in ("sw.js", "manifest.json"))

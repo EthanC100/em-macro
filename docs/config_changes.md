@@ -19,6 +19,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C09 | 2026-11-11 | the same first C08 review (11 November 2026, 23:07 UTC); the mark sources from the next ledger-daily run | **Janus watchlist widened, faster rate marks, clustered fund calls** (amends C08 before any C08 forecast was made): (1) US10Y marked from US Treasury's daily par yield curve (the series FRED republishes as DGS10 a business day later; FRED kept as fallback) and GB10Y from the Riksbank's benchmark gilt yield (GBGVB10Y) instead of the Bank of England's IUDMNPY; (2) BRL (BCB PTAX) and MXN (Banxico FIX) added to `janus/watchlist.yaml`, 10 instruments; gold not added, as no free, republishable daily gold mark exists; (3) the fund rule counts one call per correlation cluster (G10 yields, USD vs G10 FX, EM FX, gold; defined in the watchlist) per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | US10Y and GB10Y marks were two to three business days behind when ledger-daily ran: FRED and the BoE had not yet published the later days, and the BoE database refuses cloud clients. The C08 watchlist was two correlated bets (global yields, the dollar), so counting each forecast as a call overstated the evidence. | None on any other book. The GB-DE display spread now uses the Riksbank gilt leg. The fund rule's thresholds and shares are unchanged; only how Janus's calls are counted changes. |
 | C10 | 2026-11-11 | the next ledger-daily run (11 November 2026), before C08's first daily review (23:07 UTC) | **GBP marked on the ECB cross**: US dollars per pound = the ECB's US dollars per euro divided by its pounds per euro (as JPY and AUD), replacing the Bank of England's XUDLUSS; the watchlist's GBP question resolves on it. Approved by Ethan on 2026-11-11. | The Bank of England's XUDLUSS arrived one business day late on every run, and its database refused at least one run from GitHub's servers (6 Nov 03:57 UTC: "no observations", FRED fallback) and refuses cloud sessions outright. The ECB reference rates are published the same day (16:00 CET). | None on any other book: no decision, forecast or position uses GBP. |
 | C11 | 2026-11-11 | C08's first daily review (11 November 2026, 23:07 UTC) | **No mark the review can already see**: a C08 review's forecast base marks (and so its resolution windows) and the fills of its orders, resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date, rolling forward over weekends and holidays. Approved by Ethan on 2026-11-11. | With Q018's 22:07 UTC ledger-daily run, day-D marks are in place before the 23:07 UTC day-D review: a base mark or fill at that close is a price the forecaster already knows, with hours of later moves visible (the ECB fixes at 14:15 CET), which would inflate the Brier scores and the fund rule built on them. Raised by The Opposition's review of Q018. | None on any other book, and none on records before C08. |
+| C12 | 2026-11-11 | the shadows' first live rebalance (positions from the 3 December 2026 settlement), once ledger-daily confirms go-live (expected 4 December 2026) | **Commodities book added**: a fourth Ledger book that runs the T26 shadow at paper size. Returns = the T26 shadow's monthly net returns (decisive costs) × **k = 1.1028**, fixed once so the T22 design-period backtest (2000-01..2019-12) runs at 10% annual volatility (10% ÷ 9.0675%). Paper capital US$100,000,000, for contract counts only; results in % (excess of cash, total return incl. T-bill as in the other books). Outside the Horizons fund. | To see the trend sleeve at a real paper size, with contract counts, alongside the zero-size shadow. | None. The book only reads the shadow's output; no signal, universe, timing, cost or rule changes, and the T25-T26 pre-registration, its amendments, GO_LIVE.json and the prelive files are untouched. The shadow's evaluation (15 Dec 2031) uses the shadow's own returns. The Fund rule (C04) is unchanged. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -896,3 +897,57 @@ ledger-daily still pushes with `git pull --rebase`. If an intake entry lands nex
 The next run redoes it: ledger-daily is idempotent. This was already true of the Ledger clerk sessions.
 
 **Unchanged:** every ledger file's format and every writer's output.
+
+## C12 — Commodities book: the T26 shadow at paper size (2026-11-11)
+
+**What is added.** A fourth Ledger book, **Commodities** (`ledger/commodities.py`; the app tab `#/commodities`,
+`ledger/site/commodities.js`). It is the pre-registered T26 shadow (the T22 diversified futures trend sleeve on 17
+markets) run at a real paper size, nothing more:
+
+- **Returns** = the T26 shadow's monthly net returns at decisive costs × **k**, exactly. Within a month the book moves
+  k × the shadow's month-to-date return, and each month closes at exactly k × the shadow's monthly return.
+- **k = 1.1028, frozen now, never re-estimated.**
+  - Rule: k = 10% ÷ the annual volatility of the T22 design-period backtest, rounded to 4 decimals.
+  - Data: `results/T20-T22/monthly_net.csv`, column `T22 sleeve|full|decisive` (net of decisive costs, the a160bfd
+    universe), 2000-01..2019-12, 240 months (file SHA-256 `8d6ba711…6515e6b`).
+  - Volatility: the sample standard deviation (ddof 1) of those 240 monthly returns × √12 = **9.0675%**, the same
+    figure as `results/T20-T22/performance.csv`.
+  - k = 0.10 ÷ 0.090675 = 1.10284, rounded to **1.1028**; the backtest at k runs at 9.9996%.
+  - **Why the full universe:** no backtest of the restricted 17-market T26 universe exists. The T25-T26
+    pre-registration (§2.2 D3 and §6) forbids computing one, so k uses the design-period run of the same sleeve
+    on its full a160bfd universe. Live volatility can therefore differ from 10%. The page shows realised
+    volatility against the target, and k is not re-estimated.
+- **Nothing else changes:** signals, universe, timing, costs and rules are the shadow's. The book reads the shadow's
+  public output (`results/shadows/GO_LIVE.json`, `results/shadows/T26/`) and never writes to it. The pre-registration,
+  its amendments, `GO_LIVE.json` and the prelive files are untouched, and the shadow's 2031 evaluation uses the
+  shadow's own returns, which sizing does not change.
+- **Paper capital US$100,000,000**, used only to turn weights into whole contracts:
+  - contracts = k × the shadow's held weight × US$100m ÷ (the contract's settlement at the rebalance's execution
+    date × its multiplier), rounded;
+  - the returns use the exact weights, so rounding changes no reported figure;
+  - % of risk = |weight| × the sleeve's own volatility estimate (T22's σ at the decision date), as a share of the
+    book's total.
+- **Results** are in % of capital, excess of cash. Total return including T-bill interest is shown as in the other
+  books (`ledger/books.py add_total_return`, display only).
+- **Start:** positions from the 3 December 2026 settlement (the shadows' first live rebalance, M1), once ledger-daily
+  confirms go-live (expected 4 December). Before then the tab shows "Starts 3 Dec 2026". If go-live moves, the book
+  starts with it.
+- **Outside the Horizons fund**, like my decisions. `ledger/fund.py` and C04 are unchanged.
+
+**Licensed data.** Contract counts need settlement prices. They are computed in ledger-daily, where the private store
+is (`python -m ledger.commodities update`, a new step after the shadows step). That step writes only
+`data/commodities/positions.csv`: month, market, direction, contract month, number of contracts, share of risk and
+the book's weight. No settlement, price or notional in currency is published.
+
+**The tab** shows the equity curve (excess of cash, and total return incl. T-bill), current positions (market,
+long/short, contract month, contracts, % of risk), monthly returns (book and shadow), drawdown, realised volatility
+against the 10% target, and a plain-English note on the strategy.
+
+**Tests:** `tests/test_commodities.py`, synthetic data only. They check that:
+- k reproduces from the published backtest;
+- the book's monthly returns equal k × the shadow's exactly;
+- there is no write path to the shadow's files or the private store;
+- no settlement price appears in any public output;
+- before go-live the book shows its start date;
+- the book is outside the fund.
+

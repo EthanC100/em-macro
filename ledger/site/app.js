@@ -1345,6 +1345,10 @@
     forecasts: pageForecasts, trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
     evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo, lab: pageLab,
   };
+  // pages kept in their own files (commodities.js) register on window.LedgerPages and use these shared helpers
+  window.LedgerUI = { esc, fmtDate, fmtMonth, fmtNum, fmtPct, isNum, pill, info, load, setHead, dateChart, legendRow,
+    totalLine, tbillTable, totalDataset, signClass, mtdHtml, monthlyBarChart, view, getMeta: () => meta };
+  Object.assign(routes, window.LedgerPages || {});
   const TAB_OF = { decisions: 'me', position: '', trials: 'more', elections: 'more', reports: 'more', evidence: 'more',
                    marks: 'more', screener: 'algorithm', todo: 'more', lab: 'more', forecasts: 'more', calendar: 'more', risk: 'more',
                    postmortems: 'more' };

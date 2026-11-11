@@ -132,6 +132,16 @@ jobs:
           git add -A -- databento/shadows shadows ledger
           git diff --cached --quiet || { git commit -q -m "Shadows T25-T26 $(date -u +%Y-%m-%d)"; git pull -q --rebase; git push -q; }
 
+      # Commodities book (config change C12, ledger/commodities.py): the T26 shadow x k at US$100m paper size. It
+      # reads the shadow's output above (never writes to it) and the private contract files, and writes contract
+      # counts and risk shares only (data/commodities/positions.csv): no price. Nothing to do before go-live.
+      - name: Commodities book (contract counts; no price published)
+        id: commodities
+        continue-on-error: true
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m ledger.commodities update
+
       # Post-mortems are written in the Janus daily review session (docs/janus/daily_review.md), not here.
       - name: Stress tests and what changed
         id: analytics
@@ -153,7 +163,7 @@ jobs:
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/ledger/postmortems
                  data/ledger/reports data/ledger/changes.json data/ledger/state.json
                  data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot
-                 results/shadows)
+                 results/shadows data/commodities)
           existing=()
           for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
           git add -- "${existing[@]}"
