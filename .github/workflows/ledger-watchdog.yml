@@ -1,6 +1,7 @@
 # Independent check that the Ledger's daily marks are fresh. Opens "[ALERT] Ledger marks stale" when the newest
 # mark in data/ledger/marks.csv was fetched more than 2 days ago, and closes it once marks are fresh. Runs on its
 # own schedule so it still fires when ledger-daily itself never starts (a dropped schedule, a disabled workflow).
+# From Q018 (2026-11-11) it also opens "[ALERT] ledger-daily late" when a kick window (06:07, 22:07 UTC) had no run.
 name: ledger-watchdog
 
 on:
@@ -11,6 +12,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read             # Q018: read ledger-daily's runs for the lateness check
 
 jobs:
   watchdog:
@@ -29,3 +31,10 @@ jobs:
         run: |
           python -m ledger.watchdog --out "$RUNNER_TEMP/watchdog.json"
           bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/watchdog.json"
+      - name: Is ledger-daily starting in its kick windows? (Q018)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json"
+          python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json"
+          bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json"

@@ -49,6 +49,12 @@
 # Corrections log (K-series: K001-K003 are records in the audit chain)
 /data/ledger/seals.jsonl @EthanC100
 
+# D004: v1.0 cut and stop rules (docs/ledger/v1_rules.md): the monitor, its frozen rule-5 threshold (and the
+# superseded one) and Ethan's rule-4 list
+/ledger/v1_rules.py @EthanC100
+/results/v1_rules/ @EthanC100
+/config/v1_rules_rule4.csv @EthanC100
+
 # Configuration changes (C01-C05), private-value commitments, the trial ledger
 /docs/config_changes.md @EthanC100
 /ledger/commitments.py @EthanC100

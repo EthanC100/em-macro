@@ -1,6 +1,7 @@
 # Janus watchlist: config change C08 (approved by Ethan on 11 November 2026; docs/config_changes.md C08), widened by
 # config change C09 (approved by Ethan on 11 November 2026, before C08's first review): BRL and MXN added, US10Y and
-# GB10Y resolved on faster public sources, and the correlation clusters the fund rule counts calls by.
+# GB10Y resolved on faster public sources, and the correlation clusters the fund rule counts calls by; and by config
+# change C10 (approved by Ethan on 11 November 2026, before C08's first review): GBP resolved on the ECB cross.
 #
 # Every Janus daily review gives a probability for EVERY instrument below: a whole number from 1 to 99, never 50,
 # both before The Opposition (p_initial) and after it (p_final). The probability is that the question resolves YES.
@@ -115,7 +116,8 @@ instruments:
     yes_if: higher
     yes_position: long        # long sterling
     resolution_source: >-
-      Bank of England XUDLUSS (spot US dollars per pound), as marked in data/ledger/marks.csv (registry row GBP)
+      ECB euro reference rates, US dollars per euro (EXR D.USD.EUR.SP00.A) divided by pounds per euro
+      (EXR D.GBP.EUR.SP00.A), as marked in data/ledger/marks.csv (registry row GBP)
     stop: {distance: 4.5, unit: percent}
 
   - instrument: JPY
