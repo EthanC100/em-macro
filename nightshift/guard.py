@@ -117,7 +117,14 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-unknown", action="store_true")
     ap.add_argument("--now", default=None, help="ISO timestamp (testing and dry runs)")
     a = ap.parse_args(argv)
-    cfg, now = C.load(), (datetime.fromisoformat(a.now) if a.now else C.now_utc())
+    now = datetime.fromisoformat(a.now) if a.now else C.now_utc()
+    try:
+        cfg = C.load_main()                     # main's config, fetched now: never dev's copy
+    except C.MainConfigError as e:
+        why = f"could not read main's config/night.yaml: not starting (fail safe): {e}"
+        print(json.dumps({"routine": a.routine, "go": False, "reasons": [why]} if a.cmd == "check"
+                         else {"next": "stop", "why": why}, indent=1))
+        return 4
     st = S.load()
     if a.cmd == "check":
         v = check(a.routine, now, cfg, st, busy_runs(cfg), a.allow_unknown)

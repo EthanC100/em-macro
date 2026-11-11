@@ -50,8 +50,9 @@
 /ledger/commitments.py @EthanC100
 /trials.csv @EthanC100
 
-# The agents' own rules, this file and the rulesets
+# The agents' own rules, their switches (safe mode, caps, windows), this file and the rulesets
 /.claude/ @EthanC100
+/config/night.yaml @EthanC100
 /.github/CODEOWNERS @EthanC100
 /docs/rulesets/ @EthanC100
 

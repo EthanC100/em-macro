@@ -13,6 +13,9 @@ from pathlib import Path
 from . import config as C
 
 CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
+# Protected even if a CODEOWNERS copy (e.g. dev's, before it has merged main) lacks them: the night shift's own
+# switches (safe mode, caps, windows) are Ethan's alone.
+ALWAYS = ["/config/night.yaml"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:
@@ -28,7 +31,7 @@ def patterns(path: Path = CODEOWNERS) -> list[str]:
             out.append(s.split()[0])
     if not out:
         raise ValueError("no protected paths found in CODEOWNERS")
-    return out
+    return out + [p for p in ALWAYS if p not in out]
 
 
 def matches(pattern: str, path: str) -> bool:

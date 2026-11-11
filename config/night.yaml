@@ -1,5 +1,6 @@
 # Night shift configuration (docs/agent-system.md). Read by nightshift/config.py; every routine reads it first.
-# Changing this file is an ordinary change (not protected), but the hard rules in CLAUDE.md always win.
+# Protected (CODEOWNERS): only Ethan changes it, on main; agents never edit it. The guard, promote and state read
+# main's copy, fetched fresh on every run (nightshift.config.load_main), so a change applies at the next run.
 
 timezone: Asia/Singapore
 
