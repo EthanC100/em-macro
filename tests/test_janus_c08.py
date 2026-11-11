@@ -18,13 +18,23 @@ from ledger import fund as F
 from ledger import janus as J
 from ledger import pricing as PX
 from test_janus import _m, pos
-from test_janus_c06 import LEVELS, PUBLIC, SR, UNITS, marks
+from test_janus_c06 import LEVELS as LEVELS6, PUBLIC as PUBLIC6, SR, UNITS as UNITS6
 
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 T = datetime(2026, 11, 11, 23, 7, tzinfo=UTC)                  # Wednesday: the first daily review under C08
-WL = ["US10Y", "GB10Y", "DE10Y", "JP10Y", "EUR", "GBP", "JPY", "AUD"]
-P = {"US10Y": 55, "GB10Y": 51, "DE10Y": 48, "JP10Y": 47, "EUR": 52, "GBP": 49, "JPY": 48, "AUD": 52}
+WL = ["US10Y", "GB10Y", "DE10Y", "JP10Y", "EUR", "GBP", "JPY", "AUD", "BRL", "MXN"]       # BRL, MXN from C09
+P = {"US10Y": 55, "GB10Y": 51, "DE10Y": 48, "JP10Y": 47, "EUR": 52, "GBP": 49, "JPY": 48, "AUD": 52, "BRL": 53,
+     "MXN": 48}
+EDGES = sum(abs(p - 50) for p in P.values())                  # 23 points -> 2.3% raw, scaled up to the 3% floor
+PUBLIC = PUBLIC6 + ("BRL", "MXN")
+LEVELS = {**LEVELS6, "BRL": 5.50, "MXN": 18.60}
+UNITS = {**UNITS6, "BRL": "BRL per USD", "MXN": "MXN per USD"}
+
+
+def marks(d="2026-11-09", stale=()):
+    """Every public Janus instrument (BRL and MXN included) marked on ``d``; those in ``stale`` on 2026-11-04."""
+    return [_m(i, "2026-11-04" if i in stale else d, LEVELS[i], UNITS.get(i, "% yield")) for i in PUBLIC]
 OPP = {"case_against": "The move is priced and positioning is crowded the other way.", "probability_view_wrong": 55,
        "model": "claude-opus-5-5"}
 
@@ -81,10 +91,10 @@ def book(path):
 
 
 # ----------------------------------------------------------------------------- 1. the watchlist
-def test_the_watchlist_has_six_to_eight_liquid_instruments_janus_already_marks_daily():
+def test_the_watchlist_has_liquid_instruments_janus_already_marks_daily():
     wl = J.load_watchlist()
     names = [w["instrument"] for w in wl]
-    assert names == WL and 6 <= len(wl) <= 8 and {"US10Y", "GB10Y"} <= set(names)
+    assert names == WL and 6 <= len(wl) <= 11 and {"US10Y", "GB10Y", "BRL", "MXN"} <= set(names)   # C09: 11 at most
     reg = J.registry_rows()
     for w in wl:
         assert w["instrument"] in J.UNIVERSE and not J.is_future(w["instrument"])      # public marks only (rule 7)
@@ -110,7 +120,7 @@ def test_a_c08_review_logs_every_forecast_and_the_cli_sets_the_book(tmp_path):
     assert res["ok"], res["errors"]
     recs = J.load(tmp_path / "r.jsonl")
     run_rec = next(r for r in recs if r["type"] == "run")
-    assert run_rec["c08"] and run_rec["n_forecasts"] == 8 and run_rec["risk_after_pct"] == pytest.approx(3.0)
+    assert run_rec["c08"] and run_rec["n_forecasts"] == 10 and run_rec["risk_after_pct"] == pytest.approx(3.0)
     fcs = [r for r in recs if r["type"] == "forecast"]
     assert [f["instrument"] for f in fcs] == WL and [f["forecast_id"] for f in fcs][:2] == ["JF0001", "JF0002"]
     assert all(f["p_initial"] == f["p_final"] == P[f["instrument"]] for f in fcs)
@@ -119,27 +129,31 @@ def test_a_c08_review_logs_every_forecast_and_the_cli_sets_the_book(tmp_path):
     b = book(tmp_path / "r.jsonl")
     assert {i: p["open"]["direction"] for i, p in b.items()} == {
         i: ("long" if P[i] > 50 else "short") for i in WL}
-    # risk proportional to |p - 50| (edges 5, 1, 2, 3, 2, 1, 2, 2 = 18 points -> 1.8%, scaled up to the 3% floor)
+    # risk proportional to |p - 50| (23 points -> 2.3%, scaled up to the 3% floor)
     for i, p in b.items():
-        assert p["open"]["risk_pct"] == pytest.approx(3.0 * abs(P[i] - 50) / 18, abs=1e-6)
+        assert p["open"]["risk_pct"] == pytest.approx(3.0 * abs(P[i] - 50) / EDGES, abs=1e-6)
         assert p["open"]["forecast_id"] and p["open"]["set_by"] == "CLI (C08)" and p["open"]["c08"]
     assert sum(p["open"]["risk_pct"] for p in b.values()) == pytest.approx(3.0, abs=1e-5)
     assert J.verify(recs)["ok"]
 
 
+def no_aud(f):
+    return [x for x in f if x["instrument"] != "AUD"]
+
+
 @pytest.mark.parametrize("change, expect", [
-    (lambda f: f[:-1], "missing AUD"),
-    (lambda f: f + [fc("EUR")], "forecast 9 (EUR): forecast twice"),
-    (lambda f: f[:-1] + [{**fc("AUD"), "instrument": "CHF"}], "forecast 8 (CHF): not on the watchlist"),
-    (lambda f: f[:-1] + [fc("AUD", 50)], "p_final is 50, which is not a forecast"),
-    (lambda f: f[:-1] + [fc("AUD", 52, p0=50)], "p_initial is 50, which is not a forecast"),
-    (lambda f: f[:-1] + [fc("AUD", 100)], "p_final must be a whole number from 1 to 99"),
-    (lambda f: f[:-1] + [fc("AUD", 0)], "p_final must be a whole number from 1 to 99"),
-    (lambda f: f[:-1] + [fc("AUD", 55.5)], "p_final must be a whole number from 1 to 99"),
-    (lambda f: f[:-1] + [{**fc("AUD"), "p_initial": None}], "p_initial must be a whole number"),
-    (lambda f: f[:-1] + [fc("AUD", reasoning="")], "forecast 8 (AUD): reasoning is required"),
-    (lambda f: f[:-1] + [fc("AUD", opposition={})], "opposition.case_against is required"),
-    (lambda f: f[:-1] + [fc("AUD", market_probability=0.5, market_basis="options", market_source="x")],
+    (lambda f: no_aud(f), "missing AUD"),
+    (lambda f: f + [fc("EUR")], "forecast 11 (EUR): forecast twice"),
+    (lambda f: no_aud(f) + [{**fc("AUD"), "instrument": "CHF"}], "forecast 10 (CHF): not on the watchlist"),
+    (lambda f: no_aud(f) + [fc("AUD", 50)], "p_final is 50, which is not a forecast"),
+    (lambda f: no_aud(f) + [fc("AUD", 52, p0=50)], "p_initial is 50, which is not a forecast"),
+    (lambda f: no_aud(f) + [fc("AUD", 100)], "p_final must be a whole number from 1 to 99"),
+    (lambda f: no_aud(f) + [fc("AUD", 0)], "p_final must be a whole number from 1 to 99"),
+    (lambda f: no_aud(f) + [fc("AUD", 55.5)], "p_final must be a whole number from 1 to 99"),
+    (lambda f: no_aud(f) + [{**fc("AUD"), "p_initial": None}], "p_initial must be a whole number"),
+    (lambda f: no_aud(f) + [fc("AUD", reasoning="")], "forecast 10 (AUD): reasoning is required"),
+    (lambda f: no_aud(f) + [fc("AUD", opposition={})], "opposition.case_against is required"),
+    (lambda f: no_aud(f) + [fc("AUD", market_probability=0.5, market_basis="options", market_source="x")],
      "looks like a fraction"),
     (lambda f: [], "forecasts (C08): required"),
 ])
@@ -196,8 +210,8 @@ def test_daily_rebalance_holds_inside_the_25_percent_band_resizes_outside_it_and
     first = book(path)
     assert all(p["status"] == "open" for p in first.values())
     t2 = T + timedelta(days=1)
-    # edges 6, 4, 2, 8, 2, 1, 2, 2 = 2.7% raw, scaled to 3%: US10Y 55 -> 56 (0.67% vs 0.83% held: -20%, inside the
-    # band), GB10Y 51 -> 46 (flip), JP10Y 47 -> 42 (0.89% vs 0.50%: resized)
+    # edges 6, 4, 2, 8, 2, 1, 2, 2, 3, 2 = 3.2%, inside the band: US10Y 55 -> 56 (0.60% vs 0.65% held: -8%, inside
+    # the no-trade band), GB10Y 51 -> 46 (flip), JP10Y 47 -> 42 (0.80% vs 0.39%: resized)
     probs = {"US10Y": 56, "GB10Y": 46, "JP10Y": 42}
     dry = run(tmp_path, c08(now=t2, probs=probs), now=t2, mk=marks("2026-11-11"), dry_run=True)
     assert dry["ok"] and first["US10Y"]["id"] in dry["would_hold"], dry
@@ -333,7 +347,7 @@ def test_the_first_c08_review_closes_j001_and_j002_without_editing_any_record(tm
         rv = next(r for r in new if r["type"] == "review" and r["position_id"] == pid)
         cr = next(r for r in new if r["type"] == "close_request" and r["position_id"] == pid)
         assert rv["action"] == "close" and cr["close_reason"] == "C08 rule 5: discretionary position closed"
-    assert res["opened"] == [f"J{n:03d}" for n in range(3, 11)]
+    assert res["opened"] == [f"J{n:03d}" for n in range(3, 13)]
     J.process(J.load(path), mk + day_marks("2026-11-11"), date(2026, 11, 12), path)
     st = J.positions(J.load(path))
     for pid in ("J001", "J002"):
@@ -374,18 +388,19 @@ def test_every_forecast_resolves_after_20_trading_days_with_brier_scores(tmp_pat
     assert res["JPY"]["answer"] == "YES" and res["AUD"]["answer"] == "YES"  # yen and AUD per USD lower: stronger
     assert res["GBP"]["answer"] == "NO"                                     # USD per GBP lower: GBP/USD not higher
     s = J.summarize(J.load(path), mk, date(2026, 12, 10))["forecast_summary"]
-    assert s["n_resolved"] == 8 and s["brier_final"] == pytest.approx(
-        sum(r["brier_final"] for r in res.values()) / 8, abs=1e-4)
+    assert s["n_resolved"] == 10 and s["brier_final"] == pytest.approx(
+        sum(r["brier_final"] for r in res.values()) / 10, abs=1e-4)
+    assert res["BRL"]["answer"] == "YES" and res["MXN"]["answer"] == "YES"  # reais and pesos per USD lower
     J.process(J.load(path), mk, date(2026, 12, 11), path)                   # resolved once
-    assert len([r for r in J.load(path) if r["type"] == "forecast_resolution"]) == 8
+    assert len([r for r in J.load(path) if r["type"] == "forecast_resolution"]) == 10
 
 
 # ----------------------------------------------------------------------------- 6. fund resolved calls
-def _forecast(recs, path, inst, d, p, base, end, outcome):
+def _forecast(recs, path, inst, d, p, base, end, outcome, **extra):
     n = sum(1 for r in recs if r["type"] == "forecast") + 1
     fid = f"JF{n:04d}"
     J.append(recs, {"type": "forecast", "forecast_id": fid, "instrument": inst, "date": d, "p_initial": p,
-                    "p_final": p, "market_probability": 50.0, "yes_if": "lower"}, path)
+                    "p_final": p, "market_probability": 50.0, "yes_if": "lower", **extra}, path)
     if end:
         J.append(recs, {"type": "forecast_resolution", "forecast_id": fid, "instrument": inst, "base_date": base,
                         "end_date": end, "outcome": outcome, "answer": "YES" if outcome else "NO",
@@ -394,26 +409,63 @@ def _forecast(recs, path, inst, d, p, base, end, outcome):
     return fid
 
 
-def test_a_fund_resolved_call_is_one_forecast_per_instrument_per_non_overlapping_window(tmp_path):
-    path, recs = tmp_path / "r.jsonl", []
-    days = list(weekdays(date(2026, 11, 11), date(2027, 1, 29)))
-    ids = {}
-    for i, d in enumerate(days[:45]):                                       # one forecast a weekday on US10Y
-        base, end = d, J.add_weekdays(d, 20)
-        done = end <= date(2027, 1, 8)
-        ids[d] = _forecast(recs, path, "US10Y", d.isoformat(), 60, base.isoformat(),
-                           end.isoformat() if done else None, 1)
+def _daily_forecasts(path, insts, last_resolved=date(2027, 1, 8), n_days=45, shift=None):
+    """One forecast a weekday on each of ``insts`` from 11 Nov 2026 (base = forecast date, or ``shift[inst]``
+    weekdays later), resolved 20 weekdays after its base when that falls on or before ``last_resolved``."""
+    recs, ids = [], {}
+    for d in list(weekdays(date(2026, 11, 11), date(2027, 2, 26)))[:n_days]:
+        for inst in insts:
+            base = J.add_weekdays(d, (shift or {}).get(inst, 0))
+            end = J.add_weekdays(base, 20)
+            ids[(inst, d)] = _forecast(recs, path, inst, d.isoformat(), 60 if inst != "GB10Y" else 45,
+                                       base.isoformat(), end.isoformat() if end <= last_resolved else None, 1)
+    return recs, ids
+
+
+def test_a_fund_call_is_one_per_correlation_cluster_per_non_overlapping_window(tmp_path):
+    """C09: forecasts on US10Y and GB10Y (both G10 yields) made in one review are one call, scored on their mean
+    Brier; EUR (USD vs G10 FX) is its own cluster. Daily forecasts over 45 weekdays give 2 windows per cluster: 4
+    calls, where counting per instrument would give 6."""
+    recs, ids = _daily_forecasts(tmp_path / "r.jsonl", ("US10Y", "GB10Y", "EUR"))
     calls = J.fund_calls(recs)
-    assert [c["forecast_id"] for c in calls] == [ids[date(2026, 11, 11)], ids[date(2026, 12, 9)]]
-    assert calls[1]["base_date"] == calls[0]["end_date"]                    # windows abut, never overlap
-    # a second instrument has its own windows
-    _forecast(recs, path, "EUR", "2026-11-12", 45, "2026-11-12", "2026-12-10", 0)
-    assert len(J.fund_calls(recs)) == 3
-    assert J.forecast_summary(recs)["fund_calls"] == 3
+    assert [(c["cluster"], c["date"]) for c in calls] == [
+        ("g10_yields", "2026-11-11"), ("usd_g10_fx", "2026-11-11"), ("g10_yields", "2026-12-09"),
+        ("usd_g10_fx", "2026-12-09")]
+    first = calls[0]
+    assert first["instruments"] == ["US10Y", "GB10Y"]
+    assert first["forecast_ids"] == [ids[("US10Y", date(2026, 11, 11))], ids[("GB10Y", date(2026, 11, 11))]]
+    assert first["brier_final"] == pytest.approx(((0.6 - 1) ** 2 + (0.45 - 1) ** 2) / 2)    # mean over the cluster
+    assert calls[2]["base_date"] == first["end_date"]                       # windows abut, never overlap
+    assert J.forecast_summary(recs)["fund_calls"] == 4
+    assert {c for c, ms in J.load_clusters().items() if ms} == {"g10_yields", "usd_g10_fx", "em_fx"}
+
+
+def test_a_cluster_window_spans_all_its_forecasts_and_waits_for_all_of_them(tmp_path):
+    # GB10Y's base mark comes a weekday later (a UK holiday, say): the call's window ends at GB10Y's end mark, so the
+    # next counted call starts on or after it
+    recs, _ = _daily_forecasts(tmp_path / "r.jsonl", ("US10Y", "GB10Y"), shift={"GB10Y": 1})
+    calls = [c for c in J.fund_calls(recs) if c["cluster"] == "g10_yields"]
+    assert (calls[0]["base_date"], calls[0]["end_date"]) == ("2026-11-11", "2026-12-10")
+    assert calls[1]["date"] == "2026-12-10" and calls[1]["base_date"] >= calls[0]["end_date"]
+    # a call resolves only when every forecast in it has: one open member holds the cluster's chain
+    recs, _ = _daily_forecasts(tmp_path / "b.jsonl", ("US10Y",), n_days=1)
+    _forecast(recs, tmp_path / "b.jsonl", "GB10Y", "2026-11-11", 45, None, None, 0)
+    assert J.fund_calls(recs) == []
+
+
+def test_a_forecast_keeps_the_cluster_recorded_with_it(tmp_path):
+    path = tmp_path / "r.jsonl"
+    assert run(tmp_path, c08())["ok"]
+    fcs = {r["instrument"]: r["cluster"] for r in J.load(path) if r["type"] == "forecast"}
+    assert fcs == {**{i: "g10_yields" for i in ("US10Y", "GB10Y", "DE10Y", "JP10Y")},
+                   **{i: "usd_g10_fx" for i in ("EUR", "GBP", "JPY", "AUD")}, "BRL": "em_fx", "MXN": "em_fx"}
+    recs, _ = _daily_forecasts(tmp_path / "x.jsonl", ("EUR",), n_days=1)
+    recs[0]["cluster"] = "em_fx"                      # what was recorded counts, not today's file
+    assert J.fund_calls(recs)[0]["cluster"] == "em_fx"
 
 
 def test_the_fund_counts_c08_calls_and_janus_pnl_from_10_november(tmp_path):
-    calls = [{"end_date": "2026-12-%02d" % (1 + i % 28), "p_final": 60, "market_probability": 50.0, "outcome": 1}
+    calls = [{"end_date": "2026-12-%02d" % (1 + i % 28), "brier_final": 0.16, "brier_market": 0.25}
              for i in range(30)]
     series = [["2026-11-06", 100.0], ["2026-11-10", 99.8], ["2026-12-31", 100.6]]
     s = F.janus_share([], series, date(2026, 12, 31), calls)
@@ -434,7 +486,7 @@ def test_the_fund_reads_janus_calls_from_its_summary():
              "janus": {"series": [], "live_start": None, "summary": {"closed": [], "fund_calls": []}},
              "me": {"series": [], "live_start": None}}
     f = F.build_fund(books, date(2026, 11, 20))
-    assert f["allocation"]["janus_rule"]["definition"].startswith("C08")
+    assert f["allocation"]["janus_rule"]["definition"].startswith("C09: one call per correlation cluster")
 
 
 # ----------------------------------------------------------------------------- 7. kept rules
@@ -506,7 +558,7 @@ def test_c08_is_recorded_in_the_config_changes_runbooks_and_fund_docs():
     for f in ("docs/janus/daily_review.md", "docs/janus/quick_check.md", "data/janus/README.md"):
         assert "C08" in (ROOT / f).read_text(encoding="utf-8"), f
     fund = (ROOT / "docs/fund/allocation.md").read_text(encoding="utf-8")
-    assert "one forecast per instrument per non-overlapping 20-trading-day window" in fund
+    assert "one call per correlation cluster per non-overlapping 20-trading-day window" in fund      # as amended by C09
 
 
 def _runbook_example():
@@ -516,7 +568,7 @@ def _runbook_example():
 
 def test_the_runbook_example_passes_the_cli(tmp_path):
     """The C08-format example in docs/janus/daily_review.md, with its placeholders filled and data_failure (which
-    does not apply) left out, passes and sets an eight-position book."""
+    does not apply) left out, passes and sets a ten-position book."""
     ex = _runbook_example()
     assert [f["instrument"] for f in ex["forecasts"]] == WL
     assert all(f["p_final"] != 50 and f["p_initial"] != 50 for f in ex["forecasts"])
@@ -531,7 +583,7 @@ def test_the_runbook_example_passes_the_cli(tmp_path):
             f["opposition"]["case_against"] = "It is priced, and the trend could turn."
     res = run(tmp_path, ex)
     assert res["ok"], res["errors"]
-    assert len(res["opened"]) == 8 and len(res["forecasts"]) == 8
+    assert len(res["opened"]) == 10 and len(res["forecasts"]) == 10
 
 
 def test_the_cli_dry_run_shows_the_book(tmp_path):
@@ -580,7 +632,7 @@ def test_the_10_nov_2307_review_replayed_under_c08(tmp_path, monkeypatch):
         assert errs_with(res, f"{field} is not used under C08"), field
     assert errs_with(res, "forecasts (C08): required")
     # 2. Its own stated views become forecasts (YES = the long side): short US10Y at 45% -> 55; long GB10Y 50; long
-    #    JPY 48; short AUD 48 -> 52; long DE10Y 48. EUR, GBP and JP10Y were never considered.
+    #    JPY 48; short AUD 48 -> 52; long DE10Y 48. EUR, GBP, JP10Y (and BRL, MXN, added by C09) were never considered.
     stated = {c["instrument"]: (c["probability"] if c["direction"] == "long" else 100 - c["probability"], c["reason"])
               for c in ans["candidates"]}
     assert {i: p for i, (p, _) in stated.items()} == {"US10Y": 55, "GB10Y": 50, "JPY": 48, "AUD": 52, "DE10Y": 48}
@@ -596,9 +648,9 @@ def test_the_10_nov_2307_review_replayed_under_c08(tmp_path, monkeypatch):
     c08_ans["forecasts"] = [forecast(i, p, why) for i, (p, why) in stated.items()]
     res = J.apply_proposal(c08_ans, now=REPLAY_NOW, path=path, marks_rows=mk, dry_run=True)
     assert errs_with(res, "forecast 2 (GB10Y): p_final is 50, which is not a forecast"), res["errors"]
-    assert errs_with(res, "missing JP10Y, EUR, GBP")
-    # 3. Forced to a side: GB10Y 51 (it leaned to holding J002 long), and the three it never considered
-    forced = {"GB10Y": 51, "EUR": 51, "GBP": 49, "JP10Y": 49}
+    assert errs_with(res, "missing JP10Y, EUR, GBP, BRL, MXN")
+    # 3. Forced to a side: GB10Y 51 (it leaned to holding J002 long), and the five it never considered
+    forced = {"GB10Y": 51, "EUR": 51, "GBP": 49, "JP10Y": 49, "BRL": 51, "MXN": 49}
     why = "Not considered by the 10 Nov review; C08 forces a side (replay)."
     c08_ans["forecasts"] = [forecast(i, forced.get(i, p), w) for i, (p, w) in stated.items() if i != "GB10Y"] + \
         [forecast(i, p, why) for i, p in forced.items()]
@@ -609,17 +661,18 @@ def test_the_10_nov_2307_review_replayed_under_c08(tmp_path, monkeypatch):
     assert [(r["position_id"], r["action"]) for r in new if r["type"] == "review"] == [("J001", "close"),
                                                                                        ("J002", "close")]
     assert sorted(r["position_id"] for r in new if r["type"] == "cancel") == ["J001", "J002"]
-    # eight forecasts logged; eight orders from them at 3.00% at risk (1.5% raw, scaled up to the band) instead of 0.5%
-    assert len([r for r in new if r["type"] == "forecast"]) == 8
+    # ten forecasts logged; ten orders from them at 3.00% at risk (1.7% raw, scaled up to the band) instead of 0.5%
+    assert len([r for r in new if r["type"] == "forecast"]) == 10
     opens = {r["instrument"]: r for r in new if r["type"] == "open"}
     assert {i: o["direction"] for i, o in opens.items()} == {
         "US10Y": "long", "JPY": "short", "AUD": "long", "DE10Y": "short", "GB10Y": "long", "EUR": "long",
-        "GBP": "short", "JP10Y": "short"}
-    assert opens["US10Y"]["risk_pct"] == pytest.approx(1.0) and opens["GB10Y"]["risk_pct"] == pytest.approx(0.2)
+        "GBP": "short", "JP10Y": "short", "BRL": "long", "MXN": "short"}
+    assert opens["US10Y"]["risk_pct"] == pytest.approx(3 * 5 / 17, abs=1e-6)               # 0.88%
+    assert opens["GB10Y"]["risk_pct"] == pytest.approx(3 / 17, abs=1e-6)
     assert sum(o["risk_pct"] for o in opens.values()) == pytest.approx(3.0, abs=1e-5)
     assert next(r for r in new if r["type"] == "run")["risk_after_pct"] == pytest.approx(3.0)
     # The Opposition argued against short US10Y; under C08 it is a forecast like any other, logged and sized
     assert opens["US10Y"]["forecast_id"] and J.verify(J.load(path))["ok"]
     # the orders fill at the next official daily marks, and every forecast resolves 20 trading days later
     J.process(J.load(path), mk + day_marks("2026-11-10"), date(2026, 11, 11), path)
-    assert all(p["status"] == "open" for p in book(path).values()) and len(book(path)) == 8
+    assert all(p["status"] == "open" for p in book(path).values()) and len(book(path)) == 10

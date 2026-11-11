@@ -60,12 +60,13 @@ the notional traded.
 | WTI, BRENT, NATGAS, HEATOIL, RBOB | NYMEX CL, BZ (proxy for ICE Brent), NG, HO, RB, by contract month | Final exchange settlement of the held contract, Databento GLBX.MDP3, **stored privately** in em-macro-data |
 | GOLD, SILVER, COPPER | COMEX GC, SI, HG, by contract month | as above |
 | CORN, SOYBEANS, WHEAT | CBOT ZC, ZS, ZW, by contract month (US cents per bushel) | as above |
-| US10Y | US 10y Treasury | FRED DGS10 (Fed H.15); fallback Riksbank USGVB10Y |
+| US10Y | US 10y Treasury | US Treasury daily par yield curve, 10-year CMT (from C09; the series FRED republishes as DGS10 a business day later); fallback FRED DGS10 |
 | DE10Y | German 10y Bund | Bundesbank daily (Svensson 10y) |
-| GB10Y | UK 10y gilt | Bank of England IUDMNPY |
+| GB10Y | UK 10y gilt | Riksbank SWEA GBGVB10Y, benchmark 10y gilt (from C09; before it, Bank of England IUDMNPY, published two to three business days late) |
 | JP10Y | Japan 10y JGB | Japan Ministry of Finance JGB curve CSV; fallback Riksbank JPGVB10Y |
 | FR-DE | France 10y over the Bund | Riksbank SWEA FRGVB10Y − DEGVB10Y |
 | EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP: Bank of England) |
+| BRL, MXN | EM FX (from C09) | BCB PTAX sell rate (SGS 1); Banxico FIX (SIE SF43718) |
 
 **Futures and options (from 2026-11-06; code `ledger/janus_fut.py`, settlements `ledger/settlements.py`).**
 - The spot-price estimates (EIA via FRED) are gone. Each position holds a real contract month, filled at the

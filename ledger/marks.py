@@ -12,7 +12,8 @@ latest observation of the source (its own date, not the fetch date). A source th
 replaced by its fallback, and if that fails too the previous mark is kept with a note; one bad
 source never stops the run.
 
-Sources (``source`` column): fred, ecb_exr, bcb_sgs, banxico, sarb, nbp, boe, bde, bundesbank,
+Sources (``source`` column): fred, ustreasury (US Treasury daily par yield curve CSV), ecb_exr, bcb_sgs, banxico,
+sarb, nbp, boe, bde, bundesbank,
 riksbank (Sveriges Riksbank SWEA API: daily benchmark 10-year yields of FR, DE, US, GB, JP and others),
 mof_jgb (Japan Ministry of Finance JGB curve), mindicador, datos_gov_co, em_macro (a loader of this
 repository), panel_daily, panel_monthly (the project's own panels, refreshed monthly) and spread (leg
@@ -223,6 +224,41 @@ def fetch_riksbank(series: str, get=http_get):
     return d, v, url
 
 
+UST_URL = ("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/"
+           "{y}/all?type=daily_treasury_yield_curve&field_tdr_date_value={y}&page&_format=csv")
+
+
+def ustreasury_history(tenor: str = "10 Yr", start: date | None = None, get=http_get, today: date | None = None):
+    """US Treasury daily par yield curve rates (keyless CSV, one row per business day, published after each day's
+    close). The 10-year column is the 10-year constant-maturity yield that the Federal Reserve's H.15 and FRED
+    (DGS10) republish one business day later, so the values are identical."""
+    today = today or date.today()
+    years = sorted({today.year, (start or today - timedelta(days=45)).year})
+    pts, url = [], ""
+    for y in years:
+        url = UST_URL.format(y=y)
+        rows = list(csv.reader(get(url).decode("utf-8-sig", "replace").splitlines()))
+        if not rows:
+            continue
+        head = [c.strip().strip('"') for c in rows[0]]
+        if "Date" not in head or tenor not in head:
+            raise ValueError(f"Treasury csv {y}: no Date / {tenor} column")
+        di, ci = head.index("Date"), head.index(tenor)
+        for r in rows[1:]:
+            m = re.match(r"^(\d{2})/(\d{2})/(\d{4})$", r[di].strip()) if len(r) > max(di, ci) else None
+            v = _num(r[ci]) if m else None
+            if m and v is not None:
+                pts.append((date(int(m.group(3)), int(m.group(1)), int(m.group(2))), v))
+    pts = sorted(p for p in pts if start is None or p[0] >= start)
+    return pts, url
+
+
+def fetch_ustreasury(tenor: str, get=http_get):
+    pts, url = ustreasury_history(tenor or "10 Yr", None, get)
+    d, v = _last(pts)
+    return d, v, url
+
+
 def mof_jgb_history(tenor: str = "10Y", get=http_get):
     """Japan Ministry of Finance JGB constant-maturity yields (keyless CSV, one row per business day)."""
     url = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv"
@@ -309,6 +345,7 @@ def fetch_panel_monthly(spec: str, get=None, root: Path = ROOT):
 FETCHERS = {
     "fred": fetch_fred, "ecb_exr": fetch_ecb_exr, "bcb_sgs": fetch_bcb_sgs, "banxico": fetch_banxico,
     "sarb": fetch_sarb, "nbp": fetch_nbp, "boe": fetch_boe, "bde": fetch_bde, "bundesbank": fetch_bundesbank,
+    "ustreasury": fetch_ustreasury,
     "mindicador": fetch_mindicador, "datos_gov_co": fetch_datos_gov_co, "em_macro": fetch_em_macro,
     "panel_daily": fetch_panel_daily, "panel_monthly": fetch_panel_monthly,
     "riksbank": fetch_riksbank, "mof_jgb": fetch_mof_jgb,
@@ -349,6 +386,7 @@ def ecb_exr_history(ccy: str, start: date, get=http_get):
 
 HISTORY = {"riksbank": riksbank_history, "fred": fred_history, "bundesbank": bundesbank_history,
            "ecb_exr": ecb_exr_history,
+           "ustreasury": lambda ident, start, get=http_get: ustreasury_history(ident or "10 Yr", start, get),
            "mof_jgb": lambda ident, start, get=http_get: (lambda r: ([p for p in r[0] if p[0] >= start], r[1]))(
                mof_jgb_history(ident or "10Y", get))}
 

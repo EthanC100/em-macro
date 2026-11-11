@@ -194,6 +194,12 @@ UNIVERSE = {
                 cost=0.001),
     "CAD": dict(name="CAD per USD (long = long Canadian dollar)", asset_class="fx", country="Canada", currency="CAD",
                 cost=0.001),
+    # added by config change C09 (2026-11-11) for the C08 watchlist: EM FX on central-bank fixings; the algorithm's
+    # cost model treats both as major currencies (10bp one way)
+    "BRL": dict(name="BRL per USD, BCB PTAX (long = long Brazilian real)", asset_class="fx", country="Brazil",
+                currency="BRL", cost=0.001),
+    "MXN": dict(name="MXN per USD, Banxico FIX (long = long Mexican peso)", asset_class="fx", country="Mexico",
+                currency="MXN", cost=0.001),
 }
 # CME-group futures by contract month (ledger/settlements.py, ledger/janus_fut.py): energy, COMEX metals, CBOT
 # grains, marked at Databento final settlements stored privately; options only as defined-risk structures
@@ -618,7 +624,7 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                      for k, v in UNIVERSE.items()],
         "dropped": DROPPED, "chain": verify(records),
         # config change C08: every forced forecast with its resolution and Brier score, and the fund rule's resolved
-        # calls (one forecast per instrument per non-overlapping 20-trading-day window; docs/fund/allocation.md)
+        # calls (C09: one call per correlation cluster per non-overlapping 20-trading-day window; allocation.md)
         "forecasts": forecast_rows(records), "forecast_summary": forecast_summary(records),
         "fund_calls": fund_calls(records),
         "disclaimer": ("Janus is an experiment in AI judgement. Its results do not feed the algorithm (v1.0 and v1.1 are "
@@ -1553,13 +1559,26 @@ def _check_c07(ans: dict, records: list[dict], pos: dict[str, dict], open_ids: l
 
 
 # ----------------------------------------------------------------------------- config change C08
+def _watchlist_doc(path: Path | None = None) -> dict:
+    import yaml
+    return yaml.safe_load((path or WATCHLIST_FILE).read_text(encoding="utf-8"))
+
+
+def load_clusters(path: Path | None = None) -> dict[str, list[str]]:
+    """C09: the correlation clusters of janus/watchlist.yaml, {cluster: [instruments]} in file order (a cluster may
+    be empty, e.g. gold while no free daily mark exists). The fund rule counts one call per cluster per window."""
+    return {str(c["cluster"]): [str(i).strip().upper() for i in (c.get("instruments") or [])]
+            for c in _watchlist_doc(path).get("clusters") or []}
+
+
 def load_watchlist(path: Path | None = None) -> list[dict]:
     """The C08 watchlist (janus/watchlist.yaml): instrument, question, yes_if, yes_position, resolution_source,
-    stop, with the file's horizon_trading_days on each entry."""
-    import yaml
-    doc = yaml.safe_load((path or WATCHLIST_FILE).read_text(encoding="utf-8"))
+    stop, with the file's horizon_trading_days and the instrument's cluster (C09) on each entry."""
+    doc = _watchlist_doc(path)
     h = int(doc["horizon_trading_days"])
+    of = {i: c for c, ms in load_clusters(path).items() for i in ms}
     return [{**w, "instrument": str(w["instrument"]).strip().upper(), "horizon_trading_days": h,
+             "cluster": of.get(str(w["instrument"]).strip().upper()),
              "question": " ".join(str(w["question"]).split()),
              "resolution_source": " ".join(str(w["resolution_source"]).split())} for w in doc["instruments"]]
 
@@ -1854,7 +1873,8 @@ def _apply_c08(ans: dict, plan: dict, records: list[dict], today: date, now: dat
         fids[f["instrument"]] = f"JF{n_fc:04d}"
         append(records, {"type": "forecast", "forecast_id": fids[f["instrument"]], "instrument": f["instrument"],
                          "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
-                         "run_seq": run_rec["seq"], "question": w["question"], "yes_if": w["yes_if"],
+                         "run_seq": run_rec["seq"], "cluster": w["cluster"], "question": w["question"],
+                         "yes_if": w["yes_if"],
                          "yes_position": w["yes_position"], "horizon_trading_days": w["horizon_trading_days"],
                          "resolution_source": w["resolution_source"], "p_initial": f["p_initial"],
                          "p_final": f["p_final"], "market_probability": f["market_probability"],
@@ -2016,8 +2036,9 @@ def forecast_rows(records: list[dict]) -> list[dict]:
     out = []
     for f in (r for r in records if r["type"] == "forecast"):
         r = res.get(f["forecast_id"], {})
-        out.append({k: f.get(k) for k in ("forecast_id", "instrument", "date", "question", "yes_if", "p_initial",
-                                          "p_final", "market_probability", "market_basis", "reasoning", "excluded")}
+        out.append({k: f.get(k) for k in ("forecast_id", "instrument", "date", "run_seq", "cluster", "question",
+                                          "yes_if", "p_initial", "p_final", "market_probability", "market_basis",
+                                          "reasoning", "excluded")}
                    | {"opposition_probability_view_wrong": (f.get("opposition") or {}).get("probability_view_wrong"),
                       "status": "resolved" if r else "open",
                       **{k: r.get(k) for k in ("base_date", "end_date", "base_value", "end_value", "outcome", "answer",
@@ -2025,24 +2046,46 @@ def forecast_rows(records: list[dict]) -> list[dict]:
     return out
 
 
-def fund_calls(records: list[dict]) -> list[dict]:
-    """C08 rule 6: the fund allocation rule's resolved calls (docs/fund/allocation.md). One forecast per instrument
-    per non-overlapping 20-trading-day window: per instrument, in the order the forecasts were made, the first
-    forecast counts, and the next one counted is the first whose base mark is dated on or after the end mark of the
-    last one counted. Which forecast counts depends only on dates, never on outcomes. Only resolved calls are listed;
-    the chain of windows stops at a counted forecast that has not resolved yet."""
+def fund_calls(records: list[dict], clusters: dict[str, list[str]] | None = None) -> list[dict]:
+    """The fund allocation rule's resolved calls (docs/fund/allocation.md; C08 rule 6 as amended by C09): one call per
+    correlation cluster (janus/watchlist.yaml) per non-overlapping 20-trading-day window, so correlated forecasts do
+    not count as independent calls.
+
+    A cluster call is the set of that cluster's forecasts made in one daily review. Its window runs from the earliest
+    base mark to the latest end mark of its forecasts, and it scores the mean of their Brier scores (Janus's p_final,
+    p_initial, and the market's). Per cluster, in review order, the first review's call counts; the next one counted
+    is the first whose earliest base mark is dated on or after the end of the last one counted. Which call counts
+    depends only on dates, never on outcomes. A call resolves when all its forecasts have resolved; only resolved
+    calls are listed, and a cluster's chain stops at a counted call that has not resolved yet. A forecast's cluster
+    is the one recorded with it (the watchlist's, for forecasts recorded without one)."""
+    clusters = clusters if clusters is not None else load_clusters()
+    of = {i: c for c, ms in clusters.items() for i in ms}
+    groups: dict[tuple, list[dict]] = {}
+    for r in forecast_rows(records):
+        c = r.get("cluster") or of.get(r["instrument"])
+        if c:
+            groups.setdefault((c, r.get("run_seq") or r["date"]), []).append(r)
+    def mean(xs):
+        return round(sum(xs) / len(xs), 6)
     out = []
-    rows = forecast_rows(records)
-    for inst in dict.fromkeys(r["instrument"] for r in rows):
+    for c in dict.fromkeys(list(clusters) + [k[0] for k in groups]):
         last_end = None
-        for r in (x for x in rows if x["instrument"] == inst):
-            if r["status"] != "resolved":            # its base and end are not known yet, nor any later one's
-                break
-            if last_end is not None and r["base_date"] < last_end:
+        for (cc, _), ms in groups.items():
+            if cc != c:
+                continue
+            if any(m["status"] != "resolved" for m in ms):
+                break                                # its window is not known yet, nor any later call's
+            base, end = min(m["base_date"] for m in ms), max(m["end_date"] for m in ms)
+            if last_end is not None and base < last_end:
                 continue                             # inside the last counted window
-            out.append(r)
-            last_end = r["end_date"]
-    return sorted(out, key=lambda r: (r["end_date"], r["forecast_id"]))
+            out.append({"cluster": c, "date": ms[0]["date"], "run_seq": ms[0].get("run_seq"),
+                        "forecast_ids": [m["forecast_id"] for m in ms], "instruments": [m["instrument"] for m in ms],
+                        "base_date": base, "end_date": end,
+                        "brier_final": mean([m["brier_final"] for m in ms]),
+                        "brier_initial": mean([m["brier_initial"] for m in ms]),
+                        "brier_market": mean([m["brier_market"] for m in ms])})
+            last_end = end
+    return sorted(out, key=lambda r: (r["end_date"], r["cluster"]))
 
 
 def forecast_summary(records: list[dict]) -> dict:
@@ -2498,8 +2541,10 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                 "superseded": ("C05 (b) sizing table, below_budget and weekend deferrals; C06 rules 1 "
                                                "and 2; C07 rules 1, 2 and 4; discretionary new positions and reviews "
                                                "(a quick check cannot close or tighten a C08 position)"),
-                                "fund_resolved_call": ("one forecast per instrument per non-overlapping 20-trading-day "
-                                                       "window (docs/fund/allocation.md)")}},
+                                "fund_resolved_call": ("one call per correlation cluster (janus/watchlist.yaml: "
+                                                       "G10 yields, USD vs G10 FX, EM FX, gold) per non-overlapping "
+                                                       "20-trading-day window, scored on the mean Brier of its "
+                                                       "forecasts (C09; docs/fund/allocation.md)")}},
             "watchlist": _watchlist_context(marks_rows, today),
             "forecasts_open": [r for r in forecast_rows(records) if r["status"] == "open"][-40:],
             "forecast_summary": forecast_summary(records),

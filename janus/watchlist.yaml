@@ -1,4 +1,6 @@
-# Janus watchlist: config change C08 (approved by Ethan on 11 November 2026; docs/config_changes.md C08).
+# Janus watchlist: config change C08 (approved by Ethan on 11 November 2026; docs/config_changes.md C08), widened by
+# config change C09 (approved by Ethan on 11 November 2026, before C08's first review): BRL and MXN added, US10Y and
+# GB10Y resolved on faster public sources, and the correlation clusters the fund rule counts calls by.
 #
 # Every Janus daily review gives a probability for EVERY instrument below: a whole number from 1 to 99, never 50,
 # both before The Opposition (p_initial) and after it (p_final). The probability is that the question resolves YES.
@@ -20,8 +22,14 @@
 #   * Brier score = (p / 100 - outcome)^2, with outcome 1 for YES and 0 for NO, for p_final, p_initial and the
 #     market's probability.
 #
-# Only instruments with a free public daily mark are listed: futures are left out because their settlements are
-# licensed (CLAUDE.md rule 7), so a resolution derived from them could not be published.
+# Only instruments with a free, republishable public daily mark are listed: futures are left out because their
+# settlements are licensed (CLAUDE.md rule 7), so a resolution derived from them could not be published. Gold has no
+# such mark: the LBMA Gold Price is licensed by ICE Benchmark Administration (FRED removed it on 31 January 2022 at
+# IBA's request) and COMEX settlements are CME-licensed, so the gold cluster below has no instrument.
+#
+# clusters (C09): the fund allocation rule counts one call per cluster per non-overlapping 20-trading-day window
+# (docs/fund/allocation.md), so forecasts on correlated instruments do not count as independent calls. Every
+# instrument belongs to exactly one cluster.
 #
 # stop: the mechanical stop of a C08 position, set from the latest mark when the order is placed, on the losing
 # side, about twice a typical 20-trading-day standard deviation of the mark (percentage points of yield for rates,
@@ -41,21 +49,22 @@ instruments:
     yes_if: lower
     yes_position: long        # long the bond (gains when the yield falls)
     resolution_source: >-
-      FRED DGS10 (Federal Reserve H.15 10-year constant-maturity yield, % a year),
-      https://fred.stlouisfed.org/series/DGS10, as marked in data/ledger/marks.csv (registry row US10Y)
+      US Treasury daily par yield curve rates, 10-year constant-maturity yield (% a year),
+      https://home.treasury.gov/resource-center/data-chart-center/interest-rates/ (the same series FRED republishes
+      as DGS10 a business day later; fallback FRED DGS10), as marked in data/ledger/marks.csv (registry row US10Y)
     stop: {distance: 0.55, unit: yield_points}
 
   - instrument: GB10Y
     name: UK 10-year gilt
     asset_class: rates
     question: >-
-      Will the UK 10-year nominal par gilt yield be lower at the end mark (20 trading days after the base mark)
-      than at the base mark?
+      Will the UK 10-year benchmark gilt yield be lower at the end mark (20 trading days after the base mark) than
+      at the base mark?
     yes_if: lower
     yes_position: long        # long the gilt (gains when the yield falls)
     resolution_source: >-
-      Bank of England IUDMNPY (10-year nominal par gilt yield, % a year), Bank of England database, as marked in
-      data/ledger/marks.csv (registry row GB10Y)
+      Sveriges Riksbank SWEA GBGVB10Y (UK benchmark 10-year government bond yield, % a year),
+      https://api.riksbank.se/swea/v1/Observations/GBGVB10Y, as marked in data/ledger/marks.csv (registry row GB10Y)
     stop: {distance: 0.60, unit: yield_points}
 
   - instrument: DE10Y
@@ -134,3 +143,43 @@ instruments:
       ECB euro reference rates, Australian dollars per euro (EXR D.AUD.EUR.SP00.A) divided by US dollars per euro,
       as marked in data/ledger/marks.csv (registry row AUD)
     stop: {distance: 6.0, unit: percent}
+
+  - instrument: BRL
+    name: USD/BRL (Brazilian reais per US dollar)
+    asset_class: fx
+    question: >-
+      Will the Brazilian real be stronger against the US dollar, that is, will the BCB PTAX rate (reais per US
+      dollar, sell) be lower at the end mark (20 trading days after the base mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the real
+    resolution_source: >-
+      Banco Central do Brasil PTAX sell rate (SGS series 1, reais per US dollar),
+      https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados, as marked in data/ledger/marks.csv (registry row BRL)
+    stop: {distance: 8.0, unit: percent}
+
+  - instrument: MXN
+    name: USD/MXN (Mexican pesos per US dollar)
+    asset_class: fx
+    question: >-
+      Will the Mexican peso be stronger against the US dollar, that is, will the Banxico FIX rate (pesos per US
+      dollar) be lower at the end mark (20 trading days after the base mark) than at the base mark?
+    yes_if: lower
+    yes_position: long        # long the peso
+    resolution_source: >-
+      Banco de Mexico FIX rate (SIE series SF43718, pesos per US dollar), https://www.banxico.org.mx/SieInternet/,
+      as marked in data/ledger/marks.csv (registry row MXN)
+    stop: {distance: 7.0, unit: percent}
+
+clusters:
+  - cluster: g10_yields
+    name: G10 yields
+    instruments: [US10Y, GB10Y, DE10Y, JP10Y]
+  - cluster: usd_g10_fx
+    name: USD vs G10 FX
+    instruments: [EUR, GBP, JPY, AUD]
+  - cluster: em_fx
+    name: EM FX
+    instruments: [BRL, MXN]
+  - cluster: gold
+    name: Gold
+    instruments: []           # no free, republishable daily gold mark (see the header); reserved for one

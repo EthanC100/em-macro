@@ -16,6 +16,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C06 | 2026-11-10 | the 10 November 2026 daily review (23:07 UTC) | **Janus: hard 2-position minimum, dated event reasons, failed-review records**: (1) at least 2 open positions at all times; a dated `below_budget` reason may only let total risk fall below 3%, never the book below 2 positions; fewer than 2 only for a named data failure (which mark, how stale), and only for the instruments affected. (2) An event-based reason cites the event's date from an official calendar URL listed in `sources_read`, and expires at the end of the next trading day after the event. (3) The CLI rejects a review that breaks (1) or (2), and a rejected daily review writes a failed-review record (closes Q004). Approved by Ethan on 2026-11-10. *Rules 1-2 superseded by C08 from 11 Nov 2026; rule 3 kept.* | The 9 and 10 November reviews held no position under a `below_budget` reason, and the 10 November review dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET (correction K004). A rejected review left no record (Q004). | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing else in C05 changes. |
 | C07 | 2026-11-10 | the first Janus daily review after it was recorded (10 November 2026, 23:07 UTC) | **Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals only where the market is closed**: (1) no opened position may state a probability of 50%; the CLI rejects a proposal containing one. (2) When the C06 two-position minimum binds, the review lists at least 5 candidates across at least 2 asset classes; a candidate it dropped after The Opposition may be reopened only if it states why no other candidate is better. (3) Every review records its current UTC time and, for each event cited in a reason or thesis, whether it had already occurred; an event dated in the future cannot be described as released. (4) A deferred idea counts toward the minimum only if its market is closed on the review date, and must open at the next session. Approved by Ethan on 2026-11-10. *Rules 1, 2 and 4 superseded by C08 from 11 Nov 2026; rule 3 kept.* | The 10 November 10:30 UTC review met C06's minimum with two 0.25% rates longs (J001, J002) at a stated probability of 50%, opened anyway after The Opposition put each near 43-44% to work, with no other asset class considered; and it described October CPI as "released at 08:30 ET on 10 Nov" at 10:30 UTC, three hours before the 13:30 UTC release. | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing in C05 or C06 changes except what C07 adds. |
 | C08 | 2026-11-11 | the 11 November 2026 daily review (23:07 UTC) | **Janus: forced forecasts and a mechanical book, replacing discretionary position selection**: (1) a watchlist, `janus/watchlist.yaml`: US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY and AUD, each with a precise question (direction, 20 trading days, resolution source); (2) every daily review gives every instrument a probability, a whole number from 1 to 99 and never 50, before and after The Opposition; every forecast is logged and resolved automatically with Brier scores; (3) the CLI sets the book: each instrument on the side of its final forecast, risk proportional to \|p − 50\| inside C05's 3-10% band, rebalanced at each daily review with a 25% no-trade band; only a named data failure excludes an instrument; (4) The Opposition is advisory; (5) J001 and J002 are closed by the first C08 review; (6) a fund resolved call is one forecast per instrument per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | The 10 November 23:07 UTC review (run record seq 238) held only J001 and J002, two rates longs stated at 50%, 0.5% at risk, under a `below_budget` reason tied to the FOMC a month away (9 Dec). Its other candidates sat at 48-50% with "no edge", and the one fresh idea (short US10Y) was dropped after The Opposition. Discretionary selection kept the book at the minimum, and it yields too few scored calls to judge Janus. | None on any other book: no algorithm, frozen result or other book changes. The fund allocation rule's thresholds and shares are unchanged; only what counts as a Janus resolved call is defined (`docs/fund/allocation.md`). The rules of C05, C06 and C07 that C08 supersedes are marked in their sections. |
+| C09 | 2026-11-11 | the same first C08 review (11 November 2026, 23:07 UTC); the mark sources from the next ledger-daily run | **Janus watchlist widened, faster rate marks, clustered fund calls** (amends C08 before any C08 forecast was made): (1) US10Y marked from US Treasury's daily par yield curve (the series FRED republishes as DGS10 a business day later; FRED kept as fallback) and GB10Y from the Riksbank's benchmark gilt yield (GBGVB10Y) instead of the Bank of England's IUDMNPY; (2) BRL (BCB PTAX) and MXN (Banxico FIX) added to `janus/watchlist.yaml`, 10 instruments; gold not added, as no free, republishable daily gold mark exists; (3) the fund rule counts one call per correlation cluster (G10 yields, USD vs G10 FX, EM FX, gold; defined in the watchlist) per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | US10Y and GB10Y marks were two to three business days behind when ledger-daily ran: FRED and the BoE had not yet published the later days, and the BoE database refuses cloud clients. The C08 watchlist was two correlated bets (global yields, the dollar), so counting each forecast as a call overstated the evidence. | None on any other book. The GB-DE display spread now uses the Riksbank gilt leg. The fund rule's thresholds and shares are unchanged; only how Janus's calls are counted changes. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -584,6 +585,8 @@ allocation rules (`docs/fund/allocation.md`) and the T25-T26 shadow files.
 
 ## C08 — Janus: forced forecasts on a watchlist, a mechanical book (2026-11-11)
 
+> **Amended by C09 (same day, before C08's first review):** the watchlist has 10 instruments (BRL and MXN added), US10Y and GB10Y are marked from faster public sources, and a fund resolved call is one call per correlation cluster per non-overlapping 20-trading-day window (rule 6 below as amended). See C09.
+
 Approved by Ethan on 2026-11-11 and effective from that day's daily review (23:07 UTC; `C08_FROM` in
 `ledger/janus.py`). It replaces discretionary position selection with forced forecasts and mechanical sizing. Rules of
 C05, C06 and C07 that it supersedes are listed below and marked in their sections; the others are kept.
@@ -713,3 +716,88 @@ under C08 in `tests/test_janus_c08.py` (see "Replay" below).
 `budget_status`, `summarize` and `context`); `ledger/fund.py` (`janus_record_c08`); `ledger/postmortem.py` (no
 post-mortem for a resize); `docs/janus/daily_review.md`,
 `docs/janus/quick_check.md`, `docs/fund/allocation.md`, `data/janus/README.md`; `tests/test_janus_c08.py`.
+
+## C09 — Janus: faster US10Y and GB10Y marks, BRL and MXN, clustered fund calls (2026-11-11)
+
+Approved by Ethan on 2026-11-11. Recorded before C08's first daily review (11 November, 23:07 UTC), so no C08
+forecast was made under the earlier wording. It amends C08; everything else in C08 stands.
+
+**1. Why US10Y and GB10Y marks stopped at 6 November, and the fix.** At 01:00 UTC on 11 November both instruments'
+latest marks were dated 6 November, two weekdays old, which C06's test calls stale.
+- **No run had fetched since.** ledger-daily last ran on 10 November at 17:14 UTC. It is scheduled for 05:52 and
+  09:22 UTC but starts 7-11 hours late (`docs/agent-system.md`).
+- **The sources had not published the later days when it ran.** The fetch log in `data/ledger/marks.csv` (latest
+  date returned by each run) shows the same pattern every day. Each fetch succeeded, with no error and no fallback,
+  and returned data ending two to three business days earlier:
+
+  | ledger-daily run (UTC) | US10Y (FRED DGS10) | GB10Y (BoE IUDMNPY) | DE10Y (Bundesbank), for comparison |
+  |---|---|---|---|
+  | Sun 8 Nov 16:07 | - | Wed 4 Nov | Fri 6 Nov |
+  | Mon 9 Nov 20:03 | Thu 5 Nov | Thu 5 Nov | Mon 9 Nov |
+  | Tue 10 Nov 17:14 | Fri 6 Nov | Fri 6 Nov | Tue 10 Nov |
+
+- **US10Y.** FRED's DGS10 is the Federal Reserve's H.15 copy of Treasury's 10-year constant-maturity yield,
+  published a business day after Treasury's own daily par yield curve and after ledger-daily's usual run time. At
+  02:40 UTC on 11 November:
+  - FRED had 9 November (4.88);
+  - Treasury's curve CSV already had 10 November (4.98);
+  - Treasury's 6 and 9 November values (4.86, 4.88) equal the stored FRED marks: the same series.
+
+  The source is now `ustreasury` (`ledger/marks.py` `fetch_ustreasury`, `ustreasury_history`), with FRED DGS10 as
+  the fallback.
+- **GB10Y.** The Bank of England publishes IUDMNPY two to three business days late (table above). Its database also
+  answers "Access denied" to cloud clients, so a Janus session's `context --fetch` could not refresh it at all. The
+  source is now the Riksbank's benchmark 10-year gilt yield, SWEA GBGVB10Y: keyless, one value per business day, the
+  source already used for FR10Y and DE10YBM. It had 9 November at 02:45 UTC on 11 November. The fallback stays the
+  monthly panel, which never acts.
+  - The level differs from the BoE's par yield by a few basis points (6 Nov: 5.156 against 5.118).
+  - Each run stores the source's last three weeks, newest fetch winning, so recent GB10Y marks become one consistent
+    Riksbank series.
+  - No decision, forecast or filled position uses GB10Y. J002 is unfilled and is closed tonight under C08.
+- **Effect.** At a ledger-daily run on review day, US10Y is marked at the previous business day (instead of two
+  back), and GB10Y at the previous business day or the one before. Both pass C06's staleness test, so neither can be
+  named as a data failure because of publication lag.
+
+**2. Watchlist: BRL and MXN added; no gold** (`janus/watchlist.yaml`, now 10 instruments).
+- **BRL:** will the Brazilian real be stronger, that is, the BCB PTAX sell rate (reais per US dollar, SGS series 1)
+  lower after 20 trading days? Stop 8%.
+- **MXN:** will the peso be stronger, that is, the Banxico FIX (pesos per US dollar, SIE SF43718) lower after 20
+  trading days? Stop 7%.
+- Both were already marked daily by ledger-daily. Both join Janus's universe at the algorithm's cost for major
+  currencies (10bp one way); capacity references were already in `data/ledger/capacity_reference.csv`.
+- **Gold: no free, republishable daily mark exists.**
+  - The LBMA Gold Price is licensed by ICE Benchmark Administration; FRED removed it on 31 January 2022 at IBA's
+    request.
+  - COMEX settlements are CME-licensed (rule 7).
+  - The gold cluster is defined and empty, reserved for a source that qualifies.
+
+**3. Fund rule: one call per correlation cluster per non-overlapping 20-trading-day window.** The clusters are
+defined in the watchlist. Every instrument is in exactly one, and each forecast records its cluster:
+
+| cluster | instruments |
+|---|---|
+| G10 yields | US10Y, GB10Y, DE10Y, JP10Y |
+| USD vs G10 FX | EUR, GBP, JPY, AUD |
+| EM FX | BRL, MXN |
+| gold | none yet |
+
+- **A cluster call** is that cluster's forecasts from one daily review.
+- **Its window** runs from their earliest base mark to their latest end mark.
+- **Its score** is the mean of their Brier scores (Janus's `p_final`, and the market's).
+- **Which calls count:** per cluster, the first review's call counts; the next one counted is the first whose
+  earliest base mark is on or after the end of the last one counted. It depends only on dates.
+- **When a call resolves:** when all its forecasts have resolved.
+- **Rate:** three clusters with instruments give about three calls per 20 trading days. The 30-call threshold is
+  therefore about ten months away, not four.
+- **Unchanged:** every other part of the rule (P&L from 10 November 2026, the shares, the drawdown override).
+
+Text: `docs/fund/allocation.md`. Code: `fund_calls` in `ledger/janus.py`, `janus_record_c08` in `ledger/fund.py`.
+
+**Unchanged.** Everything else in C08: every forecast is still logged and Brier-scored on its own, and the book
+still takes a position on every watchlist instrument, now 10. The mechanical sizing, the 3-10% band and the 25%
+no-trade band are unchanged.
+
+**Where:** `data/ledger/instruments.csv` (US10Y, GB10Y); `ledger/marks.py` (`ustreasury`); `janus/watchlist.yaml`;
+`ledger/janus.py` (`UNIVERSE` BRL and MXN, `load_clusters`, `fund_calls`, the forecast record's `cluster`);
+`ledger/fund.py`; `docs/fund/allocation.md`; `docs/janus/daily_review.md`; `data/janus/README.md`;
+`tests/test_janus_c09.py` and `tests/test_janus_c08.py` (10 instruments, cluster calls).
