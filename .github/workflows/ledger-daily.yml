@@ -15,11 +15,14 @@ name: ledger-daily
 # the step then printed "nothing to commit". The commit step now stages only paths that exist, fails if a
 # changed ledger file is left unstaged or the push fails, and a marks watchdog (here and in ledger-watchdog)
 # opens "[ALERT] Ledger marks stale" when the newest mark is more than 2 days old.
+# 2026-11-11 (Q018, approved by Ethan): GitHub creates this repository's schedule events 5.5-10.5 hours late, so the
+# "ledger-daily kick" Claude Code scheduled task dispatches this workflow at 06:07 and 22:07 UTC (docs/agent-system.md).
+# The crons stay as backups; the watchdog step alerts ("[ALERT] Kick window missed: ledger-daily late") when a kick window had no run.
 on:
   schedule:
-    - cron: "52 5 * * *"      # 05:52 UTC daily, before the 06:41 app build
-    - cron: "22 9 * * *"      # 09:22 UTC backup: GitHub delays or drops scheduled runs (5 Nov ran at 13:31); re-running is idempotent
-  workflow_dispatch:
+    - cron: "52 5 * * *"      # backup (Q018): 05:52 UTC daily, before the 06:41 app build
+    - cron: "22 9 * * *"      # backup: GitHub delays or drops scheduled runs (5 Nov ran at 13:31); re-running is idempotent
+  workflow_dispatch:          # primary (Q018): the ledger-daily kick task, 06:07 and 22:07 UTC
 
 permissions:
   contents: write
@@ -27,7 +30,8 @@ permissions:
   actions: write
 
 concurrency:
-  group: ledger-intake          # shares the intake workflow's group: the ledger files are edited by one job at a time
+  group: ledger-writers         # with private-commitments and shadows-setup: one of them edits the ledger at a time.
+                                # ledger-intake left this group (Q022): it writes through scripts/ledger_commit.sh
   cancel-in-progress: false
 
 jobs:
@@ -248,12 +252,33 @@ jobs:
           git fetch -q origin main && git checkout -q FETCH_HEAD -- data/ledger/marks.csv || true
           python -m ledger.watchdog --out "$RUNNER_TEMP/watchdog.json"
           bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/watchdog.json"
+          # Q018: a kick window (06:07, 22:07 UTC) with no ledger-daily run opens "[ALERT] Kick window missed: ledger-daily late"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json" \
+            && python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json" \
+            && bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json" || echo "lateness check could not run"
+          # Q022: re-run ledger-intake once for any open Ledger form opened by a person with no bot comment 30 minutes
+          # after it was opened or last edited (its run was lost). The comment first: it caps the re-run at one per edit
+          owner="${GITHUB_REPOSITORY%/*}"; repo="${GITHUB_REPOSITORY#*/}"
+          gh api graphql -f owner="$owner" -f repo="$repo" -f query="$(python -c 'from ledger.intake_runs import SWEEP_QUERY;print(SWEEP_QUERY)')" \
+            > "$RUNNER_TEMP/issues.json" \
+            && for n in $(python -m ledger.intake_runs sweep --issues "$RUNNER_TEMP/issues.json"); do
+                 echo "re-running ledger-intake for issue #$n"
+                 gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Ledger intake had not processed this form 30 minutes after it was opened or last edited; ledger-daily is re-running it once (Q022)." \
+                   && gh workflow run ledger-intake.yml --ref main -f issue="$n"
+               done || echo "intake sweep could not run"
 
       - name: Job summary
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
+          started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .run_started_at 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
           {
             echo "### Ledger daily $(date -u +%Y-%m-%d)"
+            echo
+            python -m ledger.watchdog --lateness "$EVENT" "$started" --schedule "$SCHEDULE" 2>/dev/null || true
             echo
             echo '```'
             tail -n 40 "$RUNNER_TEMP/marks.log" 2>/dev/null

@@ -21,14 +21,17 @@ C08 superseded are listed at the end of this section, for reading older records.
   whose `sources_read` is empty; it counts as **failed**.
 
 **2. Forecasts (C08).**
-- The watchlist is `janus/watchlist.yaml`: **US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY, AUD**. `context` shows each
-  instrument's question, its latest mark and its stop rule (`watchlist`).
+- The watchlist is `janus/watchlist.yaml`: **US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY, AUD, BRL, MXN** (BRL and
+  MXN added by config change C09). `context` shows each instrument's question, latest mark, stop rule and
+  correlation cluster (`watchlist`).
 - Each question asks whether the instrument's mark moves in one direction over **20 trading days**:
   - yields **lower** (YES = long the bond);
   - EUR/USD and GBP/USD **higher** (YES = long the euro or sterling);
-  - yen per dollar and Australian dollars per dollar **lower** (YES = long the yen or the Australian dollar).
+  - yen, Australian dollars, reais (BCB PTAX) and pesos (Banxico FIX) per dollar **lower** (YES = long the yen,
+    the Australian dollar, the real or the peso).
 - How a question resolves:
-  - **base mark:** the first first-hand daily mark dated on or after today;
+  - **base mark:** the first first-hand daily mark dated **after** today's UTC date (config change C11): never
+    today's close, which you may already know. On a Friday it is Monday's mark; after a holiday, the next session's;
   - **end mark:** the first first-hand daily mark dated on or after the 20th weekday after the base mark;
   - **answer:** YES only if the end mark is strictly beyond the base mark in that direction.
 - For **every** instrument, give the probability (%) that its question resolves YES:
@@ -40,6 +43,9 @@ C08 superseded are listed at the end of this section, for reading older records.
   `time_anchor` (rule 5).
 - `market_probability`, `market_basis` and `market_source` are optional per forecast: give them only when a
   market-implied probability exists (for example from options). Otherwise the CLI records 50, basis `none`.
+- Correlated forecasts are not independent evidence. The fund rule counts one call per correlation cluster (G10
+  yields, USD vs G10 FX, EM FX, gold) per 20-trading-day window (C09, `docs/fund/allocation.md`). Each forecast is
+  still logged and scored on its own, and still sets its own position.
 - The CLI rejects a review that misses an instrument, or gives a probability outside 1-99, at 50 or not a whole
   number. Every forecast is logged, and resolved automatically with Brier scores for `p_final`, `p_initial` and
   the market, **whether or not a position results**.
@@ -47,15 +53,16 @@ C08 superseded are listed at the end of this section, for reading older records.
 **3. The book is mechanical (C08). The CLI sets it; you do not.**
 - **Side:** each instrument goes to the side of your final forecast (above 50 long, below 50 short).
 - **Size:** risk is **0.1% of the account per point of |p_final − 50|**, at most 2% per position. If the total
-  falls outside **3-10%**, the CLI scales it to the nearer edge. For example, eight forecasts 1-5 points from 50
-  come to 1.5% and are scaled up to 3%.
+  falls outside **3-10%**, the CLI scales it to the nearer edge. For example, ten forecasts 1-5 points from 50
+  come to 1.7% and are scaled up to 3%.
 - **Stop:** mechanical, from the watchlist: about twice a typical 20-trading-day move, on the losing side of the
   latest mark.
 - **Rebalancing:** at every daily review, with a **25% no-trade band**.
   - A position on the right side whose target risk is within 25% of its current risk is held.
   - Otherwise it is resized at the next mark, with costs charged only on the notional traded.
   - A forecast that changes side flips the position.
-- **Fills:** at the next official daily mark, as before.
+- **Fills (C11):** every order, resize and close this review sets fills at the first official daily mark dated
+  after today's UTC date, never at a close you can already see.
 - **Not in a daily review:** `new_positions`, `reviews`, `below_budget`, `candidates` and `deferred_ideas`. The CLI
   rejects a review that includes them. There is no "below budget" reason any more, and no deferral: on a weekend
   or holiday the orders simply fill at the next session's mark.
@@ -117,7 +124,7 @@ probability, and the CLI never checks your probability against its view.
   positions, and capacity (notional at most 10% of daily volume and below 80% of any position limit; a size above
   capacity is cut and the cut recorded).
 - Conventions on the watchlist: yields `long` = long the bond; FX `long` = long the named currency (EUR, GBP, the
-  yen, the Australian dollar). YES on every question is the long side.
+  yen, the Australian dollar, the real, the peso). YES on every question is the long side.
 - **Futures settlements are licensed.** The watchlist has no futures, but the CLI (`context`, `propose`, `mark`)
   still makes or refreshes a **read-only** clone of em-macro-data, through the environment's own GitHub access,
   and prints one `settlements: ...` status line on stderr.
@@ -127,7 +134,8 @@ probability, and the CLI never checks your probability against its view.
     token in a URL or a git command.
   - **Never write to em-macro-data**: no commit, push, `ledger.derivs settle` or `ledger.settlements fetch`.
   - Never copy a settlement, or a level derived from one, into any public text; refer to moves in %.
-- Orders fill at the **next official daily mark**, not at today's price. A C08 position closes automatically at
+- Orders fill at the **first official daily mark dated after today's UTC date** (C11), not at today's price or
+  today's close. A C08 position closes automatically at
   the first mark through its mechanical stop, or when the CLI resizes, flips or excludes it at a daily review.
 - Push to `main` (the script does this). Do not create a branch or a pull request.
 
@@ -161,7 +169,7 @@ next session's mark.
 
 ## 2. Forecast every watchlist instrument (p_initial)
 
-For each of the eight instruments in `context.watchlist`, read its question and the research you did, and write
+For each of the ten instruments in `context.watchlist`, read its question and the research you did, and write
 down your probability that it resolves **YES** over the next 20 trading days: `p_initial`, a whole number from 1 to
 99, never 50. Write one to three sentences of `reasoning`. Calibrate honestly:
 - most 20-day directional calls are close to even, so most forecasts will sit between about 40 and 60;
@@ -210,7 +218,9 @@ Opposition made your forecasts better or worse.
   {"instrument": "EUR", "p_initial": 52, "p_final": 51, "reasoning": "...", "opposition": {"case_against": "..."}},
   {"instrument": "GBP", "p_initial": 49, "p_final": 49, "reasoning": "...", "opposition": {"case_against": "..."}},
   {"instrument": "JPY", "p_initial": 55, "p_final": 53, "reasoning": "...", "opposition": {"case_against": "..."}},
-  {"instrument": "AUD", "p_initial": 47, "p_final": 48, "reasoning": "...", "opposition": {"case_against": "..."}}],
+  {"instrument": "AUD", "p_initial": 47, "p_final": 48, "reasoning": "...", "opposition": {"case_against": "..."}},
+  {"instrument": "BRL", "p_initial": 54, "p_final": 52, "reasoning": "...", "opposition": {"case_against": "..."}},
+  {"instrument": "MXN", "p_initial": 51, "p_final": 53, "reasoning": "...", "opposition": {"case_against": "..."}}],
  "data_failure": [{"instrument": "GB10Y", "mark": "which mark failed", "last_mark": "YYYY-MM-DD or none"}]}
 ```
 
@@ -223,11 +233,23 @@ Opposition made your forecasts better or worse.
 
 ```bash
 python -m ledger.janus propose --file /tmp/janus_review.json --dry-run      # fix every error; shows the book
-scripts/janus_commit.sh "Janus daily review $(date -u +%Y-%m-%d): 8 forecasts, C08 book" -- \
+scripts/janus_commit.sh "Janus daily review $(date -u +%Y-%m-%d): 10 forecasts, C08 book" -- \
   python -m ledger.janus propose --file /tmp/janus_review.json
 ```
 
-The dry run lists what the CLI would close, hold and open, and the risk after the review.
+The dry run lists what the CLI would close, hold and open, the risk after the review, and `marks_after`: every
+order, close and forecast base mark from this review uses the first mark dated after that date (C11). For the
+example above, run at 23:07 UTC on Wednesday 11 November with J001 and J002 open (25 points from 50 come to 2.5%,
+scaled up to 3%):
+
+```json
+{"ok": true, "dry_run": true, "risk_after_pct": 3.0, "marks_after": "2026-11-11",
+ "would_close": ["J001", "J002"], "would_hold": [],
+ "would_open": [["US10Y", "long", 0.48], ["GB10Y", "long", 0.24], "..."]}
+```
+
+J001 and J002 (opened before C08) close and the new orders fill at Thursday 12 November's marks. Each forecast's
+base mark is its instrument's first mark dated 12 November or later.
 
 ## 6. Due post-mortems (every book)
 

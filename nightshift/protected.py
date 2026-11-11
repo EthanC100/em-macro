@@ -13,6 +13,12 @@ from pathlib import Path
 from . import config as C
 
 CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
+# Protected even if a CODEOWNERS copy (e.g. dev's, before it has merged main) lacks them: the night shift's own
+# switches (safe mode, caps, windows) are Ethan's alone, and so are D004's rules monitor, its frozen rule-5
+# threshold and the rule-4 list (docs/ledger/v1_rules.md), and decision D005's managed-currency list and the
+# override that applies it to the booked v1.0 book (docs/ledger/d005_vol_floor.md).
+ALWAYS = ["/config/night.yaml", "/ledger/v1_rules.py", "/results/v1_rules/", "/config/v1_rules_rule4.csv",
+          "/config/v1_managed_fx.csv", "/em_macro/d005.py", "/em_macro/d005_fallback.py"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:
@@ -28,7 +34,7 @@ def patterns(path: Path = CODEOWNERS) -> list[str]:
             out.append(s.split()[0])
     if not out:
         raise ValueError("no protected paths found in CODEOWNERS")
-    return out
+    return out + [p for p in ALWAYS if p not in out]
 
 
 def matches(pattern: str, path: str) -> bool:

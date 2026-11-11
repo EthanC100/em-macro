@@ -68,6 +68,8 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     position. The first C08 review closes every earlier position (J001, J002) as its closing action. Kept:
     sources_read, the time anchor, failed-review records (exit 3). Superseded: C05 (b)'s sizing table,
     below_budget and deferrals, C06 rules 1-2, C07 rules 1, 2 and 4;
+  * config change C11 (approved 2026-11-11): a C08 review's forecast base marks and the fills of its orders,
+    resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -168,6 +170,10 @@ C08_PROBABILITY_RANGE = (1, 99)       # whole numbers; 50 is never a forecast
 C08_RISK_PER_POINT = 0.1              # % at risk per point of |p_final - 50|, before scaling into the C05 band
 C08_NO_TRADE_BAND = 0.25              # a held position is resized only when its target risk moves more than 25%
 C08_DISCRETIONARY = ("new_positions", "reviews", "below_budget", "candidates", "deferred_ideas")
+# Config change C11 (approved by Ethan 2026-11-11, before C08's first review): a C08 review's forecast base marks,
+# and the fills of its orders and closes, use the first first-hand daily mark dated strictly after the review's UTC
+# date (rolling forward over weekends and holidays), never a mark the review could already see
+C11_FROM = date(2026, 11, 11)
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
 GENESIS = "0" * 64
@@ -194,6 +200,12 @@ UNIVERSE = {
                 cost=0.001),
     "CAD": dict(name="CAD per USD (long = long Canadian dollar)", asset_class="fx", country="Canada", currency="CAD",
                 cost=0.001),
+    # added by config change C09 (2026-11-11) for the C08 watchlist: EM FX on central-bank fixings; the algorithm's
+    # cost model treats both as major currencies (10bp one way)
+    "BRL": dict(name="BRL per USD, BCB PTAX (long = long Brazilian real)", asset_class="fx", country="Brazil",
+                currency="BRL", cost=0.001),
+    "MXN": dict(name="MXN per USD, Banxico FIX (long = long Mexican peso)", asset_class="fx", country="Mexico",
+                currency="MXN", cost=0.001),
 }
 # CME-group futures by contract month (ledger/settlements.py, ledger/janus_fut.py): energy, COMEX metals, CBOT
 # grains, marked at Databento final settlements stored privately; options only as defined-risk structures
@@ -443,7 +455,8 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
         ser = series(marks_rows, inst)
         if p["status"] == "pending":
             dd = parse_date(o["decision_date"])
-            nxt = next((x for x in ser if x[0] >= dd and x[0] <= today), None)
+            # C11: an order placed by a C08 review fills at the first mark dated strictly after the review's UTC date
+            nxt = next((x for x in ser if (x[0] > dd if o.get("c08") else x[0] >= dd) and x[0] <= today), None)
             if not nxt:
                 continue
             d, v, m = nxt
@@ -478,7 +491,7 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
             if PX.stop_hit(k, direction, f["entry_level"], stop_now, v):
                 reason, hit = "stop", (d, v, m)
                 break
-            if cr and d >= cr:
+            if cr and (d > cr if p["close_request"].get("c08") else d >= cr):     # C11 for C08 closes
                 reason, hit = (p["close_request"].get("close_reason") or "Janus close decision"), (d, v, m)
                 break
             if hz and d >= hz:
@@ -618,7 +631,7 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                      for k, v in UNIVERSE.items()],
         "dropped": DROPPED, "chain": verify(records),
         # config change C08: every forced forecast with its resolution and Brier score, and the fund rule's resolved
-        # calls (one forecast per instrument per non-overlapping 20-trading-day window; docs/fund/allocation.md)
+        # calls (C09: one call per correlation cluster per non-overlapping 20-trading-day window; allocation.md)
         "forecasts": forecast_rows(records), "forecast_summary": forecast_summary(records),
         "fund_calls": fund_calls(records),
         "disclaimer": ("Janus is an experiment in AI judgement. Its results do not feed the algorithm (v1.0 and v1.1 are "
@@ -1553,13 +1566,26 @@ def _check_c07(ans: dict, records: list[dict], pos: dict[str, dict], open_ids: l
 
 
 # ----------------------------------------------------------------------------- config change C08
+def _watchlist_doc(path: Path | None = None) -> dict:
+    import yaml
+    return yaml.safe_load((path or WATCHLIST_FILE).read_text(encoding="utf-8"))
+
+
+def load_clusters(path: Path | None = None) -> dict[str, list[str]]:
+    """C09: the correlation clusters of janus/watchlist.yaml, {cluster: [instruments]} in file order (a cluster may
+    be empty, e.g. gold while no free daily mark exists). The fund rule counts one call per cluster per window."""
+    return {str(c["cluster"]): [str(i).strip().upper() for i in (c.get("instruments") or [])]
+            for c in _watchlist_doc(path).get("clusters") or []}
+
+
 def load_watchlist(path: Path | None = None) -> list[dict]:
     """The C08 watchlist (janus/watchlist.yaml): instrument, question, yes_if, yes_position, resolution_source,
-    stop, with the file's horizon_trading_days on each entry."""
-    import yaml
-    doc = yaml.safe_load((path or WATCHLIST_FILE).read_text(encoding="utf-8"))
+    stop, with the file's horizon_trading_days and the instrument's cluster (C09) on each entry."""
+    doc = _watchlist_doc(path)
     h = int(doc["horizon_trading_days"])
+    of = {i: c for c, ms in load_clusters(path).items() for i in ms}
     return [{**w, "instrument": str(w["instrument"]).strip().upper(), "horizon_trading_days": h,
+             "cluster": of.get(str(w["instrument"]).strip().upper()),
              "question": " ".join(str(w["question"]).split()),
              "resolution_source": " ".join(str(w["resolution_source"]).split())} for w in doc["instruments"]]
 
@@ -1854,7 +1880,8 @@ def _apply_c08(ans: dict, plan: dict, records: list[dict], today: date, now: dat
         fids[f["instrument"]] = f"JF{n_fc:04d}"
         append(records, {"type": "forecast", "forecast_id": fids[f["instrument"]], "instrument": f["instrument"],
                          "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
-                         "run_seq": run_rec["seq"], "question": w["question"], "yes_if": w["yes_if"],
+                         "run_seq": run_rec["seq"], "cluster": w["cluster"], "question": w["question"],
+                         "yes_if": w["yes_if"],
                          "yes_position": w["yes_position"], "horizon_trading_days": w["horizon_trading_days"],
                          "resolution_source": w["resolution_source"], "p_initial": f["p_initial"],
                          "p_final": f["p_final"], "market_probability": f["market_probability"],
@@ -1892,7 +1919,8 @@ def _apply_c08(ans: dict, plan: dict, records: list[dict], today: date, now: dat
                             "failure closes it. The stop and the 6-month horizon are backstops."),
             "sources": [], "sources_read": (ans.get("sources_read") or [])[:25], "model": model,
             "set_by": "CLI (C08)", "decided_at": now.isoformat(), "decision_date": today.isoformat(),
-            "entry_rule": "next available first-hand daily mark dated on or after the decision date",
+            "entry_rule": ("first first-hand daily mark dated strictly after the decision's UTC date (C11), rolling "
+                           "forward over weekends and holidays"),
             "market_probability": float(m_side), "market_source": f["market_source"],
             "market_basis": f["market_basis"], "provisional_capacity": o["provisional_capacity"],
             "run_seq": run_rec["seq"], "session": "daily_review", "c08": True, "forecast_id": fids[o["instrument"]],
@@ -1925,7 +1953,7 @@ def c08_rebalance_fills(records: list[dict], marks_rows: list[dict], today: date
             continue
         k, ser = kind(inst, reg), series(marks_rows, inst)
         ed, dd = parse_date(old["fill"]["entry_date"]), parse_date(o["decision_date"])
-        hit = next((x for x in ser if x[0] >= max(dd, ed) and x[0] <= today), None)
+        hit = next((x for x in ser if x[0] > dd and x[0] >= ed and x[0] <= today), None)     # C11: after the review
         if not hit:
             continue
         d, v, m = hit
@@ -1971,12 +1999,13 @@ def c08_rebalance_fills(records: list[dict], marks_rows: list[dict], today: date
 
 
 def forecast_outcome(f: dict, marks_rows: list[dict], today: date) -> dict | None:
-    """C08: how a forecast resolves (janus/watchlist.yaml): the base mark is the first first-hand daily mark dated on
-    or after the forecast's date; the end mark the first dated on or after the 20th weekday after the base mark's
+    """C08 as amended by C11: how a forecast resolves (janus/watchlist.yaml): the base mark is the first first-hand
+    daily mark dated strictly after the forecast's (the review's) UTC date, so it is never a close the forecaster
+    already knew; the end mark the first dated on or after the 20th weekday after the base mark's
     date; YES when the end mark is strictly beyond the base mark in the ``yes_if`` direction. None until both exist."""
     ser = [x for x in series(marks_rows, f["instrument"]) if x[0] <= today]
     fd = parse_date(f["date"])
-    base = next((x for x in ser if x[0] >= fd), None)
+    base = next((x for x in ser if x[0] > fd), None)          # C11: strictly after the forecast's (review's) UTC date
     if not base:
         return None
     target = add_weekdays(base[0], int(f.get("horizon_trading_days") or 20))
@@ -2016,8 +2045,9 @@ def forecast_rows(records: list[dict]) -> list[dict]:
     out = []
     for f in (r for r in records if r["type"] == "forecast"):
         r = res.get(f["forecast_id"], {})
-        out.append({k: f.get(k) for k in ("forecast_id", "instrument", "date", "question", "yes_if", "p_initial",
-                                          "p_final", "market_probability", "market_basis", "reasoning", "excluded")}
+        out.append({k: f.get(k) for k in ("forecast_id", "instrument", "date", "run_seq", "cluster", "question",
+                                          "yes_if", "p_initial", "p_final", "market_probability", "market_basis",
+                                          "reasoning", "excluded")}
                    | {"opposition_probability_view_wrong": (f.get("opposition") or {}).get("probability_view_wrong"),
                       "status": "resolved" if r else "open",
                       **{k: r.get(k) for k in ("base_date", "end_date", "base_value", "end_value", "outcome", "answer",
@@ -2025,24 +2055,46 @@ def forecast_rows(records: list[dict]) -> list[dict]:
     return out
 
 
-def fund_calls(records: list[dict]) -> list[dict]:
-    """C08 rule 6: the fund allocation rule's resolved calls (docs/fund/allocation.md). One forecast per instrument
-    per non-overlapping 20-trading-day window: per instrument, in the order the forecasts were made, the first
-    forecast counts, and the next one counted is the first whose base mark is dated on or after the end mark of the
-    last one counted. Which forecast counts depends only on dates, never on outcomes. Only resolved calls are listed;
-    the chain of windows stops at a counted forecast that has not resolved yet."""
+def fund_calls(records: list[dict], clusters: dict[str, list[str]] | None = None) -> list[dict]:
+    """The fund allocation rule's resolved calls (docs/fund/allocation.md; C08 rule 6 as amended by C09): one call per
+    correlation cluster (janus/watchlist.yaml) per non-overlapping 20-trading-day window, so correlated forecasts do
+    not count as independent calls.
+
+    A cluster call is the set of that cluster's forecasts made in one daily review. Its window runs from the earliest
+    base mark to the latest end mark of its forecasts, and it scores the mean of their Brier scores (Janus's p_final,
+    p_initial, and the market's). Per cluster, in review order, the first review's call counts; the next one counted
+    is the first whose earliest base mark is dated on or after the end of the last one counted. Which call counts
+    depends only on dates, never on outcomes. A call resolves when all its forecasts have resolved; only resolved
+    calls are listed, and a cluster's chain stops at a counted call that has not resolved yet. A forecast's cluster
+    is the one recorded with it (the watchlist's, for forecasts recorded without one)."""
+    clusters = clusters if clusters is not None else load_clusters()
+    of = {i: c for c, ms in clusters.items() for i in ms}
+    groups: dict[tuple, list[dict]] = {}
+    for r in forecast_rows(records):
+        c = r.get("cluster") or of.get(r["instrument"])
+        if c:
+            groups.setdefault((c, r.get("run_seq") or r["date"]), []).append(r)
+    def mean(xs):
+        return round(sum(xs) / len(xs), 6)
     out = []
-    rows = forecast_rows(records)
-    for inst in dict.fromkeys(r["instrument"] for r in rows):
+    for c in dict.fromkeys(list(clusters) + [k[0] for k in groups]):
         last_end = None
-        for r in (x for x in rows if x["instrument"] == inst):
-            if r["status"] != "resolved":            # its base and end are not known yet, nor any later one's
-                break
-            if last_end is not None and r["base_date"] < last_end:
+        for (cc, _), ms in groups.items():
+            if cc != c:
+                continue
+            if any(m["status"] != "resolved" for m in ms):
+                break                                # its window is not known yet, nor any later call's
+            base, end = min(m["base_date"] for m in ms), max(m["end_date"] for m in ms)
+            if last_end is not None and base < last_end:
                 continue                             # inside the last counted window
-            out.append(r)
-            last_end = r["end_date"]
-    return sorted(out, key=lambda r: (r["end_date"], r["forecast_id"]))
+            out.append({"cluster": c, "date": ms[0]["date"], "run_seq": ms[0].get("run_seq"),
+                        "forecast_ids": [m["forecast_id"] for m in ms], "instruments": [m["instrument"] for m in ms],
+                        "base_date": base, "end_date": end,
+                        "brier_final": mean([m["brier_final"] for m in ms]),
+                        "brier_initial": mean([m["brier_initial"] for m in ms]),
+                        "brier_market": mean([m["brier_market"] for m in ms])})
+            last_end = end
+    return sorted(out, key=lambda r: (r["end_date"], r["cluster"]))
 
 
 def forecast_summary(records: list[dict]) -> dict:
@@ -2274,7 +2326,9 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                     "would_close": [a["id"] for a in plan["actions"] if a["action"] == "close"],
                     "would_hold": [a["id"] for a in plan["actions"] if a["action"] == "hold"],
                     "would_open": [(o["instrument"], o["direction"], o["risk_pct"]) for o in plan["opens"]],
-                    "targets": plan["targets"]}
+                    "targets": plan["targets"],
+                    # C11: orders, closes and forecast base marks use the first mark dated after this date
+                    "marks_after": today.isoformat()}
         return _apply_c08(ans, plan, records, today, now, path, wl)
     if errors and not dry_run and ans.get("session") == "daily_review":
         # C06 rule 3 (closes Q004): a rejected daily review is recorded as failed, so the quick check flags it the
@@ -2492,14 +2546,19 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                                "is stale) excludes an instrument from the book; it is still forecast"),
                                 "not_used": list(C08_DISCRETIONARY),
                                 "opposition": "advisory: it never vetoes a forecast",
+                                "c11": ("forecast base marks, order fills, resizes and closes use the first first-hand "
+                                        "daily mark dated strictly after the review's UTC date (weekends and "
+                                        "holidays roll forward), never a close the review could already see"),
                                 "kept": ("sources_read (C05 a), time_anchor (C07 rule 3, now also covering every "
                                          "forecast's reasoning), failed-review records and exit 3 (C06 rule 3), "
                                          "licensed data never in public error text"),
                                 "superseded": ("C05 (b) sizing table, below_budget and weekend deferrals; C06 rules 1 "
                                                "and 2; C07 rules 1, 2 and 4; discretionary new positions and reviews "
                                                "(a quick check cannot close or tighten a C08 position)"),
-                                "fund_resolved_call": ("one forecast per instrument per non-overlapping 20-trading-day "
-                                                       "window (docs/fund/allocation.md)")}},
+                                "fund_resolved_call": ("one call per correlation cluster (janus/watchlist.yaml: "
+                                                       "G10 yields, USD vs G10 FX, EM FX, gold) per non-overlapping "
+                                                       "20-trading-day window, scored on the mean Brier of its "
+                                                       "forecasts (C09; docs/fund/allocation.md)")}},
             "watchlist": _watchlist_context(marks_rows, today),
             "forecasts_open": [r for r in forecast_rows(records) if r["status"] == "open"][-40:],
             "forecast_summary": forecast_summary(records),

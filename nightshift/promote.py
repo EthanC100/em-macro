@@ -211,7 +211,8 @@ def reasons(res: dict) -> list[str]:
     out = []
     names = {"nothing": "nothing to promote", "d_conflict_free": "(d) merge conflicts",
              "c_protected_paths": "(c) protected paths touched", "a_tests": "(a) test suite",
-             "b_ledger_rebuild": "(b) Ledger rebuild differs", "window": "time or busy writer"}
+             "b_ledger_rebuild": "(b) Ledger rebuild differs", "window": "time or busy writer",
+             "config": "main's config/night.yaml unreadable (fail safe)"}
     for k, v in res.get("checks", {}).items():
         if not v.get("ok"):
             extra = v.get("touched") or v.get("conflicts") or v.get("unexplained") or v.get("reasons") \
@@ -231,13 +232,19 @@ def main(argv=None) -> int:
     ap.add_argument("--head", default="origin/dev")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
-    cfg, now, repo = C.load(), C.now_utc(), C.ROOT
+    now, repo = C.now_utc(), C.ROOT
     today = a.today or now.astimezone(C.SGT).date().isoformat()
+    try:
+        cfg = C.load_main(repo)                 # main's config, fetched now: never dev's copy
+    except C.MainConfigError as e:
+        cfg = None
+        res = {"ok": False, "today": today, "checks": {"config": {"ok": False, "reasons": [str(e)]}}}
     store = Path(a.data_snapshot) if a.data_snapshot else (
         Path(os.environ["EM_MACRO_DATA"]) if os.environ.get("EM_MACRO_DATA") else
         (repo.parent / "em-macro-data" if (repo.parent / "em-macro-data").is_dir() else None))
-    res = {"checks": {}}
-    if not a.ignore_window:
+    if cfg is not None:
+        res = {"checks": {}}
+    if cfg is not None and not a.ignore_window:
         g = G.check("promote", now, cfg, S.load(), G.busy_runs(cfg))
         if not g["go"]:
             res = {"ok": False, "today": today, "checks": {"window": {"ok": False, "reasons": g["reasons"]}}}

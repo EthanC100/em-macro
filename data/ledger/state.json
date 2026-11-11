@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-10",
- "at": "2026-11-10T17:17:01+00:00",
+ "as_of": "2026-11-11",
+ "at": "2026-11-11T12:11:06+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -26,23 +26,44 @@
    "note": "",
    "outcome": "",
    "status": "open"
+  },
+  "D004": {
+   "action": "No trade",
+   "instrument": "v1.0 systematic book (frozen, commit 7886867)",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  },
+  "D005": {
+   "action": "No trade",
+   "instrument": "v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)",
+   "note": "",
+   "outcome": "",
+   "status": "open"
+  },
+  "D006": {
+   "action": "No trade",
+   "instrument": "v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)",
+   "note": "Duplicate of D005 (same block, logged twice); no position.",
+   "outcome": "scratched",
+   "status": "resolved"
   }
  },
  "forecasts": {
   "F001": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Republicans keep control of the US Senate after the 3 Nov 2026 midterms",
-   "status": "open"
+   "status": "resolved"
   },
   "F002": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Mike Rogers (R) wins the Michigan US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   },
   "F003": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Ken Paxton (R) wins the Texas US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   },
   "F004": {
    "outcome": "",
@@ -50,16 +71,16 @@
    "status": "open"
   },
   "F005": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Susan Collins (R) wins the Maine US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   }
  },
  "index": {
-  "algorithm v1.0": 101.3857,
+  "algorithm v1.0": 99.7188,
   "algorithm v1.1": 100.0,
-  "janus": 100.0,
-  "me": 99.0417
+  "janus": 99.9569,
+  "me": 98.9591
  },
  "janus": {
   "J001": {
@@ -67,16 +88,16 @@
    "instrument": "US10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J002": {
    "direction": "long",
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   }
  },
- "janus_no_trades": 7,
+ "janus_no_trades": 8,
  "latest_mark": "2026-11-30"
 }

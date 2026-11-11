@@ -13,6 +13,9 @@
   settlements through a read-only clone of em-macro-data (the environment's GitHub access; `add_repo` with read
   access if the clone fails). Never print `DATA_REPO_READ_TOKEN`, and never write to em-macro-data.
 
+- **Tests before any push** (every session): hard rule 15 below binds every Claude Code session in this repository,
+  not only the night shift.
+
 ## Night shift: hard rules
 
 These bind every night-shift routine and subagent (`.claude/routines/`, `.claude/agents/`; how it works:
@@ -22,8 +25,10 @@ These bind every night-shift routine and subagent (`.claude/routines/`, `.claude
    PR opened by the promote routine after `python -m nightshift.promote` passes (section 5 of docs/agent-system.md).
 2. **Never modify protected paths**: the block in `.github/CODEOWNERS` (frozen v1.0/v1.1 code and configs, the
    T25-T26 shadow files, `docs/prereg/`, the corrections log `data/ledger/seals.jsonl`, `docs/config_changes.md`,
-   `ledger/commitments.py`, `trials.csv`, `.claude/`, `.github/CODEOWNERS`, `docs/rulesets/`). Tags `v1.0-frozen`
-   and `v1.1-frozen` are never moved or deleted. Check with `python -m nightshift.protected <paths>`.
+   `ledger/commitments.py`, `trials.csv`, `.claude/`, `config/night.yaml`, `.github/CODEOWNERS`,
+   `docs/rulesets/`). Tags `v1.0-frozen` and `v1.1-frozen` are never moved or deleted. Check with
+   `python -m nightshift.protected <paths>`. Agents never edit `config/night.yaml` (safe mode, caps, windows): Ethan
+   sets it on main, and the guard, promote and state read main's copy, fetched fresh on every run.
 3. **Never hand-edit data files owned by the existing writers** (inventory in docs/agent-system.md):
    `data/ledger/`, `data/janus/`, `results/shadows/`, `results/systematic*/`, `results/screener/`, `data/processed/`,
    `data/elections/`, and their workflows in `.github/workflows/`. They must keep working unchanged.
@@ -46,3 +51,7 @@ These bind every night-shift routine and subagent (`.claude/routines/`, `.claude
     on.** Never ask a question at night: open questions go to "Needs Ethan" in the morning report.
 14. Never run while ledger-daily, the Janus daily review or the monthly rebalance is running
     (`python -m nightshift.guard check <routine>`), and never create another Janus schedule.
+15. **Tests before any push (binds every session).** Any command that runs tests and pipes their output (`| tee`,
+    `| tail`, `| grep`) must check the test runner's own exit code: `set -o pipefail`, `${PIPESTATUS[0]}`, or no
+    pipe. In GitHub Actions, a step that pipes test output runs under `shell: bash` (`-eo pipefail`). Never push
+    after a failed or unverified test run: find out which test failed and why first.

@@ -1,0 +1,29 @@
+{
+ "decision": "D004",
+ "rule": 5,
+ "frozen": true,
+ "computed_at": "2026-11-11T03:10:42Z",
+ "threshold_pp": 3.176,
+ "percentile": 10,
+ "window": "2006-01..2019-12",
+ "n_month_ends": 168,
+ "data_through": "2019-12",
+ "distribution_pp": {
+  "min": 2.1061,
+  "p05": 2.8331,
+  "p10": 3.176,
+  "p25": 3.6971,
+  "median": 4.3152,
+  "max": 7.0912
+ },
+ "method": "At each month-end t from v1.0's first positions (2006-01) to 2019-12: v1.0's held positions after the no-trade band (em_macro.systematic.run(build_inputs(), DESIGN['signals']).attrs['weights'], frozen design, read only); carry of each held instrument at t as the algorithm defines it (build_inputs: FX = local policy rate minus fed funds, monthly averages; EM bonds = 10y yield minus local policy rate; euro spreads = the spread; DE10Y = yield minus policy rate; percentage points a year; the latest available month when t is missing); spread = equal-weighted mean carry of the long positions minus equal-weighted mean carry of the short positions, both books together. Threshold = the 10th percentile of the monthly spreads (linear interpolation, as numpy.percentile). Only month-ends to 2019-12 are used; no 2020+ value enters the threshold.",
+ "source": "Frozen v1.0 code em_macro/systematic.py (tag v1.0-frozen, commit 7886867) on the repository's processed panels (data/processed/daily_panel.csv, country_month_panel.csv) and the public series it downloads (FRED DFF, DEXUSUK, DEXUSEU; BIS policy rates and CPI; Banco de la Republica TRM; Banco Central de Chile dolar observado). The S&P 500 benchmark download is stubbed (not a position input). Monthly values: results/v1_rules/carry_spread_2005_2019.csv.",
+ "reproduction_check": {
+  "months_compared": 167,
+  "max_abs_diff_net": 4.962025322752424e-07,
+  "systematic_py_sha256": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "daily_panel_sha256": "9135e371c8fd546e93c243475cf66cc9ca888e1b4f850343593aea179aa7e816",
+  "country_month_panel_sha256": "b90e6d399ce6a983e061eb10a133dd1473156fb919e0e72afd064cbd49d65458"
+ },
+ "note": "Computed once for D004 and never recomputed or edited; ledger/v1_rules.py pins this file's SHA-256."
+}

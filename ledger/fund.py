@@ -17,9 +17,10 @@ P&L.
   from its peak exceeds 10%, overriding everything else. Otherwise, once Janus has at least 30 resolved calls
   (every position records a market probability, 50 where no market-implied one exists): 30% if its total net P&L
   (after costs) on those calls is positive and its Brier score is lower than the market's; 10% if that P&L is
-  negative or its Brier score is higher than the market's. From config change C08 (2026-11-11) a resolved call is a
-  forced forecast: one per instrument per non-overlapping 20-trading-day window (``fund_calls`` in Janus's
-  summary), and the P&L on those calls is Janus's net P&L from 10 November 2026. Otherwise (fewer than 30 calls, or a tie on either
+  negative or its Brier score is higher than the market's. From config changes C08 and C09 (2026-11-11) a resolved
+  call is one call per correlation cluster of forced forecasts per non-overlapping 20-trading-day window, scored on
+  the mean Brier of its forecasts (``fund_calls`` in Janus's summary), and the P&L on those calls is Janus's net
+  P&L from 10 November 2026. Otherwise (fewer than 30 calls, or a tie on either
   measure without a failure on the other) it stays at its starting 20%. The algorithm takes the rest.
 - **Start.** The fund starts on the first date every member is live (v1.1: the 3 December 2026 rebalance, index
   100 on 30 November 2026).
@@ -34,9 +35,10 @@ from datetime import date, timedelta
 SHARES = {"algorithm v1.1": 0.80, "janus": 0.20}          # starting risk shares (C04 as amended 2026-11-07)
 JANUS_START, JANUS_UP, JANUS_LOW, JANUS_DOWN = 0.20, 0.30, 0.10, 0.05
 MIN_RESOLVED_CALLS = 30
-# Config change C08 (2026-11-11): Janus's resolved calls are its forced forecasts, one per instrument per
-# non-overlapping 20-trading-day window (ledger/janus.py fund_calls), and the P&L on them is Janus's net P&L after
-# costs from the end of the day before C08 (10 November 2026) to the evaluation date
+# Config change C08 (2026-11-11), as amended by C09 before any forecast was made: Janus's resolved calls are its
+# forced forecasts counted as one call per correlation cluster per non-overlapping 20-trading-day window, each scored
+# on the mean Brier of its forecasts (ledger/janus.py fund_calls), and the P&L on them is Janus's net P&L after costs
+# from the end of the day before C08 (10 November 2026) to the evaluation date
 C08_FROM = date(2026, 11, 11)
 DRAWDOWN_LIMIT_PCT = 10.0
 MIN_MONTHS_FOR_VOL, VOL_WINDOW_MONTHS = 6, 12
@@ -131,20 +133,19 @@ def janus_record(closed: list[dict], upto: date) -> dict:
 
 
 def janus_record_c08(calls: list[dict], janus_series: list[list], upto: date) -> dict:
-    """The rule's inputs under C08 (docs/fund/allocation.md): the resolved calls are the counted forecasts whose end
-    mark is dated on or before ``upto``; Janus's Brier uses p_final, the market's its market_probability; the net P&L
-    is the change in Janus's equity index (net of costs, % of the starting account) from 10 November 2026 to ``upto``."""
+    """The rule's inputs under C08/C09 (docs/fund/allocation.md): the resolved calls are the counted cluster calls whose
+    window ends on or before ``upto``; Janus's Brier is the mean of the calls' Brier scores (each the mean over the
+    cluster's forecasts, from p_final), the market's likewise from market_probability; the net P&L is the change in
+    Janus's equity index (net of costs, % of the starting account) from 10 November 2026 to ``upto``."""
     cs = [c for c in calls if c.get("end_date") and _d(c["end_date"]) <= upto]
-    def brier(p, c):
-        return (float(p) / 100.0 - float(c["outcome"])) ** 2
-    bj = sum(brier(c["p_final"], c) for c in cs) / len(cs) if cs else None
-    bm = sum(brier(c["market_probability"], c) for c in cs) / len(cs) if cs else None
+    bj = sum(float(c["brier_final"]) for c in cs) / len(cs) if cs else None
+    bm = sum(float(c["brier_market"]) for c in cs) / len(cs) if cs else None
     a, b = level_on(janus_series, C08_FROM - timedelta(days=1)), level_on(janus_series, upto)
     net = (b - a) if (a is not None and b is not None) else 0.0
     return {"resolved_calls": len(cs), "calls_with_market_probability": len(cs),
             "net_pnl_pct_on_those_calls": round(net, 4), "brier_janus": round(bj, 4) if bj is not None else None,
             "brier_market": round(bm, 4) if bm is not None else None,
-            "definition": "C08: one forecast per instrument per non-overlapping 20-trading-day window"}
+            "definition": "C09: one call per correlation cluster per non-overlapping 20-trading-day window"}
 
 
 def janus_share(closed: list[dict], janus_series: list[list], upto: date, calls: list[dict] | None = None) -> dict:

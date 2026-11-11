@@ -33,7 +33,7 @@ edited. A fill, a stop change, a close or a review is a new record.
 | `run` | session | session (daily_review / quick_check), model, timestamp, market summary, session URL, sources read |
 | `open` | daily review | new position: instrument, direction, % of account at risk, stop, horizon, probability its view is right, thesis, what would change its mind, sources, model, timestamp. The entry is not yet filled |
 | `opposition` | daily review | The Opposition's case against an `open` |
-| `fill` | `mark` | entry at the first first-hand daily mark dated on or after the decision date: notional, contracts, costs, capacity check, roll contract |
+| `fill` | `mark` | entry at the first first-hand daily mark dated on or after the decision date (for an order from a C08 review, from config change C11: strictly after the review's UTC date): notional, contracts, costs, capacity check, roll contract |
 | `cancel` | `mark` / session | the entry mark was already through the stop, or Janus withdrew the order before the fill |
 | `review` | session | hold / close / tighten_stop for an open position, with reasoning |
 | `stop_change` | session | a tightened stop (widening is rejected in code) |
@@ -60,12 +60,13 @@ the notional traded.
 | WTI, BRENT, NATGAS, HEATOIL, RBOB | NYMEX CL, BZ (proxy for ICE Brent), NG, HO, RB, by contract month | Final exchange settlement of the held contract, Databento GLBX.MDP3, **stored privately** in em-macro-data |
 | GOLD, SILVER, COPPER | COMEX GC, SI, HG, by contract month | as above |
 | CORN, SOYBEANS, WHEAT | CBOT ZC, ZS, ZW, by contract month (US cents per bushel) | as above |
-| US10Y | US 10y Treasury | FRED DGS10 (Fed H.15); fallback Riksbank USGVB10Y |
+| US10Y | US 10y Treasury | US Treasury daily par yield curve, 10-year CMT (from C09; the series FRED republishes as DGS10 a business day later); fallback FRED DGS10 |
 | DE10Y | German 10y Bund | Bundesbank daily (Svensson 10y) |
-| GB10Y | UK 10y gilt | Bank of England IUDMNPY |
+| GB10Y | UK 10y gilt | Riksbank SWEA GBGVB10Y, benchmark 10y gilt (from C09; before it, Bank of England IUDMNPY, published two to three business days late) |
 | JP10Y | Japan 10y JGB | Japan Ministry of Finance JGB curve CSV; fallback Riksbank JPGVB10Y |
 | FR-DE | France 10y over the Bund | Riksbank SWEA FRGVB10Y − DEGVB10Y |
-| EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP: Bank of England) |
+| EUR, GBP, JPY, CHF, AUD, CAD | major FX | ECB euro reference rates crossed with EUR/USD (GBP from C10; before it, Bank of England XUDLUSS) |
+| BRL, MXN | EM FX (from C09) | BCB PTAX sell rate (SGS 1); Banxico FIX (SIE SF43718) |
 
 **Futures and options (from 2026-11-06; code `ledger/janus_fut.py`, settlements `ledger/settlements.py`).**
 - The spot-price estimates (EIA via FRED) are gone. Each position holds a real contract month, filled at the

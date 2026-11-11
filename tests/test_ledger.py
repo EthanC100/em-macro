@@ -155,7 +155,9 @@ def test_build_writes_site_and_json(tmp_path):
     # T01-T15, the T16-T19 risk batch (T18 passed; T16, T17, T19 failed), then T20-T22 (commodity trials, all failed)
     # and T23-T24 (T21 and T22 on 1979-1999, sleeve-level gates only: both passed), then T25-T26 (their zero-size
     # live shadows, pre-registered and pending)
-    assert tr["summary"]["n"] == 26 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 3
+    # and T27 (pre-registered 2026-11-11, withdrawn after Step 0 before any result; counted in N, not rejected)
+    assert tr["summary"]["n"] == 27 and tr["summary"]["inconclusive"] == 1 and tr["summary"]["pending"] == 3
+    assert tr["summary"]["withdrawn"] == 1
     assert {status[t] for t in ("T25", "T26")} == {"pending"}
     assert {status[t] for t in ("T20", "T21", "T22")} == {"fail"}
     assert {status[t] for t in ("T23", "T24")} == {"pass"}
@@ -498,7 +500,10 @@ def test_evidence_groups_and_status(tmp_path):
     assert all(0 < len(t["reason"]) <= 160 for t in groups["failed"])
     assert ev["overall"].startswith(f"No validated discretionary edge yet; v1.0 live for {n_live} month"
                                     f"{'s' if n_live != 1 else ''}")
-    assert "18 rejected" in ev["overall"]                 # 11, T13 (trial T02), T16, T17, T19, and T20-T22
+    # 11, T13 (trial T02), T16, T17, T19, and T20-T22 rejected; T27 withdrawn before any result is not a rejection
+    assert "18 rejected · 1 withdrawn." in ev["overall"]
+    assert [t["id"] for t in groups["withdrawn"]] == ["T27"] and "T27" not in failed
+    assert groups["withdrawn"][0]["status"] == "withdrawn" and ev["counts"]["withdrawn"] == 1
     assert "v1.1 (v1.0 + T18, passed) live for" in ev["overall"]
     assert "3 ideas under prospective test" in ev["overall"]    # T15 (election rule), T25 and T26 (shadows)
     assert "T13" in failed and "T14" not in failed and "T15" not in failed and "T18" not in failed

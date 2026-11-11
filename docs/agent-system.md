@@ -22,13 +22,14 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | workflow (file) | schedule | identity on main | writes on main | also writes |
 |---|---|---|---|---|
 | **ledger-daily** (`.github/workflows/ledger-daily.yml`) | 05:52 and 09:22 UTC daily, and by hand. **Actually starts 7-11 hours late**: runs 5-10 started 11:56-16:50 UTC (19:56-00:50 Singapore), today's at 14:25 UTC, so it often runs **inside the night window** | `GITHUB_TOKEN` (github-actions[bot]) | `data/ledger/` marks, decisions, forecasts, derivative_pnl, automation_log, api_log, postmortems, reports, changes.json, state.json, stress*.json; `data/raw/bist`, `data/raw/bondspot`; `results/shadows/` (from go-live). Then through `scripts/ledger_commit.sh`: `data/janus/`, `data/ledger/seals.jsonl` and the other ledger_commit paths | em-macro-data `ledger/`, `databento/shadows`, `shadows` with secret `EM_MACRO_DATA_TOKEN`; Databento API (US$1/day cap) |
-| **ledger-intake** (`ledger-intake.yml`) | on issues opened/edited/reopened (Ledger forms) | `GITHUB_TOKEN` | the entry's file under `data/ledger/`; seals via ledger_commit.sh | issue comments |
-| **systematic-monthly** (`systematic.yml`) | 07:23 UTC on the 3rd (the rebalance); Mon/Thu 06:37 keep-cache (no push) | `GITHUB_TOKEN` (plain `git push`, no retry) | `results/systematic/` (positions, paper_pnl, rebalance_log, adjustments, overrides_log), `results/systematic_v1.1/`, `results/live_compare/`, `data/processed/`, `data/raw/{bondspot,bist,imf_weo}`, coverage reports, `results/screener/`, `data/ledger/reports`, changes.json, state.json | alert issues |
+| **ledger-intake** (`ledger-intake.yml`) | on issues opened/edited/reopened (Ledger forms); from Q022 also `workflow_dispatch` (input `issue`) from ledger-daily's sweep of forms with no intake comment after 30 minutes | `GITHUB_TOKEN` | the entry's file under `data/ledger/` and its seal, both through ledger_commit.sh on a fresh main (Q022: the id is re-allocated if the push is rejected). Its own concurrency group per issue; ledger-daily, private-commitments and shadows-setup share `ledger-writers` | issue comments |
+| **systematic-monthly** (`systematic.yml`) | 07:23 UTC on the 3rd (the rebalance); Mon/Thu 06:37 keep-cache (no push) | `GITHUB_TOKEN` (plain `git push`, no retry) | `results/systematic/` (positions, paper_pnl, rebalance_log, adjustments, overrides_log, `d005/` from the D005 step), `results/systematic_v1.1/`, `results/live_compare/`, `data/processed/`, `data/raw/{bondspot,bist,imf_weo}`, coverage reports, `results/screener/`, `data/ledger/reports`, changes.json, state.json | alert issues |
 | **ledger-screener** (`ledger-screener.yml`) | by hand | `GITHUB_TOKEN` | `results/screener/`, `data/ledger/reports` | |
 | **elections-daily** (`elections-daily.yml`) | 06:41 UTC daily | `GITHUB_TOKEN` | `data/elections/`, `docs/elections/` | alert issues |
 | **elections-weekly** (`elections-weekly.yml`) | Mondays 06:17 UTC | `GITHUB_TOKEN` | `data/elections/`, `docs/elections/` | |
 | **shadows-setup** (`shadows-setup.yml`) | by hand (run #3 used; Amendment 2 record mode remains) | `GITHUB_TOKEN` | `results/shadows/` (GO_LIVE.json, prelive files) | em-macro-data with `EM_MACRO_DATA_TOKEN` |
 | **private-commitments** (`private-commitments.yml`) | by hand | `GITHUB_TOKEN` | `data/ledger/derivatives.csv`, `data/ledger/seals.jsonl` (K003) | em-macro-data `ledger/commitments.jsonl` (salts) |
+| **v1-rules-monitor** (`v1-rules-monitor.yml`, D004) | after every successful systematic-monthly run (`workflow_run`), and by hand | `GITHUB_TOKEN` (retries on a rejected push) | `data/ledger/v1_rules.json`, `data/ledger/v1_rules_history.csv` only (flags; never exposure, never frozen v1.0 files) | dispatches ledger-pages |
 | **ledger-pages** (`ledger-pages.yml`) | every push to main, 06:41 UTC, by hand, dispatched by the others | none (no commit) | deploys GitHub Pages only | |
 | ledger-watchdog (`ledger-watchdog.yml`) | 12:17 UTC | none (read only) | alert issues only | |
 
@@ -44,6 +45,7 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | Month-ahead report | 28th, 21:00 Singapore | none (Claude Docs) | | not set |
 | Ledger forecast resolver (`docs/ledger/forecast_resolver.md`) | documented as a daily task, **but not on the account's task list** (`docs/todo.md`: "Create the scheduled tasks", unticked) | would be Ethan via the Claude App | `data/ledger/forecasts.csv`, seals via ledger_commit.sh | — |
 | Ledger monthly letters (`docs/letters/monthly_letters.md`) | documented for the 3rd-6th, **not on the task list** | same | letters via ledger_commit.sh | — |
+| **ledger-daily kick** (trig_01Ci634N…, added 2026-11-11 for Q018, approved by Ethan) | **06:07 and 22:07 UTC** daily (`7 6,22 * * *`) | none: no commit; it dispatches `ledger-daily.yml` on main through the Claude GitHub App (`workflow_dispatch`) | nothing (dispatch only) | `claude-sonnet-5-5`. Fires into one standing session with em-macro attached (session_01Ayx8qcPWT8…, "ledger-daily kick (Q018)"), whose system prompt allows only the dispatch and a run-list check. Why: GitHub creates this repository's schedule events 5.5-10.5 hours late (Q018), so ledger-daily's crons are backups. Verified 2026-11-11: fired 06:41:54 UTC, run 42974261471 created 06:42:02 |
 
 ### Interactive and manual writers
 
@@ -186,7 +188,8 @@ on main (the test checks each exists):
 | pre-registrations | `docs/prereg/` |
 | corrections log (K001-K003) | `data/ledger/seals.jsonl` (the corrections are records in the audit chain) |
 | config changes, commitments, trials | `docs/config_changes.md`, `ledger/commitments.py`, `trials.csv` |
-| the agents' own rules | `.claude/`, `.github/CODEOWNERS`, `docs/rulesets/` |
+| D005 volatility floor (supersedes D004 rule 4) | `config/v1_managed_fx.csv` (managed-currency list), `em_macro/d005.py`, `em_macro/d005_fallback.py` (the override and its fail-safe); all three also always protected in `nightshift/protected.py` |
+| the agents' own rules and switches | `.claude/`, `config/night.yaml` (also always protected in `nightshift/protected.py`), `.github/CODEOWNERS`, `docs/rulesets/` |
 
 Tags cannot be covered by CODEOWNERS: `docs/rulesets/frozen-tags.json` blocks updating or deleting both tags.
 `data/processed/*.csv` (hashed v1.0 inputs) are not protected: the monthly workflow rewrites them by design, the
@@ -274,8 +277,10 @@ hourly: 100 scheduled runs per account, 100 API fires per account, 30 "Run now"+
 overage. This system's peak is about 6 runs an hour (2 quick checks, ~3 chain runs, pr-review), far under those.
 **The risk is the plan's usage limits, not run counts**: at the cap the night shift is about 80% of the week's
 usage (about 4x the Janus load). Interactive sessions (like this one) come on top and are not estimated.
-- **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`): cap 4, explorer and its subagent on Sonnet 5.5
-  medium. Roughly 1,000 units a week less at the cap.
+- **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`, set on main): cap 4, explorer and its subagent on
+  Sonnet 5.5 medium. Roughly 1,000 units a week less at the cap. The guard, promote and state read main's copy,
+  fetched fresh on every run, so it applies at the next run without waiting for night-start's merge into dev; if
+  main's copy cannot be fetched or parsed, nothing starts (fail safe).
 - Janus's quick checks and reviews run on **Sonnet**, not Opus, so no model change is recommended. They run every
   hour of every day (336 runs/week), including weekends and nights when no Janus market trades; that is their
   existing schedule and C05 is not changed here.

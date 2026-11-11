@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ledger-intake          # one job at a time edits the ledger and the private store
+  group: ledger-writers         # one job at a time edits the ledger and the private store (renamed from ledger-intake, Q022)
   cancel-in-progress: false
 
 jobs:

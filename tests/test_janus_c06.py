@@ -140,6 +140,8 @@ def test_a_real_data_failure_across_the_universe_allows_fewer_than_two(tmp_path)
     df = [{"instrument": i, "mark": "official daily mark", "last_mark": "2026-11-04"} for i in PUBLIC]
     df += [{"instrument": i, "mark": "Databento final settlement (em-macro-data)", "last_mark": "none"}
            for i in J.UNIVERSE if J.is_future(i)]
+    df += [{"instrument": i, "mark": "central-bank fixing (no mark in this test)", "last_mark": "none"}
+           for i in J.UNIVERSE if not J.is_future(i) and i not in PUBLIC]            # BRL, MXN (added by C09)
     res = run(tmp_path, c06(new_positions=[], no_trade_reasoning="No current marks.", below_budget=DF,
                             data_failure=df), mk=marks(stale=PUBLIC))
     assert res["ok"], res["errors"]

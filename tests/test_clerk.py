@@ -78,6 +78,19 @@ def test_resolve_block(ledger_root):
     assert not res["ok"] and "`Exit price or result:`" in res["comment"]
 
 
+def test_resolve_never_changes_the_sealed_issue_field(ledger_root):
+    """``issue`` is sealed with the entry (ledger/audit.py): a resolve of a decision or a forecast leaves it as logged."""
+    before = {r["id"]: r["issue"] for r in _rows(ledger_root / "data/ledger/decisions.csv")}
+    fbefore = {r["id"]: r["issue"] for r in _rows(ledger_root / "data/ledger/forecasts.csv")}
+    assert intake.process_paste("RESOLVE\nId: D001\nOutcome: scratched\nExit price or result: duplicate\n",
+                                "clerk", TODAY, ledger_root)["ok"]
+    fid = sorted(fbefore)[0]
+    assert intake.process_paste(f"RESOLVE\nId: {fid}\nOutcome: void\nExit price or result: race not called\n",
+                                "77", TODAY, ledger_root)["ok"]
+    assert {r["id"]: r["issue"] for r in _rows(ledger_root / "data/ledger/decisions.csv")} == before
+    assert {r["id"]: r["issue"] for r in _rows(ledger_root / "data/ledger/forecasts.csv")} == fbefore
+
+
 def test_stop_level_skips_account_percentages():
     from ledger.schema import stop_level
     assert stop_level("Max loss is the premium paid (2% of account). Exit early if March 2027 Brent futures "
@@ -125,3 +138,18 @@ def test_log_writes_through_ledger_commit_and_seals(tmp_path):
     p = subprocess.run([sys.executable, "-m", "ledger.clerk", "log", str(block), "--today", TODAY.isoformat(),
                         "--branch", "test"], cwd=work, capture_output=True, text=True)
     assert p.returncode == 1 and "NOT LOGGED" in p.stdout and "at most 2%" in p.stdout
+    # resolving the sealed clerk entry through the clerk passes the audit seal (the resolve leaves ``issue`` alone)
+    _git("merge", "-q", "--ff-only", "origin/test", cwd=work)          # the clerk checks against the local tree
+    block.write_text("RESOLVE\nId: D003\nOutcome: scratched\nExit price or result: duplicate of D002\n"
+                     "Note: Duplicate (same block, logged twice); no position.\n")
+    p = subprocess.run([sys.executable, "-m", "ledger.clerk", "log", str(block), "--today", TODAY.isoformat(),
+                        "--branch", "test"], cwd=work, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "LOGGED: resolve D003" in p.stdout and "pushed" in p.stdout
+    _git("fetch", "-q", "origin", cwd=work)
+    row = next(r for r in csv.DictReader(_git("show", "origin/test:data/ledger/decisions.csv", cwd=work).splitlines())
+               if r["id"] == "D003")
+    assert (row["status"], row["outcome"], row["issue"]) == ("resolved", "scratched", "clerk")
+    seals = [json.loads(x) for x in _git("show", "origin/test:data/ledger/seals.jsonl", cwd=work).splitlines()
+             if '"D003"' in x]
+    assert sum(1 for s in seals if s["part"] == "resolution") == 2           # open, then resolved

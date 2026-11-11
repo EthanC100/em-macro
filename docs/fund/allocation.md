@@ -49,8 +49,9 @@ in this order:
      market's**.
 
    A call is "right" when its gross P&L is positive. Janus's Brier uses its stated probability; the market's uses
-   the market probability recorded with the call. **From config change C08 (11 November 2026) a resolved call is a
-   forced forecast, defined in "Resolved calls under C08" below.**
+   the market probability recorded with the call. **From config changes C08 and C09 (11 November 2026) a resolved
+   call is one call per correlation cluster of forced forecasts, defined in "Resolved calls under C08 and C09"
+   below.**
 4. Otherwise **20%**. This covers an exact tie: net P&L of exactly zero, or a Brier score equal to the market's,
    with no failure on the other measure.
 
@@ -94,39 +95,59 @@ Unchanged: the members, combining by risk (risk share ÷ trailing 12-month volat
 completed months), evaluation at each month start on data to the previous month end, the 30-call threshold, the
 Brier and P&L definitions, the required market probability, and the correlation display.
 
-## Resolved calls under C08 (config change C08, 2026-11-11)
+## Resolved calls under C08 and C09 (config changes C08 and C09, 2026-11-11)
 
 From the 11 November 2026 daily review, Janus no longer chooses positions. Every daily review gives a probability
 for every instrument on its watchlist (`janus/watchlist.yaml`), and the CLI sets the book from those forecasts
-(`docs/config_changes.md` C08). Every forecast is logged and resolved with a Brier score. Daily forecasts on the same
-instrument overlap: a forecast made today and one made tomorrow cover almost the same 20 trading days. So the rule
-counts calls as follows. Recorded before any C08 forecast resolved, and before the fund starts.
+(`docs/config_changes.md` C08). Every forecast is logged and resolved with a Brier score. Two kinds of overlap would
+make a count of forecasts overstate the evidence:
+- **In time:** a forecast made today and one made tomorrow cover almost the same 20 trading days.
+- **Across instruments:** the G10 yields move together, and so do the dollar's G10 crosses.
 
-- **A resolved call is one forecast per instrument per non-overlapping 20-trading-day window.** For each instrument,
-  in the order the forecasts were made:
-  - the first C08 forecast counts;
-  - the next one counted is the first whose base mark is dated on or after the end mark of the last one counted.
+So the rule counts calls as follows. C09 set this before any C08 forecast was made, and before the fund starts. It
+replaces C08's first wording, one forecast per instrument per window, which never applied.
 
-  The windows follow each other without overlapping. Which forecast counts depends only on dates, never on
-  outcomes, so no forecast can be picked after the fact.
-- **When it resolves.** A forecast's window runs from its base mark (the first first-hand daily mark dated on or
-  after the forecast's date) to its end mark (the first first-hand daily mark dated on or after the 20th weekday
-  after the base mark). A call counts toward the rule at a month start when its end mark is dated on or before the
-  previous month end.
-- **Right or wrong.** A call is right when the question resolves the way the forecast leaned: YES with `p_final`
-  above 50, or NO with `p_final` below 50. The Brier score uses the outcome itself (1 for YES, 0 for NO):
-  - Janus's Brier uses `p_final`, its probability after The Opposition;
+- **A resolved call is one call per correlation cluster per non-overlapping 20-trading-day window.** The clusters
+  are defined in the watchlist, and every instrument is in exactly one:
+
+  | cluster | instruments |
+  |---|---|
+  | G10 yields | US10Y, GB10Y, DE10Y, JP10Y |
+  | USD vs G10 FX | EUR, GBP, JPY, AUD |
+  | EM FX | BRL, MXN |
+  | gold | none yet: no free, republishable daily gold mark exists |
+
+  Each forecast records its cluster when it is made.
+- **A cluster call** is that cluster's forecasts from one daily review. Its window runs from the earliest base mark
+  to the latest end mark among them.
+- **Which calls count.** For each cluster, in the order of the reviews:
+  - the first C08 review's call counts;
+  - the next one counted is the first whose earliest base mark is dated on or after the end of the last one
+    counted.
+
+  The windows follow each other without overlapping. Which call counts depends only on dates, never on outcomes, so
+  no call can be picked after the fact.
+- **When it resolves.** Each forecast's window runs from its base mark (the first first-hand daily mark dated
+  strictly after the forecast's date, from config change C11) to its end mark (the first first-hand daily mark dated on or after the 20th weekday
+  after the base mark). A cluster call resolves when all its forecasts have resolved. It counts toward the rule at
+  a month start when its window ends on or before the previous month end.
+- **Scoring.** A forecast is right when the question resolves the way it leaned: YES with `p_final` above 50, or NO
+  with `p_final` below 50. Each forecast's Brier score uses the outcome itself (1 for YES, 0 for NO):
+  - Janus's uses `p_final`, its probability after The Opposition;
   - the market's uses the `market_probability` recorded with the forecast, which is 50 with basis `none` when no
     market-implied probability was given.
+
+  A cluster call scores the mean of its forecasts' Brier scores, for Janus and for the market. The rule compares
+  Janus's mean over the resolved calls with the market's.
 - **P&L.** Positions are now set mechanically from all the forecasts together, so no position belongs to a single
   call. "Total net P&L after costs on those calls" is therefore Janus's net P&L after costs from the end of
   10 November 2026 (the last day before C08) to the evaluation date: the change in its equity index, in % of the
   starting account. It includes closing J001 and J002, which was C08's first action.
 - **Earlier positions.** Positions opened before C08 (J001, J002) are not resolved calls under this definition.
-- **Rate.** With eight instruments, about eight calls resolve every 20 trading days. The 30-call threshold is
-  therefore reached roughly four months after the first C08 forecasts.
+- **Rate.** Three clusters have instruments, so about three calls resolve every 20 trading days. The 30-call
+  threshold is therefore reached roughly ten months after the first C08 forecasts.
 
 Unchanged: the members, the starting 20% share, 30% and 10% after at least 30 resolved calls, the 5% drawdown
 override, the evaluation at each month start on data to the previous month end, combining by risk, and the
 correlation display. Code: `fund_calls` in `ledger/janus.py` (in Janus's summary) and `janus_record_c08` in
-`ledger/fund.py`.
+`ledger/fund.py`. Changing the clusters is a new config change.

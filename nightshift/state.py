@@ -112,8 +112,15 @@ def main(argv=None) -> int:
     ap.add_argument("--reason", default="")
     ap.add_argument("--state", default=str(STATE))
     a = ap.parse_args(argv)
-    cfg, path, now = C.load(), Path(a.state), C.now_utc()
+    path, now = Path(a.state), C.now_utc()
     s = load(path)
+    cfg = None
+    if a.cmd in ("status", "acquire"):          # release and stop never need it, so they always record
+        try:
+            cfg = C.load_main()                 # main's config, fetched now: never dev's copy
+        except C.MainConfigError as e:
+            print(f"refused: could not read main's config/night.yaml (fail safe): {e}")
+            return 3
     if a.cmd == "status":
         roll_night(s, now)
         print(json.dumps({k: s[k] for k in ("lock", "night", "runs_used", "last_kind", "chain_stopped")}

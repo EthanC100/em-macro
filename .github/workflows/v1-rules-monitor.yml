@@ -1,0 +1,76 @@
+# D004: v1.0's pre-committed cut and stop rules (ledger/v1_rules.py, docs/ledger/v1_rules.md).
+# Runs after every completed systematic-monthly run (the official month-end v1.0 run) and by hand. It reads the
+# files that run committed to main (results/systematic/paper_pnl.csv and positions.csv, the screener file of the
+# month) and writes only data/ledger/v1_rules.json and data/ledger/v1_rules_history.csv: drawdown from the live
+# peak, live Sharpe after costs and the carry spread against the frozen 2005-2019 threshold, with a flag for every
+# triggered rule (shown in the Ledger app and in the night shift's morning report).
+# It NEVER changes exposure, never edits frozen v1.0 code, configs or tags, and leaves systematic-monthly unchanged.
+name: v1-rules-monitor
+
+on:
+  workflow_run:
+    workflows: [systematic-monthly]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write             # dispatch ledger-pages after a commit (GITHUB_TOKEN pushes do not trigger it)
+
+concurrency:
+  group: v1-rules-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    # the monthly run's keep-cache job also completes the workflow: only act when main may have a new month-end
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Evaluate the D004 rules (flags only)
+        run: python -m ledger.v1_rules monitor
+
+      - name: Commit and push the evaluation
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ledger/v1_rules.json data/ledger/v1_rules_history.csv
+          if git diff --cached --quiet; then
+            echo "nothing to commit"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          as_of=$(python -c "import json; print(json.load(open('data/ledger/v1_rules.json'))['as_of'])")
+          git commit -q -m "v1.0 rules monitor (D004): ${as_of} month-end"
+          for attempt in 1 2 3 4 5; do
+            if git push -q origin HEAD:main; then
+              echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "push rejected (attempt $attempt); re-evaluating on the new main" >&2
+            sleep $((attempt * 4))
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            python -m ledger.v1_rules monitor
+            git add data/ledger/v1_rules.json data/ledger/v1_rules_history.csv
+            git diff --cached --quiet && { echo "nothing to commit"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0; }
+            git commit -q -m "v1.0 rules monitor (D004): ${as_of} month-end"
+          done
+          echo "could not push after 5 attempts" >&2
+          exit 1
+
+      - name: Rebuild the Ledger app
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || echo "could not dispatch ledger-pages (it also runs daily)"

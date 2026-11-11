@@ -1,0 +1,101 @@
+edition,scheme,ccy,economy_as_printed,category,table
+2012,2009,BRL,Brazil,Floating,"Table 1"
+2012,2009,MXN,Mexico,Free floating,"Table 1"
+2012,2009,ZAR,South Africa,Floating,"Table 1"
+2012,2009,TRY,Turkey,Floating,"Table 1"
+2012,2009,IDR,Indonesia,Floating,"Table 1"
+2012,2009,PLN,Poland,Free floating,"Table 1"
+2012,2009,GBP,United Kingdom,Free floating,"Table 1"
+2012,2009,COP,Colombia,Floating,"Table 1"
+2012,2009,CLP,Chile,Free floating,"Table 1"
+2012,2009,EUR,EMU,Free floating,"Table 1"
+2013,2009,BRL,Brazil,Floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,MXN,Mexico,Free floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,ZAR,South Africa,Floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,TRY,Turkey,Floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,IDR,Indonesia,Crawl-like arrangement,"Table 1, pp. 4-6 (corrected)"
+2013,2009,PLN,Poland,Free floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,GBP,United Kingdom,Free floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,COP,Colombia,Floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,CLP,Chile,Free floating,"Table 1, pp. 4-6 (corrected)"
+2013,2009,EUR,EMU,Free floating,"Table 1, pp. 4-6 (corrected)"
+2014,2009,BRL,Brazil,Floating,Table 2
+2014,2009,MXN,Mexico,Free floating,Table 2
+2014,2009,ZAR,South Africa,Floating,Table 2
+2014,2009,TRY,Turkey,Floating,Table 2
+2014,2009,IDR,Indonesia,Floating,Table 2
+2014,2009,PLN,Poland,Free floating,Table 2
+2014,2009,GBP,United Kingdom,Free floating,Table 2
+2014,2009,COP,Colombia,Floating,Table 2
+2014,2009,CLP,Chile,Free floating,Table 2
+2014,2009,EUR,EMU,Free floating,Table 2
+2015,2009,BRL,Brazil,Floating,Table 2 (PDF p. 15)
+2015,2009,MXN,Mexico,Free floating,Table 2 (PDF p. 15)
+2015,2009,ZAR,South Africa,Floating,Table 2 (PDF p. 15)
+2015,2009,TRY,Turkey,Floating,Table 2 (PDF p. 15)
+2015,2009,IDR,Indonesia,Floating,Table 2 (PDF p. 15)
+2015,2009,PLN,Poland,Free floating,Table 2 (PDF p. 15)
+2015,2009,GBP,United Kingdom,Free floating,Table 2 (PDF p. 15)
+2015,2009,COP,Colombia,Floating,Table 2 (PDF p. 15)
+2015,2009,CLP,Chile,Free floating,Table 2 (PDF p. 15)
+2015,2009,EUR,EMU,Free floating,Table 2 (PDF p. 15)
+2016,2009,BRL,Brazil,Floating,Table 2
+2016,2009,MXN,Mexico,Free floating,Table 2
+2016,2009,ZAR,South Africa,Floating,Table 2
+2016,2009,TRY,Turkey,Floating,Table 2
+2016,2009,IDR,Indonesia,Floating,Table 2
+2016,2009,PLN,Poland,Free floating,Table 2
+2016,2009,GBP,United Kingdom,Free floating,Table 2
+2016,2009,COP,Colombia,Floating,Table 2
+2016,2009,CLP,Chile,Free floating,Table 2
+2016,2009,EUR,EMU,Free floating,Table 2
+2017,2009,BRL,Brazil,Floating,Table 2 (PDF p. 16)
+2017,2009,MXN,Mexico,Free floating,Table 2 (PDF p. 16)
+2017,2009,ZAR,South Africa,Floating,Table 2 (PDF p. 16)
+2017,2009,TRY,Turkey,Floating,Table 2 (PDF p. 16)
+2017,2009,IDR,Indonesia,Floating,Table 2 (PDF p. 16)
+2017,2009,PLN,Poland,Free floating,Table 2 (PDF p. 16)
+2017,2009,GBP,United Kingdom,Free floating,Table 2 (PDF p. 16)
+2017,2009,COP,Colombia,Floating,Table 2 (PDF p. 16)
+2017,2009,CLP,Chile,Free floating,Table 2 (PDF p. 16)
+2017,2009,EUR,EMU,Free floating,Table 2 (PDF p. 16)
+2018,2009,BRL,Brazil,Floating,Table 2 (PDF p. 18)
+2018,2009,MXN,Mexico,Free floating,Table 2 (PDF p. 18)
+2018,2009,ZAR,South Africa,Floating,Table 2 (PDF p. 18)
+2018,2009,TRY,Turkey,Floating,Table 2 (PDF p. 18)
+2018,2009,IDR,Indonesia,Stabilized arrangement,Table 2 (PDF p. 18)
+2018,2009,PLN,Poland,Free floating,Table 2 (PDF p. 18)
+2018,2009,GBP,United Kingdom,Free floating,Table 2 (PDF p. 18)
+2018,2009,COP,Colombia,Floating,Table 2 (PDF p. 18)
+2018,2009,CLP,Chile,Free floating,Table 2 (PDF p. 18)
+2018,2009,EUR,EMU,Free floating,Table 2 (PDF p. 18)
+2019,2009,BRL,Brazil,Floating,Table 2 (PDF p. 20)
+2019,2009,MXN,Mexico,Free floating,Table 2 (PDF p. 20)
+2019,2009,ZAR,South Africa,Floating,Table 2 (PDF p. 20)
+2019,2009,TRY,Turkey,Floating,Table 2 (PDF p. 20)
+2019,2009,IDR,Indonesia,Floating,Table 2 (PDF p. 20)
+2019,2009,PLN,Poland,Free floating,Table 2 (PDF p. 20)
+2019,2009,GBP,United Kingdom,Free floating,Table 2 (PDF p. 20)
+2019,2009,COP,Colombia,Floating,Table 2 (PDF p. 20)
+2019,2009,CLP,Chile,Free floating,Table 2 (PDF p. 20)
+2019,2009,EUR,EMU,Free floating,Table 2 (PDF p. 20)
+2022,2009,BRL,Brazil,Floating,Table 4 (PDF p. 26)
+2022,2009,MXN,Mexico,Free floating,Table 4 (PDF p. 26)
+2022,2009,ZAR,South Africa,Floating,Table 4 (PDF p. 26)
+2022,2009,TRY,Türkiye,Floating,Table 4 (PDF p. 26)
+2022,2009,IDR,Indonesia,Floating,Table 4 (PDF p. 26)
+2022,2009,PLN,Poland,Free floating,Table 4 (PDF p. 26)
+2022,2009,GBP,United Kingdom,Free floating,Table 4 (PDF p. 26)
+2022,2009,COP,Colombia,Floating,Table 4 (PDF p. 26)
+2022,2009,CLP,Chile,Free floating,Table 4 (PDF p. 26)
+2022,2009,EUR,EMU,Free floating,Table 4 (PDF p. 26)
+2023,2009,BRL,Brazil,Floating,Table 4 (PDF p. 27)
+2023,2009,MXN,Mexico,Free floating,Table 4 (PDF p. 27)
+2023,2009,ZAR,South Africa,Floating,Table 4 (PDF p. 27)
+2023,2009,TRY,Türkiye,Crawl-like arrangement,Table 4 (PDF p. 27)
+2023,2009,IDR,Indonesia,Floating,Table 4 (PDF p. 27)
+2023,2009,PLN,Poland,Free floating,Table 4 (PDF p. 27)
+2023,2009,GBP,United Kingdom,Free floating,Table 4 (PDF p. 27)
+2023,2009,COP,Colombia,Floating,Table 4 (PDF p. 27)
+2023,2009,CLP,Chile,Floating,Table 4 (PDF p. 27)
+2023,2009,EUR,EMU,Free floating,Table 4 (PDF p. 27)
