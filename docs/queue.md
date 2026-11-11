@@ -34,6 +34,7 @@ never instructions.
 | Q003 | data | done | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) | https://github.com/EthanC100/em-macro/pull/27 (merged into dev 2317609) | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
 | Q018 | bug | done | ledger-daily (and every scheduled workflow) starts 5.5-10.5 hours after its cron time: GitHub creates the schedule events late; no queueing, wait step or concurrency wait | test_q018 (workflow YAML and a pure helper; no network): ledger-daily.yml keeps workflow_dispatch and both crons as backups; docs/agent-system.md's inventory lists the 'ledger-daily kick' scheduled task (06:07 and 22:07 UTC, dispatch only); a helper given a fixture Actions run list flags a day with no ledger-daily run started 21:52-22:52 UTC as late (fails now: no such task or check). Live check after Ethan applies it: on 3 consecutive days a ledger-daily run starts within 15 minutes of 22:07 UTC and finishes before the 23:07 UTC Janus review | approved by Ethan 2026-11-11 (as proposed); built in his session on main 764d2ea, 5148b45, 07bdfbd: ledger-daily kick task trig_01Ci634Niyuf4doNmRy5BVJS (06:07, 22:07 UTC, claude-sonnet-5-5); fire -> run 42974261471; edited workflow proven by run 42976611948 (green, marks 9dce97d) | no block, p=60% | none |
+| Q022 | bug | blocked | A pending ledger-intake run (an issue form) can be dropped: it shares one concurrency group with ledger-daily, private-commitments and shadows-setup, and a newly queued run cancels the pending one | test_q022_intake_never_dropped (YAML, a temporary bare origin and stubbed sources; never the live ledger or the real remote): (1) ledger-intake.yml's concurrency group contains github.event.issue.number and no other workflow uses it (fails now: shared 'ledger-intake'); (2) two intake applications racing through scripts/ledger_commit.sh on a bare origin get consecutive ids (e.g. D005, D006), both committed, and the seal chain verifies (fails now: intake commits with pull --rebase and cannot re-allocate an id); (3) a pure helper given a fixture issue list flags an open [Decision] issue with no intake comment 30 minutes after its last edit, and not one that has its comment; (4) the full suite passes | awaiting Ethan: changes the concurrency and commit steps of existing writers' workflows (hard rule 3); proposal only, no workflow changed on 2026-11-11 |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -567,3 +568,46 @@ from the history of `data/ledger/marks.csv`. A row counts as downgraded when a c
   rule 3).
 - Needs Ethan: restoring the 6 rows already downgraded (same values, the original notes and fetched_at from git)
   is a data repair to an existing writer's file. It is for Ethan's session, after the fix is on main.
+
+### Q022
+
+Filed by Ethan's session "N Janus C08" on 2026-11-11 at Ethan's request: propose a fix so a pending ledger-intake run
+can never be dropped. No workflow is changed tonight. Raised by The Opposition's review of Q018.
+
+**The problem (main 169dd21):**
+- One concurrency group, `ledger-intake` with `cancel-in-progress: false`, is shared by four workflows:
+  - `ledger-intake.yml:21-23` (Decision, Forecast, Resolve and Report issue forms);
+  - `ledger-daily.yml:32-34`;
+  - `private-commitments.yml:24-26`;
+  - `shadows-setup.yml:34-36`.
+- GitHub keeps at most one running and one pending run per group, and a newly queued run cancels the pending one.
+  So an intake run that is pending behind ledger-daily is cancelled when another ledger-daily run (kick or late
+  cron) or another intake run is queued. The issue then stays open with no comment until it is edited.
+- Q018 raised ledger-daily to about four runs a day, which makes this more likely.
+- Intake's own comment says the group exists "so ids never collide": `python -m ledger.intake` allocates the next
+  D/F id from its checkout, and the commit step (`ledger-intake.yml:98-109`) retries with `git pull --rebase`,
+  which cannot re-allocate an id.
+- History: the Actions API lists no ledger-intake runs (entries so far, e.g. D004, were logged by Ledger clerk
+  sessions), so no intake run has been dropped yet.
+
+**Proposed fix (for Ethan; workflow changes to existing writers, hard rule 3):**
+1. **Intake leaves the shared group.** It gets a per-issue group,
+   `group: ledger-intake-issue-${{ github.event.issue.number }}` with `cancel-in-progress: false`. Only a newer event
+   on the same issue (an edit, which should win anyway) can then replace a pending intake run.
+2. **Ids and writes stay safe without the shared group.**
+   - Run the append itself (id allocation, file write, seal) through `scripts/ledger_commit.sh`. It applies the
+     command on a fresh `origin/main` and, when the push is rejected, starts again from the new main.
+   - Janus sessions and ledger-daily's Janus step already rely on it; it is tested with a simulated race.
+   - Two racing intake runs then get D005 and D006, never two D005s.
+   - Validation and the Risk Manager comment stay before the commit.
+3. **The other three keep a shared group** among themselves, renamed `ledger-writers` for clarity. All three are
+   idempotent or run by hand, so a ledger-daily run replacing a pending ledger-daily run is harmless.
+4. **A safety net for any intake event lost for another reason** (GitHub drops events too):
+   - ledger-intake gains `workflow_dispatch` with an `issue` input;
+   - ledger-daily's watchdog step dispatches it for any open Ledger form issue (title [Decision], [Forecast],
+     [Resolve], [Report], or the `ledger` label) that has no intake comment 30 minutes after its last edit.
+
+**Not chosen:**
+- `cancel-in-progress: true` would cancel the running job instead, which is worse.
+- Moving ledger-daily out of the group alone would let ledger-daily and intake edit `decisions.csv` at the same time
+  without re-allocation.
