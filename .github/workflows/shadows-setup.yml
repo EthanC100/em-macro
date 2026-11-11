@@ -32,7 +32,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ledger-intake          # the same group as ledger-daily: one job edits the ledger and the private store
+  group: ledger-writers         # the same group as ledger-daily: one job edits the ledger and the private store (Q022)
   cancel-in-progress: false
 
 jobs:

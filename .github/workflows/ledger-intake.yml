@@ -8,10 +8,21 @@
 # Repository settings needed once: Settings > Actions > General > Workflow permissions =
 # "Read and write permissions".
 name: ledger-intake
+#
+# Q022 (approved by Ethan 2026-11-11): an issue form's run is never dropped. It has its own concurrency group per
+# issue (it used to share "ledger-intake" with ledger-daily, private-commitments and shadows-setup, where a newly
+# queued run cancelled the pending one), and the entry is written through scripts/ledger_commit.sh on a fresh main,
+# which re-runs the intake (re-allocating the id) when a push is rejected. ledger-daily dispatches this workflow
+# (input `issue`) for any open Ledger form with no intake comment 30 minutes after it was opened or last edited.
 
 on:
   issues:
     types: [opened, edited, reopened]
+  workflow_dispatch:            # Q022: ledger-daily re-runs a form whose intake run was lost
+    inputs:
+      issue:
+        description: "Number of the Ledger form issue to process"
+        required: true
 
 permissions:
   contents: write
@@ -19,33 +30,27 @@ permissions:
   actions: write
 
 concurrency:
-  group: ledger-intake          # one at a time, so ids never collide
+  group: ledger-intake-issue-${{ github.event.issue.number || inputs.issue }}   # Q022: one group per issue
   cancel-in-progress: false
 
 jobs:
   intake:
     if: >-
-      github.event.issue.state == 'open' &&
-      (startsWith(github.event.issue.title, '[Decision]') || startsWith(github.event.issue.title, '[Forecast]') ||
-       startsWith(github.event.issue.title, '[Resolve]') || startsWith(github.event.issue.title, '[Report]') ||
-       contains(join(github.event.issue.labels.*.name, ','), 'ledger:') ||
-       (contains(github.event.issue.labels.*.name, 'ledger') &&
-        (startsWith(github.event.issue.title, '[Paste]') || contains(github.event.issue.body, 'DECISION RECORD') ||
-         contains(github.event.issue.body, 'FORECAST') ||
-         contains(github.event.issue.body, 'RESOLVE'))))
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.state == 'open' &&
+       (startsWith(github.event.issue.title, '[Decision]') || startsWith(github.event.issue.title, '[Forecast]') ||
+        startsWith(github.event.issue.title, '[Resolve]') || startsWith(github.event.issue.title, '[Report]') ||
+        contains(join(github.event.issue.labels.*.name, ','), 'ledger:') ||
+        (contains(github.event.issue.labels.*.name, 'ledger') &&
+         (startsWith(github.event.issue.title, '[Paste]') || contains(github.event.issue.body, 'DECISION RECORD') ||
+          contains(github.event.issue.body, 'FORECAST') ||
+          contains(github.event.issue.body, 'RESOLVE')))))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash               # -eo pipefail
     steps:
-      - name: Only the repository owner and collaborators may log entries
-        if: >-
-          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" \
-            --body "Only the repository owner or collaborators can log Ledger entries. This issue was not processed."
-          exit 1
-
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -55,80 +60,131 @@ jobs:
         with:
           python-version: "3.12"
 
+      # the issue from the event, or (workflow_dispatch from ledger-daily's sweep) from the API: the same REST shape
+      - name: Load the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_INPUT: ${{ inputs.issue }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_INPUT" > "$RUNNER_TEMP/issue.json"
+          else
+            python -c "import json,os;print(json.dumps(json.load(open(os.environ['GITHUB_EVENT_PATH']))['issue']))" \
+              > "$RUNNER_TEMP/issue.json"
+          fi
+          python -m ledger.intake_runs env --issue-json "$RUNNER_TEMP/issue.json" --env-file "$GITHUB_ENV"
+
+      - name: Only the repository owner and collaborators may log entries
+        if: >-
+          env.LEDGER_FORM == 'true' && env.ISSUE_STATE == 'open' &&
+          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), env.AUTHOR_ASSOCIATION)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "Only the repository owner or collaborators can log Ledger entries. This issue was not processed."
+          exit 1
+
       - name: Make sure the ledger labels exist
+        if: env.LEDGER_FORM == 'true' && env.ISSUE_STATE == 'open'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for l in ledger ledger:decision ledger:forecast ledger:resolve ledger:report; do
-            gh label create "$l" --repo "${{ github.repository }}" --color 1d4ed8 --force >/dev/null 2>&1 || true
+            gh label create "$l" --repo "$GITHUB_REPOSITORY" --color 1d4ed8 --force >/dev/null 2>&1 || true
           done
 
-      - name: Validate and write the entry
+      # validation and the ledger tests on a separate copy of main, so the checkout stays clean for ledger_commit.sh
+      - name: Validate the entry on a copy of main
         id: intake
+        if: env.LEDGER_FORM == 'true' && env.ISSUE_STATE == 'open'
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
-          ISSUE_USER: ${{ github.event.issue.user.login }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -m ledger.intake --out /tmp/intake.json
-          echo "ok=$(python -c "import json;print(str(json.load(open('/tmp/intake.json'))['ok']).lower())")" >> "$GITHUB_OUTPUT"
-          echo "skip=$(python -c "import json;print(str(json.load(open('/tmp/intake.json')).get('skip', False)).lower())")" >> "$GITHUB_OUTPUT"
-          echo "id=$(python -c "import json;print(json.load(open('/tmp/intake.json')).get('id', ''))")" >> "$GITHUB_OUTPUT"
-          echo "kind=$(python -c "import json;print(json.load(open('/tmp/intake.json')).get('kind') or '')")" >> "$GITHUB_OUTPUT"
-          python -c "import json;print(json.load(open('/tmp/intake.json'))['comment'])" > /tmp/comment.md
-          python -c "import json;print(' '.join(json.load(open('/tmp/intake.json'))['files']))" > /tmp/files.txt
-          python -c "import json;print(json.load(open('/tmp/intake.json')).get('risk_comment') or '')" > /tmp/risk.md
-          echo "risk=$([ -s /tmp/risk.md ] && grep -q '[^[:space:]]' /tmp/risk.md && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
-      - name: Post the Risk Manager check
-        if: steps.intake.outputs.risk == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/risk.md
+          git worktree add -q --detach "$RUNNER_TEMP/check" origin/main
+          cd "$RUNNER_TEMP/check"
+          python -m ledger.intake --out "$RUNNER_TEMP/intake.json"
+          f="$RUNNER_TEMP/intake.json"
+          echo "ok=$(python -c "import json;print(str(json.load(open('$f'))['ok']).lower())")" >> "$GITHUB_OUTPUT"
+          echo "skip=$(python -c "import json;print(str(json.load(open('$f')).get('skip', False)).lower())")" >> "$GITHUB_OUTPUT"
+          python -c "import json;print(json.load(open('$f'))['comment'])" > "$RUNNER_TEMP/comment.md"
+          python -c "import json;print(json.load(open('$f')).get('risk_comment') or '')" > "$RUNNER_TEMP/risk.md"
+          echo "risk=$([ -s "$RUNNER_TEMP/risk.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/risk.md" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Ledger tests still pass with the new entry
+        id: tests
         if: steps.intake.outputs.ok == 'true'
+        working-directory: ${{ runner.temp }}/check
         run: |
           pip install pytest
           python -m pytest -q tests/test_ledger.py tests/test_automation.py
 
-      - name: Commit and push
+      # Q022: the real write, on a fresh main through the shared script. A rejected push starts again from the new
+      # main and re-runs the intake there, so the id is allocated on the main it is pushed to.
+      - name: Write the entry through scripts/ledger_commit.sh
+        id: write
         if: steps.intake.outputs.ok == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $(cat /tmp/files.txt)
-          git commit -m "Ledger ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }} (issue #${{ github.event.issue.number }})"
-          for i in 1 2 3 4; do
-            if git push origin HEAD:main; then exit 0; fi
-            sleep $((i * 3)); git pull --rebase origin main
-          done
-          exit 1
+          export LEDGER_MSG_FILE="$RUNNER_TEMP/msg.txt"
+          bash scripts/ledger_commit.sh "Ledger entry (issue #$ISSUE_NUMBER)" -- \
+            python -m ledger.intake --out "$RUNNER_TEMP/final.json" --fail-unless-ok
+          f="$RUNNER_TEMP/final.json"
+          python -c "import json;print(json.load(open('$f'))['comment'])" > "$RUNNER_TEMP/comment.md"
+          python -c "import json;print(json.load(open('$f')).get('risk_comment') or '')" > "$RUNNER_TEMP/risk.md"
 
-      # the hash-chain seal of the new entry (data/ledger/seals.jsonl), on a fresh main through the shared script
-      - name: Seal the new entry
-        if: steps.intake.outputs.ok == 'true'
+      - name: Post the Risk Manager check
+        if: >-
+          always() && steps.intake.outputs.risk == 'true' &&
+          (steps.intake.outputs.ok != 'true' || steps.write.outcome == 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch -q origin main
-          git worktree add -q --detach "$RUNNER_TEMP/seal-wt" origin/main
-          cd "$RUNNER_TEMP/seal-wt"
-          bash scripts/ledger_commit.sh "Seal ${{ steps.intake.outputs.kind }} ${{ steps.intake.outputs.id }}" -- true
+          if [ -s "$RUNNER_TEMP/risk.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/risk.md"; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/risk.md"
+          fi
 
       - name: Comment and close
-        if: steps.intake.outputs.ok == 'true'
+        if: steps.write.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/comment.md
-          gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --reason completed
-          gh workflow run ledger-pages.yml --repo "${{ github.repository }}" --ref main || true
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --reason completed
+          gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || true
 
       - name: Comment with what is wrong
-        if: steps.intake.outputs.ok != 'true' && steps.intake.outputs.skip != 'true'
+        if: steps.intake.outputs.ok == 'false' && steps.intake.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/comment.md
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+
+      # every outcome leaves a bot comment, so ledger-daily's sweep never re-runs the same form edit twice (Q022)
+      - name: Comment if the ledger tests failed
+        if: failure() && steps.tests.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+            "The entry passed its checks, but the ledger tests failed with it ($RUN_URL). Nothing was logged. Edit the issue to try again, or log it with the Ledger clerk."
+
+      # the entry passed on the copy of main but not on the fresh main at the write (it changed meanwhile), or the
+      # push failed five times: say so on the issue, which stays open (editing it re-runs the intake)
+      - name: Comment if the write failed
+        if: failure() && steps.write.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The entry passed its checks but could not be written ($RUN_URL)."
+            [ -s "$RUNNER_TEMP/final.json" ] && python -c "import json;print(json.load(open('$RUNNER_TEMP/final.json')).get('comment',''))"
+            echo
+            echo "Nothing was logged. Edit the issue to try again."
+          } > "$RUNNER_TEMP/failed.md"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/failed.md"

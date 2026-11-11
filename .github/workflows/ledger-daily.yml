@@ -30,7 +30,8 @@ permissions:
   actions: write
 
 concurrency:
-  group: ledger-intake          # shares the intake workflow's group: the ledger files are edited by one job at a time
+  group: ledger-writers         # with private-commitments and shadows-setup: one of them edits the ledger at a time.
+                                # ledger-intake left this group (Q022): it writes through scripts/ledger_commit.sh
   cancel-in-progress: false
 
 jobs:
@@ -255,6 +256,16 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json" \
             && python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json" \
             && bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json" || echo "lateness check could not run"
+          # Q022: re-run ledger-intake once for any open Ledger form opened by a person with no bot comment 30 minutes
+          # after it was opened or last edited (its run was lost). The comment first: it caps the re-run at one per edit
+          owner="${GITHUB_REPOSITORY%/*}"; repo="${GITHUB_REPOSITORY#*/}"
+          gh api graphql -f owner="$owner" -f repo="$repo" -f query="$(python -c 'from ledger.intake_runs import SWEEP_QUERY;print(SWEEP_QUERY)')" \
+            > "$RUNNER_TEMP/issues.json" \
+            && for n in $(python -m ledger.intake_runs sweep --issues "$RUNNER_TEMP/issues.json"); do
+                 echo "re-running ledger-intake for issue #$n"
+                 gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Ledger intake had not processed this form 30 minutes after it was opened or last edited; ledger-daily is re-running it once (Q022)." \
+                   && gh workflow run ledger-intake.yml --ref main -f issue="$n"
+               done || echo "intake sweep could not run"
 
       - name: Job summary
         if: always()
