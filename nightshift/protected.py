@@ -14,8 +14,9 @@ from . import config as C
 
 CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
 # Protected even if a CODEOWNERS copy (e.g. dev's, before it has merged main) lacks them: the night shift's own
-# switches (safe mode, caps, windows) are Ethan's alone.
-ALWAYS = ["/config/night.yaml"]
+# switches (safe mode, caps, windows) are Ethan's alone, and so are decision D005's managed-currency list and the
+# override that applies it to the booked v1.0 book.
+ALWAYS = ["/config/night.yaml", "/config/v1_managed_fx.csv", "/em_macro/d005.py"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:

@@ -513,6 +513,42 @@ def side_by_side(v10_months: list[dict], v11: dict) -> dict:
     }
 
 
+D005_POSITIONS = "results/systematic/d005/positions.csv"
+D005_MANAGED = "config/v1_managed_fx.csv"
+
+
+def build_d005(positions: list[dict], months: list[dict], root: Path = ROOT) -> dict:
+    """D005 (supersedes D004 rule 4): the managed list, the current v1.0 vs D005 book and the unadjusted v1.0
+    comparison line (net_before_d005: v1.0 without D005) against the booked line (final_net)."""
+    managed = [{k: (r.get(k) or "").strip() for k in ("currency", "imf_classification", "source", "date", "evidence")}
+               for r in read_csv(root / D005_MANAGED)] if (root / D005_MANAGED).exists() else []
+    rows = read_csv(root / D005_POSITIONS) if (root / D005_POSITIONS).exists() else []
+    as_of = positions[0].get("as_of") if positions else None
+    current = [{"instrument": r.get("instrument"), "book": r.get("book"), "side": r.get("side"),
+                "managed": r.get("managed") == "True", "floored": r.get("floored") == "True",
+                "v10_size_pct_of_capital": fnum(r.get("v10_size_pct_of_capital"), 3),
+                "d005_size_pct_of_capital": fnum(r.get("d005_size_pct_of_capital"), 3),
+                "change_pct_of_capital": fnum(r.get("change_pct_of_capital"), 3),
+                "instrument_vol_pct": fnum(r.get("instrument_vol_pct"), 3), "vol_used_pct": fnum(r.get("vol_used_pct"), 3)}
+               for r in rows if r.get("as_of") == as_of]
+    floor = fnum(rows[0].get("vol_floor_pct"), 3) if rows and current else None
+    live = [m for m in months if m["live"]]
+    idx_booked, idx_unadj, comparison = 100.0, 100.0, []
+    for m in live:
+        unadj = m["net_before_d005"] if m.get("net_before_d005") is not None else m["net"]
+        idx_booked *= 1 + (m["net"] or 0.0)
+        idx_unadj *= 1 + (unadj or 0.0)
+        comparison.append({"month": m["month"], "booked_index": round(idx_booked, 4),
+                           "unadjusted_index": round(idx_unadj, 4), "d005_adj": m.get("d005_adj") or 0.0})
+    return {"decision": "D005", "supersedes": "D004 rule 4", "first_as_of": "2026-11", "first_rebalance": "2026-12-03",
+            "managed": managed, "as_of": as_of if current else None, "vol_floor_pct": floor, "current": current,
+            "booked_sizes": {c["instrument"]: c["d005_size_pct_of_capital"] for c in current},
+            "applied": bool(current) or any(abs(m.get("d005_adj") or 0) > 0 for m in live),
+            "comparison": comparison,
+            "live_effect_pct": round(100 * (idx_booked / idx_unadj - 1), 4) if live else 0.0,
+            "doc": "docs/ledger/d005_vol_floor.md"}
+
+
 def build_algorithm() -> dict:
     pnl = read_csv(ROOT / "results/systematic/paper_pnl.csv")
     positions = read_csv(ROOT / "results/systematic/positions.csv")
@@ -536,6 +572,7 @@ def build_algorithm() -> dict:
         phase = "live" if live else ("pre_live" if pre_live else "backtest")
         months.append({
             "month": m, "net": net, "model_net": fnum(r.get("model_net"), 6),
+            "d005_adj": fnum(r.get("d005_adj"), 6), "net_before_d005": fnum(r.get("net_before_d005"), 6),
             "override_pnl": fnum(r.get("override_pnl"), 6), "fx_gross": fnum(r.get("fx_gross"), 6),
             "bond_gross": fnum(r.get("bond_gross"), 6), "cost": fnum(r.get("cost"), 6),
             "carry_basket": fnum(r.get("carry_basket"), 6), "sp500_tr": fnum(r.get("sp500_tr"), 6),
@@ -589,19 +626,28 @@ def build_algorithm() -> dict:
                        for k, v in r.items()} for r in perf_test],
         "test_run_utc": test_run.get("run_utc"), "freeze_month": freeze_month,
     }
+    d005 = build_d005(positions, months)
+    booked = d005["booked_sizes"]          # D005 book of the same as_of: the booked sizes; else v1.0's
     pos = []
     for p in positions:
         inst = p.get("instrument", "")
+        v10_size = fnum(p.get("size_pct_of_capital"), 3)
+        size = booked.get(inst, v10_size) if booked else v10_size
         pos.append({
             **{k: p.get(k) for k in ("as_of", "effective_from", "book", "instrument", "description", "side")},
             "country": COUNTRY_OF.get(inst, inst),
             "sleeve": "Currencies" if p.get("book") == "fx" else "Bonds",
-            "size_pct_of_capital": fnum(p.get("size_pct_of_capital"), 3),
+            "size_pct_of_capital": size, "v10_size_pct_of_capital": v10_size,
             "risk_share_pct": fnum(p.get("risk_share_pct"), 3),
             "instrument_vol_pct": fnum(p.get("instrument_vol_pct"), 3),
             "carry_z": fnum(p.get("carry_z"), 3), "trend_z": fnum(p.get("trend_z"), 3),
             "value_z": fnum(p.get("value_z"), 3), "cost_pct_per_trade": fnum(p.get("cost_pct_per_trade"), 3),
         })
+    if booked:                               # risk shares of the booked (D005) sizes, as em_macro.systematic computes them
+        rv = {p["instrument"]: abs(p["size_pct_of_capital"] or 0) * (p["instrument_vol_pct"] or 0) for p in pos}
+        tot = sum(rv.values())
+        for p in pos:
+            p["risk_share_pct"] = round(100 * rv[p["instrument"]] / tot, 1) if tot else p["risk_share_pct"]
     by_country: dict[str, dict] = {}
     for p in pos:
         c = by_country.setdefault(p["country"], {"country": p["country"], "risk_share_pct": 0.0,
@@ -634,7 +680,7 @@ def build_algorithm() -> dict:
                       "n_live_months": len(live_rows),
                       "pre_live_months": [r["month"] for r in pre_live_rows],
                       "live_base_month": live_base_month},
-        "overrides": overrides, "adjustments": adjustments,
+        "overrides": overrides, "adjustments": adjustments, "d005": d005,
         "release_url": RELEASE_URL, "freeze_commit": FREEZE_COMMIT,
         "freeze_doc_url": f"{REPO_URL}/blob/main/docs/v1.0_freeze.md",
         "gross_leverage": months[-1]["gross_leverage"] if months else None,
