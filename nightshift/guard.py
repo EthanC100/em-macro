@@ -9,6 +9,11 @@ If the Actions API cannot be read, the run does not start (fail safe) unless ``-
 ``python -m nightshift.guard next`` prints the routine that should run next: ``night-worker`` while the approved
 queue has items, alternating with ``night-explorer``; ``night-explorer`` when the approved queue is empty and
 explorer hypotheses remain for the night; ``stop`` when nothing is left, the cap is reached or it is after 05:00.
+
+``python -m nightshift.guard next --for night-worker`` (Q020) is the question a looping night-worker asks before each
+item: ``night-worker`` (exit 0) while approved items remain and ``check night-worker`` passes (window, cap, chain
+stopped, busy writers, Actions API readable), else ``stop`` (exit 4). It never answers ``night-explorer``, whatever
+``max_hypotheses_per_night`` says. Plain ``next`` and ``check`` are unchanged.
 """
 from __future__ import annotations
 
@@ -104,6 +109,17 @@ def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer
     return {"next": "stop", "why": "nothing left to do: approved queue empty and explorer done for the night"}
 
 
+def next_for_worker(now: datetime, cfg: dict, st: dict, items: list[dict], busy: list[str] | None) -> dict:
+    """The looping worker's next step: night-worker or stop, never night-explorer (Q020)."""
+    v = check("night-worker", now, cfg, st, busy)
+    if not v["go"]:
+        return {"next": "stop", "why": "; ".join(v["reasons"])}
+    n_appr = len(Q.approved(items))
+    if not n_appr:
+        return {"next": "stop", "why": "no approved items left"}
+    return {"next": "night-worker", "why": f"{n_appr} approved item(s)"}
+
+
 def explorer_runs(st: dict) -> int:
     return sum(1 for e in st.get("log", []) if e.get("routine") == "night-explorer"
                and e.get("finished_at") and C.night_of(datetime.fromisoformat(e["finished_at"])).isoformat()
@@ -115,6 +131,8 @@ def main(argv=None) -> int:
     ap.add_argument("cmd", choices=["check", "next"])
     ap.add_argument("routine", nargs="?", default="night-worker")
     ap.add_argument("--allow-unknown", action="store_true")
+    ap.add_argument("--for", dest="for_routine", choices=["night-worker"], default=None,
+                    help="with next: answer only night-worker or stop (the looping worker's per-item question)")
     ap.add_argument("--now", default=None, help="ISO timestamp (testing and dry runs)")
     a = ap.parse_args(argv)
     now = datetime.fromisoformat(a.now) if a.now else C.now_utc()
@@ -131,6 +149,10 @@ def main(argv=None) -> int:
         print(json.dumps(v, indent=1))
         return 0 if v["go"] else 4
     items = Q.parse(Q.QUEUE.read_text(encoding="utf-8"))
+    if a.for_routine == "night-worker":
+        v = next_for_worker(now, cfg, st, items, busy_runs(cfg))
+        print(json.dumps(v, indent=1))
+        return 0 if v["next"] == "night-worker" else 4
     print(json.dumps(next_routine(now, cfg, st, items, explorer_runs(st)), indent=1))
     return 0
 
