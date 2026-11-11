@@ -12,3 +12,5 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-11,queue,Q013,55,advisory,claude-opus-5-5,,,
 2026-11-11,queue,Q014,68,advisory,claude-opus-5-5,,,
 2026-11-11,queue,Q012,50,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q015,45,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q017,60,advisory,claude-opus-5-5,,,
