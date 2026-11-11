@@ -14,7 +14,7 @@ import pytest
 from ledger import v1_rules as V
 
 NOW = datetime(2026, 12, 3, 9, 0, tzinfo=timezone.utc)
-THR = {"threshold_pp": 3.176}
+THR = {"threshold_pp": 0.5202}
 PNL_COLS = ["month", "net", "sample", "final_net"]
 
 
@@ -36,16 +36,19 @@ def _months(n: int, start: str = "2026-11") -> list[str]:
 
 
 def make_repo(root: Path, nets: list[float], as_of: str | None = None, carry: dict | None = None,
-              positions: list[tuple[str, str]] | None = None, rule4: list[dict] | None = None) -> Path:
+              positions: list[tuple[str, str, float]] | None = None, rule4: list[dict] | None = None) -> Path:
     """paper_pnl with 2026-10 (pre-live, ignored) and the given live nets; positions as_of the last booked month."""
     ms = _months(len(nets))
     rows = [{"month": "2026-10", "net": "-0.5", "final_net": "-0.5", "sample": "test"}]   # pre-live: never counted
     rows += [{"month": m, "net": f"{x:.6f}", "final_net": f"{x:.6f}", "sample": "live"} for m, x in zip(ms, nets)]
     _write_csv(root / V.PAPER_PNL, PNL_COLS, rows)
     as_of = as_of or (ms[-1] if ms else "2026-10")
-    positions = positions or [("TRY", "long"), ("BRL", "long"), ("MXN", "short"), ("TR10Y", "short")]
-    _write_csv(root / V.POSITIONS, ["as_of", "effective_from", "book", "instrument", "description", "side"],
-               [{"as_of": as_of, "effective_from": V.next_month(as_of), "instrument": i, "side": s} for i, s in positions])
+    positions = positions or [("TRY", "long", 100.0), ("BRL", "long", 50.0), ("MXN", "short", -50.0),
+                              ("TR10Y", "short", -50.0)]
+    _write_csv(root / V.POSITIONS, ["as_of", "effective_from", "book", "instrument", "description", "side",
+                                    "size_pct_of_capital"],
+               [{"as_of": as_of, "effective_from": V.next_month(as_of), "instrument": i, "side": s,
+                 "size_pct_of_capital": w} for i, s, w in positions])
     carry = carry if carry is not None else {"TRY": 30.0, "BRL": 10.0, "MXN": 2.0, "TR10Y": -1.0}
     _write_csv(root / V.SCREENER.format(as_of=as_of), ["as_of", "instrument", "data_month", "stale", "carry", "position"],
                [{"as_of": as_of, "instrument": i, "data_month": as_of, "stale": "False", "carry": c} for i, c in carry.items()])
@@ -58,10 +61,18 @@ def status(res: dict, n: int) -> str:
 
 
 # ----------------------------------------------------------------------------- building blocks
-def test_carry_spread_and_percentile():
-    assert V.carry_spread([("A", "long", 4.0), ("B", "long", 2.0), ("C", "short", 1.0)]) == pytest.approx(2.0)
-    assert V.carry_spread([("A", "long", 4.0)]) is None                         # no short side
-    assert V.carry_spread([("A", "long", 4.0), ("C", "short", None)]) is None   # a held position without carry
+def test_carry_spread_is_position_weighted_per_unit_of_gross():
+    # (3 x 4 + 1 x 2 - 2 x 1) / (3 + 1 + 2) = 12 / 6
+    assert V.carry_spread([("A", 3.0, 4.0), ("B", 1.0, 2.0), ("C", -2.0, 1.0)]) == pytest.approx(2.0)
+    assert V.carry_spread([("A", 1.0, 4.0)]) == pytest.approx(4.0)               # one side only is still defined
+    assert V.carry_spread([("A", 0.0, 4.0)]) is None                            # nothing held
+    assert V.carry_spread([("A", 1.0, 4.0), ("C", -1.0, None)]) is None         # a held position without carry
+    assert V.carry_spread([("A", None, 4.0)]) is None                           # a held position without a weight
+    # a small high-carry position no longer dominates: equal weights would give (30 + 1) / 2 - 1 = 14.5
+    assert V.carry_spread([("TRY", 0.1, 30.0), ("X", 2.0, 1.0), ("Y", -1.9, 1.0)]) == pytest.approx((3.0 + 2.0 - 1.9) / 4.0)
+
+
+def test_percentile_matches_numpy():
     xs = [5.0, 1.0, 3.3, 2.2, 9.1, 4.4, 0.5]
     for q in (5, 10, 50, 90):
         assert V.percentile(xs, q) == pytest.approx(float(np.percentile(xs, q)))
@@ -71,7 +82,7 @@ def test_no_live_month_yet_is_index_100_and_no_flag(tmp_path):
     make_repo(tmp_path, [], as_of="2026-10")
     res = V.evaluate(tmp_path, NOW, THR, previous=[])
     assert res["live_months"] == 0 and res["index"] == 100.0 and res["drawdown_pct"] == 0.0
-    assert res["carry_spread_pp"] == pytest.approx((30 + 10) / 2 - (2 - 1) / 2)
+    assert res["carry_spread_pp"] == pytest.approx((100 * 30 + 50 * 10 - 50 * 2 - 50 * -1) / 250)
     assert res["flags"] == [] and not res["flagged"]
     assert [status(res, n) for n in range(1, 6)] == ["ok"] * 5
 
@@ -164,13 +175,13 @@ def test_rule4_unheld_currency_does_not_trigger(tmp_path):
 
 
 # ----------------------------------------------------------------------------- rule 5
-LOW = {"TRY": 3.0, "BRL": 2.0, "MXN": 0.5, "TR10Y": 0.5}      # spread 2.0pp < 3.176
+LOW = {"TRY": 0.5, "BRL": 0.5, "MXN": 0.5, "TR10Y": 0.5}      # spread (50 + 25 - 25 - 25) / 250 = 0.1pp < 0.5202
 
 
 def test_rule5_one_month_below_is_a_watch_two_consecutive_is_a_review(tmp_path):
     make_repo(tmp_path, [0.01], carry=LOW)
     res = V.evaluate(tmp_path, NOW, THR, previous=[{"as_of": "2026-10", "carry_below": "False"}])
-    assert res["carry_spread_pp"] == pytest.approx(2.0) and status(res, 5) == "watch" and res["carry_streak"] == 1
+    assert res["carry_spread_pp"] == pytest.approx(0.1) and status(res, 5) == "watch" and res["carry_streak"] == 1
     assert res["flags"] == []
     res = V.evaluate(tmp_path, NOW, THR, previous=[{"as_of": "2026-10", "carry_below": "True"}])
     assert status(res, 5) == "triggered" and res["carry_streak"] == 2
@@ -197,6 +208,28 @@ def test_rule5_missing_screener_or_changed_threshold_is_flagged_not_silent(tmp_p
 
 
 # ----------------------------------------------------------------------------- the frozen threshold
+def test_live_sign_follows_the_side_and_a_missing_size_is_an_error(tmp_path):
+    make_repo(tmp_path, [0.01], positions=[("TRY", "long", 100.0), ("MXN", "short", 50.0)])   # short written unsigned
+    res = V.evaluate(tmp_path, NOW, THR, previous=[])
+    assert res["carry_spread_pp"] == pytest.approx((100 * 30 - 50 * 2) / 150, abs=1e-4)
+    assert [h["weight_pct"] for h in res["carry_holdings"]] == [100.0, -50.0]
+    make_repo(tmp_path, [0.01], positions=[("TRY", "long", ""), ("MXN", "short", -50.0)])
+    res = V.evaluate(tmp_path, NOW, THR, previous=[])
+    assert status(res, 5) == "error" and "no size_pct_of_capital for held TRY" in res["rules"][4]["detail"]
+
+
+def test_superseded_equal_weight_threshold_is_kept_unchanged():
+    assert V.sha256_file(V.SUPERSEDED_THRESHOLD_FILE) == V.SUPERSEDED_THRESHOLD_SHA256
+    old = json.loads(V.SUPERSEDED_THRESHOLD_FILE.read_text(encoding="utf-8"))
+    assert old["threshold_pp"] == 3.176 and "equal-weighted" in old["method"]
+    assert V.SUPERSEDED_HISTORY_FILE.exists()
+    new = json.loads(V.THRESHOLD_FILE.read_text(encoding="utf-8"))
+    ch = new["definition_change"]
+    assert ch["before_first_live_evaluation"] is True and "TRY" in ch["why"]
+    assert ch["previous_file_sha256"] == V.SUPERSEDED_THRESHOLD_SHA256 and ch["previous_threshold_pp"] == 3.176
+    assert "divided by gross exposure" in new["method"]
+
+
 def test_threshold_file_is_frozen_pinned_and_uses_2005_2019_only():
     thr = V.load_threshold()
     assert "error" not in thr, thr.get("error")
@@ -207,6 +240,8 @@ def test_threshold_file_is_frozen_pinned_and_uses_2005_2019_only():
         rows = list(csv.DictReader(f))
     assert len(rows) == thr["n_month_ends"] and all(r["as_of"] <= "2019-12" for r in rows)
     assert rows[0]["as_of"] >= "2005-01"
+    for r in rows[:24]:          # gross exposure is the sum of the stored absolute weights
+        assert float(r["gross_leverage"]) == pytest.approx(sum(abs(float(p.split(":")[1])) for p in r["positions"].split()), abs=1e-3)
     vals = [float(r["carry_spread_pp"]) for r in rows]
     assert round(float(np.percentile(vals, 10)), 4) == thr["threshold_pp"]
     assert thr["reproduction_check"]["max_abs_diff_net"] < 1e-5      # the official in-sample P&L was reproduced
@@ -268,3 +303,15 @@ def test_app_build_reads_the_state(tmp_path, monkeypatch):
     V.write(V.evaluate(tmp_path, NOW, THR, previous=[]), tmp_path)
     out = B.build_v1_rules()
     assert out["available"] is True and out["decision"] == "D004" and len(out["rules"]) == 5
+
+
+def test_d004_files_are_protected_and_the_monitor_outputs_are_not():
+    from nightshift import protected as P
+    for path in ("ledger/v1_rules.py", "results/v1_rules/carry_spread_threshold.json",
+                 "results/v1_rules/superseded/carry_spread_threshold_equal_weight.json", "config/v1_rules_rule4.csv"):
+        assert P.protected([path]) == [path], path
+        block = P.CODEOWNERS.read_text(encoding="utf-8").split("# protected:start")[1].split("# protected:end")[0]
+        pats = [ln.split()[0] for ln in block.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+        assert P.protected([path], pats) == [path], f"{path} missing from the CODEOWNERS block"
+    # the monitor's own outputs stay writable by the v1-rules-monitor workflow
+    assert P.protected(["data/ledger/v1_rules.json", "data/ledger/v1_rules_history.csv"]) == []

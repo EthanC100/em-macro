@@ -14,8 +14,9 @@ from . import config as C
 
 CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
 # Protected even if a CODEOWNERS copy (e.g. dev's, before it has merged main) lacks them: the night shift's own
-# switches (safe mode, caps, windows) are Ethan's alone.
-ALWAYS = ["/config/night.yaml"]
+# switches (safe mode, caps, windows) are Ethan's alone, and so are D004's rules monitor, its frozen rule-5
+# threshold and the rule-4 list (docs/ledger/v1_rules.md).
+ALWAYS = ["/config/night.yaml", "/ledger/v1_rules.py", "/results/v1_rules/", "/config/v1_rules_rule4.csv"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:

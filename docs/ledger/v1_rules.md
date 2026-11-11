@@ -15,7 +15,7 @@ Measured on the official month-end v1.0 index from the 1 Nov 2026 live start.
 | 2 | Stop | index 27% or more below its live peak | close v1.0 entirely; restart only as a new pre-registered version |
 | 3 | Time | live Sharpe after costs below zero at 24 months | stop v1.0 |
 | 4 | Instrument | capital controls, a closed market, or a managed peg or crawl in a held currency | drop that instrument |
-| 5 | Carry-spread review | long-minus-short carry spread below its 2005-2019 10th percentile (3.176pp) at two consecutive month-ends | a written review within 7 days; no automatic cut |
+| 5 | Carry-spread review | position-weighted carry spread below its 2005-2019 10th percentile (0.5202pp) at two consecutive month-ends | a written review within 7 days; no automatic cut |
 
 ## The monitor (flags only)
 
@@ -47,18 +47,26 @@ restores, and shows "in force" in between).
 - **Live Sharpe after costs:** `ledger.build.perf_stats` on the live monthly nets (mean x 12 / (sd x sqrt 12)), the
   app's figure; the net is after the frozen cost model and is an excess-of-cash return. Rule 3 is evaluated once,
   on the first 24 live months (2026-11 to 2028-10, booked on 3 Nov 2028).
-- **Carry spread:** at each month-end, the equal-weighted mean carry of v1.0's long positions minus that of its
-  short positions, FX and bonds together, in percentage points a year. Carry as the algorithm defines it
-  (`em_macro.systematic.build_inputs`): FX = local policy rate minus fed funds; EM bonds = 10y yield minus the local
-  policy rate; euro spreads = the spread; DE10Y = yield minus the policy rate; the latest available month when the
-  current one is missing. Live values come from that month's screener file
-  (`results/screener/screener_<as_of>.csv`), written by the same monthly run from the same inputs. Month-ends are
-  counted from the 2026-10 positions (held at the live start).
-- **Rule-5 threshold:** **3.176pp**, the 10th percentile over v1.0's 168 month-ends 2006-01..2019-12. Computed once
-  on 11 Nov 2026 (`python -m ledger.v1_rules freeze`, which refuses to run again) from the frozen code, read only;
-  the reproduced 2006-2019 net P&L matches the official paper P&L to within 5e-7. Stored with its method, source
-  and distribution in `results/v1_rules/carry_spread_threshold.json` (monthly values in
-  `carry_spread_2005_2019.csv`); `ledger/v1_rules.py` pins the file's SHA-256 and flags any change.
+- **Carry spread (position-weighted):** at each month-end, the sum over v1.0's positions of signed weight x carry,
+  divided by gross exposure (the sum of absolute weights), FX and bonds together, in percentage points a year: the
+  carry the book earns per unit of gross exposure. Weights are v1.0's actual month-end weights (live:
+  `size_pct_of_capital` in `results/systematic/positions.csv`, signed by `side`; history: the frozen run's
+  weights). Carry as the algorithm defines it (`em_macro.systematic.build_inputs`): FX = local policy rate minus
+  fed funds; EM bonds = 10y yield minus the local policy rate; euro spreads = the spread; DE10Y = yield minus the
+  policy rate; the latest available month when the current one is missing. Live carry comes from that month's
+  screener file (`results/screener/screener_<as_of>.csv`), written by the same monthly run from the same inputs.
+  Month-ends are counted from the 2026-10 positions (held at the live start).
+- **Rule-5 threshold:** **0.5202pp**, the 10th percentile over v1.0's 168 month-ends 2006-01..2019-12 (median
+  1.08pp, range 0.19-1.92pp). Computed once on 11 Nov 2026 (`python -m ledger.v1_rules freeze`, which refuses to
+  run again) from the frozen code, read only; the reproduced 2006-2019 net P&L matches the official paper P&L to
+  within 5e-7. Stored with its method, source and distribution in `results/v1_rules/carry_spread_threshold.json`
+  (monthly values and weights in `carry_spread_2005_2019.csv`); `ledger/v1_rules.py` pins the file's SHA-256 and
+  flags any change.
+- **Definition change (11 Nov 2026, before the first live evaluation):** the first frozen threshold (3.176pp) used
+  an equal-weighted long-minus-short spread, which TRY's carry (about 33pp) dominated whatever its size in the
+  book. Ethan replaced it with the position-weighted spread above. Only the 2026-10 baseline had been evaluated; it
+  was re-run (8.14pp against 0.52pp). The old files are kept unchanged in `results/v1_rules/superseded/` and are
+  never used; the new threshold file records the change, the reason and the old file's SHA-256.
 - **Rule 4:** no free source flags capital controls, closed markets or managed pegs and crawls reliably, so the
   monitor reads Ethan's list, `config/v1_rules_rule4.csv` (`instrument` or `currency`, `event`, `start`, `end`,
   `source`, `note`). A listed currency covers its FX instrument and its country's bond or spread. A held instrument

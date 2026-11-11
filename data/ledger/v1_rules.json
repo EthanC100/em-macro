@@ -2,7 +2,7 @@
  "decision": "D004",
  "as_of": "2026-10",
  "month_end": "2026-10-31",
- "evaluated_at": "2026-11-11T03:13:42Z",
+ "evaluated_at": "2026-11-11T06:25:23Z",
  "next_rebalance": "2026-11-03",
  "live_start": "2026-10-31",
  "live_months": 0,
@@ -12,49 +12,49 @@
  "drawdown_pct": 0.0,
  "halved": false,
  "sharpe": null,
- "carry_spread_pp": 11.9575,
- "carry_threshold_pp": 3.176,
+ "carry_spread_pp": 8.1391,
+ "carry_threshold_pp": 0.5202,
  "carry_below": false,
  "carry_streak": 0,
  "carry_holdings": [
   {
    "instrument": "MX10Y",
-   "side": "long",
+   "weight_pct": 125.85,
    "carry_pp": 2.825
   },
   {
    "instrument": "TR10Y",
-   "side": "short",
+   "weight_pct": -45.32,
    "carry_pp": -1.314
   },
   {
    "instrument": "TRY",
-   "side": "long",
+   "weight_pct": 95.78,
    "carry_pp": 33.061
   },
   {
    "instrument": "IDR",
-   "side": "long",
+   "weight_pct": 56.31,
    "carry_pp": 1.87
   },
   {
    "instrument": "BRL",
-   "side": "long",
+   "weight_pct": 34.81,
    "carry_pp": 9.87
   },
   {
    "instrument": "MXN",
-   "side": "short",
+   "weight_pct": -37.78,
    "carry_pp": 2.62
   },
   {
    "instrument": "PLN",
-   "side": "short",
+   "weight_pct": -44.38,
    "carry_pp": -0.13
   },
   {
    "instrument": "EUR",
-   "side": "short",
+   "weight_pct": -52.41,
    "carry_pp": -1.38
   }
  ],
@@ -92,7 +92,7 @@
    "rule": 5,
    "name": "carry-spread review",
    "status": "ok",
-   "detail": "carry spread 11.96pp vs threshold 3.18pp (2005-2019 10th percentile) at 2026-10",
+   "detail": "carry spread 8.14pp vs threshold 0.52pp (2005-2019 10th percentile) at 2026-10",
    "action": ""
   }
  ],
