@@ -1,0 +1,39 @@
+{
+ "decision": "D004",
+ "rule": 5,
+ "frozen": true,
+ "computed_at": "2026-11-11T06:25:16Z",
+ "threshold_pp": 0.5202,
+ "percentile": 10,
+ "window": "2006-01..2019-12",
+ "n_month_ends": 168,
+ "data_through": "2019-12",
+ "distribution_pp": {
+  "min": 0.1945,
+  "p05": 0.3478,
+  "p10": 0.5202,
+  "p25": 0.8688,
+  "median": 1.0754,
+  "max": 1.9241
+ },
+ "method": "At each month-end t from v1.0's first positions (2006-01) to 2019-12: v1.0's held positions after the no-trade band (em_macro.systematic.run(build_inputs(), DESIGN['signals']).attrs['weights'], frozen design, read only); carry of each held instrument at t as the algorithm defines it (build_inputs: FX = local policy rate minus fed funds, monthly averages; EM bonds = 10y yield minus local policy rate; euro spreads = the spread; DE10Y = yield minus policy rate; percentage points a year; the latest available month when t is missing); spread = sum over the held positions of signed weight x carry, divided by gross exposure (sum of absolute weights), FX and bonds together, with v1.0's actual month-end weights (the same weights as size_pct_of_capital / 100 in the live positions file). Threshold = the 10th percentile of the monthly spreads (linear interpolation, as numpy.percentile). Only month-ends to 2019-12 are used; no 2020+ value enters the threshold.",
+ "source": "Frozen v1.0 code em_macro/systematic.py (tag v1.0-frozen, commit 7886867) on the repository's processed panels (data/processed/daily_panel.csv, country_month_panel.csv) and the public series it downloads (FRED DFF, DEXUSUK, DEXUSEU; BIS policy rates and CPI; Banco de la Republica TRM; Banco Central de Chile dolar observado). The S&P 500 benchmark download is stubbed (not a position input). Monthly values: results/v1_rules/carry_spread_2005_2019.csv.",
+ "reproduction_check": {
+  "months_compared": 167,
+  "max_abs_diff_net": 4.962025322752424e-07,
+  "systematic_py_sha256": "1eb4cf6b1c537c1711e5fff0b7aa044fee932c20992eb0d3cea4c3c5fc50be66",
+  "daily_panel_sha256": "9135e371c8fd546e93c243475cf66cc9ca888e1b4f850343593aea179aa7e816",
+  "country_month_panel_sha256": "b90e6d399ce6a983e061eb10a133dd1473156fb919e0e72afd064cbd49d65458"
+ },
+ "definition_change": {
+  "date": "2026-11-11",
+  "decided_by": "Ethan",
+  "before_first_live_evaluation": true,
+  "previous_definition": "equal-weighted mean carry of the long positions minus equal-weighted mean carry of the short positions",
+  "previous_threshold_pp": 3.176,
+  "previous_file": "results/v1_rules/superseded/carry_spread_threshold_equal_weight.json",
+  "previous_file_sha256": "ef2ca46b9447c4a74ada63003310f15a23435cc5c1f4835d7de45f6246853af3",
+  "why": "The equal-weighted spread was dominated by TRY (carry about 33pp at the 2026-10 month-end): one instrument moved the average of a three-to-five-name side by several points, whatever its size in the book. Weighting by v1.0's actual positions measures the carry the book earns per unit of gross exposure. Changed on 11 Nov 2026, before the first live evaluation (the 2026-11 month-end, booked at the 3 Dec 2026 run); only the 2026-10 baseline had been evaluated, and it is re-run."
+ },
+ "note": "Computed once for D004 and never recomputed or edited; ledger/v1_rules.py pins this file's SHA-256."
+}

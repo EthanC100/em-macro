@@ -33,16 +33,25 @@ Definitions (all fixed with D004; docs/ledger/v1_rules.md):
 * **Live Sharpe after costs:** ``ledger.build.perf_stats`` on the live monthly nets (mean x 12 / (sd x sqrt 12),
   sample sd), the app's figure. Net is after the frozen cost model and is an excess-of-cash return. Rule 3 is
   evaluated at the month-end of the 24th live month (2028-10, booked at the 3 Nov 2028 run).
-* **Carry spread (rule 5):** at each month-end, the equal-weighted mean carry of v1.0's long positions minus the
-  equal-weighted mean carry of its short positions, both books together, in percentage points a year. Carry is the
+* **Book carry at constant risk (rule 5; the "carry spread"):** at each month-end, the sum over v1.0's positions of
+  signed weight x carry, FX and bonds together, NOT divided by gross exposure: percentage points a year on capital.
+  v1.0 is always scaled to its 10% volatility target, so this is the carry the book earns per year at constant risk.
+  Weights are v1.0's raw month-end weights, as a fraction of capital: live, ``size_pct_of_capital / 100`` in
+  results/systematic/positions.csv (the frozen run's output, signed by ``side``); history, the frozen run's weights.
+  Neither applies any adjustment (results/systematic/position_adjustments.csv, overrides.yaml, D005 or any later
+  decision), so history and live are comparable. Carry is the
   algorithm's own (em_macro.systematic ``build_inputs``: FX, local policy rate minus fed funds, monthly averages;
   EM bonds, 10y yield minus the local policy rate; euro spreads, the spread; DE10Y, yield minus policy rate), with
-  the latest available month when the current one is missing (as the screener does). Live values come from the
+  the latest available month when the current one is missing (as the screener does). Live carry comes from the
   screener file of the month (results/screener/screener_<as_of>.csv, written by the same monthly run from the same
   inputs). Month-ends counted from as_of 2026-10, the positions held at the live start.
-* **Threshold (rule 5):** the 10th percentile (numpy linear interpolation) of that spread over v1.0's month-end
-  positions 2006-01..2019-12, recomputed once from the frozen code, stored with its method and source in
+* **Threshold (rule 5):** the 10th percentile (numpy linear interpolation) of book carry over v1.0's month-end
+  positions 2006-01..2019-12, computed once from the frozen code, stored with its method and source in
   results/v1_rules/carry_spread_threshold.json and pinned here by its SHA-256 (FROZEN_THRESHOLD_SHA256).
+  Two definition changes (Ethan, 11 Nov 2026, both before any live month was evaluated; final): (1) the equal-weighted
+  long-minus-short spread was dominated by TRY; (2) the position-weighted spread per unit of gross exposure let large
+  low-volatility euro positions drag the measure down, so its threshold was out of reach for the live book. Both
+  superseded thresholds are kept byte-identical in results/v1_rules/superseded/ (SUPERSEDED, pinned) and never used.
 * **Rule 4:** a held instrument listed in config/v1_rules_rule4.csv (Ethan's list of capital controls, closed
   markets and managed pegs or crawls, with a date and a source) with a start on or before the month-end and no end.
 """
@@ -68,7 +77,18 @@ CARRY_CONSECUTIVE = 2
 REVIEW_DAYS = 7
 THRESHOLD_FILE = ROOT / "results/v1_rules/carry_spread_threshold.json"
 THRESHOLD_HISTORY = ROOT / "results/v1_rules/carry_spread_2005_2019.csv"
-FROZEN_THRESHOLD_SHA256 = "ef2ca46b9447c4a74ada63003310f15a23435cc5c1f4835d7de45f6246853af3"  # set by `freeze` (11 Nov 2026)
+FROZEN_THRESHOLD_SHA256 = "5c1adfbf0be7cfd01be8325dd4d08d7497947d2e6123471ba64318e34e1e7fe7"  # set by `freeze` (book carry at constant risk, final, 11 Nov 2026)
+# superseded thresholds (both 11 Nov 2026, before any live month was evaluated), kept for the record, never used:
+# (threshold file, monthly values, SHA-256 of the threshold file, definition)
+SUPERSEDED_DIR = ROOT / "results/v1_rules/superseded"
+SUPERSEDED = [
+    (SUPERSEDED_DIR / "carry_spread_threshold_equal_weight.json", SUPERSEDED_DIR / "carry_spread_2005_2019_equal_weight.csv",
+     "ef2ca46b9447c4a74ada63003310f15a23435cc5c1f4835d7de45f6246853af3",
+     "equal-weighted mean carry of the long positions minus that of the short positions"),
+    (SUPERSEDED_DIR / "carry_spread_threshold_per_gross.json", SUPERSEDED_DIR / "carry_spread_2005_2019_per_gross.csv",
+     "9ed2edaed46ca6468c67acf1648c428c747b7a3c934e5458425da2eb33641d0c",
+     "sum of signed weight x carry divided by gross exposure (position-weighted, per unit of gross)"),
+]
 RULE4_FILE = ROOT / "config/v1_rules_rule4.csv"
 RULE4_COLUMNS = ["instrument", "currency", "event", "start", "end", "source", "note"]
 RULE4_EVENTS = ("capital controls", "closed market", "managed peg", "crawl")
@@ -112,14 +132,14 @@ def sha256_file(path: Path) -> str:
 
 
 # ----------------------------------------------------------------------------- the carry spread (rule 5)
-def carry_spread(holdings: list[tuple[str, str, float | None]]) -> float | None:
-    """(instrument, side, carry pp) for every held position -> equal-weighted mean carry of the longs minus that of
-    the shorts, or None when either side is empty or a held position has no carry."""
-    longs = [c for _, s, c in holdings if s == "long"]
-    shorts = [c for _, s, c in holdings if s == "short"]
-    if not longs or not shorts or any(c is None for c in longs + shorts):
+def carry_spread(holdings: list[tuple[str, float | None, float | None]]) -> float | None:
+    """Book carry at constant risk: (instrument, signed weight as a fraction of capital, carry pp) for every position
+    -> sum(weight x carry), pp a year on capital, NOT divided by gross exposure. Zero weights are ignored. None when
+    nothing is held, or when a held position has no weight or no carry."""
+    held = [(w, c) for _, w, c in holdings if w is None or w != 0]
+    if not held or any(w is None or c is None for w, c in held):
         return None
-    return sum(longs) / len(longs) - sum(shorts) / len(shorts)
+    return sum(w * c for w, c in held)
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -147,26 +167,35 @@ def load_threshold(path: Path = THRESHOLD_FILE, expected_sha: str | None = None)
 
 def live_carry(as_of: str, positions: list[dict], root: Path = ROOT) -> dict:
     """Rule-5 spread at one month-end from the screener file of that month (carry as the algorithm) and the
-    official positions."""
+    official positions with their signed weights (size_pct_of_capital)."""
     sc = {r["instrument"]: r for r in _rows(root / SCREENER.format(as_of=as_of)) if r.get("as_of") == as_of}
     if not sc:
         return {"spread": None, "error": f"no screener file for {as_of} ({SCREENER.format(as_of=as_of)})"}
-    hold, missing, stale = [], [], []
+    hold, missing, stale, unsized = [], [], [], []
     for p in positions:
         side = (p.get("side") or "").lower()
         if side not in ("long", "short"):
             continue
         r = sc.get(p["instrument"])
         c = _f(r.get("carry")) if r else None
+        w = _f(p.get("size_pct_of_capital"))                      # raw frozen output: no adjustment is applied
+        if w is not None:
+            w = (abs(w) if side == "long" else -abs(w)) / 100.0  # fraction of capital; the side decides the sign
         if c is None:
             missing.append(p["instrument"])
         elif str(r.get("stale")).lower() == "true":
             stale.append(f"{p['instrument']} ({r.get('data_month')})")
-        hold.append((p["instrument"], side, c))
-    out = {"spread": carry_spread(hold), "holdings": [{"instrument": i, "side": s, "carry_pp": c} for i, s, c in hold],
-           "stale": stale}
-    if missing:
-        out["error"] = f"no carry for held {', '.join(missing)} in the {as_of} screener file"
+        if w is None:
+            unsized.append(p["instrument"])
+        hold.append((p["instrument"], w, c))
+    out = {"spread": carry_spread(hold), "stale": stale,
+           "holdings": [{"instrument": i, "weight_pct": None if w is None else round(100 * w, 4), "carry_pp": c,
+                         "contribution_pp": None if (w is None or c is None) else round(w * c, 4)}
+                        for i, w, c in hold]}
+    errs = ([f"no carry for held {', '.join(missing)} in the {as_of} screener file"] if missing else []) \
+        + ([f"no size_pct_of_capital for held {', '.join(unsized)} in {POSITIONS}"] if unsized else [])
+    if errs:
+        out["error"] = "; ".join(errs)
     return out
 
 
@@ -326,10 +355,10 @@ def evaluate(root: Path = ROOT, now: datetime | None = None, threshold: dict | N
         rule(5, "carry-spread review", "error", threshold["error"])
         flags.append(f"D004 rule 5 cannot be checked: {threshold['error']}")
     elif spread is None:
-        rule(5, "carry-spread review", "error", carry.get("error") or "carry spread unavailable")
-        flags.append(f"D004 rule 5 cannot be checked at {as_of}: {carry.get('error') or 'carry spread unavailable'}")
+        rule(5, "carry-spread review", "error", carry.get("error") or "book carry unavailable")
+        flags.append(f"D004 rule 5 cannot be checked at {as_of}: {carry.get('error') or 'book carry unavailable'}")
     else:
-        txt = f"carry spread {spread:.2f}pp vs threshold {thr:.2f}pp (2005-2019 10th percentile) at {as_of}"
+        txt = f"book carry at constant risk {spread:.2f}pp vs threshold {thr:.2f}pp (2005-2019 10th percentile) at {as_of}"
         if streak >= CARRY_CONSECUTIVE:
             due = (now.date() + timedelta(days=REVIEW_DAYS)).isoformat()
             rule(5, "carry-spread review", "triggered", f"{txt}; below for {streak} consecutive month-ends",
@@ -393,7 +422,7 @@ def summary_lines(res: dict | None) -> list[str]:
         return ["no evaluation yet (python -m ledger.v1_rules monitor runs after each monthly v1.0 run)"]
     head = (f"{res['as_of']} month-end: index {res['index']:.2f}, drawdown {res['drawdown_pct']:.1f}% from the live peak, "
             f"{res['live_months']} live month(s), Sharpe {res['sharpe'] if res['sharpe'] is not None else 'n/a'}, "
-            f"carry spread {res['carry_spread_pp'] if res['carry_spread_pp'] is not None else 'n/a'}pp "
+            f"book carry {res['carry_spread_pp'] if res['carry_spread_pp'] is not None else 'n/a'}pp "
             f"(threshold {res['carry_threshold_pp'] if res['carry_threshold_pp'] is not None else 'n/a'}pp)")
     if not res.get("flags"):
         return [head, "No rule triggered."]
@@ -402,7 +431,7 @@ def summary_lines(res: dict | None) -> list[str]:
 
 # ----------------------------------------------------------------------------- one-off: the threshold
 def compute_history(end: str = "2019-12") -> tuple[list[dict], dict]:
-    """v1.0's month-end long-minus-short carry spread from its first positions to ``end``, from the frozen code
+    """v1.0's month-end book carry at constant risk from its first positions to ``end``, from the frozen code
     (read only). Returns (rows, provenance)."""
     import pandas as pd
     from em_macro import systematic as SY
@@ -422,14 +451,14 @@ def compute_history(end: str = "2019-12") -> tuple[list[dict], dict]:
         if str(t) > end:
             break
         w = W.loc[t]
-        hold = [(c, "long" if w[c] > 0 else "short", _f(C.at[t, c])) for c in W.columns if w[c] != 0]
+        hold = [(c, float(w[c]), _f(C.at[t, c])) for c in W.columns if w[c] != 0]
         s = carry_spread(hold)
         if s is None:
             continue
         rows.append({"as_of": str(t), "carry_spread_pp": round(s, 6),
-                     "n_long": sum(1 for h in hold if h[1] == "long"), "n_short": sum(1 for h in hold if h[1] == "short"),
-                     "longs": " ".join(h[0] for h in hold if h[1] == "long"),
-                     "shorts": " ".join(h[0] for h in hold if h[1] == "short")})
+                     "gross_leverage": round(sum(abs(h[1]) for h in hold), 6),
+                     "n_long": sum(1 for h in hold if h[1] > 0), "n_short": sum(1 for h in hold if h[1] < 0),
+                     "positions": " ".join(f"{h[0]}:{h[1]:+.4f}" for h in hold)})
     # provenance: the reproduced net P&L must equal the official in-sample paper P&L
     official = {r["month"]: _f(r.get("net")) for r in _rows(ROOT / PAPER_PNL) if (r.get("month") or "") <= end}
     diffs = [abs(float(out["net"].loc[p]) - official[str(p)]) for p in out.index
@@ -445,12 +474,13 @@ def freeze(now: datetime | None = None) -> dict:
     if THRESHOLD_FILE.exists():
         raise SystemExit(f"{THRESHOLD_FILE.relative_to(ROOT)} exists: the D004 threshold is computed once and frozen")
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    prev = [json.loads(f.read_text(encoding="utf-8")) if f.exists() else {} for f, _, _, _ in SUPERSEDED]
     rows, prov = compute_history("2019-12")
     vals = [r["carry_spread_pp"] for r in rows]
     thr = percentile(vals, 10)
     THRESHOLD_FILE.parent.mkdir(parents=True, exist_ok=True)
     with THRESHOLD_HISTORY.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["as_of", "carry_spread_pp", "n_long", "n_short", "longs", "shorts"],
+        w = csv.DictWriter(f, fieldnames=["as_of", "carry_spread_pp", "gross_leverage", "n_long", "n_short", "positions"],
                            lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
@@ -467,9 +497,13 @@ def freeze(now: datetime | None = None) -> dict:
                    "design, read only); carry of each held instrument at t as the algorithm defines it (build_inputs: FX "
                    "= local policy rate minus fed funds, monthly averages; EM bonds = 10y yield minus local policy rate; "
                    "euro spreads = the spread; DE10Y = yield minus policy rate; percentage points a year; the latest "
-                   "available month when t is missing); spread = equal-weighted mean carry of the long positions minus "
-                   "equal-weighted mean carry of the short positions, both books together. Threshold = the 10th "
-                   "percentile of the monthly spreads (linear interpolation, as numpy.percentile). Only month-ends to "
+                   "available month when t is missing); book carry at constant risk = sum over the held positions of signed "
+                   "weight (fraction of capital) x carry, FX and bonds together, NOT divided by gross exposure: pp a "
+                   "year on capital. v1.0 is always scaled to its 10% volatility target, so this is the carry the book "
+                   "earns per year at constant risk. Weights are v1.0's raw month-end weights (live: "
+                   "size_pct_of_capital / 100 in results/systematic/positions.csv; no adjustment, override or later "
+                   "decision such as D005 is applied to either side). Threshold = the 10th "
+                   "percentile of the monthly values (linear interpolation, as numpy.percentile). Only month-ends to "
                    "2019-12 are used; no 2020+ value enters the threshold."),
         "source": ("Frozen v1.0 code em_macro/systematic.py (tag v1.0-frozen, commit 7886867) on the repository's "
                    "processed panels (data/processed/daily_panel.csv, country_month_panel.csv) and the public "
@@ -477,6 +511,32 @@ def freeze(now: datetime | None = None) -> dict:
                    "TRM; Banco Central de Chile dolar observado). The S&P 500 benchmark download is stubbed (not a "
                    "position input). Monthly values: results/v1_rules/carry_spread_2005_2019.csv."),
         "reproduction_check": prov,
+        "live_months_evaluated": 0,
+        "no_live_month_evaluated": True,
+        "live_status_at_freeze": ("No live month has been evaluated: the first live month-end (2026-11) is booked at "
+                                  "the 3 Dec 2026 run. Only the 2026-10 baseline (positions at the live start) had been "
+                                  "computed, under each definition, and it is re-run under this one."),
+        "final": True,
+        "definition_changes": [
+            {"n": 1, "date": "2026-11-11", "decided_by": "Ethan", "before_first_live_evaluation": True,
+             "from": SUPERSEDED[0][3], "to": SUPERSEDED[1][3],
+             "superseded_threshold_pp": prev[0].get("threshold_pp"),
+             "superseded_file": str(SUPERSEDED[0][0].relative_to(ROOT)), "superseded_file_sha256": SUPERSEDED[0][2],
+             "why": ("The equal-weighted spread was dominated by TRY (carry about 33pp at the 2026-10 month-end): one "
+                     "instrument moved the average of a three-to-five-name side by several points, whatever its size "
+                     "in the book.")},
+            {"n": 2, "date": "2026-11-11", "decided_by": "Ethan", "before_first_live_evaluation": True,
+             "from": SUPERSEDED[1][3], "to": ("sum of signed weight x carry over v1.0's raw positions, NOT divided by "
+                                              "gross exposure (book carry at constant risk)"),
+             "superseded_threshold_pp": prev[1].get("threshold_pp"),
+             "superseded_file": str(SUPERSEDED[1][0].relative_to(ROOT)), "superseded_file_sha256": SUPERSEDED[1][2],
+             "why": ("Dividing by gross exposure let large low-volatility euro positions drag the measure down: euro "
+                     "spreads and the Bund averaged about 48% of gross exposure in 2006-2019 at carry under 1pp, so the "
+                     "per-gross threshold (0.52pp) was out of reach for the live book (8.14pp at the 2026-10 "
+                     "baseline, no euro positions). The book is always scaled to the 10% volatility target, so the "
+                     "undivided sum is the carry it earns per year at constant risk, comparable across books of "
+                     "different composition. This definition is final.")},
+        ],
         "note": "Computed once for D004 and never recomputed or edited; ledger/v1_rules.py pins this file's SHA-256.",
     }
     THRESHOLD_FILE.write_text(json.dumps(obj, indent=1) + "\n", encoding="utf-8")

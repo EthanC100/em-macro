@@ -891,7 +891,7 @@
         <div class="stat"><span class="k">Index (official)</span><span class="v">${fmtNum(vr.index, 2)}</span><span class="s">${esc(vr.as_of)} month-end · peak ${fmtNum(vr.peak, 2)}</span></div>
         <div class="stat"><span class="k">From live peak</span><span class="v ${signClass(vr.drawdown_pct)}">${fmtPct(vr.drawdown_pct, 2, true)}</span><span class="s">halve at −20% · stop at −27%</span></div>
         <div class="stat"><span class="k">Live Sharpe</span><span class="v">${isNum(vr.sharpe) ? fmtNum(vr.sharpe, 2) : '—'}</span><span class="s">after costs · ${vr.live_months} of 24 months</span></div>
-        <div class="stat"><span class="k">Carry spread</span><span class="v">${isNum(vr.carry_spread_pp) ? fmtNum(vr.carry_spread_pp, 2) : '—'}pp</span><span class="s">review below ${isNum(vr.carry_threshold_pp) ? fmtNum(vr.carry_threshold_pp, 2) : '—'}pp twice</span></div>
+        <div class="stat"><span class="k">Book carry</span><span class="v">${isNum(vr.carry_spread_pp) ? fmtNum(vr.carry_spread_pp, 2) : '—'}pp</span><span class="s">a year at constant risk · review below ${isNum(vr.carry_threshold_pp) ? fmtNum(vr.carry_threshold_pp, 2) : '—'}pp twice</span></div>
       </div>
       <div class="table-wrap"><table class="compact"><thead><tr><th>Rule</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="small muted">Evaluated ${fmtDateTime(vr.evaluated_at)}. ${esc(vr.note || '')}</p></div></section>`;
