@@ -745,6 +745,8 @@ def trial_status(r: dict) -> str:
     dec = (r.get("decision") or "").strip().lower()
     if dec.startswith("inconclusive"):          # evidence without a pass rule: neither passed nor failed
         return "inconclusive"
+    if dec.startswith("withdrawn"):             # withdrawn before any result (T27): not a rejected idea
+        return "withdrawn"
     if res.startswith("fail") or "rejected" in dec or "not adopted" in dec or dec.startswith("null"):
         return "fail"
     if "kept" in dec or "pass" in dec or res.startswith("pass"):
@@ -765,6 +767,7 @@ def build_trials() -> dict:
                "fail": sum(t["status"] == "fail" for t in items),
                "pending": sum(t["status"] == "pending" for t in items),
                "inconclusive": sum(t["status"] == "inconclusive" for t in items),
+               "withdrawn": sum(t["status"] == "withdrawn" for t in items),
                "counted_n7": sum(t["counted"] for t in items)}
     return {"items": items, "summary": summary, "source": "trials.csv",
             "updated": git_last_date("trials.csv")}
@@ -1049,6 +1052,10 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
     failed = [{"id": t["trial_id"], "name": t["name"], "status": "failed", "date": t.get("date_tested"),
                "group": t.get("trial_group"), "reason": one_line_reason(t), "link": "#/trials"}
               for t in trials["items"] if t["status"] == "fail"]
+    withdrawn = [{"id": t["trial_id"], "name": t["name"], "status": "withdrawn", "date": t.get("date_tested"),
+                  "group": t.get("trial_group"), "reason": one_line_reason(t), "link": "#/trials"}
+                 for t in trials["items"] if t["status"] == "withdrawn"]
+    rejected = f"{len(failed)} rejected" + (f" · {len(withdrawn)} withdrawn" if withdrawn else "")
     n_live = live_months
     # a passed trial that is now a live version (T18 -> v1.1) is a systematic rule change, not a discretionary idea
     # passed sleeve backtests (T23-T24) support only a later zero-size shadow pre-registration: not validated ideas
@@ -1060,7 +1067,7 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
     if discretionary:
         overall = (f"{len(discretionary)} validated discretionary idea{'s' if len(discretionary) != 1 else ''}; "
                    f"v1.0 live for {n_live} month{'s' if n_live != 1 else ''} of the {months_needed} needed; "
-                   f"{v11_text}; {len(failed)} rejected.")
+                   f"{v11_text}; {rejected}.")
     else:
         overall = (f"No validated discretionary edge yet; v1.0 live for {n_live} month{'s' if n_live != 1 else ''} "
                    f"({months_needed} needed for a 90%-confidence track record); {v11_text}; "
@@ -1070,7 +1077,7 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
                       + (f"zero-size live shadows pre-registered as {', '.join(shadows)}, pending); " if shadows
                          else "zero-size shadow not yet pre-registered); ")
                       if backtests else "")
-                   + f"{len(failed)} rejected.")
+                   + f"{rejected}.")
     return {
         "overall": overall, "as_of": today.isoformat(),
         "groups": [
@@ -1078,8 +1085,10 @@ def build_evidence(trials: dict, algorithm: dict, today: date) -> dict:
             {"key": "prospective", "title": "Under prospective test", "items": prospective},
             {"key": "passed", "title": "Passed trials", "items": passed},
             {"key": "failed", "title": "Failed or rejected ideas", "items": failed},
+            {"key": "withdrawn", "title": "Withdrawn before any result", "items": withdrawn},
         ],
-        "counts": {"live": 2, "prospective": len(prospective), "passed": len(passed), "failed": len(failed)},
+        "counts": {"live": 2, "prospective": len(prospective), "passed": len(passed), "failed": len(failed),
+                   "withdrawn": len(withdrawn)},
         "sources": ["trials.csv", "results/systematic/paper_pnl.csv", f"{V11_DIR}/paper_pnl.csv",
                     "data/elections/signals.csv"],
         "min_track_record": {"years": MIN_TRACK_RECORD_YEARS, "months": months_needed, "confidence": "90%"},
