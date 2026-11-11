@@ -752,8 +752,10 @@ latest marks were dated 6 November, two weekdays old, which C06's test calls sta
   source already used for FR10Y and DE10YBM. It had 9 November at 02:45 UTC on 11 November. The fallback stays the
   monthly panel, which never acts.
   - The level differs from the BoE's par yield by a few basis points (6 Nov: 5.156 against 5.118).
-  - Each run stores the source's last three weeks, newest fetch winning, so recent GB10Y marks become one consistent
-    Riksbank series.
+  - A run adds the source's recent observations only for dates with no mark yet; existing rows are kept. GB10Y's
+    marks are therefore Bank of England values up to 6 November and Riksbank values from 9 November. No C08
+    forecast or position spans the switch: the first C08 forecasts are made on 11 November. (Corrected the same day:
+    an earlier wording said each run would replace the last three weeks.)
   - No decision, forecast or filled position uses GB10Y. J002 is unfilled and is closed tonight under C08.
 - **Effect.** At a ledger-daily run on review day, US10Y is marked at the previous business day (instead of two
   back), and GB10Y at the previous business day or the one before. Both pass C06's staleness test, so neither can be
@@ -822,9 +824,11 @@ run before it, so no forecast resolves on the Bank of England source.
   cross (`_ecb_ident`, `fetch_ecb_exr`, `ecb_exr_history`).
 - **Fallback:** FRED's DEXUSUK, unchanged (it is never used when older than the previous daily mark).
 - **Watchlist:** GBP's question in `janus/watchlist.yaml` is unchanged; it now resolves on the ECB cross.
-- **History:** each run stores the source's last 15 observations, newest fetch winning, so recent GBP marks become one
-  consistent ECB series. The two sources differ by about 0.1% because they fix at different times (9 November: BoE
-  1.3403, ECB 1.341604).
+- **History:** a run adds the source's recent observations only for dates with no mark yet; existing rows are kept.
+  GBP's marks are therefore Bank of England values up to 9 November and ECB values from 10 November (the first,
+  1.34227, from ledger-daily run 42974261471). No forecast or position spans the switch. The two sources differ by
+  about 0.1% because they fix at different times (9 November: BoE 1.3403, ECB 1.341604). (Corrected the same day:
+  an earlier wording said recent rows would be replaced.)
 
 **Unchanged.** Everything else in C08 and C09. No decision, forecast or position uses GBP.
 
