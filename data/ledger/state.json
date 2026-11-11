@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-11",
- "at": "2026-11-11T07:13:31+00:00",
+ "at": "2026-11-11T11:29:22+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -44,26 +44,26 @@
   "D006": {
    "action": "No trade",
    "instrument": "v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)",
-   "note": "",
-   "outcome": "",
-   "status": "open"
+   "note": "Duplicate of D005 (same block, logged twice); no position.",
+   "outcome": "scratched",
+   "status": "resolved"
   }
  },
  "forecasts": {
   "F001": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Republicans keep control of the US Senate after the 3 Nov 2026 midterms",
-   "status": "open"
+   "status": "resolved"
   },
   "F002": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Mike Rogers (R) wins the Michigan US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   },
   "F003": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Ken Paxton (R) wins the Texas US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   },
   "F004": {
    "outcome": "",
@@ -71,16 +71,16 @@
    "status": "open"
   },
   "F005": {
-   "outcome": "",
+   "outcome": "no",
    "question": "Susan Collins (R) wins the Maine US Senate race, 3 Nov 2026",
-   "status": "open"
+   "status": "resolved"
   }
  },
  "index": {
   "algorithm v1.0": 99.7188,
   "algorithm v1.1": 100.0,
   "janus": 99.9793,
-  "me": 99.0417
+  "me": 98.9591
  },
  "janus": {
   "J001": {

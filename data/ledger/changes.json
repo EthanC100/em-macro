@@ -1,18 +1,43 @@
 {
- "since": "2026-11-11T07:01:34+00:00",
- "at": "2026-11-11T07:13:31+00:00",
+ "since": "2026-11-11T07:13:31+00:00",
+ "at": "2026-11-11T11:29:22+00:00",
  "items": [
   {
    "book": "me",
-   "kind": "trade",
-   "link": "#/position/me/D005",
-   "text": "New decision D005: No trade v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)"
+   "kind": "pnl",
+   "label": "me",
+   "change": -0.0826,
+   "text": "me: -0.08 index points (to 98.96)"
   },
   {
    "book": "me",
-   "kind": "trade",
+   "kind": "close",
    "link": "#/position/me/D006",
-   "text": "New decision D006: No trade v1.0 systematic book: volatility floor for managed currencies (override outside the frozen code)"
+   "text": "D006 closed: outcome scratched"
+  },
+  {
+   "book": "forecasts",
+   "kind": "forecast",
+   "link": "#/forecasts",
+   "text": "Forecast F001 resolved no (Brier only, no P&L)"
+  },
+  {
+   "book": "forecasts",
+   "kind": "forecast",
+   "link": "#/forecasts",
+   "text": "Forecast F002 resolved no (Brier only, no P&L)"
+  },
+  {
+   "book": "forecasts",
+   "kind": "forecast",
+   "link": "#/forecasts",
+   "text": "Forecast F003 resolved no (Brier only, no P&L)"
+  },
+  {
+   "book": "forecasts",
+   "kind": "forecast",
+   "link": "#/forecasts",
+   "text": "Forecast F005 resolved no (Brier only, no P&L)"
   }
  ]
 }

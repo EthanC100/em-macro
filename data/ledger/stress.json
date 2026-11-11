@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": -0.364,
+    "janus": -0.395,
     "me": 0.526
    },
    "positions": [
@@ -205,7 +205,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": -0.084,
+     "pnl_pct": -0.115,
      "move": "4.5611 -> 4.6467 (2008-08-29 to 2008-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -249,7 +249,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.866,
+    "janus": 0.903,
     "me": 0.29
    },
    "positions": [
@@ -464,7 +464,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": 0.102,
+     "pnl_pct": 0.139,
      "move": "0.5035 -> 0.419 (2020-02-28 to 2020-03-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -496,7 +496,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -7.651,
+    "janus": -8.786,
     "me": 0.317
    },
    "positions": [
@@ -711,7 +711,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": -3.155,
+     "pnl_pct": -4.291,
      "move": "1.013 -> 3.6952 (2021-12-31 to 2022-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
