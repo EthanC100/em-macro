@@ -1,19 +1,13 @@
 {
- "since": "2026-11-11T11:29:22+00:00",
- "at": "2026-11-11T12:11:06+00:00",
+ "since": "2026-11-11T12:11:06+00:00",
+ "at": "2026-11-11T17:27:59+00:00",
  "items": [
   {
-   "book": "janus",
+   "book": "algorithm",
    "kind": "pnl",
-   "label": "janus",
-   "change": -0.0224,
-   "text": "janus: -0.02 index points (to 99.96)"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J002",
-   "text": "Janus J002 filled: long GB10Y"
+   "label": "algorithm v1.0",
+   "change": 0.1901,
+   "text": "algorithm v1.0: +0.19 index points (to 99.91)"
   }
  ]
 }
