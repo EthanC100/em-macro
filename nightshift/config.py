@@ -1,6 +1,7 @@
 """Night-shift configuration (config/night.yaml) and Singapore-time helpers."""
 from __future__ import annotations
 
+import subprocess
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -13,7 +14,41 @@ SGT = ZoneInfo("Asia/Singapore")
 
 
 def load(path: Path = CONFIG) -> dict:
+    """A config file from disk (tests, and tools that only need a file). The guard, promote and state never use
+    this for the live config: they use load_main(), so a switch made on main applies at once."""
     cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return cfg
+
+
+class MainConfigError(RuntimeError):
+    """main's config/night.yaml could not be fetched, read or parsed. Callers fail safe: nothing starts."""
+
+
+MAIN_REMOTE, MAIN_BRANCH = "origin", "main"
+CONFIG_REL = "config/night.yaml"
+
+
+def load_main(repo: Path = ROOT, remote: str = MAIN_REMOTE, branch: str = MAIN_BRANCH) -> dict:
+    """config/night.yaml as it is on main right now: fetched fresh (never a stale local ref, never the dev
+    checkout), so safe mode, caps and windows Ethan sets on main take effect on the next run, whatever dev holds.
+    Raises MainConfigError if the fetch, the read or the parse fails."""
+    def git(*a: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *a], cwd=repo, capture_output=True, text=True, timeout=120)
+    try:
+        f = git("fetch", "-q", remote, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise MainConfigError(f"git fetch {remote} {branch} failed: {e}") from e
+    if f.returncode != 0:
+        raise MainConfigError(f"git fetch {remote} {branch} failed: {(f.stderr or '').strip()[-200:]}")
+    s = git("show", f"{remote}/{branch}:{CONFIG_REL}")
+    if s.returncode != 0:
+        raise MainConfigError(f"{CONFIG_REL} not readable on {remote}/{branch}: {(s.stderr or '').strip()[-200:]}")
+    try:
+        cfg = yaml.safe_load(s.stdout)
+    except yaml.YAMLError as e:
+        raise MainConfigError(f"{CONFIG_REL} on {remote}/{branch} does not parse: {e}") from e
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("window"), dict):
+        raise MainConfigError(f"{CONFIG_REL} on {remote}/{branch} has no window section")
     return cfg
 
 

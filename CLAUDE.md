@@ -18,8 +18,10 @@ These bind every night-shift routine and subagent (`.claude/routines/`, `.claude
    PR opened by the promote routine after `python -m nightshift.promote` passes (section 5 of docs/agent-system.md).
 2. **Never modify protected paths**: the block in `.github/CODEOWNERS` (frozen v1.0/v1.1 code and configs, the
    T25-T26 shadow files, `docs/prereg/`, the corrections log `data/ledger/seals.jsonl`, `docs/config_changes.md`,
-   `ledger/commitments.py`, `trials.csv`, `.claude/`, `.github/CODEOWNERS`, `docs/rulesets/`). Tags `v1.0-frozen`
-   and `v1.1-frozen` are never moved or deleted. Check with `python -m nightshift.protected <paths>`.
+   `ledger/commitments.py`, `trials.csv`, `.claude/`, `config/night.yaml`, `.github/CODEOWNERS`,
+   `docs/rulesets/`). Tags `v1.0-frozen` and `v1.1-frozen` are never moved or deleted. Check with
+   `python -m nightshift.protected <paths>`. Agents never edit `config/night.yaml` (safe mode, caps, windows): Ethan
+   sets it on main, and the guard, promote and state read main's copy, fetched fresh on every run.
 3. **Never hand-edit data files owned by the existing writers** (inventory in docs/agent-system.md):
    `data/ledger/`, `data/janus/`, `results/shadows/`, `results/systematic*/`, `results/screener/`, `data/processed/`,
    `data/elections/`, and their workflows in `.github/workflows/`. They must keep working unchanged.

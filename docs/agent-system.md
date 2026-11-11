@@ -181,7 +181,7 @@ on main (the test checks each exists):
 | pre-registrations | `docs/prereg/` |
 | corrections log (K001-K003) | `data/ledger/seals.jsonl` (the corrections are records in the audit chain) |
 | config changes, commitments, trials | `docs/config_changes.md`, `ledger/commitments.py`, `trials.csv` |
-| the agents' own rules | `.claude/`, `.github/CODEOWNERS`, `docs/rulesets/` |
+| the agents' own rules and switches | `.claude/`, `config/night.yaml` (also always protected in `nightshift/protected.py`), `.github/CODEOWNERS`, `docs/rulesets/` |
 
 Tags cannot be covered by CODEOWNERS: `docs/rulesets/frozen-tags.json` blocks updating or deleting both tags.
 `data/processed/*.csv` (hashed v1.0 inputs) are not protected: the monthly workflow rewrites them by design, the
@@ -269,8 +269,10 @@ hourly: 100 scheduled runs per account, 100 API fires per account, 30 "Run now"+
 overage. This system's peak is about 6 runs an hour (2 quick checks, ~3 chain runs, pr-review), far under those.
 **The risk is the plan's usage limits, not run counts**: at the cap the night shift is about 80% of the week's
 usage (about 4x the Janus load). Interactive sessions (like this one) come on top and are not estimated.
-- **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`): cap 4, explorer and its subagent on Sonnet 5.5
-  medium. Roughly 1,000 units a week less at the cap.
+- **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`, set on main): cap 4, explorer and its subagent on
+  Sonnet 5.5 medium. Roughly 1,000 units a week less at the cap. The guard, promote and state read main's copy,
+  fetched fresh on every run, so it applies at the next run without waiting for night-start's merge into dev; if
+  main's copy cannot be fetched or parsed, nothing starts (fail safe).
 - Janus's quick checks and reviews run on **Sonnet**, not Opus, so no model change is recommended. They run every
   hour of every day (336 runs/week), including weekends and nights when no Janus market trades; that is their
   existing schedule and C05 is not changed here.

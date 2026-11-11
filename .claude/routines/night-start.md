@@ -21,12 +21,17 @@ first hourly night-worker run does steps 2-5 itself when tonight has no night-st
 ```bash
 git fetch -q origin main dev || git fetch -q origin main
 git checkout -q -B dev origin/dev 2>/dev/null || git checkout -q -B dev origin/main
-git merge --no-ff --no-edit -m "night-start: merge main into dev" origin/main
+python -m nightshift.merge main-into-dev --main origin/main
 ```
-- If the merge conflicts: `git merge --abort`. **Never resolve a conflict with an existing writer's files.** Stop
-  the chain: `scripts/night_commit.sh "night-start: chain stopped (dev conflicts with main)" -- python -m
-  nightshift.state stop --reason "dev conflicts with main: <files>"` and end.
-- Otherwise `git push origin dev` (dev only; never main).
+`nightshift.merge` resolves only the night shift's own files: `docs/queue.md` rows by id (most advanced status
+wins), `docs/agent-state.json` and `results/opposition/calibration.csv` from dev. It prints JSON and exits:
+- 0 (`merged` or `up-to-date`): `git push origin dev` (dev only; never main). Name any `auto_resolved` files in
+  the run note.
+- 3 (`conflict`: another file conflicts) or 4 (`invalid-queue`): it has already run `git merge --abort`. **Never
+  resolve a conflict by hand.** Stop the chain: `scripts/night_commit.sh "night-start: chain stopped (dev
+  conflicts with main)" -- python -m nightshift.state stop --reason "dev conflicts with main: <not_auto files or
+  queue errors>"` and end.
+- 2 or anything else: stop the chain the same way with the error text, and end.
 
 ## 3. Triage
 Use the Agent tool with `subagent_type: triage`. Pass it nothing but "Audit em-macro for tonight's queue; return
