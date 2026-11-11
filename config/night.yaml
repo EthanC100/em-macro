@@ -22,7 +22,7 @@ safe_mode:
   explorer_effort: medium
 
 explorer:
-  max_hypotheses_per_night: 3
+  max_hypotheses_per_night: 0
   data_end: "2019-12-31"  # exploration never reads returns after this date
 
 # GitHub Actions workflows that write to main or the private store. The night shift never starts a run, and
