@@ -1140,6 +1140,20 @@ def build_lab(today: date) -> dict:
         return {"label": "Lab - experimental", "series": [], "sleeves": [], "proposed": [], "errors": [repr(e)[:300]]}
 
 
+def build_v1_rules() -> dict:
+    """D004's cut and stop rules for v1.0 (ledger/v1_rules.py): the latest month-end evaluation, read only. The
+    monitor writes data/ledger/v1_rules.json after each official monthly run; it never changes exposure."""
+    p = ROOT / "data/ledger/v1_rules.json"
+    if not p.exists():
+        return {"decision": "D004", "available": False, "flags": [], "rules": [],
+                "note": "No evaluation yet: python -m ledger.v1_rules monitor runs after each monthly v1.0 run."}
+    try:
+        obj = json.loads(p.read_text(encoding="utf-8"))
+    except ValueError as e:
+        return {"decision": "D004", "available": False, "flags": [f"data/ledger/v1_rules.json unreadable: {e}"], "rules": []}
+    return {**obj, "available": True}
+
+
 def build(out_dir: Path, today: date | None = None, now: datetime | None = None) -> dict:
     today = today or date.today()
     now = now or datetime.now(timezone.utc)
@@ -1168,6 +1182,7 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
     changes = json.loads((ROOT / "data/ledger/changes.json").read_text(encoding="utf-8")) \
         if (ROOT / "data/ledger/changes.json").exists() else {"items": []}
     postmortems = {"items": PM.load_all()}
+    v1_rules = build_v1_rules()
     lab = build_lab(today)                        # "Lab - experimental": its own book, never read by any other
     audit = AUD.verify_all()
     commit = git("rev-parse", "--short", "HEAD")
@@ -1201,7 +1216,8 @@ def build(out_dir: Path, today: date | None = None, now: datetime | None = None)
                       ("algorithm", algorithm), ("trials", trials), ("elections", elections),
                       ("reports", reports), ("evidence", evidence), ("marks", marks), ("screener", screener),
                       ("todo", todo), ("books", books), ("janus", janus), ("calendar", calendar), ("stress", stress),
-                      ("changes", changes), ("postmortems", postmortems), ("fund", fund), ("lab", lab)):
+                      ("changes", changes), ("postmortems", postmortems), ("fund", fund), ("lab", lab),
+                      ("v1_rules", v1_rules)):
         write_json(data / f"{name}.json", obj)
     # precache manifest and the service worker with a build id
     files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")

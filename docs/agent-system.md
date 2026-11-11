@@ -29,6 +29,7 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | **elections-weekly** (`elections-weekly.yml`) | Mondays 06:17 UTC | `GITHUB_TOKEN` | `data/elections/`, `docs/elections/` | |
 | **shadows-setup** (`shadows-setup.yml`) | by hand (run #3 used; Amendment 2 record mode remains) | `GITHUB_TOKEN` | `results/shadows/` (GO_LIVE.json, prelive files) | em-macro-data with `EM_MACRO_DATA_TOKEN` |
 | **private-commitments** (`private-commitments.yml`) | by hand | `GITHUB_TOKEN` | `data/ledger/derivatives.csv`, `data/ledger/seals.jsonl` (K003) | em-macro-data `ledger/commitments.jsonl` (salts) |
+| **v1-rules-monitor** (`v1-rules-monitor.yml`, D004) | after every successful systematic-monthly run (`workflow_run`), and by hand | `GITHUB_TOKEN` (retries on a rejected push) | `data/ledger/v1_rules.json`, `data/ledger/v1_rules_history.csv` only (flags; never exposure, never frozen v1.0 files) | dispatches ledger-pages |
 | **ledger-pages** (`ledger-pages.yml`) | every push to main, 06:41 UTC, by hand, dispatched by the others | none (no commit) | deploys GitHub Pages only | |
 | ledger-watchdog (`ledger-watchdog.yml`) | 12:17 UTC | none (read only) | alert issues only | |
 

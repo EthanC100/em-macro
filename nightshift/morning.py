@@ -1,7 +1,10 @@
 """The morning report: one phone screen, written after promote (results/night/morning/<Singapore date>.md).
 
-Sections, in order: Promoted to main, Merged into dev, Failed or empty runs, Janus, Lab sleeves, Explorer
-findings, Pre-registrations awaiting me, Usage, Needs Ethan (at most 3, each with a recommendation).
+Sections, in order: Promoted to main, Merged into dev, Failed or empty runs, Janus, v1.0 rules (D004), Lab sleeves,
+Explorer findings, Pre-registrations awaiting me, Usage, Needs Ethan (at most 3, each with a recommendation).
+
+v1.0 rules (D004) is read, never written: data/ledger/v1_rules.json on origin/main (ledger/v1_rules.py, written
+after each official month-end v1.0 run). A triggered rule appears as a FLAG line, and also in Needs Ethan.
 
 "Failed or empty runs" checks actual output, not the run's own status: a run logged as "merged" must have its
 commits on origin/dev, and an explorer run must have rows in results/exploration/log.csv for the night.
@@ -123,6 +126,23 @@ def janus_section(today: date) -> list[str]:
     return lines
 
 
+def v1_rules_state() -> dict | None:
+    """The latest D004 evaluation: origin/main's copy (the monitor writes to main), else the local file."""
+    live = _git("show", "origin/main:data/ledger/v1_rules.json")
+    if live:
+        try:
+            return json.loads(live)
+        except ValueError:
+            pass
+    from ledger import v1_rules as V
+    return V.load_state()
+
+
+def v1_rules_section(state: dict | None) -> list[str]:
+    from ledger import v1_rules as V
+    return V.summary_lines(state)
+
+
 def lab_section(today: date) -> list[str]:
     from lab.book import build
     lb = build(today)
@@ -158,6 +178,8 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     bad = verify_runs(runs, dev, rows, nd)
     L += ["", "**Failed or empty runs:**"] + ([f"- {b}" for b in bad] or ["- none (outputs verified)"])
     L += ["", "**Janus:**"] + [f"- {x}" for x in janus_section(day)]
+    v1 = v1_rules_state()
+    L += ["", "**v1.0 rules (D004):**"] + [f"- {x}" for x in v1_rules_section(v1)]
     L += ["", "**Lab sleeves:**"] + [f"- {x}" for x in lab_section(day)]
     nom = [r for r in tonight if r.get("nominated")]
     L += ["", f"**Explorer findings:** {len(tonight)} variant(s) logged, {len(nom)} nominated"
@@ -165,6 +187,9 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     L += ["", "**Pre-registrations awaiting me:** " + (", ".join(drafts) if drafts else "none")]
     L += ["", f"**Usage:** {used} of {C.run_cap(cfg)} runs" + (" (SAFE MODE)" if sm else "")
           + f"; queue: {len(Q.approved(items))} approved, {sum(1 for i in items if i['status'] == 'blocked')} blocked"]
+    v1_needs = [f"{f} => act on it at the next rebalance (docs/ledger/v1_rules.md); the monitor changes nothing"
+                for f in ((v1 or {}).get("flags") or [])]
+    needs = v1_needs + [n for n in needs if n not in v1_needs]
     L += ["", "**Needs Ethan:**"] + ([f"- {n}" for n in needs[:3]] or ["- nothing"])
     if len(L) > MAX_LINES:
         L = L[:MAX_LINES - 1] + ["(truncated to one screen)"]

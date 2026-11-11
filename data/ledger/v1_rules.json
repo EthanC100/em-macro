@@ -1,0 +1,102 @@
+{
+ "decision": "D004",
+ "as_of": "2026-10",
+ "month_end": "2026-10-31",
+ "evaluated_at": "2026-11-11T03:13:42Z",
+ "next_rebalance": "2026-11-03",
+ "live_start": "2026-10-31",
+ "live_months": 0,
+ "last_booked_month": null,
+ "index": 100.0,
+ "peak": 100.0,
+ "drawdown_pct": 0.0,
+ "halved": false,
+ "sharpe": null,
+ "carry_spread_pp": 11.9575,
+ "carry_threshold_pp": 3.176,
+ "carry_below": false,
+ "carry_streak": 0,
+ "carry_holdings": [
+  {
+   "instrument": "MX10Y",
+   "side": "long",
+   "carry_pp": 2.825
+  },
+  {
+   "instrument": "TR10Y",
+   "side": "short",
+   "carry_pp": -1.314
+  },
+  {
+   "instrument": "TRY",
+   "side": "long",
+   "carry_pp": 33.061
+  },
+  {
+   "instrument": "IDR",
+   "side": "long",
+   "carry_pp": 1.87
+  },
+  {
+   "instrument": "BRL",
+   "side": "long",
+   "carry_pp": 9.87
+  },
+  {
+   "instrument": "MXN",
+   "side": "short",
+   "carry_pp": 2.62
+  },
+  {
+   "instrument": "PLN",
+   "side": "short",
+   "carry_pp": -0.13
+  },
+  {
+   "instrument": "EUR",
+   "side": "short",
+   "carry_pp": -1.38
+  }
+ ],
+ "rule4_hits": [],
+ "rules": [
+  {
+   "rule": 1,
+   "name": "halve",
+   "status": "ok",
+   "detail": "no live month booked yet (first official month-end: Nov 2026, booked at the 3 Dec 2026 run)",
+   "action": ""
+  },
+  {
+   "rule": 2,
+   "name": "stop",
+   "status": "ok",
+   "detail": "no live month booked yet (first official month-end: Nov 2026, booked at the 3 Dec 2026 run)",
+   "action": ""
+  },
+  {
+   "rule": 3,
+   "name": "time",
+   "status": "ok",
+   "detail": "0 of 24 live months; live Sharpe after costs n/a (needs 2 months); evaluated at 24 months",
+   "action": ""
+  },
+  {
+   "rule": 4,
+   "name": "instrument",
+   "status": "ok",
+   "detail": "no held instrument on the rule-4 list (config/v1_rules_rule4.csv)",
+   "action": ""
+  },
+  {
+   "rule": 5,
+   "name": "carry-spread review",
+   "status": "ok",
+   "detail": "carry spread 11.96pp vs threshold 3.18pp (2005-2019 10th percentile) at 2026-10",
+   "action": ""
+  }
+ ],
+ "flags": [],
+ "flagged": false,
+ "note": "Flags only: this monitor never changes exposure and never touches frozen v1.0 code, configs or tags. Ethan acts on the flags. Rules and definitions: docs/ledger/v1_rules.md."
+}

@@ -873,8 +873,32 @@
   }
 
   // ------------------------------------------------------------------ Home: the cockpit
+  // ------------------------------------------------------------------ D004: v1.0 cut and stop rules (ledger/v1_rules.py, flags only)
+  const V1_STATUS = { triggered: 'bad', 'in force': 'warn', watch: 'warn', error: 'warn', ok: 'good', passed: 'good' };
+  function v1RulesFlags(vr) {
+    if (!vr || !(vr.flags || []).length) return '';
+    return `<section class="section"><div class="card notice"><b class="bad">v1.0 rules (D004): ${vr.flags.length} flag${vr.flags.length > 1 ? 's' : ''} at the ${esc(vr.as_of || '')} month-end.</b>
+      <ul class="small">${vr.flags.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+      <p class="small muted">Flags only: the monitor never changes exposure. Ethan acts at the next rebalance. <a href="#/algorithm">Details</a></p></div></section>`;
+  }
+  function v1RulesSection(vr) {
+    if (!vr) return '';
+    const head = `<div class="section-head"><h2>v1.0 cut and stop rules (D004)</h2>${info('Pre-committed in decision D004 (11 Nov 2026). Measured on the official month-end v1.0 index from the 1 Nov 2026 live start. A monitor evaluates them after each official monthly run and raises flags; it never changes exposure and never touches frozen v1.0 code, configs or tags. Ethan acts on the flags. Rules and definitions: docs/ledger/v1_rules.md.')}</div>`;
+    if (!vr.available) return `<section class="section">${head}<div class="card"><p class="empty">${esc(vr.note || 'No evaluation yet.')}</p></div></section>`;
+    const rows = (vr.rules || []).map((r) => `<tr><td>${r.rule}. ${esc(r.name)}</td><td>${pill(r.status, V1_STATUS[r.status] || '')}</td><td class="wrap small">${esc(r.detail)}${r.action ? ` <b>→ ${esc(r.action)}</b>` : ''}</td></tr>`).join('');
+    return `<section class="section">${head}<div class="card">
+      <div class="stats">
+        <div class="stat"><span class="k">Index (official)</span><span class="v">${fmtNum(vr.index, 2)}</span><span class="s">${esc(vr.as_of)} month-end · peak ${fmtNum(vr.peak, 2)}</span></div>
+        <div class="stat"><span class="k">From live peak</span><span class="v ${signClass(vr.drawdown_pct)}">${fmtPct(vr.drawdown_pct, 2, true)}</span><span class="s">halve at −20% · stop at −27%</span></div>
+        <div class="stat"><span class="k">Live Sharpe</span><span class="v">${isNum(vr.sharpe) ? fmtNum(vr.sharpe, 2) : '—'}</span><span class="s">after costs · ${vr.live_months} of 24 months</span></div>
+        <div class="stat"><span class="k">Carry spread</span><span class="v">${isNum(vr.carry_spread_pp) ? fmtNum(vr.carry_spread_pp, 2) : '—'}pp</span><span class="s">review below ${isNum(vr.carry_threshold_pp) ? fmtNum(vr.carry_threshold_pp, 2) : '—'}pp twice</span></div>
+      </div>
+      <div class="table-wrap"><table class="compact"><thead><tr><th>Rule</th><th>Status</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small muted">Evaluated ${fmtDateTime(vr.evaluated_at)}. ${esc(vr.note || '')}</p></div></section>`;
+  }
+
   async function pageHome() {
-    const [b, jn, ch, fd] = await Promise.all([homeHead(), load('janus'), load('changes'), load('fund')]);
+    const [b, jn, ch, fd, vr] = await Promise.all([homeHead(), load('janus'), load('changes'), load('fund'), load('v1_rules').catch(() => null)]);
     const v10 = b.algorithm.versions[0], v11 = b.algorithm.versions[1];
     const TOT_MTD = { me: b.me.total_mtd_pct, algorithm: v10.total_mtd_pct, janus: b.janus.total_mtd_pct, fund: fd.live ? fd.total_mtd_pct : null };
     const card = (id, title, sub, mtd, est, open, gauge_, extra, openLabel = 'Open positions') => `
@@ -892,7 +916,7 @@
     const exRows = (rows) => rows.map((r) => `<tr class="${r.shared ? 'flag' : ''}"><td><b>${esc(r.key)}</b>${r.shared ? ` <span class="pill warn">${r.opposed ? 'held by 2+ books, opposite' : 'held by 2+ books'}</span>` : ''}</td>
       ${cols.map((c) => `<td class="num ${bookOf(c).cls}-t">${isNum(r.books[c]) ? fmtNum(r.books[c], r.books[c] && Math.abs(r.books[c]) < 10 ? 2 : 1) : '—'}</td>`).join('')}</tr>`).join('');
     const cmp = b.comparison;
-    view.innerHTML = `
+    view.innerHTML = `${v1RulesFlags(vr)}
       <section class="section cockpit">
         ${card('me', 'Me', 'my decisions', b.me.mtd_pct, false, b.me.open_count, gauge(b.me.risk_used_pct, b.me.risk_limit_pct, '% at risk'))}
         ${card('algorithm', 'Algorithm', 'mechanical rules, not AI', v10.mtd_pct, true, `${v10.n_positions} (v1.0) · ${v11.n_positions} (v1.1)`, gauge(v10.gross_leverage, v10.leverage_cap, 'gross leverage, x'),
@@ -990,7 +1014,7 @@
 
   // ------------------------------------------------------------------ Algorithm
   async function pageAlgorithm() {
-    const [b, alg] = await Promise.all([load('books'), load('algorithm')]);
+    const [b, alg, vr] = await Promise.all([load('books'), load('algorithm'), load('v1_rules').catch(() => null)]);
     const [v10, v11] = b.algorithm.versions;
     setHead('Algorithm', positionsHead(v10.positions_set, b.latest_mark));
     const verBlock = (v, cap, positions) => {
@@ -1053,7 +1077,9 @@
       </section>`;
     view.innerHTML = `
       <section class="section"><div class="card b-algorithm notice"><b>Mechanical rules, not AI.</b> v1.0 is the frozen control (carry, trend and value; FX and bonds); v1.1 is v1.0 plus the pre-registered T18 turnover rule. Both run on the same inputs every month on the 3rd; neither reads my decisions or Janus. ${info('Live records: v1.0 from the November 2026 positions (index 100 at the end of October 2026), v1.1 from the 3 December 2026 rebalance. Paper capital US$500,000,000 from that rebalance (C03); results are in % of capital. Positions are set by the monthly run; daily figures for the month in progress are estimates, replaced by the official figure on the 3rd.')}</div></section>
+      ${v1RulesFlags(vr)}
       ${verBlock(v10, alg.capacity)}
+      ${v1RulesSection(vr)}
       ${verBlock(v11, alg.v11 && alg.v11.capacity)}
       ${shadowsHtml}
       <section class="section">
