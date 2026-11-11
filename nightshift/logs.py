@@ -1,7 +1,9 @@
 """Append-only logs written by the night agents (on dev):
 
 * results/exploration/log.csv: EVERY variant the explorer tests, kept or not (hard rule: log every variant). The
-  data window must end on or before config explorer.data_end (2019-12-31): a row reaching later is refused.
+  data window must end on or before explorer.data_end (2019-12-31) in MAIN's config/night.yaml (read fresh through
+  config.load_main, never the dev checkout's copy): a row reaching later is refused (exit 1); if main's cutoff
+  cannot be read, nothing is logged (exit 2, "refused: cutoff unreadable").
 * results/opposition/calibration.csv: The Opposition's probability (0-100) that a PR, queue item, idea or sleeve
   works, for later scoring (``outcome`` and ``resolved_on`` are filled when it resolves).
 
@@ -15,7 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from . import config as C
@@ -46,8 +48,30 @@ def _append(path: Path, cols: list[str], row: dict) -> None:
         w.writerow({c: row.get(c, "") for c in cols})
 
 
+class CutoffUnreadable(RuntimeError):
+    """main's explorer.data_end could not be read. Nothing is logged; the CLI exits 2 (not 1, over the cutoff)."""
+
+
+def main_cutoff() -> date:
+    """explorer.data_end from main's protected config/night.yaml (C.load_main, fetched fresh), never from the
+    checkout the explorer runs in (dev). Any failure raises CutoffUnreadable: there is no fallback."""
+    try:
+        v = C.load_main()["explorer"]["data_end"]
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, date):
+            return v
+        if not isinstance(v, str):
+            raise TypeError(f"explorer.data_end is {v!r}")
+        return date.fromisoformat(v)
+    except Exception as e:  # noqa: BLE001 - every failure means the cutoff is unknown: refuse
+        raise CutoffUnreadable(f"{type(e).__name__}: {e}") from e
+
+
 def log_variant(row: dict, path: Path = EXPLORATION, data_end_max: str | None = None) -> dict:
-    cap = date.fromisoformat(data_end_max or C.load()["explorer"]["data_end"])
+    cap = main_cutoff()
+    if data_end_max is not None:
+        cap = min(cap, date.fromisoformat(data_end_max))   # can only tighten main's cutoff, never loosen it
     end, start = date.fromisoformat(row["data_end"]), date.fromisoformat(row["data_start"])
     if end > cap:
         raise ValueError(f"data_end {end} is after {cap}: exploration never uses 2020+ returns")
@@ -98,6 +122,9 @@ def main(argv=None) -> int:
         else:
             r = log_opposition({"target_type": a.target_type, "target_id": a.target_id, "p_works": a.p_works,
                                 "verdict": a.verdict, "model": a.model, "note": a.note})
+    except CutoffUnreadable as e:
+        print(f"refused: cutoff unreadable (main's config/night.yaml explorer.data_end): {e}")
+        return 2
     except ValueError as e:
         print(f"refused: {e}")
         return 1
