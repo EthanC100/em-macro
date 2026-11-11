@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": -0.241,
+    "janus": -0.364,
     "me": 0.526
    },
    "positions": [
@@ -196,7 +196,7 @@
      "book": "janus",
      "id": "J001",
      "instrument": "US10Y",
-     "pnl_pct": -0.163,
+     "pnl_pct": -0.28,
      "move": "3.83 -> 4.01 (2008-08-29 to 2008-10-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -205,7 +205,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": -0.078,
+     "pnl_pct": -0.084,
      "move": "4.5611 -> 4.6467 (2008-08-29 to 2008-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -249,7 +249,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.54,
+    "janus": 0.866,
     "me": 0.29
    },
    "positions": [
@@ -455,7 +455,7 @@
      "book": "janus",
      "id": "J001",
      "instrument": "US10Y",
-     "pnl_pct": 0.446,
+     "pnl_pct": 0.764,
      "move": "1.13 -> 0.7 (2020-02-28 to 2020-03-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -464,7 +464,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": 0.094,
+     "pnl_pct": 0.102,
      "move": "0.5035 -> 0.419 (2020-02-28 to 2020-03-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -496,7 +496,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -5.535,
+    "janus": -7.651,
     "me": 0.317
    },
    "positions": [
@@ -702,7 +702,7 @@
      "book": "janus",
      "id": "J001",
      "instrument": "US10Y",
-     "pnl_pct": -2.62,
+     "pnl_pct": -4.496,
      "move": "1.52 -> 4.1 (2021-12-31 to 2022-10-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -711,7 +711,7 @@
      "book": "janus",
      "id": "J002",
      "instrument": "GB10Y",
-     "pnl_pct": -2.915,
+     "pnl_pct": -3.155,
      "move": "1.013 -> 3.6952 (2021-12-31 to 2022-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -737,5 +737,5 @@
   }
  ],
  "method": "Stress tests: each book's current positions replayed through three historical episodes.\n\n    python -m ledger.stress           # fetch any missing history, then write data/ledger/stress.json\n\nEach position is held unchanged from the episode's start to its end, and the instrument moves as it did then:\n  * FX and commodities by the relative price change; yields and spreads by the absolute change in % or bp;\n  * the algorithm: weight x long return (bonds and spreads through the 10-year duration at the start level, no carry);\n  * Janus: notional x position return (filled positions; pending orders at their requested risk);\n  * my decisions: size x level change x direction / |entry - stop| (the P&L formula of ledger/scoring.py), the change\n    applied to the current mark (relative for prices, absolute for yields and spreads).\nInstruments without history over an episode are listed, not guessed. Monthly-average history (marked) is used only\nwhere no daily series exists, and the result says so.",
- "as_of": "2026-11-10"
+ "as_of": "2026-11-11"
 }

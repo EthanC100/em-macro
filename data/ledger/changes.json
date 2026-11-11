@@ -1,13 +1,25 @@
 {
- "since": "2026-11-10T13:53:32+00:00",
- "at": "2026-11-10T17:17:01+00:00",
+ "since": "2026-11-10T17:17:01+00:00",
+ "at": "2026-11-11T03:18:23+00:00",
  "items": [
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": -0.6384,
-   "text": "algorithm v1.0: -0.64 index points (to 101.39)"
+   "change": -1.6669,
+   "text": "algorithm v1.0: -1.67 index points (to 99.72)"
+  },
+  {
+   "book": "me",
+   "kind": "trade",
+   "link": "#/position/me/D004",
+   "text": "New decision D004: No trade v1.0 systematic book (frozen, commit 7886867)"
+  },
+  {
+   "book": "janus",
+   "kind": "no trade",
+   "link": "#/janus",
+   "text": "Janus reviewed and opened nothing (no-trade record)"
   }
  ]
 }
