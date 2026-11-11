@@ -23,3 +23,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-11,queue,Q021,72,advisory,claude-opus-5-5,,,"gap: a daily spread with one carried leg (date=min, mixed-date value) passes mark_can_act and still overwrites a first-hand row (marks.py:530-541); add a 5th test for it; decide revision-on-stale-refetch rule; watchdog fetched_at heartbeat meaning changes"
 2026-11-11,pr,37,70,advisory,claude-opus-5-5,,,
 2026-11-11,pr,38,55,advisory,claude-opus-5-5,,,
+2026-11-11,pr,39,72,advisory,claude-opus-5-5,,,
