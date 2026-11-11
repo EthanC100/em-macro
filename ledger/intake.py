@@ -263,7 +263,8 @@ def handle_resolve(fields: dict, issue: int, today: date, root: Path) -> dict:
             row["pnl_pct"] = f"{_deriv_pnl(terms, parse_number(row['size_pct']), exit_value(terms, parse_number(r['result']))):g}"
         note = " ".join(r["note"].split()) if r["note"] else ""
         row["resolution_note"] = (note + " " + override.strip()).strip() if override else note
-        row["issue"] = f"{row.get('issue') or ''}{'; ' if row.get('issue') else ''}{issue}"
+        # ``issue`` (where the entry was logged) is a sealed entry field (ledger/audit.py FILES): a resolution never
+        # changes it, or the audit seal refuses the resolve. The resolving issue or clerk run is in the commit.
         sc = score_decision(row)
         lines = [f"Resolved **{ref}** as **{outcome}** on {today.isoformat()}." + (override if override else "")]
         if sc["brier"] is not None:
@@ -275,7 +276,7 @@ def handle_resolve(fields: dict, issue: int, today: date, root: Path) -> dict:
             lines.append("- P&L: not computable (needs a numeric entry level in the record, the stop and the exit price, or a P&L entered here).")
     else:
         row["result"] = " ".join(r["result"].split()) + (f" — {' '.join(r['note'].split())}" if r["note"] else "") + override
-        row["issue"] = f"{row.get('issue') or ''}{'; ' if row.get('issue') else ''}{issue}"
+        # ``issue`` is sealed with the entry (see above): left unchanged
         sc = score_forecast(row)
         lines = [f"Resolved **{ref}** as **{outcome}** on {today.isoformat()}." + (override if override else "")]
         if sc["brier_me"] is not None:
