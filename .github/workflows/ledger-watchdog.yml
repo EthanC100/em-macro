@@ -35,6 +35,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json"
-          python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json"
-          bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ledger-daily.yml/runs?per_page=30" > "$RUNNER_TEMP/runs.json" \
+            && python -m ledger.watchdog --late-runs "$RUNNER_TEMP/runs.json" --out "$RUNNER_TEMP/late.json" \
+            && bash .github/scripts/marks_alert.sh "$RUNNER_TEMP/late.json" || echo "lateness check could not run"

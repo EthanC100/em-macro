@@ -25,13 +25,14 @@ from .marks import MARKS, read_marks
 TITLE = "[ALERT] Ledger marks stale"
 # Q018 (approved by Ethan 2026-11-11): GitHub creates this repository's schedule events 5.5-10.5 hours late, so a
 # Claude Code scheduled task ("ledger-daily kick", docs/agent-system.md) dispatches ledger-daily at 06:07 and 22:07
-# UTC, with the crons kept as backups. A kick window counts as missed when no ledger-daily run (any event) started
-# from 15 minutes before to 45 minutes after it.
+# UTC, with the crons kept as backups. A kick window counts as missed when no ledger-daily run (any event, not
+# cancelled) started from 20 minutes before to 45 minutes after it.
 # Not "[ALERT] ledger-daily ...": ledger-daily closes every open alert with that prefix when a run succeeds, which
 # would close this one straight after a late run.
 LATE_TITLE = "[ALERT] Kick window missed: ledger-daily late"
 KICK_TIMES = ((6, 7), (22, 7))                       # UTC (hour, minute)
-KICK_EARLY, KICK_LATE = timedelta(minutes=15), timedelta(minutes=45)
+KICK_EARLY, KICK_LATE = timedelta(minutes=20), timedelta(minutes=45)   # 20: the kick skips while a run made
+# up to 20 minutes earlier is still active, so such a run must count for the window (The Opposition, Q018)
 KICK_FROM = datetime(2026, 11, 11, 22, 7, tzinfo=timezone.utc)   # the task's first scheduled firing
 
 
@@ -50,7 +51,8 @@ def check(now: datetime, max_age_days: float = 2.0, path: Path = MARKS) -> dict:
     body = (f"The newest mark in `data/ledger/marks.csv` was fetched at **{last or 'never'}**"
             f"{f' ({age:.1f} days ago)' if age is not None else ''}; the limit is {max_age_days:g} days. "
             f"Newest observation date: {obs or '-'}.\n\n"
-            "ledger-daily should fetch and commit marks every morning (05:52 UTC, with a 09:22 UTC backup run). "
+            "ledger-daily should fetch and commit marks twice a day: the ledger-daily kick task dispatches it at 06:07 and "
+            "22:07 UTC, and its 05:52 and 09:22 UTC crons are late-running backups (Q018). "
             "Check Actions > ledger-daily: a failed run opens its own alert; a green run that committed nothing "
             "points at the commit step. Re-run it with Actions > ledger-daily > Run workflow.\n\n"
             "Until marks are fresh, live P&L, stop checks and horizon closes use old prices. "
@@ -85,12 +87,14 @@ def late_check(runs, now: datetime, lookback_hours: float = 48) -> dict:
     (else ``created_at``). The JSON matches the marks check, so .github/scripts/marks_alert.sh opens and closes
     "[ALERT] Kick window missed: ledger-daily late" from it."""
     runs = runs.get("workflow_runs", []) if isinstance(runs, dict) else list(runs or [])
+    # a run cancelled before it did anything (replaced while pending in the concurrency group) does not count
+    runs = [r for r in runs if r.get("conclusion") not in ("cancelled", "skipped")]
     starts = sorted(t for t in (_utc(r.get("run_started_at") or r.get("created_at")) for r in runs) if t)
     missed = [t for t in kick_windows(now, lookback_hours)
               if not any(t - KICK_EARLY <= s <= t + KICK_LATE for s in starts)]
     latest = starts[-1].isoformat() if starts else None
     body = ("ledger-daily did not start within its kick window (" + ", ".join(
-        f"{t:%Y-%m-%d %H:%M} UTC" for t in missed) + "): no run started from 15 minutes before to 45 minutes after. "
+        f"{t:%Y-%m-%d %H:%M} UTC" for t in missed) + "): no run (not cancelled) started from 20 minutes before to 45 minutes after. "
             f"Latest ledger-daily start: {latest or 'none'}.\n\n"
             "The \"ledger-daily kick\" Claude Code scheduled task (docs/agent-system.md) dispatches ledger-daily at 06:07 "
             "and 22:07 UTC because GitHub starts this repository's scheduled workflows hours late (Q018). Check the "

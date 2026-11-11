@@ -51,6 +51,15 @@ def test_a_kick_window_without_a_run_is_late():
     assert not ok["late"] and ok["missed"] == [] and ok["close_comment"]
 
 
+def test_a_run_started_up_to_20_minutes_early_counts_and_a_cancelled_run_does_not():
+    """The kick skips while a run created up to 20 minutes earlier is still active, so that run counts for the
+    window; a run cancelled while pending (replaced in the concurrency group) never counts (The Opposition, Q018)."""
+    now = datetime(2026, 11, 12, 0, 0, tzinfo=UTC)
+    assert W.late_check(runs("2026-11-11T21:48:00Z"), now)["missed"] == []
+    cancelled = {"workflow_runs": [{"run_started_at": "2026-11-11T22:07:05Z", "conclusion": "cancelled"}]}
+    assert W.late_check(cancelled, now)["missed"] == ["2026-11-11T22:07:00+00:00"]
+
+
 def test_windows_before_the_task_existed_or_still_open_are_not_judged():
     assert W.late_check(runs(), datetime(2026, 11, 11, 22, 30, tzinfo=UTC))["missed"] == []     # window still open
     assert W.late_check(runs(), datetime(2026, 11, 11, 22, 53, tzinfo=UTC))["missed"] == ["2026-11-11T22:07:00+00:00"]
