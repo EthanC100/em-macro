@@ -6,8 +6,10 @@ behind ledger-daily could be dropped silently. Now:
   * ledger-intake has its own group per issue (only a newer edit of the same issue can replace its pending run);
   * the entry is written through scripts/ledger_commit.sh on a fresh main, which re-runs the intake (and so
     re-allocates the id) when a push is rejected, so two forms racing get consecutive ids;
-  * ledger-daily dispatches ledger-intake (workflow_dispatch, input ``issue``) for any open Ledger form that has no
-    intake comment 30 minutes after it was opened or last edited (``sweep``).
+  * ledger-daily dispatches ledger-intake (workflow_dispatch, input ``issue``) for any open Ledger form opened by a
+    person that has no comment from the Actions bot 30 minutes after it was opened or last edited (``sweep``). It
+    comments on the issue first, so a form is re-run at most once per edit; intake comments on every outcome
+    (logged, wrong, ledger tests failed, write failed) and logs an issue at most once (``already_logged``).
 
     python -m ledger.intake_runs env --issue-json ISSUE.json [--env-file "$GITHUB_ENV"]
     python -m ledger.intake_runs sweep --issues ISSUES.json [--now 2026-11-11T12:00:00Z]
@@ -26,24 +28,24 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-FORM_PREFIXES = ("[Decision]", "[Forecast]", "[Resolve]", "[Report]")
-PASTE_MARKERS = ("DECISION RECORD", "FORECAST", "RESOLVE")
 GRACE = timedelta(minutes=30)
 BOT_LOGINS = ("github-actions", "github-actions[bot]")
 SWEEP_QUERY = """query($owner: String!, $repo: String!) {
   repository(owner: $owner, name: $repo) {
     issues(states: OPEN, first: 100, orderBy: {field: UPDATED_AT, direction: DESC}) {
-      nodes { number title body createdAt lastEditedAt labels(first: 20) { nodes { name } }
+      nodes { number title body createdAt lastEditedAt author { login } labels(first: 20) { nodes { name } }
               comments(last: 50) { nodes { author { login } createdAt } } } } } }"""
 
 
 def is_ledger_form(title: str, body: str, labels: list[str]) -> bool:
-    """The same test as ledger-intake's job condition: a form title, a ledger:* label, or a pasted block on an issue
-    labelled ``ledger``."""
+    """Exactly the issues `python -m ledger.intake` processes (its own routing: a pasted block on an issue labelled
+    ``ledger``, or a form kind from the title or a ledger:<kind> label). ledger-daily's own "[RESOLVE?]" issues
+    (label ``ledger:resolve?``) are not forms."""
+    from . import intake as I
     title, body = title or "", body or ""
-    if any(title.startswith(p) for p in FORM_PREFIXES) or any(lb.startswith("ledger:") for lb in labels):
+    if "ledger" in labels and (I.paste_kind(body) or title.strip().startswith(I.PASTE_TITLE_PREFIX)):
         return True
-    return "ledger" in labels and (title.startswith("[Paste]") or any(m in body for m in PASTE_MARKERS))
+    return I.classify(title, labels) is not None
 
 
 def _labels(issue: dict) -> list[str]:
@@ -85,6 +87,9 @@ def needs_intake(issues, now: datetime, grace: timedelta = GRACE) -> list[int]:
         issues = (((issues.get("data") or {}).get("repository") or {}).get("issues") or {}).get("nodes") or []
     out = []
     for i in issues:
+        author = ((i.get("author") or {}).get("login") or "")
+        if author in BOT_LOGINS or author.endswith("[bot]"):
+            continue                                 # opened by a workflow (e.g. ledger-daily's [RESOLVE?] issues)
         if not is_ledger_form(i.get("title"), i.get("body"), _labels(i)):
             continue
         t0 = max(t for t in (_t(i.get("createdAt")), _t(i.get("lastEditedAt"))) if t)

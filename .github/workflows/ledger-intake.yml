@@ -112,6 +112,7 @@ jobs:
           echo "risk=$([ -s "$RUNNER_TEMP/risk.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/risk.md" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Ledger tests still pass with the new entry
+        id: tests
         if: steps.intake.outputs.ok == 'true'
         working-directory: ${{ runner.temp }}/check
         run: |
@@ -161,6 +162,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+
+      # every outcome leaves a bot comment, so ledger-daily's sweep never re-runs the same form edit twice (Q022)
+      - name: Comment if the ledger tests failed
+        if: failure() && steps.tests.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+            "The entry passed its checks, but the ledger tests failed with it ($RUN_URL). Nothing was logged. Edit the issue to try again, or log it with the Ledger clerk."
 
       # the entry passed on the copy of main but not on the fresh main at the write (it changed meanwhile), or the
       # push failed five times: say so on the issue, which stays open (editing it re-runs the intake)

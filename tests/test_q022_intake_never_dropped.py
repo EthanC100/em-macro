@@ -54,9 +54,11 @@ def test_intake_writes_through_ledger_commit_and_never_rebases_an_allocated_id()
     assert "scripts/ledger_commit.sh" in write and "--fail-unless-ok" in write and "LEDGER_MSG_FILE" in write
     assert not any("pull --rebase" in r for r in runs.values())
     assert "Seal the new entry" not in runs                # ledger_commit.sh seals
+    assert "Comment if the ledger tests failed" in runs                # every outcome leaves a bot comment
     daily, _ = wf("ledger-daily.yml")
-    assert any("ledger.intake_runs sweep" in str(s.get("run", "")) and "gh workflow run ledger-intake.yml" in
-               str(s.get("run", "")) for s in daily["jobs"]["daily"]["steps"])
+    sweep = next(str(s["run"]) for s in daily["jobs"]["daily"]["steps"] if "ledger.intake_runs sweep" in str(s.get("run", "")))
+    # the sweep comments before it dispatches: at most one re-run per edit
+    assert sweep.index("gh issue comment") < sweep.index("gh workflow run ledger-intake.yml")
 
 
 # ----------------------------------------------------------------------------- (2) two forms racing
@@ -124,6 +126,25 @@ def test_two_forms_racing_get_consecutive_ids_and_both_are_committed(tmp_path):
     assert v.returncode == 0, v.stdout + v.stderr
 
 
+def test_an_issue_is_logged_once_however_often_it_is_processed(tmp_path):
+    """A re-run (an edit, a queued event after a dispatched run, the sweep) of an issue already logged writes
+    nothing new and says which id it is (The Opposition, PR #35)."""
+    origin, a, _ = _repo(tmp_path)
+    first = subprocess.run(_write_cmd(104, tmp_path), cwd=a, env=_env(104, PASTE_DECISION, tmp_path),
+                           capture_output=True, text=True)
+    assert first.returncode == 0, first.stdout + first.stderr
+    head = _git("rev-parse", "origin/test", cwd=a)
+    again = subprocess.run(_write_cmd(104, tmp_path), cwd=a, env=_env(104, PASTE_DECISION, tmp_path),
+                           capture_output=True, text=True)
+    assert again.returncode == 0 and "nothing to commit" in again.stdout, again.stdout + again.stderr
+    out = json.loads((tmp_path / "final104.json").read_text())
+    assert out["duplicate"] and out["id"] == "D003" and "Already logged as **D003**" in out["comment"]
+    _git("fetch", "-q", "origin", cwd=a)
+    assert _git("rev-parse", "origin/test", cwd=a) == head
+    rows = _git("show", "origin/test:data/ledger/decisions.csv", cwd=a)
+    assert rows.count("\nD003,") == 1 and "\nD004," not in rows
+
+
 def test_an_entry_that_fails_on_the_fresh_main_writes_nothing(tmp_path):
     origin, a, _ = _repo(tmp_path)
     head = _git("rev-parse", "origin/test", cwd=a)
@@ -140,8 +161,9 @@ NOW = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
 
 
 def issue(n, title="[Decision] MX10Y", created="2026-11-12T10:00:00Z", edited=None, comments=(), labels=("ledger:decision",),
-          body="### Instrument\n\nMX10Y"):
+          body="### Instrument\n\nMX10Y", author="EthanC100"):
     return {"number": n, "title": title, "body": body, "createdAt": created, "lastEditedAt": edited,
+            "author": {"login": author},
             "labels": {"nodes": [{"name": x} for x in labels]},
             "comments": {"nodes": [{"author": {"login": who}, "createdAt": t} for who, t in comments]}}
 
@@ -155,6 +177,13 @@ def test_the_sweep_flags_an_open_form_with_no_intake_comment_after_30_minutes():
         issue(5, comments=[("EthanC100", "2026-11-12T10:05:00Z")]),                      # only a human comment
         issue(6, title="notes", labels=()),                                              # not a Ledger form
         issue(7, title="[Paste] MX10Y", labels=("ledger",), body="DECISION RECORD\nDate: 12 Nov 2026"),   # pasted
+        # ledger-daily's own [RESOLVE?] issues are not forms (and are opened by the bot) (The Opposition, PR #35)
+        issue(8, title="[RESOLVE?] D001 horizon passed", labels=("ledger", "ledger:resolve?"), author="github-actions"),
+        issue(9, title="[RESOLVE?] D001 horizon passed", labels=("ledger", "ledger:resolve?")),
+        issue(10, author="github-actions"),                                              # any bot-opened issue
+        issue(11, title="notes", labels=("ledger",), body="see the FORECAST thread"),     # intake would skip it
+        # the sweep's own comment caps the re-run at one per edit
+        issue(12, comments=[("github-actions", "2026-11-12T10:40:00Z")]),
     ]}}}}
     assert R.needs_intake(issues, NOW) == [1, 4, 5, 7]
 

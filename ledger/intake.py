@@ -535,6 +535,21 @@ def process(kind: str, body: str, issue: int, today: date, root: Path = ROOT, to
     return {"ok": False, "kind": None, "comment": "This issue is not a ledger form; nothing to do."}
 
 
+def already_logged(kind: str, issue: int, root: Path = ROOT) -> str | None:
+    """Q022: the id of a decision or forecast already logged from this issue, if any. An issue form can be processed
+    more than once (an edit, a queued event after a re-run, ledger-daily's sweep); it is logged once."""
+    if not issue or kind not in ("decision", "forecast"):
+        return None
+    path = root / ("data/ledger/decisions.csv" if kind == "decision" else "data/ledger/forecasts.csv")
+    if not path.exists():
+        return None
+    with path.open(encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            if str(issue) in [x.strip() for x in str(row.get("issue") or "").split(";")]:
+                return row.get("id")
+    return None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", required=True)
@@ -547,7 +562,12 @@ def main(argv=None) -> int:
     kind = classify(title, labels)
     today = parse_date(os.environ.get("TODAY")) or date.today()
     issue = int(os.environ.get("ISSUE_NUMBER", "0") or 0)
-    if "ledger" in labels and (paste_kind(body) or title.strip().startswith(PASTE_TITLE_PREFIX)):
+    pasted = "ledger" in labels and (paste_kind(body) or title.strip().startswith(PASTE_TITLE_PREFIX))
+    done = already_logged(paste_kind(body) if pasted else kind, issue, Path(a.root))
+    if done:
+        result = {"ok": True, "kind": paste_kind(body) if pasted else kind, "id": done, "duplicate": True, "files": [],
+                  "comment": f"Already logged as **{done}** from this issue; nothing new was written."}
+    elif pasted:
         result = process_paste(body, issue, today, Path(a.root))
     elif kind is None:
         result = {"ok": False, "kind": None, "skip": True, "comment": ""}
@@ -557,7 +577,7 @@ def main(argv=None) -> int:
     Path(a.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "comment"}))
     msg = os.environ.get("LEDGER_MSG_FILE")
-    if msg and result.get("ok"):
+    if msg and result.get("ok") and not result.get("duplicate"):
         # scripts/ledger_commit.sh commits with this message: the id allocated on the fresh main it ran on (Q022)
         Path(msg).write_text(f"Ledger {result.get('kind')} {result.get('id')} (issue #{issue})\n", encoding="utf-8")
     return 1 if (a.fail_unless_ok and not result.get("ok")) else 0

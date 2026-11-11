@@ -870,3 +870,29 @@ The Opposition raised it in its review of Q018.
 the dry run's `marks_after`); `janus/watchlist.yaml` (the resolution rule); `docs/janus/daily_review.md` (the rule and
 the dry-run example); `docs/fund/allocation.md`; `data/janus/README.md`; `tests/test_janus_c11.py`; C08 tests moved to
 the new rule.
+
+## 2026-11-11: ledger-intake leaves the shared concurrency group (Q022, PR #35)
+
+Approved by Ethan on 2026-11-11. It changes the "2026-11-04: Ledger automation" note above, where ledger-daily
+"shares the `ledger-intake` concurrency group so the ledger files are edited by one job at a time".
+
+**Why.** That group was shared by ledger-intake, ledger-daily, private-commitments and shadows-setup. GitHub keeps one
+pending run per group, and a newly queued run cancels it, so an issue form's run waiting behind ledger-daily could be
+dropped. Q018 raised ledger-daily to about four runs a day.
+
+**From PR #35:**
+- **Intake's own group:** ledger-intake has its own concurrency group per issue.
+- **Intake's write:** it writes through `scripts/ledger_commit.sh` on a fresh main, as the Ledger clerk sessions
+  already do. A rejected push re-runs the intake there, so the id is allocated on the main it is pushed to.
+- **The writers' group:** ledger-daily, private-commitments and shadows-setup share `ledger-writers`, and are still
+  edited one at a time among themselves.
+- **No duplicate entries:** an issue is logged once (`already_logged`).
+- **The sweep:** ledger-daily re-runs intake, once per edit, for an open form opened by a person that has no bot
+  comment after 30 minutes.
+
+**What "one job at a time" no longer covers.** An intake (or clerk) write can now land while ledger-daily is running.
+ledger-daily still pushes with `git pull --rebase`. If an intake entry lands next to a `decisions.csv` or
+`forecasts.csv` row that ledger-daily is changing, its push can conflict and that run fails loudly (its alert issue).
+The next run redoes it: ledger-daily is idempotent. This was already true of the Ledger clerk sessions.
+
+**Unchanged:** every ledger file's format and every writer's output.
