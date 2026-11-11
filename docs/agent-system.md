@@ -23,7 +23,7 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 |---|---|---|---|---|
 | **ledger-daily** (`.github/workflows/ledger-daily.yml`) | 05:52 and 09:22 UTC daily, and by hand. **Actually starts 7-11 hours late**: runs 5-10 started 11:56-16:50 UTC (19:56-00:50 Singapore), today's at 14:25 UTC, so it often runs **inside the night window** | `GITHUB_TOKEN` (github-actions[bot]) | `data/ledger/` marks, decisions, forecasts, derivative_pnl, automation_log, api_log, postmortems, reports, changes.json, state.json, stress*.json; `data/raw/bist`, `data/raw/bondspot`; `results/shadows/` (from go-live). Then through `scripts/ledger_commit.sh`: `data/janus/`, `data/ledger/seals.jsonl` and the other ledger_commit paths | em-macro-data `ledger/`, `databento/shadows`, `shadows` with secret `EM_MACRO_DATA_TOKEN`; Databento API (US$1/day cap) |
 | **ledger-intake** (`ledger-intake.yml`) | on issues opened/edited/reopened (Ledger forms) | `GITHUB_TOKEN` | the entry's file under `data/ledger/`; seals via ledger_commit.sh | issue comments |
-| **systematic-monthly** (`systematic.yml`) | 07:23 UTC on the 3rd (the rebalance); Mon/Thu 06:37 keep-cache (no push) | `GITHUB_TOKEN` (plain `git push`, no retry) | `results/systematic/` (positions, paper_pnl, rebalance_log, adjustments, overrides_log), `results/systematic_v1.1/`, `results/live_compare/`, `data/processed/`, `data/raw/{bondspot,bist,imf_weo}`, coverage reports, `results/screener/`, `data/ledger/reports`, changes.json, state.json | alert issues |
+| **systematic-monthly** (`systematic.yml`) | 07:23 UTC on the 3rd (the rebalance); Mon/Thu 06:37 keep-cache (no push) | `GITHUB_TOKEN` (plain `git push`, no retry) | `results/systematic/` (positions, paper_pnl, rebalance_log, adjustments, overrides_log, `d005/` from the D005 step), `results/systematic_v1.1/`, `results/live_compare/`, `data/processed/`, `data/raw/{bondspot,bist,imf_weo}`, coverage reports, `results/screener/`, `data/ledger/reports`, changes.json, state.json | alert issues |
 | **ledger-screener** (`ledger-screener.yml`) | by hand | `GITHUB_TOKEN` | `results/screener/`, `data/ledger/reports` | |
 | **elections-daily** (`elections-daily.yml`) | 06:41 UTC daily | `GITHUB_TOKEN` | `data/elections/`, `docs/elections/` | alert issues |
 | **elections-weekly** (`elections-weekly.yml`) | Mondays 06:17 UTC | `GITHUB_TOKEN` | `data/elections/`, `docs/elections/` | |
@@ -183,6 +183,7 @@ on main (the test checks each exists):
 | pre-registrations | `docs/prereg/` |
 | corrections log (K001-K003) | `data/ledger/seals.jsonl` (the corrections are records in the audit chain) |
 | config changes, commitments, trials | `docs/config_changes.md`, `ledger/commitments.py`, `trials.csv` |
+| D005 volatility floor (supersedes D004 rule 4) | `config/v1_managed_fx.csv` (managed-currency list), `em_macro/d005.py`, `em_macro/d005_fallback.py` (the override and its fail-safe); all three also always protected in `nightshift/protected.py` |
 | the agents' own rules and switches | `.claude/`, `config/night.yaml` (also always protected in `nightshift/protected.py`), `.github/CODEOWNERS`, `docs/rulesets/` |
 
 Tags cannot be covered by CODEOWNERS: `docs/rulesets/frozen-tags.json` blocks updating or deleting both tags.

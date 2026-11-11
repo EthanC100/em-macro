@@ -89,6 +89,26 @@ jobs:
         id: overlay
         run: python -m em_macro.overlay update 2>&1 | tee "$RUNNER_TEMP/overlay.log"
 
+      # D005 (supersedes D004 rule 4; docs/ledger/d005_vol_floor.md): floor the volatility of each currency on
+      # config/v1_managed_fx.csv at the month's median EM-currency volatility, recompute that leg's inverse-vol
+      # weight and rescale v1.0's book to its 10% target before it is booked. Imports the frozen v1.0 code
+      # read-only; writes results/systematic/d005/ and adds d005_adj / net_before_d005 to paper_pnl.csv
+      # (final_net = booked book; net and model_net stay unadjusted v1.0). FAIL-SAFE (continue-on-error): on any
+      # error it books this month as v1.0 unadjusted, keeps the D005 P&L already booked, writes
+      # results/systematic/d005/status.json and exits 1; v1.0's rebalance is still committed and the alert issue
+      # is opened. If the process dies before writing, the fail-safe step below does the same with the standard
+      # library only. v1.0's own files (positions.csv, rebalance_log.csv, ...) are never written by either.
+      - name: D005 volatility floor on the v1.0 book (managed currencies)
+        id: d005
+        continue-on-error: true
+        run: python -m em_macro.d005 update 2>&1 | tee "$RUNNER_TEMP/d005.log"
+
+      - name: D005 fail-safe (book v1.0 unadjusted this month)
+        id: d005_fallback
+        if: steps.d005.outcome == 'failure'
+        continue-on-error: true
+        run: python -m em_macro.d005_fallback 2>&1 | tee "$RUNNER_TEMP/d005_fallback.log"
+
       # Ledger screener (ledger/screener.py): every country's signals, ranks, position and catalysts after the
       # rebalance, filed as a report and shown in the app. Read-only use of the frozen inputs and signal code;
       # a failure here never blocks the rebalance (continue-on-error).
@@ -134,6 +154,7 @@ jobs:
                     data/processed data/raw/bondspot data/raw/bist data/raw/imf_weo \
                     results/coverage_report.md results/panel_coverage.md \
                     results/screener data/ledger/reports
+            if [ -d results/systematic/d005 ]; then git add -- results/systematic/d005; fi   # D005 book (from the 2026-11 positions)
             for f in data/ledger/changes.json data/ledger/state.json; do
               [ -e "$f" ] && git add -- "$f"     # one path at a time: a missing path must not unstage the others
             done
@@ -148,7 +169,7 @@ jobs:
           } 2>&1 | tee "$RUNNER_TEMP/commit.log"
 
       - name: Close open alert issues after a successful run
-        if: success() && steps.update_v11.outcome == 'success' && steps.rebalance_v11.outcome == 'success'
+        if: success() && steps.d005.outcome == 'success' && steps.update_v11.outcome == 'success' && steps.rebalance_v11.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -161,7 +182,7 @@ jobs:
           done
 
       - name: Open or update the alert issue
-        if: failure() || steps.update_v11.outcome == 'failure' || steps.rebalance_v11.outcome == 'failure'
+        if: failure() || steps.d005.outcome == 'failure' || steps.d005_fallback.outcome == 'failure' || steps.update_v11.outcome == 'failure' || steps.rebalance_v11.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -173,6 +194,8 @@ jobs:
             update=${{ steps.update.outcome }}
             rebalance=${{ steps.rebalance.outcome }}
             overlay=${{ steps.overlay.outcome }}
+            d005=${{ steps.d005.outcome }}
+            d005_fallback=${{ steps.d005_fallback.outcome }}
             update_v11=${{ steps.update_v11.outcome }}
             rebalance_v11=${{ steps.rebalance_v11.outcome }}
             tests=${{ steps.tests.outcome }}
@@ -180,6 +203,7 @@ jobs:
         run: |
           declare -A names=([install]="Install" [refresh]="Refresh data" [update]="Positions and paper P&L"
                             [rebalance]="Rebalance log" [overlay]="Political-risk overlay and overrides"
+                            [d005]="D005 volatility floor" [d005_fallback]="D005 fail-safe"
                             [update_v11]="v1.1 positions and paper P&L" [rebalance_v11]="v1.1 rebalance log"
                             [tests]="Tests" [commit]="Commit and push")
           step=""
@@ -203,7 +227,12 @@ jobs:
               echo "**Failing step:** a setup step before the pipeline (checkout, Python or the cache); see the run log."
             fi
             echo
-            if { [ "$step" = "update_v11" ] || [ "$step" = "rebalance_v11" ]; } && [ "$COMMIT_OUTCOME" = "success" ]; then
+            if { [ "$step" = "d005" ] || [ "$step" = "d005_fallback" ]; } && [ "$COMMIT_OUTCOME" = "success" ]; then
+              echo "Only the D005 step failed (fail-safe): v1.0 rebalanced and this month was booked as v1.0"
+              echo "UNADJUSTED (no volatility floor); D005 P&L of months already booked is kept. Details:"
+              echo "results/systematic/d005/status.json. Fix the cause, then re-run the workflow"
+              echo "(Actions > systematic-monthly > Run workflow) to book this month with D005."
+            elif { [ "$step" = "update_v11" ] || [ "$step" = "rebalance_v11" ]; } && [ "$COMMIT_OUTCOME" = "success" ]; then
               echo "Only the v1.1 step failed: v1.0's rebalance (results/systematic/) was committed as usual;"
               echo "v1.1's positions and P&L for this month were not updated. Fix the cause, then re-run the"
               echo "workflow (Actions > systematic-monthly > Run workflow); both rebalance logs record the actual"
