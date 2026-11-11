@@ -33,7 +33,7 @@ edited. A fill, a stop change, a close or a review is a new record.
 | `run` | session | session (daily_review / quick_check), model, timestamp, market summary, session URL, sources read |
 | `open` | daily review | new position: instrument, direction, % of account at risk, stop, horizon, probability its view is right, thesis, what would change its mind, sources, model, timestamp. The entry is not yet filled |
 | `opposition` | daily review | The Opposition's case against an `open` |
-| `fill` | `mark` | entry at the first first-hand daily mark dated on or after the decision date: notional, contracts, costs, capacity check, roll contract |
+| `fill` | `mark` | entry at the first first-hand daily mark dated on or after the decision date (for an order from a C08 review, from config change C11: strictly after the review's UTC date): notional, contracts, costs, capacity check, roll contract |
 | `cancel` | `mark` / session | the entry mark was already through the stop, or Janus withdrew the order before the fill |
 | `review` | session | hold / close / tighten_stop for an open position, with reasoning |
 | `stop_change` | session | a tightened stop (widening is rejected in code) |

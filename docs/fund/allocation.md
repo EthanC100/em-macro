@@ -127,8 +127,8 @@ replaces C08's first wording, one forecast per instrument per window, which neve
 
   The windows follow each other without overlapping. Which call counts depends only on dates, never on outcomes, so
   no call can be picked after the fact.
-- **When it resolves.** Each forecast's window runs from its base mark (the first first-hand daily mark dated on or
-  after the forecast's date) to its end mark (the first first-hand daily mark dated on or after the 20th weekday
+- **When it resolves.** Each forecast's window runs from its base mark (the first first-hand daily mark dated
+  strictly after the forecast's date, from config change C11) to its end mark (the first first-hand daily mark dated on or after the 20th weekday
   after the base mark). A cluster call resolves when all its forecasts have resolved. It counts toward the rule at
   a month start when its window ends on or before the previous month end.
 - **Scoring.** A forecast is right when the question resolves the way it leaned: YES with `p_final` above 50, or NO

@@ -30,7 +30,8 @@ C08 superseded are listed at the end of this section, for reading older records.
   - yen, Australian dollars, reais (BCB PTAX) and pesos (Banxico FIX) per dollar **lower** (YES = long the yen,
     the Australian dollar, the real or the peso).
 - How a question resolves:
-  - **base mark:** the first first-hand daily mark dated on or after today;
+  - **base mark:** the first first-hand daily mark dated **after** today's UTC date (config change C11): never
+    today's close, which you may already know. On a Friday it is Monday's mark; after a holiday, the next session's;
   - **end mark:** the first first-hand daily mark dated on or after the 20th weekday after the base mark;
   - **answer:** YES only if the end mark is strictly beyond the base mark in that direction.
 - For **every** instrument, give the probability (%) that its question resolves YES:
@@ -60,7 +61,8 @@ C08 superseded are listed at the end of this section, for reading older records.
   - A position on the right side whose target risk is within 25% of its current risk is held.
   - Otherwise it is resized at the next mark, with costs charged only on the notional traded.
   - A forecast that changes side flips the position.
-- **Fills:** at the next official daily mark, as before.
+- **Fills (C11):** every order, resize and close this review sets fills at the first official daily mark dated
+  after today's UTC date, never at a close you can already see.
 - **Not in a daily review:** `new_positions`, `reviews`, `below_budget`, `candidates` and `deferred_ideas`. The CLI
   rejects a review that includes them. There is no "below budget" reason any more, and no deferral: on a weekend
   or holiday the orders simply fill at the next session's mark.
@@ -132,7 +134,8 @@ probability, and the CLI never checks your probability against its view.
     token in a URL or a git command.
   - **Never write to em-macro-data**: no commit, push, `ledger.derivs settle` or `ledger.settlements fetch`.
   - Never copy a settlement, or a level derived from one, into any public text; refer to moves in %.
-- Orders fill at the **next official daily mark**, not at today's price. A C08 position closes automatically at
+- Orders fill at the **first official daily mark dated after today's UTC date** (C11), not at today's price or
+  today's close. A C08 position closes automatically at
   the first mark through its mechanical stop, or when the CLI resizes, flips or excludes it at a daily review.
 - Push to `main` (the script does this). Do not create a branch or a pull request.
 
@@ -234,7 +237,19 @@ scripts/janus_commit.sh "Janus daily review $(date -u +%Y-%m-%d): 10 forecasts, 
   python -m ledger.janus propose --file /tmp/janus_review.json
 ```
 
-The dry run lists what the CLI would close, hold and open, and the risk after the review.
+The dry run lists what the CLI would close, hold and open, the risk after the review, and `marks_after`: every
+order, close and forecast base mark from this review uses the first mark dated after that date (C11). For the
+example above, run at 23:07 UTC on Wednesday 11 November with J001 and J002 open (25 points from 50 come to 2.5%,
+scaled up to 3%):
+
+```json
+{"ok": true, "dry_run": true, "risk_after_pct": 3.0, "marks_after": "2026-11-11",
+ "would_close": ["J001", "J002"], "would_hold": [],
+ "would_open": [["US10Y", "long", 0.48], ["GB10Y", "long", 0.24], "..."]}
+```
+
+J001 and J002 (opened before C08) close and the new orders fill at Thursday 12 November's marks. Each forecast's
+base mark is its instrument's first mark dated 12 November or later.
 
 ## 6. Due post-mortems (every book)
 

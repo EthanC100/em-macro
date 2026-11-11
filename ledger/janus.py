@@ -68,6 +68,8 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     position. The first C08 review closes every earlier position (J001, J002) as its closing action. Kept:
     sources_read, the time anchor, failed-review records (exit 3). Superseded: C05 (b)'s sizing table,
     below_budget and deferrals, C06 rules 1-2, C07 rules 1, 2 and 4;
+  * config change C11 (approved 2026-11-11): a C08 review's forecast base marks and the fills of its orders,
+    resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -168,6 +170,10 @@ C08_PROBABILITY_RANGE = (1, 99)       # whole numbers; 50 is never a forecast
 C08_RISK_PER_POINT = 0.1              # % at risk per point of |p_final - 50|, before scaling into the C05 band
 C08_NO_TRADE_BAND = 0.25              # a held position is resized only when its target risk moves more than 25%
 C08_DISCRETIONARY = ("new_positions", "reviews", "below_budget", "candidates", "deferred_ideas")
+# Config change C11 (approved by Ethan 2026-11-11, before C08's first review): a C08 review's forecast base marks,
+# and the fills of its orders and closes, use the first first-hand daily mark dated strictly after the review's UTC
+# date (rolling forward over weekends and holidays), never a mark the review could already see
+C11_FROM = date(2026, 11, 11)
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
 GENESIS = "0" * 64
@@ -449,7 +455,8 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
         ser = series(marks_rows, inst)
         if p["status"] == "pending":
             dd = parse_date(o["decision_date"])
-            nxt = next((x for x in ser if x[0] >= dd and x[0] <= today), None)
+            # C11: an order placed by a C08 review fills at the first mark dated strictly after the review's UTC date
+            nxt = next((x for x in ser if (x[0] > dd if o.get("c08") else x[0] >= dd) and x[0] <= today), None)
             if not nxt:
                 continue
             d, v, m = nxt
@@ -484,7 +491,7 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
             if PX.stop_hit(k, direction, f["entry_level"], stop_now, v):
                 reason, hit = "stop", (d, v, m)
                 break
-            if cr and d >= cr:
+            if cr and (d > cr if p["close_request"].get("c08") else d >= cr):     # C11 for C08 closes
                 reason, hit = (p["close_request"].get("close_reason") or "Janus close decision"), (d, v, m)
                 break
             if hz and d >= hz:
@@ -1912,7 +1919,8 @@ def _apply_c08(ans: dict, plan: dict, records: list[dict], today: date, now: dat
                             "failure closes it. The stop and the 6-month horizon are backstops."),
             "sources": [], "sources_read": (ans.get("sources_read") or [])[:25], "model": model,
             "set_by": "CLI (C08)", "decided_at": now.isoformat(), "decision_date": today.isoformat(),
-            "entry_rule": "next available first-hand daily mark dated on or after the decision date",
+            "entry_rule": ("first first-hand daily mark dated strictly after the decision's UTC date (C11), rolling "
+                           "forward over weekends and holidays"),
             "market_probability": float(m_side), "market_source": f["market_source"],
             "market_basis": f["market_basis"], "provisional_capacity": o["provisional_capacity"],
             "run_seq": run_rec["seq"], "session": "daily_review", "c08": True, "forecast_id": fids[o["instrument"]],
@@ -1945,7 +1953,7 @@ def c08_rebalance_fills(records: list[dict], marks_rows: list[dict], today: date
             continue
         k, ser = kind(inst, reg), series(marks_rows, inst)
         ed, dd = parse_date(old["fill"]["entry_date"]), parse_date(o["decision_date"])
-        hit = next((x for x in ser if x[0] >= max(dd, ed) and x[0] <= today), None)
+        hit = next((x for x in ser if x[0] > dd and x[0] >= ed and x[0] <= today), None)     # C11: after the review
         if not hit:
             continue
         d, v, m = hit
@@ -1991,12 +1999,13 @@ def c08_rebalance_fills(records: list[dict], marks_rows: list[dict], today: date
 
 
 def forecast_outcome(f: dict, marks_rows: list[dict], today: date) -> dict | None:
-    """C08: how a forecast resolves (janus/watchlist.yaml): the base mark is the first first-hand daily mark dated on
-    or after the forecast's date; the end mark the first dated on or after the 20th weekday after the base mark's
+    """C08 as amended by C11: how a forecast resolves (janus/watchlist.yaml): the base mark is the first first-hand
+    daily mark dated strictly after the forecast's (the review's) UTC date, so it is never a close the forecaster
+    already knew; the end mark the first dated on or after the 20th weekday after the base mark's
     date; YES when the end mark is strictly beyond the base mark in the ``yes_if`` direction. None until both exist."""
     ser = [x for x in series(marks_rows, f["instrument"]) if x[0] <= today]
     fd = parse_date(f["date"])
-    base = next((x for x in ser if x[0] >= fd), None)
+    base = next((x for x in ser if x[0] > fd), None)          # C11: strictly after the forecast's (review's) UTC date
     if not base:
         return None
     target = add_weekdays(base[0], int(f.get("horizon_trading_days") or 20))
@@ -2317,7 +2326,9 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                     "would_close": [a["id"] for a in plan["actions"] if a["action"] == "close"],
                     "would_hold": [a["id"] for a in plan["actions"] if a["action"] == "hold"],
                     "would_open": [(o["instrument"], o["direction"], o["risk_pct"]) for o in plan["opens"]],
-                    "targets": plan["targets"]}
+                    "targets": plan["targets"],
+                    # C11: orders, closes and forecast base marks use the first mark dated after this date
+                    "marks_after": today.isoformat()}
         return _apply_c08(ans, plan, records, today, now, path, wl)
     if errors and not dry_run and ans.get("session") == "daily_review":
         # C06 rule 3 (closes Q004): a rejected daily review is recorded as failed, so the quick check flags it the
@@ -2535,6 +2546,9 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                                "is stale) excludes an instrument from the book; it is still forecast"),
                                 "not_used": list(C08_DISCRETIONARY),
                                 "opposition": "advisory: it never vetoes a forecast",
+                                "c11": ("forecast base marks, order fills, resizes and closes use the first first-hand "
+                                        "daily mark dated strictly after the review's UTC date (weekends and "
+                                        "holidays roll forward), never a close the review could already see"),
                                 "kept": ("sources_read (C05 a), time_anchor (C07 rule 3, now also covering every "
                                          "forecast's reasoning), failed-review records and exit 3 (C06 rule 3), "
                                          "licensed data never in public error text"),

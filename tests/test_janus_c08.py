@@ -207,16 +207,18 @@ def test_daily_rebalance_holds_inside_the_25_percent_band_resizes_outside_it_and
     assert run(tmp_path, c08())["ok"]
     recs = J.load(path)
     J.process(recs, marks("2026-11-10") + day_marks("2026-11-11"), date(2026, 11, 12), path)
+    assert all(p["status"] == "pending" for p in book(path).values())          # C11: not at the review day's mark
+    J.process(J.load(path), day_marks("2026-11-11") + day_marks("2026-11-12"), date(2026, 11, 13), path)
     first = book(path)
     assert all(p["status"] == "open" for p in first.values())
     t2 = T + timedelta(days=1)
     # edges 6, 4, 2, 8, 2, 1, 2, 2, 3, 2 = 3.2%, inside the band: US10Y 55 -> 56 (0.60% vs 0.65% held: -8%, inside
     # the no-trade band), GB10Y 51 -> 46 (flip), JP10Y 47 -> 42 (0.80% vs 0.39%: resized)
     probs = {"US10Y": 56, "GB10Y": 46, "JP10Y": 42}
-    dry = run(tmp_path, c08(now=t2, probs=probs), now=t2, mk=marks("2026-11-11"), dry_run=True)
+    dry = run(tmp_path, c08(now=t2, probs=probs), now=t2, mk=marks("2026-11-12"), dry_run=True)
     assert dry["ok"] and first["US10Y"]["id"] in dry["would_hold"], dry
     assert {first["GB10Y"]["id"], first["JP10Y"]["id"]} <= set(dry["would_close"])
-    assert run(tmp_path, c08(now=t2, probs=probs), now=t2, mk=marks("2026-11-11"))["ok"]
+    assert run(tmp_path, c08(now=t2, probs=probs), now=t2, mk=marks("2026-11-12"))["ok"]
     after = book(path)
     assert after["US10Y"]["id"] == first["US10Y"]["id"]                          # held
     assert after["GB10Y"]["open"]["direction"] == "short" and after["GB10Y"]["open"]["flips"] == first["GB10Y"]["id"]
@@ -228,15 +230,15 @@ def test_daily_rebalance_holds_inside_the_25_percent_band_resizes_outside_it_and
 def test_a_resize_fills_at_one_mark_and_pays_costs_only_on_the_notional_traded(tmp_path):
     path = tmp_path / "r.jsonl"
     run(tmp_path, c08())
-    J.process(J.load(path), day_marks("2026-11-11"), date(2026, 11, 12), path)
+    J.process(J.load(path), day_marks("2026-11-12"), date(2026, 11, 13), path)
     old = book(path)["JP10Y"]
     t2 = T + timedelta(days=1)
-    assert run(tmp_path, c08(now=t2, probs={"JP10Y": 40, "GB10Y": 45}), now=t2, mk=day_marks("2026-11-11"))["ok"]
-    J.process(J.load(path), day_marks("2026-11-11") + day_marks("2026-11-12", 0.01), date(2026, 11, 13), path)
+    assert run(tmp_path, c08(now=t2, probs={"JP10Y": 40, "GB10Y": 45}), now=t2, mk=day_marks("2026-11-12"))["ok"]
+    J.process(J.load(path), day_marks("2026-11-12") + day_marks("2026-11-13", 0.01), date(2026, 11, 14), path)
     pos_ = J.positions(J.load(path))
     new = book(path)["JP10Y"]
     close = pos_[old["id"]]["close"]
-    assert close["reason"] == "C08 rebalance" and close["date"] == new["fill"]["entry_date"] == "2026-11-12"
+    assert close["reason"] == "C08 rebalance" and close["date"] == new["fill"]["entry_date"] == "2026-11-13"
     carried = min(old["fill"]["notional_frac"], new["fill"]["notional_frac"])
     assert close["carried_notional_frac"] == pytest.approx(carried) and new["fill"]["carried_from"] == old["id"]
     traded = new["fill"]["notional_frac"] - carried
@@ -256,15 +258,15 @@ def test_a_resize_is_not_a_closed_call_awaiting_a_post_mortem(tmp_path, monkeypa
     from ledger import postmortem as PM
     path = tmp_path / "r.jsonl"
     run(tmp_path, c08())
-    J.process(J.load(path), day_marks("2026-11-11"), date(2026, 11, 12), path)
+    J.process(J.load(path), day_marks("2026-11-12"), date(2026, 11, 13), path)
     t2 = T + timedelta(days=1)
-    run(tmp_path, c08(now=t2, probs={"JP10Y": 40, "GB10Y": 45}), now=t2, mk=day_marks("2026-11-11"))
-    J.process(J.load(path), day_marks("2026-11-11") + day_marks("2026-11-12", 0.01), date(2026, 11, 13), path)
+    run(tmp_path, c08(now=t2, probs={"JP10Y": 40, "GB10Y": 45}), now=t2, mk=day_marks("2026-11-12"))
+    J.process(J.load(path), day_marks("2026-11-12") + day_marks("2026-11-13", 0.01), date(2026, 11, 14), path)
     load = J.load
     monkeypatch.setattr(PM.JN, "load", lambda p=path: load(p))
     monkeypatch.setattr(PM, "_rows", lambda f: [])
     monkeypatch.setattr(PM, "POS_FILES", {})
-    reasons = {c["record"]["instrument"]: c["record"]["reason"] for c in PM.candidates(day_marks("2026-11-12"))
+    reasons = {c["record"]["instrument"]: c["record"]["reason"] for c in PM.candidates(day_marks("2026-11-13"))
                if c["book"] == "janus"}
     assert reasons.get("GB10Y") == "C08 side flip" and "JP10Y" not in reasons, reasons
 
@@ -350,6 +352,10 @@ def test_the_first_c08_review_closes_j001_and_j002_without_editing_any_record(tm
     assert res["opened"] == [f"J{n:03d}" for n in range(3, 13)]
     J.process(J.load(path), mk + day_marks("2026-11-11"), date(2026, 11, 12), path)
     st = J.positions(J.load(path))
+    assert st["J001"]["status"] == "open"                      # C11: not closed at the review day's own mark
+    J.process(J.load(path), mk + day_marks("2026-11-11") + day_marks("2026-11-12"), date(2026, 11, 13), path)
+    st = J.positions(J.load(path))
+    assert st["J001"]["close"]["date"] == "2026-11-12"
     for pid in ("J001", "J002"):
         assert st[pid]["status"] == "closed" and st[pid]["close"]["reason"] == "C08 rule 5: discretionary position closed"
     assert J.verify(J.load(path))["ok"]
@@ -375,13 +381,14 @@ def test_every_forecast_resolves_after_20_trading_days_with_brier_scores(tmp_pat
         mk += day_marks(d, -0.05 if d >= date(2026, 12, 1) else 0.0)        # yields down 5bp, FX down 0.05%
     mk = [m for m in mk if not (m["instrument"] == "EUR" and m["date"] >= "2026-12-01")] + \
         [_m("EUR", d.isoformat(), LEVELS["EUR"], "USD per EUR") for d in weekdays(date(2026, 12, 1), date(2026, 12, 11))]
-    J.process(J.load(path), mk, date(2026, 12, 8), path)                   # before the end mark: nothing resolves
+    J.process(J.load(path), mk, date(2026, 12, 9), path)                   # before the end mark: nothing resolves
     assert not [r for r in J.load(path) if r["type"] == "forecast_resolution"]
     J.process(J.load(path), mk, date(2026, 12, 10), path)
     res = {r["instrument"]: r for r in J.load(path) if r["type"] == "forecast_resolution"}
     assert set(res) == set(WL)                                              # GB10Y too, though it had no position
     us = res["US10Y"]
-    assert (us["base_date"], us["target_date"], us["end_date"]) == ("2026-11-11", "2026-12-09", "2026-12-09")
+    # C11: the base mark is the first dated after the review's UTC date (11 Nov), not that day's own close
+    assert (us["base_date"], us["target_date"], us["end_date"]) == ("2026-11-12", "2026-12-10", "2026-12-10")
     assert us["answer"] == "YES" and us["brier_final"] == pytest.approx((0.55 - 1) ** 2)
     assert us["brier_market"] == pytest.approx(0.25)
     assert res["EUR"]["answer"] == "NO"                                     # unchanged mark: NO
@@ -674,5 +681,5 @@ def test_the_10_nov_2307_review_replayed_under_c08(tmp_path, monkeypatch):
     # The Opposition argued against short US10Y; under C08 it is a forecast like any other, logged and sized
     assert opens["US10Y"]["forecast_id"] and J.verify(J.load(path))["ok"]
     # the orders fill at the next official daily marks, and every forecast resolves 20 trading days later
-    J.process(J.load(path), mk + day_marks("2026-11-10"), date(2026, 11, 11), path)
+    J.process(J.load(path), mk + day_marks("2026-11-10") + day_marks("2026-11-11"), date(2026, 11, 12), path)
     assert all(p["status"] == "open" for p in book(path).values()) and len(book(path)) == 10

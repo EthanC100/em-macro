@@ -1,7 +1,8 @@
 # Janus watchlist: config change C08 (approved by Ethan on 11 November 2026; docs/config_changes.md C08), widened by
 # config change C09 (approved by Ethan on 11 November 2026, before C08's first review): BRL and MXN added, US10Y and
 # GB10Y resolved on faster public sources, and the correlation clusters the fund rule counts calls by; and by config
-# change C10 (approved by Ethan on 11 November 2026, before C08's first review): GBP resolved on the ECB cross.
+# change C10 (approved by Ethan on 11 November 2026, before C08's first review): GBP resolved on the ECB cross; and
+# by config change C11 (same day, before C08's first review): base marks dated strictly after the review's date.
 #
 # Every Janus daily review gives a probability for EVERY instrument below: a whole number from 1 to 99, never 50,
 # both before The Opposition (p_initial) and after it (p_final). The probability is that the question resolves YES.
@@ -12,8 +13,9 @@
 #
 # How every question resolves (the same for all instruments):
 #   * base mark: the instrument's first first-hand daily mark (data/ledger/marks.csv, `mark_can_act`: a daily
-#     observation, never a fallback flagged stale, a carried-forward mark or a monthly average) dated on or after
-#     the forecast's date (its UTC date);
+#     observation, never a fallback flagged stale, a carried-forward mark or a monthly average) dated strictly after
+#     the forecast's (the review's) UTC date, rolling forward over weekends and holidays (config change C11: never a
+#     close the forecaster could already see);
 #   * horizon: 20 trading days, counted as 20 weekdays (Monday to Friday) after the base mark's date; that weekday
 #     is the target date;
 #   * end mark: the first first-hand daily mark dated on or after the target date (on a market holiday, the next

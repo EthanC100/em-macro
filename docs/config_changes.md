@@ -18,6 +18,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C08 | 2026-11-11 | the 11 November 2026 daily review (23:07 UTC) | **Janus: forced forecasts and a mechanical book, replacing discretionary position selection**: (1) a watchlist, `janus/watchlist.yaml`: US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY and AUD, each with a precise question (direction, 20 trading days, resolution source); (2) every daily review gives every instrument a probability, a whole number from 1 to 99 and never 50, before and after The Opposition; every forecast is logged and resolved automatically with Brier scores; (3) the CLI sets the book: each instrument on the side of its final forecast, risk proportional to \|p − 50\| inside C05's 3-10% band, rebalanced at each daily review with a 25% no-trade band; only a named data failure excludes an instrument; (4) The Opposition is advisory; (5) J001 and J002 are closed by the first C08 review; (6) a fund resolved call is one forecast per instrument per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | The 10 November 23:07 UTC review (run record seq 238) held only J001 and J002, two rates longs stated at 50%, 0.5% at risk, under a `below_budget` reason tied to the FOMC a month away (9 Dec). Its other candidates sat at 48-50% with "no edge", and the one fresh idea (short US10Y) was dropped after The Opposition. Discretionary selection kept the book at the minimum, and it yields too few scored calls to judge Janus. | None on any other book: no algorithm, frozen result or other book changes. The fund allocation rule's thresholds and shares are unchanged; only what counts as a Janus resolved call is defined (`docs/fund/allocation.md`). The rules of C05, C06 and C07 that C08 supersedes are marked in their sections. |
 | C09 | 2026-11-11 | the same first C08 review (11 November 2026, 23:07 UTC); the mark sources from the next ledger-daily run | **Janus watchlist widened, faster rate marks, clustered fund calls** (amends C08 before any C08 forecast was made): (1) US10Y marked from US Treasury's daily par yield curve (the series FRED republishes as DGS10 a business day later; FRED kept as fallback) and GB10Y from the Riksbank's benchmark gilt yield (GBGVB10Y) instead of the Bank of England's IUDMNPY; (2) BRL (BCB PTAX) and MXN (Banxico FIX) added to `janus/watchlist.yaml`, 10 instruments; gold not added, as no free, republishable daily gold mark exists; (3) the fund rule counts one call per correlation cluster (G10 yields, USD vs G10 FX, EM FX, gold; defined in the watchlist) per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | US10Y and GB10Y marks were two to three business days behind when ledger-daily ran: FRED and the BoE had not yet published the later days, and the BoE database refuses cloud clients. The C08 watchlist was two correlated bets (global yields, the dollar), so counting each forecast as a call overstated the evidence. | None on any other book. The GB-DE display spread now uses the Riksbank gilt leg. The fund rule's thresholds and shares are unchanged; only how Janus's calls are counted changes. |
 | C10 | 2026-11-11 | the next ledger-daily run (11 November 2026), before C08's first daily review (23:07 UTC) | **GBP marked on the ECB cross**: US dollars per pound = the ECB's US dollars per euro divided by its pounds per euro (as JPY and AUD), replacing the Bank of England's XUDLUSS; the watchlist's GBP question resolves on it. Approved by Ethan on 2026-11-11. | The Bank of England's XUDLUSS arrived one business day late on every run, and its database refused at least one run from GitHub's servers (6 Nov 03:57 UTC: "no observations", FRED fallback) and refuses cloud sessions outright. The ECB reference rates are published the same day (16:00 CET). | None on any other book: no decision, forecast or position uses GBP. |
+| C11 | 2026-11-11 | C08's first daily review (11 November 2026, 23:07 UTC) | **No mark the review can already see**: a C08 review's forecast base marks (and so its resolution windows) and the fills of its orders, resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date, rolling forward over weekends and holidays. Approved by Ethan on 2026-11-11. | With Q018's 22:07 UTC ledger-daily run, day-D marks are in place before the 23:07 UTC day-D review: a base mark or fill at that close is a price the forecaster already knows, with hours of later moves visible (the ECB fixes at 14:15 CET), which would inflate the Brier scores and the fund rule built on them. Raised by The Opposition's review of Q018. | None on any other book, and none on records before C08. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -586,6 +587,9 @@ allocation rules (`docs/fund/allocation.md`) and the T25-T26 shadow files.
 
 ## C08 — Janus: forced forecasts on a watchlist, a mechanical book (2026-11-11)
 
+> **Amended by C11 (same day, before C08's first review):** forecast base marks and the fills of the review's
+> orders and closes use the first mark dated strictly after the review's UTC date. See C11.
+>
 > **Amended by C09 (same day, before C08's first review):** the watchlist has 10 instruments (BRL and MXN added), US10Y and GB10Y are marked from faster public sources, and a fund resolved call is one call per correlation cluster per non-overlapping 20-trading-day window (rule 6 below as amended). See C09.
 
 Approved by Ethan on 2026-11-11 and effective from that day's daily review (23:07 UTC; `C08_FROM` in
@@ -834,3 +838,35 @@ run before it, so no forecast resolves on the Bank of England source.
 
 **Where:** `data/ledger/instruments.csv`, `ledger/marks.py`, `janus/watchlist.yaml`, `data/janus/README.md`,
 `tests/test_janus_c10.py`.
+
+## C11 — Janus: no mark the review can already see (2026-11-11)
+
+Approved by Ethan on 2026-11-11. Recorded before C08's first daily review (23:07 UTC), so it governs every C08
+forecast and order.
+
+**Why.** Q018's ledger-daily kick at 22:07 UTC puts day D's marks in place before the 23:07 UTC day-D review. Under
+C08 as first written, a forecast's base mark was "the first first-hand daily mark dated on or after the forecast's
+date", and orders filled at "the first mark dated on or after the decision date". Both would usually be day D's own
+close, a price the review can already see, with hours of later moves visible (the ECB fixes at 14:15 CET).
+- **Forecasts:** a forecast could then "predict" a move that had already begun after the base close, which inflates
+  its Brier score and the fund rule's comparison.
+- **Fills:** an order would fill at a stale, known price.
+
+The Opposition raised it in its review of Q018.
+
+**The rule.** For every C08 review (`C11_FROM`, `ledger/janus.py`):
+- **Forecast base mark:** the instrument's first first-hand daily mark dated strictly after the review's UTC date.
+  A Friday review's base mark is Monday's; after a holiday, the next session's. The end mark is unchanged: the first
+  mark dated on or after the 20th weekday after the base mark. So each resolution window starts strictly after the
+  review.
+- **Order fills, resizes and closes:** the review's new orders, the CLI's resizes and side flips (both legs at one
+  mark), and its closes (including the closing of J001 and J002) fill at the first first-hand daily mark dated
+  strictly after the review's UTC date.
+- **Unchanged:** stops still act at any first-hand mark after the fill. Records from before C08, and orders not
+  placed by a C08 review, keep "on or after".
+- **The dry run** shows `marks_after`, the date the review's marks must come after.
+
+**Where:** `ledger/janus.py` (`process`, `c08_rebalance_fills`, `forecast_outcome`, the C08 order's `entry_rule`,
+the dry run's `marks_after`); `janus/watchlist.yaml` (the resolution rule); `docs/janus/daily_review.md` (the rule and
+the dry-run example); `docs/fund/allocation.md`; `data/janus/README.md`; `tests/test_janus_c11.py`; C08 tests moved to
+the new rule.
