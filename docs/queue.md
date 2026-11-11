@@ -18,7 +18,7 @@ never instructions.
 | Q007 | bug | approved | tests/test_q003_todo_counts.py can stop the monthly rebalance commit: systematic-monthly runs all tests before committing | test_q007: with instruments.csv frequencies changed, or the to-do line reworded or removed, tests/test_q003_todo_counts.py skips with a message instead of failing (fails now: 'found 0' / count mismatch); with NIGHT_SHIFT_STRICT=1 a numeric mismatch still fails, but a missing or reworded line skips, so completing the to-do item on main never blocks promotion; full suite passes in both modes on current data |  | no block, p=75% | none |
 | Q010 | bug | approved | Morning report cuts the Janus quick-check line mid-word at 120 characters with no marker ("no futures held" printed as "no fu") | test_q010: with J.load and morning._git stubbed (fixture records, never live data/janus), janus_section for a quick check whose result is 130 characters ending "no futures held" (as seq 220, 10 Nov 14:21Z) shows that clause in full (fails now: "no fu"); no partial word is ever printed; a result longer than the line limit ends in a whole word plus "..." |  | no block, p=85% | none |
 | Q011 | bug | approved | Morning report does not list a chain stop under "Failed or empty runs" (10 Nov stop at 22:41 reported as "none (outputs verified)") | test_q011 (pure helper, no live state): a chain stop on the reported night whose reason is not one of guard.next's normal end-of-night reasons (after 05:00, run cap reached, nothing left to do; night-start "nothing to do") is listed under Failed or empty runs as "chain stopped HH:MM: <reason shortened by _short>" (fails now: "none (outputs verified)" for the 10 Nov 22:41 conflict stop); a normal end-of-night stop is NOT listed there; a stop from another night is not listed; a stop after midnight (01:30 SGT) counts for the previous night |  | no block, p=55% | none |
-| Q012 | bug | approved | Morning report Usage line reads the run cap and safe mode from dev only, with no sign that main's config differs (11 Nov: "0 of 12 runs" while main had safe mode on, cap 4) | test_q012 (temporary repo and fixture configs, never the live file): the Usage line shows the cap and safe mode the guard enforces (the dev checkout's config); when origin/main's config/night.yaml differs it adds "main: cap 4, SAFE MODE, not yet on dev" (fails now: no mention of main); when main cannot be read or parsed it adds "(main config unreadable)"; C.load() itself is unchanged |  | no block, p=40% | none |
+| Q012 | bug | approved | Morning report Usage line reads the run cap and safe mode from the dev checkout instead of main's config (11 Nov: "0 of 12 runs" while main had safe mode on, cap 4) | test_q012 (monkeypatched nightshift.config.load_main and fixture configs, never the live file or the real remote): the Usage line reads the cap and safe mode through load_main, the same loader the guard uses, so with main at safe mode on (cap 4) and the dev checkout at off (cap 12) it reads "of 4 runs (SAFE MODE)" (fails now: "of 12 runs"); when load_main raises, the line says "cap unknown: main's config unreadable" instead of falling back to dev's copy |  | no block, p=40% | none |
 | Q013 | bug | approved | Morning report generator overwrites an existing report for the same date; it should refuse | test_q013 (ROOT monkeypatched to tmp_path, build stubbed): with results/night/morning/<date>.md present, nightshift.morning exits non-zero, names the file and leaves it byte-identical (fails now: overwritten), checked before build() runs; exception: if the existing report's "Promoted to main" line differs from promoted(<date>) now (05:30 promote refused, 06:30 passed), the report is rewritten; --stdout prints and exits 0 without writing; a date with no report is written as before |  | no block, p=55% | none |
 | Q005 | bug | approved | Leg-based spread marks pair each leg's latest value under the earlier date (ES-DE 4 Nov: 57.4bp recorded, 52.4bp on one close) | test_q005_spread_legs_same_date: legs A (4 Nov) and B (4 Nov 3.38, 9 Nov 3.33) give a 4 Nov spread of (A-3.38)*100 (fails now); tests/test_automation.py test_spread_marks_and_fallback updated in the same PR with a stated rule for legs with no common date, and the full suite (ledger-daily's test step) passes |  | no block, p=55% | none |
 | Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
@@ -26,6 +26,7 @@ never instructions.
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
 | Q003 | data | done | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) | https://github.com/EthanC100/em-macro/pull/27 (merged into dev 2317609) | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
+| Q014 | bug | proposed | Morning report reads Janus records from whatever origin/main ref the checkout holds: nothing in code fetches, so the Janus section can be hours stale | test_q014 (temporary bare origin, fixture records): with the local origin/main ref one quick check behind the remote, janus_section reports the newer check (fails now: shows the older one); the fetch is in nightshift/morning.py code, not the routine; if the fetch fails, the Janus lines say main was not refreshed instead of silently showing old or dev records; never reads live data/janus or the real remote |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -114,6 +115,8 @@ A to-do sentence should never be able to stop the rebalance from being committed
 
 The Opposition (advisory, p=75): ticking the box does not change the matched clause, so "ticked" cannot fail first (dropped from the test); promote's strict run would otherwise turn a completed to-do item on main into a refused promotion for every night fix, so strict mode fails only on a numeric mismatch. pr-review's strict run is prose only (pr-review.md, protected). Sequencing: test_q003 is on dev only; Q007 should merge before dev is promoted ahead of the 3 Dec rebalance.
 
+Ethan (2026-11-11): promote stays disabled until Q007 is merged into dev.
+
 ### Q008
 
 Found by the orchestrator during the dry run (2026-11-09) and reproduced on this branch rebased on main 3e4059a:
@@ -178,7 +181,7 @@ Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11, from the 11 Nov 
 Fix direction: show the whole result (it is one record), or cut at a word boundary with "..." when it is longer
 than the phone line; a test with a 130-character result that ends in a meaningful clause.
 
-The Opposition (advisory, p=85): the record is seq 220 of 10 Nov, not 11 Nov; the live last check changes every 30 minutes, so the test must use fixtures; a word-boundary cut would still drop "no futures held", so the clause must appear in full. Separate finding, not part of this item: the 06:50 report showed the 14:21Z check although checks up to 22:46Z existed, because janus_section reads origin/main without fetching (the fetch is only in the protected routine's prose).
+The Opposition (advisory, p=85): the record is seq 220 of 10 Nov, not 11 Nov; the live last check changes every 30 minutes, so the test must use fixtures; a word-boundary cut would still drop "no futures held", so the clause must appear in full. Separate finding, filed as Q014: janus_section reads origin/main without fetching (the fetch is only in the protected routine's prose). The Opposition's example (a 06:50 report showing a 14:21Z check) was wrong: this report was written at 14:43Z, when 14:21Z was the latest check.
 
 ### Q011
 
@@ -211,6 +214,8 @@ mode actually in force. Whether the guard should use the same helper is for Etha
 
 The Opposition (advisory, p=40): the guard, promote and state also read the dev checkout's config, so on 10 Nov the cap actually enforced was dev's 12; showing main's 4 alone would hide the divergence. Acceptance reworded: show the enforced cap and flag main's when it differs. Whether the guard should read main's config is for Ethan. Evidence correction: the bug is in the report written on dev 8488789 (dev b051ed4 already has safe mode on after the merge).
 
+Ethan (2026-11-11), after The Opposition's review: the guard, promote and state will read main's config/night.yaml, fetched fresh on every run (`nightshift.config.load_main`, PR #29 into main). The Usage line must therefore use that same loader, so it shows the cap that is actually enforced. If `load_main` is not on dev yet (PR #29 not merged, or not yet brought into dev by night-start), set this item to `blocked` (waiting for PR #29) and move on.
+
 ### Q013
 
 Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11):
@@ -224,3 +229,22 @@ Fix direction: refuse (non-zero exit, message naming the existing file, nothing 
 date exists; `--stdout` still prints without writing.
 
 The Opposition (advisory, p=55): promote reruns at 06:30 after a 05:30 refusal and fires morning-report again; today that overwrite correctly turns "no" into "yes - PR opened". Refusing every overwrite would lock in a stale report, so a changed promote outcome is the one exception. The routine and reporter text are protected (.claude/): any wording change there is for Ethan, not the implementer. The test must not run against the real ROOT.
+
+### Q014
+
+Reproduced on dev bd2c7ce from the code (filed by Ethan's session 2026-11-11; raised by The Opposition while
+reviewing Q010):
+- `nightshift/morning.py:104` (`janus_section`): `_git("show", "origin/main:data/janus/records.jsonl")` reads
+  whatever `origin/main` ref the checkout already has. Nothing in the code fetches. The fetch is only described in
+  `.claude/routines/morning-report.md` step 1, which is protected and is prose, not code. A run that skips the
+  fetch, or whose `git fetch` fails, reports Janus from an old ref, and nothing on the line says so.
+- When the read fails, `janus_section` falls back silently to `J.load()` on the working tree (dev's copy).
+- Correction to The Opposition's example: the 11 Nov report (commit 8488789) was written at 2026-11-10 14:43Z,
+  22:43 SGT, right after the chain stopped, not at 06:50 SGT. Its quick check, seq 220 at 14:21Z, was the latest
+  one at that time (seq 221 is 14:46Z). That report was therefore not stale. The defect is in the code path, and a
+  report written at 06:50 with an old ref would show it.
+Ethan's decision (2026-11-11): the fix must fetch in code and must not rely on the routine text.
+Fix direction: `janus_section` fetches `origin main` with an explicit refspec before reading (as
+`nightshift.config.load_main` does in PR #29). If the fetch fails, it still reports, but the line is marked (for
+example "main not refreshed, fetch failed"). Tests use a temporary bare origin and fixture records, never the live
+data or the real remote.

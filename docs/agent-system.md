@@ -87,8 +87,9 @@ main's files directly, so the Janus quick checks (every 30 minutes, all night) n
    Only the night shift's own files are resolved automatically: `docs/queue.md` rows merge by id (most advanced
    status wins: done > blocked > in-progress > approved > proposed), `docs/agent-state.json` and
    `results/opposition/calibration.csv` stay dev's. A conflict in any other file aborts the merge and stops the
-   night (never resolved by hand). Sessions on main do not edit those three files (CLAUDE.md); triage files reproducible findings in `docs/queue.md`; The Opposition reviews every unreviewed bug/data/lab
-   item; `nightshift.queue auto-approve`; fires the next routine.
+   night (never resolved by hand). Sessions on main do not edit those three files (CLAUDE.md). Triage files
+   reproducible findings in `docs/queue.md`; The Opposition reviews every unreviewed bug/data/lab item;
+   `nightshift.queue auto-approve`; fires the next routine.
 2. **Chain**: night-worker and night-explorer alternate (`python -m nightshift.guard next`); the explorer runs when
    the approved queue is empty (at most 3 hypotheses a night). Each run takes the lock (stale after 2 h), counts
    one run, and fires the next routine's API trigger (`scripts/night_fire.sh`, URL and token from environment
