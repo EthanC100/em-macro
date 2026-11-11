@@ -625,7 +625,9 @@ def marks_on_or_before(instrument: str, day: date, rows: list[dict]) -> dict | N
 
 
 def write_marks(new: list[dict], path: Path = MARKS) -> int:
-    """Merge the new marks into the file: one row per (instrument, date), newest fetch wins."""
+    """Merge the new marks into the file: one row per (instrument, date), newest fetch wins, except that a row
+    which cannot act (``mark_can_act``: a "kept previous mark" copy or a stale re-fetch) never replaces an existing
+    first-hand row for the same instrument and date (Q021). The run's printed log still shows the new note."""
     rows = read_marks(path)
     keyed = {(r["instrument"], r["date"]): r for r in rows}
     n = 0
@@ -633,6 +635,8 @@ def write_marks(new: list[dict], path: Path = MARKS) -> int:
         if not m.get("value") or not m.get("date"):
             continue
         k = (m["instrument"], m["date"])
+        if k in keyed and mark_can_act(keyed[k]) and not mark_can_act(m):
+            continue  # never downgrade a first-hand mark (Q021)
         if k not in keyed or keyed[k].get("value") != m.get("value"):
             n += 1
         keyed[k] = {c: m.get(c, "") for c in MARK_COLUMNS}
