@@ -1,13 +1,9 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "night-worker",
-  "acquired_at": "2026-11-11T23:35:43+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA"
- },
+ "lock": null,
  "night": "2026-11-11",
- "runs_used": 0,
- "last_kind": null,
+ "runs_used": 1,
+ "last_kind": "worker",
  "chain_stopped": null,
  "log": [
   {
@@ -54,6 +50,19 @@
    "commits": [],
    "note": "dev merged main (1b4b29c, no auto_resolved); filed Q023 (data, approved p=80) and Q024 (research, waits for Ethan); Q021 reviewed no block p=72 and approved; 0 blocked; night-worker not fired (exit 6, no API trigger; hourly schedule picks it up). Triage: Actions API 403, run reports not audited; Q005 should also cover GB-DE and PL-DE (marks.csv:799, :807)",
    "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-11T23:35:43+08:00",
+   "finished_at": "2026-11-11T23:45:53+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q021"
+   ],
+   "commits": [],
+   "note": "Q021 implemented, PR #37 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
+   "run": 1
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
