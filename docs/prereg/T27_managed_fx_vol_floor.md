@@ -238,3 +238,21 @@ document, changing no other row. It is updated with the outcome after the run.
 8. **Holdout:** q_t is the global EM8 series in both halves.
 9. **Disclosure:** the TRY prompt and the 2021 devaluation inside the confirmatory window are stated in the header
    and repeated in the report.
+
+## Amendment 1 — 2026-11-11, decided by the owner after Step 0, before any T27 weight or return was computed
+
+**T27 is withdrawn.** Withdrawn before any T27 weight or return was computed. Step 0 showed the floor binds in only
+6 confirmatory currency-months (IDR 2020-05/06, TRY 2026-06..09), none containing a regime break, so the trial has
+no power to test the hypothesis; and TRY's 2018 and 2021 devaluations occurred while it was classed as floating.
+
+- **What was computed:** only Step 0 (§3.3): the IMF classification tables, v1.0's own 36-month volatilities and
+  FX selections, and the count of binding currency-months (`results/T27/step0_report.md`, `results/T27/STEP0.json`,
+  commits `92d8c91`, `ff631e9`, `f29488d`). No exploration (§4) and no confirmatory test (§5) was run, and none will be.
+- **Kept:** the Step 0 outputs in `results/T27/` and the archived IMF PDFs in `data/kept/T27/`.
+- **Multiple testing:** T27 stays counted in the spec-convention N (§6): the next trial that uses a deflated Sharpe
+  counts it, so N = 21 after T27.
+- **Not resolved, now moot:** the AREAER editions that could not be obtained (2003–2011, 2020, 2021) and the
+  question of whether criterion 4 (return at 1x and 2x costs) is consistent with the "little or no cost in Sharpe"
+  hypothesis.
+- **Any later test of a managed-currency floor** (for example with a wider universe that includes pegged
+  currencies) is a new trial with a new pre-registration and ledger row.
