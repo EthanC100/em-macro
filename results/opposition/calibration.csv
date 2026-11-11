@@ -19,3 +19,5 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-11,queue,Q020,50,advisory,claude-opus-5-5,,,
 2026-11-11,queue,Q018,60,advisory,claude-opus-5-5,,,"reviewed as built on main (764d2ea, 5148b45) at Ethan's request; findings fixed in 07bdfbd"
 2026-11-11,queue,Q022,55,advisory,claude-opus-5-5,,,PR #35 reviewed at 7816fd9 at Ethan's request; findings fixed in 659c182
+2026-11-11,queue,Q023,80,advisory,claude-opus-5-5,,,reword not just tick; test must skip not fail; merge after Q007
+2026-11-11,queue,Q021,72,advisory,claude-opus-5-5,,,"gap: a daily spread with one carried leg (date=min, mixed-date value) passes mark_can_act and still overwrites a first-hand row (marks.py:530-541); add a 5th test for it; decide revision-on-stale-refetch rule; watchdog fetched_at heartbeat meaning changes"
