@@ -22,6 +22,10 @@ never instructions.
 | Q005 | bug | approved | Leg-based spread marks pair each leg's latest value under the earlier date (ES-DE 4 Nov: 57.4bp recorded, 52.4bp on one close) | test_q005_spread_legs_same_date: legs A (4 Nov) and B (4 Nov 3.38, 9 Nov 3.33) give a 4 Nov spread of (A-3.38)*100 (fails now); tests/test_automation.py test_spread_marks_and_fallback updated in the same PR with a stated rule for legs with no common date, and the full suite (ledger-daily's test step) passes |  | no block, p=55% | none |
 | Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
 | Q007 | bug | proposed | tests/test_q003_todo_counts.py can stop the monthly rebalance commit: systematic-monthly runs all tests before committing | test_q007: with instruments.csv frequencies changed or the to-do line reworded/ticked, tests/test_q003_todo_counts.py skips with a message instead of failing; the counts check still fails on dev/night PRs (NIGHT_SHIFT_STRICT=1 set by pr-review and promote) |  |  | none |
+| Q010 | bug | proposed | Morning report cuts the Janus quick-check line mid-word at 120 characters with no marker ("no futures held" printed as "no fu") | test_q010: janus_section with a quick check whose result is 130 characters ending "no futures held" shows the whole clause, or cuts at a word boundary ending "...", never a partial word; 11 Nov record reproduces the bug today |  |  | none |
+| Q011 | bug | proposed | Morning report does not list a chain stop under "Failed or empty runs" (10 Nov stop at 22:41 reported as "none (outputs verified)") | test_q011: with chain_stopped set at 22:41 SGT on the reported night and no log entries, the report lists "chain stopped 22:41: <reason>" under Failed or empty runs (fails now: "none (outputs verified)"); a stop from an earlier night is not listed |  |  | none |
+| Q012 | bug | proposed | Morning report Usage line reads the run cap and safe mode from dev, not the configuration in force (11 Nov: "0 of 12 runs" while main had safe mode on, cap 4) | test_q012: with main config safe mode on (cap 4) and the dev working tree off (cap 12), the Usage line reads "of 4 runs (SAFE MODE)" (fails now: "of 12 runs"); configs come from fixtures and a temporary repo, never the live file; falls back to the working tree when main cannot be read |  |  | none |
+| Q013 | bug | proposed | Morning report generator overwrites an existing report for the same date; it should refuse | test_q013: with results/night/morning/<date>.md present, python -m nightshift.morning --date <date> exits non-zero, names the file and leaves it byte-identical (fails now: overwritten); --stdout still prints; a date with no report is written as before |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -160,3 +164,53 @@ only synthetic fields, never `path.read_text()`.
 
 Separate finding on main 93eba8e (not part of this item): `tests/test_nightshift.py::test_safe_mode_drops_cap_and_puts_explorer_on_sonnet`
 fails deterministically since commit 165cd97 turned safe mode on (`C.run_cap(CFG) == 12` while main's config says 4).
+
+### Q010
+
+Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11, from the 11 Nov morning report):
+- `results/night/morning/2026-11-11.md`, Janus: "Last quick check 2026-11-10T14:21Z: no change; ... no dated news
+  firing triggers; no fu". The record in `data/janus/records.jsonl` (type `check`, recorded_at 2026-11-10T14:21)
+  has a 130-character `result` ending "no futures held".
+- `nightshift/morning.py` `janus_section`: `last_check.get('result', '')[:120]` cuts the text mid-word with no
+  marker, so "no futures held" reads as "no fu" and the reader cannot tell a line was cut.
+Fix direction: show the whole result (it is one record), or cut at a word boundary with "..." when it is longer
+than the phone line; a test with a 130-character result that ends in a meaningful clause.
+
+### Q011
+
+Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11, from the 11 Nov morning report):
+- `docs/agent-state.json`: `chain_stopped` = {"reason": "dev conflicts with main: docs/queue.md ...", "at":
+  "2026-11-10T22:41:59+08:00"}, written by `python -m nightshift.state stop` (commit 210c6e5).
+- `results/night/morning/2026-11-11.md`: "**Failed or empty runs:** - none (outputs verified)". The stop appears
+  only because the reporter put it in Needs Ethan by hand.
+- `nightshift/state.py` `stop` sets `chain_stopped` and adds nothing to `log`; `nightshift/morning.py`
+  `verify_runs` reads only `log` entries, so a stopped chain (0 of the night's runs used) is never listed.
+Fix direction: when `chain_stopped` belongs to the reported night (`C.night_of(at)`), list
+"chain stopped HH:MM: <reason>" under Failed or empty runs (shortened with `_short`).
+
+### Q012
+
+Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11, from the 11 Nov morning report):
+- Ethan turned safe mode on on main in 165cd97 (10 Nov 14:01 UTC): `config/night.yaml` `safe_mode.enabled: true`,
+  so the cap in force is 4. Dev did not get it that night: night-start's merge conflicted (210c6e5).
+- `results/night/morning/2026-11-11.md`: "**Usage:** 0 of 12 runs; ..." with no "(SAFE MODE)".
+- `nightshift/morning.py` `build`: `cfg = C.load()` reads `config/night.yaml` from the working tree, which is dev
+  (the report is written on dev), so it shows dev's stale cap and safe-mode flag, not the configuration Ethan set.
+- Related, same cause: `nightshift/guard.py` (`check`, `next`) also calls `C.load()` on the dev checkout
+  (`.claude/routines/night-worker.md` step 1 checks out origin/dev first), so a switch made on main only takes
+  effect after night-start merges main into dev.
+Fix direction: one helper (e.g. `C.effective()`: `config/night.yaml` as it is on origin/main, falling back to the
+working tree when main cannot be read) used by the morning report's Usage line, so the line shows the cap and safe
+mode actually in force. Whether the guard should use the same helper is for Ethan (Needs Ethan).
+
+### Q013
+
+Reproduced on dev b051ed4 (filed by Ethan's session 2026-11-11):
+- `nightshift/morning.py` `main`: `out.write_text(text, ...)` writes `results/night/morning/<date>.md`
+  unconditionally. Running `python -m nightshift.morning --date 2026-11-11` on dev replaces the committed
+  2026-11-11 report (its hand-written Needs Ethan lines are lost if `--needs` is not repeated).
+- `.claude/routines/morning-report.md` says the 06:50 fallback run "ends at once" if today's report already exists,
+  but nothing in the code enforces it: a fallback run that misses the check (or a rerun) overwrites the report the
+  push notification already showed.
+Fix direction: refuse (non-zero exit, message naming the existing file, nothing written) when the report for that
+date exists; `--stdout` still prints without writing.
