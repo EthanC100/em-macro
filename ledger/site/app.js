@@ -49,7 +49,7 @@
     'no trade': ['no trade', ''], yes: ['yes', 'purple'], no: ['no', 'purple'], void: ['void', ''],
     pass: ['passed', 'good'], passed: ['passed', 'good'], fail: ['failed', 'bad'], failed: ['failed', 'bad'],
     pending: ['under test', 'warn'], 'under test': ['under test', 'warn'], live: ['live', 'c-algorithm'],
-    inconclusive: ['inconclusive', ''],
+    inconclusive: ['inconclusive', ''], withdrawn: ['withdrawn', ''],
     resolved: ['resolved', 'purple'], long: ['long', 'good'], short: ['short', 'bad'],
     Buy: ['Buy', 'good'], Sell: ['Sell', 'bad'], 'No trade': ['No trade', ''],
   };
@@ -397,7 +397,7 @@
 
   async function pageTrials() {
     const tr = await load('trials');
-    setHead('Trials', `${tr.summary.n} trials · ${tr.summary.pass} pass · ${tr.summary.fail} fail · trials.csv updated ${fmtDate(tr.updated)}`);
+    setHead('Trials', `${tr.summary.n} trials · ${tr.summary.pass} pass · ${tr.summary.fail} fail${tr.summary.withdrawn ? ` · ${tr.summary.withdrawn} withdrawn` : ''} · trials.csv updated ${fmtDate(tr.updated)}`);
     const rows = tr.items.map((t) => `
       <details class="card" style="border-left:5px solid ${t.status === 'pass' ? 'var(--good)' : t.status === 'fail' ? 'var(--bad)' : 'var(--warn-fill)'}">
         <summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="mono" style="color:var(--c-trials);font-weight:700">${esc(t.trial_id)}</span>${badge(t.status)}<span class="row-title" style="flex:1 1 200px;min-width:0">${esc(t.name)}</span><span class="muted small">${fmtDate(t.date_tested)}</span></summary>
@@ -637,7 +637,7 @@
   async function pageEvidence() {
     const ev = await load('evidence');
     setHead('Evidence', `Every idea the programme has tested · as of ${fmtDate(ev.as_of)}`);
-    const G_COLOR = { live: 'var(--c-algorithm)', prospective: 'var(--warn)', passed: 'var(--good)', failed: 'var(--bad)' };
+    const G_COLOR = { live: 'var(--c-algorithm)', prospective: 'var(--warn)', passed: 'var(--good)', failed: 'var(--bad)', withdrawn: 'var(--muted)' };
     const progress = (pct, left, right) => `<div class="progress"><div class="bar ${pct >= 100 ? 'good' : 'warn'}"><i style="width:${Math.max(0, Math.min(100, pct || 0)).toFixed(1)}%"></i></div><div class="lbl"><span>${esc(left)}</span><span>${esc(right)}</span></div></div>`;
     const item = (g, it) => {
       if (g === 'live' && it.under_test) return `
@@ -667,7 +667,7 @@
         <div class="card ev-item"><div class="row-top"><span class="row-title"><span class="mono" style="color:var(--g)">${esc(it.id)}</span> <a href="${esc(it.link)}">${esc(it.name)}</a></span>${badge(it.status)}</div>
         <div class="reason">${esc(it.reason)}</div><div class="row-meta">${it.date ? `tested ${fmtDate(it.date)}` : ''}${it.group ? ` · ${esc(it.group)}` : ''}${it.live_as ? ` · live as <a href="#/algorithm">${esc(it.live_as)}</a>` : ''}</div></div>`;
     };
-    const EMPTY = { live: 'Nothing live.', prospective: 'Nothing under prospective test.', passed: 'None yet: no discretionary idea has passed a pre-registered test.', failed: 'None.' };
+    const EMPTY = { live: 'Nothing live.', prospective: 'Nothing under prospective test.', passed: 'None yet: no discretionary idea has passed a pre-registered test.', failed: 'None.', withdrawn: 'None.' };
     view.innerHTML = `
       <section class="section">
         <div class="card ev-status"><span class="k">Overall status</span><span class="v">${esc(ev.overall)}</span><span class="s">Computed on every build from ${esc(ev.sources.join(', '))}. Minimum track record for ${ev.min_track_record.confidence} confidence in v1.0's Sharpe: about ${ev.min_track_record.years} years (${ev.min_track_record.months} months).</span></div>
