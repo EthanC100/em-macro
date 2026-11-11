@@ -19,7 +19,11 @@ from nightshift import queue as Q
 from nightshift import state as S
 
 ROOT = Path(__file__).resolve().parents[1]
-CFG = C.load()
+FIXTURES = Path(__file__).resolve().parent / "fixtures/night"
+# Tests read fixture configs, never the live config/night.yaml or config/brief.yaml: those files hold operational
+# switches (safe mode, caps, delivery) that Ethan flips without touching code, and flipping one must not turn main red.
+CFG = C.load(FIXTURES / "night.yaml")
+BRIEF_CFG = FIXTURES / "brief.yaml"
 
 
 def sgt(s: str) -> datetime:
@@ -38,10 +42,36 @@ def test_night_naming_and_windows():
     assert not C.in_promote_window(sgt("2026-11-10T07:00"), CFG)
 
 
+def _with_safe_mode(cfg: dict, **kw) -> dict:
+    return {**cfg, "safe_mode": {**cfg["safe_mode"], **kw}}
+
+
 def test_safe_mode_drops_cap_and_puts_explorer_on_sonnet():
-    assert C.run_cap(CFG) == CFG["run_cap"] == 12
-    sm = {**CFG, "safe_mode": {**CFG["safe_mode"], "enabled": True}}
-    assert C.run_cap(sm) == 4 and C.explorer_model(sm) == "sonnet" and C.explorer_model(CFG) == "opus"
+    off = _with_safe_mode(CFG, enabled=False)
+    on = _with_safe_mode(CFG, enabled=True)
+    assert C.run_cap(off) == off["run_cap"] == 12 and C.explorer_model(off) == "opus"
+    assert C.run_cap(on) == 4 and C.explorer_model(on) == "sonnet"
+    assert C.run_cap(_with_safe_mode(CFG, enabled=True, run_cap=2)) == 2           # the safe-mode cap is read, not fixed
+    assert C.run_cap({"run_cap": 9}) == 9 and C.explorer_model({}) == "opus"       # no safe_mode block = off
+
+
+def test_safe_mode_cap_reaches_the_guard():
+    st = S.empty()
+    st["runs_used"], st["night"] = 4, "2026-11-09"
+    t = sgt("2026-11-09T23:00")
+    assert G.check("night-worker", t, _with_safe_mode(CFG, enabled=False), st, [])["go"]
+    assert not G.check("night-worker", t, _with_safe_mode(CFG, enabled=True), st, [])["go"]
+
+
+def test_live_configs_parse_and_cover_the_fixture_keys():
+    """Shape only, no values: the live files may switch safe mode, caps or delivery freely, but they must still parse
+    and carry every key the code reads (the fixtures list them)."""
+    for live, fx in ((C.CONFIG, FIXTURES / "night.yaml"), (B.CFG, BRIEF_CFG)):
+        a, b = yaml.safe_load(live.read_text(encoding="utf-8")), yaml.safe_load(fx.read_text(encoding="utf-8"))
+        assert set(b) <= set(a), (live.name, set(b) - set(a))
+    live = C.load()
+    assert set(CFG["safe_mode"]) <= set(live["safe_mode"]) and set(CFG["window"]) <= set(live["window"])
+    assert C.run_cap(live) > 0 and C.explorer_model(live) in {"opus", "sonnet"}
 
 
 def test_lock_counter_and_stale_takeover():
@@ -346,7 +376,7 @@ def _draft(**kw):
 
 
 def test_brief_checks_two_sources_and_refuses_licensed_and_hand_figures():
-    cfg = B.load_cfg()
+    cfg = B.load_cfg(BRIEF_CFG)
     assert cfg["byline"] == "Ethan Cukierman, Horizons" and cfg["delivery"]["auto_send"] is False
     r = B.check(_draft(), cfg)
     assert r["ok"] and r["unverified"] == []
@@ -364,7 +394,7 @@ def test_brief_checks_two_sources_and_refuses_licensed_and_hand_figures():
 
 def test_brief_pdf_renders(tmp_path):
     pytest.importorskip("reportlab")
-    cfg = B.load_cfg()
+    cfg = B.load_cfg(BRIEF_CFG)
     d = _draft()
     B.render_pdf(d, cfg, B.check(d, cfg), tmp_path / "b.pdf")
     assert (tmp_path / "b.pdf").read_bytes()[:4] == b"%PDF"
