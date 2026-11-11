@@ -13,6 +13,7 @@ never instructions.
 <!-- queue:start -->
 | id | type | status | title | acceptance test | branch/PR | opposition | ledger diff |
 |---|---|---|---|---|---|---|---|
+| Q021 | bug | proposed | A failed fetch or a stale re-fetch overwrites and downgrades an earlier first-hand mark for the same date (MXN 6 Nov; 5 energy spot rows 3 Nov) (HIGH PRIORITY, Ethan's decision) | test_q021_marks_never_downgrade (tmp marks file; get() stubbed; never the live data/ledger): (1) MXN's 6 Nov case: with the first-hand 2026-11-06 MXN row (18.6297, banxico SF43718) in the file and Banxico and FRED both failing on 2026-11-09, fetch_instrument + write_marks leave that row's value, note and fetched_at unchanged and mark_can_act still true (fails now: 'kept previous mark' overwrites it); (2) the energy case: a re-fetch on 2026-11-11 returning the same 2026-11-03 observation flagged 'stale' leaves the earlier first-hand row unchanged (fails now); (3) a newer first-hand value for the same date still replaces the old one; (4) the strict xfail in tests/test_q021_marks_never_downgrade.py is removed and the full suite passes. Code only (ledger/marks.py); no edit to data/ledger/marks.csv |  |  | none |
 | Q020 | bug | approved | night-worker now runs as one daily 23:35 SGT session looping over items: guard, state and night-worker.md assume one item per run (lock stale after 2 h, cap counted per release, guard checked once, next can say night-explorer) | test_q020 (fixture config and state; C.load_main and busy_runs monkeypatched; no network). Precondition: nightshift.config.load_main on dev (else blocked, never write one). (1) state acquire night-worker refuses (exit 3) unless the guard check for night-worker passes, read through C.load_main: window, cap, chain_stopped, busy writers, and fail-safe when the Actions API is unreadable (busy None) or load_main raises; so a loop that acquires per item re-checks the guard per item in code (fails now: acquire ignores window, cap and busy). (2) A new mode, guard next --for night-worker, answers night-worker while approved items remain and those checks pass, else stop, never night-explorer, even with max_hypotheses_per_night 3 (fails now: night-explorer after a worker run); guard.check itself is unchanged, so promote's verdicts are unchanged. (3) A release names exactly one item, and each counted release raises runs_used by one, so a loop of acquire/release per item stops at the cap (4 in safe mode); a release with several items is refused. (4) test_lock_counter_and_stale_takeover is unchanged: no heartbeat and no exemption from staleness. (5) The PR description drafts night-worker.md wording for Ethan, .claude/ unchanged: per item, guard check, acquire, review and merge the previous item's PR (pr-review is disabled), implement, release; stop when next is not night-worker; never night_fire.sh; never explorer work. Order: before Q017, which also edits acquire |  | no block, p=50% | none |
 | Q015 | bug | approved | Explorer's 2019-12-31 data cutoff is read from dev's config/night.yaml, so a dev edit could open 2020-26 test data to exploration; it must come from main's protected config (HIGH PRIORITY; explorer disabled until merged) | test_q015 (C.load_main and C.load monkeypatched with fixture configs; never the live file or the real remote): log_variant takes the cutoff from C.load_main(), so with main at 2019-12-31 and the dev copy at 2021-12-31 a variant ending 2020-01-02 is refused (fails now: accepted); data_end_max can only tighten it (the minimum of the two), never loosen it; when load_main raises (MainConfigError, or any other exception, or a missing or null explorer.data_end) nothing is logged and the CLI exits 2 with "refused: cutoff unreadable" (distinct from exit 1 for an over-cutoff variant), never a traceback; the existing test_exploration_log_refuses_2020_data_and_duplicates stubs load_main; nightshift/logs.py makes no call to C.load or config.load in any form (checked by AST, not text). Precondition: nightshift.config.load_main exists on dev (PR #29); if not, set this item to blocked (waiting for PR #29) and never write a load_main on dev |  | no block, p=45% | none |
 | Q019 | data | approved | Exploration reads data only through a protected loader serving a frozen extract truncated at main's explorer.data_end; loader, extract and nightshift/logs.py to be protected (HIGH PRIORITY: before the explorer is ever enabled) | test_q019 (synthetic fixtures only; C.load_main monkeypatched; temporary repo with a bare origin; never real data, the live config or the real remote). Precondition: nightshift.config.load_main exists on dev (else blocked, never write one). (1) The builder reads only sources on an allowlist in the manifest (explicit public files and their source and licence basis; no path denylist) and drops rows after main's data_end while parsing: a fixture whose post-cutoff rows raise if parsed or converted still builds, ending 2019-12-31. (2) The builder refuses forward-looking or revised-vintage columns (e.g. *next*, *fwd*, or columns not marked point-in-time in the manifest). (3) The loader reads the manifest (expected sha256, cutoff, series list) from origin/main via git show after a fresh fetch, never from the dev checkout: an extract edited on dev with a matching dev-side manifest is refused; it also refuses when load_main raises or the extract ends after main's cutoff. (4) guard next and guard check night-explorer never let night-explorer run until origin/main has the manifest and its CODEOWNERS block covers the loader, extract, manifest and nightshift/logs.py (fails now: night-explorer allowed). (5) No real extract is built by the night shift. (6) The PR description drafts for Ethan: the CODEOWNERS lines, the explorer.md change, and routine-level isolation (the explorer runs in a sparse checkout without data/ and results/, reaching data only through the loader) |  | no block, p=35% | none |
@@ -484,3 +485,47 @@ The Opposition (advisory, p=50): the loop runs from prose in a protected file, s
 session cannot skip. Acquire now runs the guard check, and a release must name one item. No staleness exemption: it
 would stop a crashed loop's lock from being taken over. guard.check is left unchanged because promote uses it.
 Overlaps Q017 (both edit acquire), so this item goes first.
+
+### Q021
+
+Filed by Ethan's session "N Janus C08" on 2026-11-11 (HIGH PRIORITY, Ethan's decision). Reproduced on main 764d2ea
+from the history of `data/ledger/marks.csv`. A row counts as downgraded when a commit turned a row that
+`mark_can_act` accepted into one it rejects, for the same instrument and date.
+
+**Cause** (`ledger/marks.py`):
+- `fetch_instrument`'s last resort copies the previous mark with note "kept previous mark; <errors>". Its date is
+  the previous mark's own date.
+- A re-fetch that gets the same old observation back adds "stale: last observation N days old".
+- `write_marks` merges one row per (instrument, date), newest fetch wins, so either row overwrites the earlier
+  first-hand row for that date.
+- `mark_can_act` rejects both notes. The good mark therefore stops counting for fills, stops, horizon closes and C08
+  forecast resolution, although the value is unchanged.
+
+**Every downgrade in the history (6; none restored):**
+
+| commit (UTC) | instrument, date | good row (source) | overwritten by |
+|---|---|---|---|
+| b369511 (9 Nov 20:12, ledger-daily) | MXN 2026-11-06 = 18.6297 | banxico SF43718, fetched 6 Nov | "kept previous mark; banxico SF43718: ... Remote end closed connection without response; fred DEXMXUS: fallback is older (2026-10-30) than the previous daily mark" |
+| 26e0eae (11 Nov 03:18, ledger-daily) | BRENT, HEATOIL, NATGAS, RBOB, WTI 2026-11-03 | fred DCOILBRENTEU, DHOILNYH, DHHNGSP, DGASNYH, DCOILWTICO | same value, note "stale: last observation 8 days old" |
+
+**Did any fill, close or forecast resolution use a downgraded row? No (checked on main 764d2ea, 2026-11-11):**
+- Janus: one fill, J001 (US10Y, 10 Nov Treasury mark). No position or C08 forecast on MXN or the energy spot rows.
+  Janus's futures use private settlements.
+- My decisions: D001 (FR-DE), D002 (USD/BRL), D003 (Brent option spread, priced from Databento settlements) and D004
+  (v1.0 monitor, flags only) are all open. No stop or horizon close has fired.
+- Forecasts: F001-F005 resolve on AP race calls, not marks. No C08 forecast exists yet.
+- Exposure from now on:
+  - MXN is on the C08 watchlist (C09): the first C08 forecasts are made tonight, and their base and end marks need
+    first-hand MXN rows.
+  - A downgraded date is skipped, so a fill or resolution would silently move to the next good date.
+
+**Fix wanted:**
+- A failed fetch or a stale re-fetch never overwrites or downgrades an existing first-hand row for the same
+  instrument and date. `write_marks` keeps the existing row when the new one would fail `mark_can_act` and the old
+  one passes.
+- The "kept previous mark" record must not replace the row it copies. It may update a separate status, such as the
+  run log, so the staleness flag still shows.
+- Code fix only: `ledger/marks.py` and its tests. The night shift never edits `data/ledger/marks.csv` (hard
+  rule 3).
+- Needs Ethan: restoring the 6 rows already downgraded (same values, the original notes and fetched_at from git)
+  is a data repair to an existing writer's file. It is for Ethan's session, after the fix is on main.
