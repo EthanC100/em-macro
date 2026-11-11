@@ -45,6 +45,7 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | Month-ahead report | 28th, 21:00 Singapore | none (Claude Docs) | | not set |
 | Ledger forecast resolver (`docs/ledger/forecast_resolver.md`) | documented as a daily task, **but not on the account's task list** (`docs/todo.md`: "Create the scheduled tasks", unticked) | would be Ethan via the Claude App | `data/ledger/forecasts.csv`, seals via ledger_commit.sh | — |
 | Ledger monthly letters (`docs/letters/monthly_letters.md`) | documented for the 3rd-6th, **not on the task list** | same | letters via ledger_commit.sh | — |
+| **ledger-daily kick** (trig_01Ci634N…, added 2026-11-11 for Q018, approved by Ethan) | **06:07 and 22:07 UTC** daily (`7 6,22 * * *`) | none: no commit; it dispatches `ledger-daily.yml` on main through the Claude GitHub App (`workflow_dispatch`) | nothing (dispatch only) | `claude-sonnet-5-5`. Fires into one standing session with em-macro attached (session_01Ayx8qcPWT8…, "ledger-daily kick (Q018)"), whose system prompt allows only the dispatch and a run-list check. Why: GitHub creates this repository's schedule events 5.5-10.5 hours late (Q018), so ledger-daily's crons are backups. Verified 2026-11-11: fired 06:41:54 UTC, run 42974261471 created 06:42:02 |
 
 ### Interactive and manual writers
 

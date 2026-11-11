@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Open, update or close "[ALERT] Ledger marks stale" from the JSON written by `python -m ledger.watchdog`.
+# Open, update or close "[ALERT] Ledger marks stale" (or, with --late-runs, "[ALERT] ledger-daily late", Q018)
+# from the JSON written by `python -m ledger.watchdog`.
 # Usage: marks_alert.sh <watchdog.json>     (needs GH_TOKEN and GITHUB_REPOSITORY)
 set -euo pipefail
 f="$1"
@@ -18,7 +19,8 @@ if [ "$stale" = "true" ]; then
     gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body-file "$f.body.md"
   fi
 elif [ -n "$existing" ]; then
+  # close_comment: from the ledger-daily lateness check (Q018); the marks check keeps its own wording
   gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
-    --comment "Marks are fresh again ($(python -c "import json;print(json.load(open('$f'))['last_fetch'])"))."
+    --comment "$(python -c "import json;d=json.load(open('$f'));print(d.get('close_comment') or 'Marks are fresh again (%s).' % d.get('last_fetch'))")"
   echo "closed #$existing"
 fi
