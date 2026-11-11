@@ -1,13 +1,13 @@
 {
- "since": "2026-11-11T12:11:06+00:00",
- "at": "2026-11-11T17:27:59+00:00",
+ "since": "2026-11-11T17:27:59+00:00",
+ "at": "2026-11-11T22:19:58+00:00",
  "items": [
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": 0.1901,
-   "text": "algorithm v1.0: +0.19 index points (to 99.91)"
+   "change": -0.0993,
+   "text": "algorithm v1.0: -0.10 index points (to 99.81)"
   }
  ]
 }
