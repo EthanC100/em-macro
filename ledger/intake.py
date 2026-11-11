@@ -539,6 +539,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", required=True)
     ap.add_argument("--root", default=str(ROOT))
+    ap.add_argument("--fail-unless-ok", action="store_true",
+                    help="exit 1 unless the entry was written (the final write through scripts/ledger_commit.sh, Q022)")
     a = ap.parse_args(argv)
     labels = [s.strip() for s in os.environ.get("ISSUE_LABELS", "").split(",") if s.strip()]
     title, body = os.environ.get("ISSUE_TITLE", ""), os.environ.get("ISSUE_BODY", "")
@@ -554,7 +556,11 @@ def main(argv=None) -> int:
     result.setdefault("files", [])
     Path(a.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "comment"}))
-    return 0
+    msg = os.environ.get("LEDGER_MSG_FILE")
+    if msg and result.get("ok"):
+        # scripts/ledger_commit.sh commits with this message: the id allocated on the fresh main it ran on (Q022)
+        Path(msg).write_text(f"Ledger {result.get('kind')} {result.get('id')} (issue #{issue})\n", encoding="utf-8")
+    return 1 if (a.fail_unless_ok and not result.get("ok")) else 0
 
 
 if __name__ == "__main__":
