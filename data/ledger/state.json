@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-11",
- "at": "2026-11-11T11:29:22+00:00",
+ "at": "2026-11-11T12:11:06+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -79,7 +79,7 @@
  "index": {
   "algorithm v1.0": 99.7188,
   "algorithm v1.1": 100.0,
-  "janus": 99.9793,
+  "janus": 99.9569,
   "me": 98.9591
  },
  "janus": {
@@ -95,7 +95,7 @@
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   }
  },
  "janus_no_trades": 8,
