@@ -22,6 +22,9 @@ Proposal (JSON): {"session": "daily_review" | "quick_check", "model": "...", "se
 "new_positions": [{"instrument", "direction", "risk_pct", "stop", "horizon", "probability", "thesis" (2-3 sentences),
 "change_mind", "sources": [{"title", "url"}], "opposition": {"case_against", "key_risks", "what_proves_it_wrong",
 "probability_view_wrong", "sources", "model"}}], "no_trade_reasoning": "...", "sources_read": [...]}
+Daily review from C08 (11 Nov 2026): {"session": "daily_review", "model", "session_url", "market_summary",
+"time_anchor": {...}, "sources_read": [...], "forecasts": [{"instrument", "p_initial", "p_final", "reasoning",
+"opposition": {"case_against", "probability_view_wrong", "model"}}], "data_failure": [...] (only when a mark failed)}
 
 Account: separate paper account of US$500,000,000, reported in % (index 100 at its start). Its results never feed
 the algorithm (v1.0/v1.1) and the algorithm never reads data/janus/.
@@ -54,6 +57,17 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     scheduled event named in a reason or thesis, and no event dated in the future is described as released; a
     deferred idea counts toward the minimum only if its market is closed on the review date (weekend, FX on 1 Jan or
     25 Dec, otherwise ``market_closed`` {holiday, calendar_url}) and must open at the next session;
+  * config change C08 (approved 2026-11-11, from the 11 Nov 2026 daily review), replacing discretionary position
+    selection: a daily review gives ``forecasts``, one per instrument of janus/watchlist.yaml, each with ``p_initial``
+    (before The Opposition) and ``p_final``, whole numbers from 1 to 99, never 50 (The Opposition is advisory and
+    never vetoes a forecast); every forecast is logged and resolved with a Brier score (``forecast_resolution``,
+    by ``mark``). The CLI sets the book: each instrument on the side of its final forecast, risk proportional to
+    |p - 50| (0.1% a point, 2% cap) scaled into C05's 3-10% band, rebalanced at each daily review with a 25%
+    no-trade band; only a verified ``data_failure`` excludes an instrument. new_positions, reviews, below_budget,
+    candidates and deferred_ideas are rejected in a daily review; a quick check cannot close or tighten a C08
+    position. The first C08 review closes every earlier position (J001, J002) as its closing action. Kept:
+    sources_read, the time anchor, failed-review records (exit 3). Superseded: C05 (b)'s sizing table,
+    below_budget and deferrals, C06 rules 1-2, C07 rules 1, 2 and 4;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -144,6 +158,16 @@ MARKET_CALENDAR_HOSTS = ("cmegroup.com", "sifma.org", "theice.com", "ice.com", "
                          "londonstockexchange.com")
 FX_CLOSED_DAYS = ((1, 1), (12, 25))  # FX trades every weekday except these (C07 rule 4)
 MIN_HORIZON_DAYS, MAX_HORIZON_DAYS = 5, 190
+# Config change C08 (approved by Ethan 2026-11-11, effective from the 11 November 2026 daily review;
+# docs/config_changes.md C08): forced forecasts on a fixed watchlist (janus/watchlist.yaml), every one logged and
+# resolved with a Brier score, and a mechanical book set by the CLI, not by Janus. It supersedes discretionary
+# position selection: C05 (b)'s sizing table, below_budget and weekend deferrals, C06 rules 1-2, C07 rules 1, 2 and 4.
+C08_FROM = date(2026, 11, 11)
+WATCHLIST_FILE = ROOT / "janus/watchlist.yaml"
+C08_PROBABILITY_RANGE = (1, 99)       # whole numbers; 50 is never a forecast
+C08_RISK_PER_POINT = 0.1              # % at risk per point of |p_final - 50|, before scaling into the C05 band
+C08_NO_TRADE_BAND = 0.25              # a held position is resized only when its target risk moves more than 25%
+C08_DISCRETIONARY = ("new_positions", "reviews", "below_budget", "candidates", "deferred_ideas")
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
 GENESIS = "0" * 64
@@ -397,6 +421,7 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
     log = []
     srows = settle_rows if settle_rows is not None else None
     pnl_out: list[dict] = []
+    log += c08_rebalance_fills(records, marks_rows, today, path, reg, ref)    # C08 resizes and flips, at one mark
     for pid, p in sorted(positions(records).items()):
         o = p["open"]
         inst, direction = o["instrument"], o["direction"]
@@ -454,7 +479,7 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
                 reason, hit = "stop", (d, v, m)
                 break
             if cr and d >= cr:
-                reason, hit = "Janus close decision", (d, v, m)
+                reason, hit = (p["close_request"].get("close_reason") or "Janus close decision"), (d, v, m)
                 break
             if hz and d >= hz:
                 reason, hit = "horizon", (d, v, m)
@@ -473,6 +498,7 @@ def process(records: list[dict], marks_rows: list[dict], today: date, path: Path
             log.append(f"{pid} closed ({reason}) at {v:g} on {d}: gross {gross:+.3f}%, net {net:+.3f}%")
     if pnl_out and path is not None:
         JF.write_pnl(pnl_path(path), pnl_out)
+    log += resolve_forecasts(records, marks_rows, today, path)              # C08: every forecast, Brier scored
     return log
 
 
@@ -591,6 +617,10 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
                       "roll_rule": roll_rule_text(k) if v["asset_class"] == "future" else None}
                      for k, v in UNIVERSE.items()],
         "dropped": DROPPED, "chain": verify(records),
+        # config change C08: every forced forecast with its resolution and Brier score, and the fund rule's resolved
+        # calls (one forecast per instrument per non-overlapping 20-trading-day window; docs/fund/allocation.md)
+        "forecasts": forecast_rows(records), "forecast_summary": forecast_summary(records),
+        "fund_calls": fund_calls(records),
         "disclaimer": ("Janus is an experiment in AI judgement. Its results do not feed the algorithm (v1.0 and v1.1 are "
                        "mechanical rules and never read Janus's records), and no edge is claimed."),
     }
@@ -786,6 +816,10 @@ def validate(ans: dict, records: list[dict], marks_rows: list[dict], today: date
         act = str(r.get("action", "")).lower()
         if act not in ("hold", "close", "tighten_stop"):
             errors.append(f"{pid}: action must be hold, close or tighten_stop (got {act!r})")
+            continue
+        if p["open"].get("c08"):
+            errors.append(f"{pid}: a C08 position is set by the CLI at each daily review; a session cannot close or "
+                          "tighten it (C08). A quick check records a check instead")
             continue
         if not str(r.get("reasoning") or "").strip():
             errors.append(f"{pid}: a reason is required for every review")
@@ -1399,6 +1433,9 @@ def _anchor_texts(ans: dict) -> list[tuple[str, str]]:
         if isinstance(c, dict):
             out += [(f"candidate {i} ({_inst(c) or '?'}) reason", c.get("reason")),
                     (f"candidate {i} ({_inst(c) or '?'}) reopen_reason", c.get("reopen_reason"))]
+    for i, f in enumerate(ans.get("forecasts") or [] if isinstance(ans.get("forecasts"), list) else [], 1):
+        if isinstance(f, dict):                      # C08: a forecast's reasoning is Janus's own text
+            out.append((f"forecast {i} ({_inst(f) or '?'}) reasoning", f.get("reasoning")))
     return [(lbl, " ".join(str(t).split())) for lbl, t in out if t and str(t).strip()]
 
 
@@ -1515,6 +1552,513 @@ def _check_c07(ans: dict, records: list[dict], pos: dict[str, dict], open_ids: l
     return errs
 
 
+# ----------------------------------------------------------------------------- config change C08
+def load_watchlist(path: Path | None = None) -> list[dict]:
+    """The C08 watchlist (janus/watchlist.yaml): instrument, question, yes_if, yes_position, resolution_source,
+    stop, with the file's horizon_trading_days on each entry."""
+    import yaml
+    doc = yaml.safe_load((path or WATCHLIST_FILE).read_text(encoding="utf-8"))
+    h = int(doc["horizon_trading_days"])
+    return [{**w, "instrument": str(w["instrument"]).strip().upper(), "horizon_trading_days": h,
+             "question": " ".join(str(w["question"]).split()),
+             "resolution_source": " ".join(str(w["resolution_source"]).split())} for w in doc["instruments"]]
+
+
+def add_weekdays(d: date, n: int) -> date:
+    """The ``n``-th weekday after ``d`` (C08: 20 trading days = 20 weekdays after the base mark's date)."""
+    while n > 0:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n -= 1
+    return d
+
+
+def _whole_probability(x) -> int | None:
+    v = _num(x)
+    return int(v) if v is not None and float(v).is_integer() else None
+
+
+def _check_forecasts(ans: dict, wl: list[dict]) -> tuple[list[str], list[dict]]:
+    """C08 rule 2: a forecast for every watchlist instrument, each with p_initial (before The Opposition) and
+    p_final, whole numbers from 1 to 99 and never 50, a reason and The Opposition's case (advisory: it never vetoes a
+    forecast, and nothing here compares it with the probabilities)."""
+    head = "forecasts (C08): "
+    names = [w["instrument"] for w in wl]
+    fc = ans.get("forecasts")
+    if not isinstance(fc, list) or not fc:
+        return [head + "required: one forecast for every watchlist instrument (" + ", ".join(names) + "), each "
+                "{\"instrument\", \"p_initial\" (before The Opposition), \"p_final\", \"reasoning\", \"opposition\": "
+                "{\"case_against\", \"probability_view_wrong\", \"model\"}}, probabilities whole numbers from 1 to 99, "
+                "never 50"], []
+    errs, out, seen = [], [], set()
+    lo, hi = C08_PROBABILITY_RANGE
+    for i, f in enumerate(fc, 1):
+        inst = _inst(f)
+        tag = f"forecast {i} ({inst or '?'})"       # first, so a withheld futures error still names it
+        if not isinstance(f, dict):
+            errs.append(tag + ": must be an object (C08)")
+            continue
+        if inst not in names:
+            errs.append(tag + ": not on the watchlist (janus/watchlist.yaml: " + ", ".join(names) + ") (C08)")
+            continue
+        if inst in seen:
+            errs.append(tag + ": forecast twice (C08)")
+            continue
+        seen.add(inst)
+        bad, ps = [], {}
+        for k in ("p_initial", "p_final"):
+            v = _whole_probability(f.get(k))
+            if v is None or not (lo <= v <= hi):
+                bad.append(f"{k} must be a whole number from {lo} to {hi} (got {f.get(k)!r})")
+            elif v == NO_VIEW_PROBABILITY:
+                bad.append(f"{k} is 50, which is not a forecast: give the side you favour (1-49 or 51-99)")
+            else:
+                ps[k] = v
+        if len(" ".join(str(f.get("reasoning") or "").split())) < 10:
+            bad.append("reasoning is required (why this probability)")
+        opp = f.get("opposition")
+        if not isinstance(opp, dict) or len(" ".join(str(opp.get("case_against") or "").split())) < 10:
+            bad.append("opposition.case_against is required: The Opposition's case against this forecast (advisory; "
+                       "it never vetoes a forecast)")
+        mkt = {k: f[k] for k in ("market_probability", "market_basis", "market_source") if f.get(k) not in (None, "")}
+        if mkt:
+            bad += _check_market(f)
+        else:                       # C04 amendment: no market-implied probability -> 50, basis none (a coin flip)
+            mkt = {"market_probability": COIN_FLIP, "market_basis": "none",
+                   "market_source": "no market-implied probability for a 20-trading-day direction: coin flip (0.50)"}
+        if bad:
+            errs += [f"{tag}: {b} (C08)" for b in bad]
+            continue
+        out.append({"instrument": inst, **ps, "reasoning": " ".join(str(f["reasoning"]).split()),
+                    "opposition": {k: opp.get(k) for k in ("case_against", "key_risks", "probability_view_wrong",
+                                                           "sources", "model") if k in opp},
+                    "market_probability": float(mkt["market_probability"]),
+                    "market_basis": str(mkt["market_basis"]).strip().lower(),
+                    "market_source": " ".join(str(mkt["market_source"]).split())})
+    missing = [n for n in names if n not in seen]
+    if missing:
+        errs.append(head + "every daily review gives a probability for every watchlist instrument; missing "
+                    + ", ".join(missing))
+    return errs, out
+
+
+def _check_c08_data_failures(ans: dict, wl: list[dict], marks_rows: list[dict], today: date) -> tuple[list[str], dict]:
+    """C08 rule 3: only a named data failure on an instrument may exclude it from the book (the C06 format, verified
+    against the marks in the same way: last_mark must match, and the mark must be stale). Every other watchlist
+    instrument needs a mark to set its stop. Returns (errors, {instrument: verified entry})."""
+    names = [w["instrument"] for w in wl]
+    last = {n: (series(marks_rows, n, actable_only=False) or [(None,)])[-1][0] for n in names}
+    df = ans.get("data_failure") or []
+    errs, ok = [], {}
+    for i, d in enumerate(df if isinstance(df, list) else [df], 1):
+        tag = f"data_failure {i}"
+        if not isinstance(d, dict):
+            errs.append(f"{tag}: must be an object")
+            continue
+        inst = _inst(d)
+        if inst not in names:
+            errs.append(f"{tag}: {inst or '?'} is not on the watchlist (C08 excludes only a watchlist instrument)")
+            continue
+        if len(" ".join(str(d.get("mark") or "").split())) < 5:
+            errs.append(f"{tag} ({inst}): mark is required: which mark failed (its source and series)")
+        if "last_mark" not in d:
+            errs.append(f"{tag} ({inst}): last_mark is required: the date of its latest mark, or \"none\"")
+            continue
+        stated = d.get("last_mark")
+        stated_d = None if str(stated or "").strip().lower() in ("", "none", "null") else parse_date(stated)
+        if stated_d != last[inst]:
+            errs.append(f"{tag} ({inst}): last_mark {stated!r} does not match its latest mark "
+                        f"({last[inst].isoformat() if last[inst] else 'none'})")
+            continue
+        if not _is_stale(last[inst], today):
+            errs.append(f"{tag} ({inst}): its latest mark ({last[inst]}) is current, "
+                        f"{_stale_weekdays(last[inst], today)} weekday(s) old (stale means at least "
+                        f"{DATA_STALE_WEEKDAYS}): not a data failure, so it stays in the book (C08)")
+            continue
+        ok[inst] = {**d, "instrument": inst, "stale_weekdays": _stale_weekdays(last[inst], today)}
+    for n in names:
+        if last[n] is None and n not in ok:
+            errs.append(f"{n} has no mark, so the CLI cannot set its stop: name the data failure in data_failure "
+                        "(C08), or wait for the mark")
+    return errs, (ok if not errs else {})
+
+
+def _water_fill(edge: dict[str, float], total: float, cap: float) -> dict[str, float]:
+    """Risk proportional to ``edge`` summing to ``total``, no position above ``cap`` (the excess goes to the rest)."""
+    out, free, left = {}, dict(edge), total
+    while free:
+        k = left / sum(free.values())
+        over = [i for i, e in free.items() if k * e >= cap - 1e-12]
+        if not over:
+            out.update({i: k * e for i, e in free.items()})
+            break
+        for i in over:
+            out[i] = cap
+            left -= cap
+            free.pop(i)
+    return out
+
+
+def c08_targets(final: dict[str, int], excluded=()) -> dict[str, dict]:
+    """C08 rule 3: each instrument on the side of its final forecast (above 50: the YES side, long; below: short),
+    risk proportional to |p - 50|: C08_RISK_PER_POINT % per point, at most 2% each; when that total is outside C05's
+    3-10% band it is scaled to the nearer edge (the 2% cap still holds, its excess spread over the rest)."""
+    edge = {i: float(abs(p - NO_VIEW_PROBABILITY)) for i, p in final.items() if i not in set(excluded)}
+    if not edge:
+        return {}
+    base = {i: min(C08_RISK_PER_POINT * e, MAX_RISK_POS) for i, e in edge.items()}
+    total = sum(base.values())
+    goal = min(max(total, RISK_BUDGET[0]), RISK_BUDGET[1])
+    risk = base if abs(goal - total) < 1e-9 else _water_fill(edge, goal, MAX_RISK_POS)
+    return {i: {"direction": "long" if final[i] > NO_VIEW_PROBABILITY else "short", "risk_pct": round(risk[i], 6),
+                "edge": edge[i]} for i in edge}
+
+
+def c08_stop(w: dict, k: str, direction: str, level: float) -> float | None:
+    """The mechanical stop: ``stop.distance`` from the latest mark on the losing side (yield points, or % of the rate)."""
+    d = float(w["stop"]["distance"])
+    cands = (level + d, level - d) if w["stop"]["unit"] == "yield_points" else (level * (1 + d / 100),
+                                                                               level * (1 - d / 100))
+    return next((round(s, 6) for s in cands if PX.valid_stop(k, direction, level, s)), None)
+
+
+def _held_risk(p: dict) -> float:
+    return float((p.get("fill") or p["open"]).get("risk_pct", p["open"]["risk_pct"]))
+
+
+def c08_plan(records: list[dict], marks_rows: list[dict], today: date, forecasts: list[dict], excluded: dict,
+             wl: list[dict]) -> dict:
+    """The book the CLI sets at a C08 daily review: closes (every position not set under C08, as rule 5's closing
+    action; a side flip; a named data failure; a resize outside the no-trade band) and orders at the next official
+    daily mark. A held position on the target side is kept while its target risk is within 25% of its current
+    risk, unless keeping it would leave the total outside the 3-10% band."""
+    reg, ref, pos = registry_rows(), CAP.load_reference(), positions(records)
+    by = {w["instrument"]: w for w in wl}
+    final = {f["instrument"]: f["p_final"] for f in forecasts}
+    targets = c08_targets(final, excluded)
+    live = {pid: p for pid, p in pos.items() if p["status"] in ("open", "pending")}
+    actions, holds, opens = [], {}, []
+    cur: dict[str, list[str]] = {}
+    for pid, p in sorted(live.items()):
+        if p["open"].get("c08") and p["open"]["instrument"] in by:
+            cur.setdefault(p["open"]["instrument"], []).append(pid)
+        else:
+            actions.append({"id": pid, "action": "close", "close_reason": "C08 rule 5: discretionary position closed",
+                            "reasoning": "Config change C08: the CLI sets the book from the forced forecasts, so every "
+                                         "position not set under C08 is closed at the first daily review under C08."})
+    for inst, pids in cur.items():
+        for extra in pids[1:]:                       # never more than one C08 position per instrument
+            actions.append({"id": extra, "action": "close", "close_reason": "C08 duplicate",
+                            "reasoning": "C08: one mechanical position per instrument."})
+    want = {}
+    for w in wl:
+        inst = w["instrument"]
+        pid = (cur.get(inst) or [None])[0]
+        t = targets.get(inst)
+        if t is None:
+            if pid:
+                actions.append({"id": pid, "action": "close", "close_reason": "C08 data failure",
+                                "reasoning": f"C08: named data failure on {inst} ({excluded[inst].get('mark')}); "
+                                             "the instrument is out of the book until its mark is current."})
+            continue
+        if pid:
+            p = live[pid]
+            held = _held_risk(p)
+            same = p["open"]["direction"] == t["direction"]
+            if same and abs(t["risk_pct"] - held) <= C08_NO_TRADE_BAND * held + 1e-9:
+                holds[inst] = (pid, held)
+            want[inst] = (pid, same)
+        else:
+            want[inst] = (None, False)
+    if holds:
+        after = sum(h for _, h in holds.values()) + sum(targets[i]["risk_pct"] for i in want if i not in holds)
+        if after < RISK_BUDGET[0] - 1e-9 <= sum(t["risk_pct"] for t in targets.values()) or \
+                after > RISK_BUDGET[1] + 1e-9:
+            holds = {}                               # the band would leave the book outside 3-10%: trade to target
+    for inst, (pid, same) in want.items():
+        t, w = targets[inst], by[inst]
+        if inst in holds:
+            actions.append({"id": pid, "action": "hold", "reasoning": (
+                f"C08: final forecast {final[inst]}% -> {t['direction']} {t['risk_pct']:.2f}% at risk; held at "
+                f"{holds[inst][1]:.2f}%, within the {C08_NO_TRADE_BAND:.0%} no-trade band.")})
+            continue
+        if pid:
+            actions.append({"id": pid, "action": "close", "close_reason": "C08 rebalance" if same else "C08 side flip",
+                            "reasoning": (f"C08: final forecast {final[inst]}% -> {t['direction']} "
+                                          f"{t['risk_pct']:.2f}% at risk; " + (
+                                              f"resized from {_held_risk(live[pid]):.2f}% (outside the "
+                                              f"{C08_NO_TRADE_BAND:.0%} no-trade band)" if same else
+                                              f"side flips from {live[pid]['open']['direction']}") + ".")})
+        k = kind(inst, reg)
+        ser = series(marks_rows, inst, actable_only=False)
+        level = ser[-1][1]
+        stop = c08_stop(w, k, t["direction"], level)
+        risk, note = t["risk_pct"], ""
+        sz = size(inst, t["direction"], risk, level, stop, reg, ref)
+        if sz["capacity_note"]:
+            risk, note = round(sz["risk_pct"], 6), sz["capacity_note"]
+        opens.append({"instrument": inst, "direction": t["direction"], "risk_pct": risk, "target_risk_pct":
+                      t["risk_pct"], "stop": stop, "ref_level": level, "ref_date": ser[-1][0].isoformat(),
+                      "replaces": pid if (pid and same) else None, "flips": pid if (pid and not same) else None,
+                      "capacity_note": note, "provisional_capacity": sz["capacity"]})
+    risk_after = sum(h for _, h in holds.values()) + sum(o["risk_pct"] for o in opens)
+    return {"targets": targets, "actions": actions, "opens": opens, "risk_after_pct": round(risk_after, 4),
+            "excluded": sorted(excluded)}
+
+
+def validate_c08(ans: dict, records: list[dict], marks_rows: list[dict], today: date, now: datetime,
+                 wl: list[dict] | None = None) -> tuple[dict | None, list[str]]:
+    """Every rule for a daily review under C08. Returns (the plan, errors); any error rejects the whole review."""
+    wl = wl if wl is not None else load_watchlist()
+    errors = []
+    if not str(ans.get("model") or "").strip():
+        errors.append("model is required (the model string of the session that decided)")
+    for k in C08_DISCRETIONARY:
+        if ans.get(k):
+            errors.append(f"{k} is not used under C08: the CLI sets the book from the forecasts (positions follow "
+                          "each instrument's final forecast; only a named data failure excludes one)")
+    if not _valid_sources(ans.get("sources_read")):         # C05 (a), kept
+        errors.append("sources_read is empty: every daily review must research the main drivers across its universe ("
+                      + ", ".join(RESEARCH_DRIVERS) + ") on the web before deciding and list what it read with URLs; "
+                      "a review without it counts as failed")
+    ferrs, forecasts = _check_forecasts(ans, wl)
+    derrs, excluded = _check_c08_data_failures(ans, wl, marks_rows, today)
+    errors += ferrs + derrs + _check_time_anchor(ans, now)  # C07 rule 3, kept
+    if errors:
+        return None, errors
+    return c08_plan(records, marks_rows, today, forecasts, excluded, wl) | {"forecasts": forecasts}, []
+
+
+def _apply_c08(ans: dict, plan: dict, records: list[dict], today: date, now: datetime, path, wl: list[dict]) -> dict:
+    """Append a C08 daily review: the run, every forecast, the closing actions and the CLI's orders."""
+    n0 = len(records)
+    _ensure_account(records, today, path)
+    model = str(ans["model"]).strip()
+    by = {w["instrument"]: w for w in wl}
+    pos = positions(records)
+    run_rec = append(records, {
+        "type": "run", "session": "daily_review", "date": today.isoformat(), "decided_at": now.isoformat(),
+        "model": model, "session_url": ans.get("session_url"), "status": "ok", "c08": True,
+        "market_summary": " ".join(str(ans.get("market_summary") or "").split()),
+        "n_new": len(plan["opens"]), "n_reviews": len(plan["actions"]), "n_forecasts": len(plan["forecasts"]),
+        "sources_read": (ans.get("sources_read") or [])[:40], "risk_after_pct": plan["risk_after_pct"],
+        "book": {"targets": plan["targets"], "excluded": plan["excluded"],
+                 "rule": (f"side of the final forecast; risk {C08_RISK_PER_POINT:g}% per point of |p - 50| (2% cap), "
+                          f"scaled into {RISK_BUDGET[0]:g}-{RISK_BUDGET[1]:g}%; {C08_NO_TRADE_BAND:.0%} no-trade band")},
+        **{k: ans[k] for k in ("data_failure", "time_anchor") if ans.get(k)}}, path)
+    fids = {}
+    n_fc = sum(1 for r in records if r["type"] == "forecast")
+    for f in plan["forecasts"]:
+        w = by[f["instrument"]]
+        n_fc += 1
+        fids[f["instrument"]] = f"JF{n_fc:04d}"
+        append(records, {"type": "forecast", "forecast_id": fids[f["instrument"]], "instrument": f["instrument"],
+                         "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
+                         "run_seq": run_rec["seq"], "question": w["question"], "yes_if": w["yes_if"],
+                         "yes_position": w["yes_position"], "horizon_trading_days": w["horizon_trading_days"],
+                         "resolution_source": w["resolution_source"], "p_initial": f["p_initial"],
+                         "p_final": f["p_final"], "market_probability": f["market_probability"],
+                         "market_basis": f["market_basis"], "market_source": f["market_source"],
+                         "reasoning": f["reasoning"], "opposition": f["opposition"],
+                         "excluded": f["instrument"] in plan["excluded"]}, path)
+    for a in plan["actions"]:
+        p = pos[a["id"]]
+        base = {"position_id": a["id"], "date": today.isoformat(), "decided_at": now.isoformat(), "model": model,
+                "set_by": "CLI (C08)", "reasoning": a["reasoning"], "run_seq": run_rec["seq"], "session": "daily_review",
+                "c08": True}
+        append(records, {"type": "review", "action": a["action"], **base}, path)
+        if a["action"] == "close":
+            if p["status"] == "pending":
+                append(records, {"type": "cancel", "position_id": a["id"], "date": today.isoformat(),
+                                 "reason": f"{a['close_reason']}: order withdrawn before it was filled"}, path)
+            else:
+                append(records, {"type": "close_request", "close_reason": a["close_reason"], **base}, path)
+    fc = {f["instrument"]: f for f in plan["forecasts"]}
+    for o in plan["opens"]:
+        f, w = fc[o["instrument"]], by[o["instrument"]]
+        long_ = o["direction"] == "long"
+        p_side = f["p_final"] if long_ else 100 - f["p_final"]
+        m_side = f["market_probability"] if long_ else 100 - f["market_probability"]
+        pid = next_id(records)
+        append(records, {
+            "type": "open", "position_id": pid, "instrument": o["instrument"], "direction": o["direction"],
+            "risk_pct": o["risk_pct"], "requested_risk_pct": o["target_risk_pct"], "stop": o["stop"],
+            "horizon": (today + timedelta(days=MAX_HORIZON_DAYS)).isoformat(), "probability": float(p_side),
+            "thesis": (f"{f['reasoning']} [C08 mechanical position: final forecast {f['p_final']}% that the answer to "
+                       f"\"{w['question']}\" is YES, so the CLI holds the {o['direction']} side with "
+                       f"{o['risk_pct']:.2f}% at risk.]"),
+            "change_mind": ("Set by the CLI at each daily review (C08): the side follows the final forecast, the size "
+                            f"is reset when the target moves by more than {C08_NO_TRADE_BAND:.0%}, and a named data "
+                            "failure closes it. The stop and the 6-month horizon are backstops."),
+            "sources": [], "sources_read": (ans.get("sources_read") or [])[:25], "model": model,
+            "set_by": "CLI (C08)", "decided_at": now.isoformat(), "decision_date": today.isoformat(),
+            "entry_rule": "next available first-hand daily mark dated on or after the decision date",
+            "market_probability": float(m_side), "market_source": f["market_source"],
+            "market_basis": f["market_basis"], "provisional_capacity": o["provisional_capacity"],
+            "run_seq": run_rec["seq"], "session": "daily_review", "c08": True, "forecast_id": fids[o["instrument"]],
+            "stop_rule": f"{w['stop']['distance']:g} {w['stop']['unit'].replace('_', ' ')} from the mark of "
+                         f"{o['ref_date']} on the losing side",
+            **({"replaces": o["replaces"]} if o["replaces"] else {}),
+            **({"flips": o["flips"]} if o["flips"] else {}),
+            **({"capacity_note": o["capacity_note"]} if o["capacity_note"] else {})}, path)
+    return {"ok": True, "errors": [], "appended": [r["seq"] for r in records[n0:]],
+            "opened": [r["position_id"] for r in records[n0:] if r["type"] == "open"],
+            "forecasts": [fids[f["instrument"]] for f in plan["forecasts"]]}
+
+
+def c08_rebalance_fills(records: list[dict], marks_rows: list[dict], today: date, path: Path | None,
+                        reg: dict, ref: dict) -> list[str]:
+    """A C08 resize (same side, ``replaces``) or side flip (``flips``) fills at one mark: the old position closes and
+    the new one fills at the first first-hand daily mark dated on or after the review (and the old fill). A resize
+    pays costs only on the notional actually traded: the part carried over is not sold and bought back. A stop hit
+    before that mark is left to the usual processing (the old position closes at its stop, the order fills alone)."""
+    log = []
+    pos = positions(records)
+    for pid, p in sorted(pos.items()):
+        o = p["open"]
+        old_id = o.get("replaces") or o.get("flips")
+        old = pos.get(old_id) if old_id else None
+        if p["status"] != "pending" or not old or old["status"] != "open" or not old.get("close_request"):
+            continue
+        inst = o["instrument"]
+        if is_future(inst):
+            continue
+        k, ser = kind(inst, reg), series(marks_rows, inst)
+        ed, dd = parse_date(old["fill"]["entry_date"]), parse_date(o["decision_date"])
+        hit = next((x for x in ser if x[0] >= max(dd, ed) and x[0] <= today), None)
+        if not hit:
+            continue
+        d, v, m = hit
+        od = old["open"]["direction"]
+        if any(PX.stop_hit(k, od, old["fill"]["entry_level"], stop_on(old, x[0]), x[1]) for x in ser if ed < x[0] < d):
+            continue
+        same = bool(o.get("replaces")) and od == o["direction"]
+        old_nf = old["fill"]["notional_frac"]
+        new_ok = PX.valid_stop(k, o["direction"], v, p["stop"])
+        sz = size(inst, o["direction"], o["risk_pct"], v, p["stop"], reg, ref) if new_ok else None
+        carried = min(old_nf, sz["notional_frac"]) if (same and sz) else 0.0
+        exit_cost = 100 * (old_nf - carried) * (one_way_cost(inst, v) + old["fill"].get("impact_frac", 0.0))
+        gross = pnl_at(old, v, reg)["gross_pct"]
+        net = round(gross - _costs_pct(old) - exit_cost, 4)
+        why = old["close_request"].get("close_reason") or ("C08 rebalance" if same else "C08 side flip")
+        append(records, {"type": "close", "position_id": old_id, "date": d.isoformat(), "exit_level": v,
+                         "reason": why, "mark_source": m.get("source"), "gross_pnl_pct": gross,
+                         "exit_cost_pct": round(exit_cost, 5), "net_pnl_pct": net,
+                         "outcome": "right" if gross > 0 else "wrong", "days_held": (d - ed).days,
+                         "carried_notional_frac": carried, "replaced_by": pid}, path)
+        log.append(f"{old_id} closed ({why}) at {v:g} on {d}: gross {gross:+.3f}%, net {net:+.3f}%")
+        if not sz:
+            append(records, {"type": "cancel", "position_id": pid, "date": d.isoformat(), "level": v,
+                             "reason": f"the entry mark {v:g} ({d}) is already through the stop {p['stop']:g}; not opened"},
+                   path)
+            log.append(f"{pid} cancelled: entry mark through the stop")
+            continue
+        traded = sz["notional_frac"] - carried
+        cost_frac = sz["one_way_cost"] + sz["impact_frac"]
+        append(records, {"type": "fill", "position_id": pid, "entry_date": d.isoformat(), "entry_level": v,
+                         "mark_source": m.get("source"), "mark_url": m.get("source_url"), "risk_pct": sz["risk_pct"],
+                         "notional_frac": sz["notional_frac"], "notional_usd": sz["notional_usd"], "contracts": None,
+                         "one_way_cost": sz["one_way_cost"], "impact_frac": sz["impact_frac"],
+                         "cost_pct": round(100 * traded * cost_frac, 5), "traded_notional_frac": traded,
+                         "carried_from": old_id if carried else None, "carried_notional_frac": carried,
+                         "capacity": {k2: sz["capacity"][k2] for k2 in ("pct_adv", "adv_usd", "adv_status", "pct_limit",
+                                                                        "position_limit", "impact_bp_trade", "flags")},
+                         "capacity_note": sz["capacity_note"]}, path)
+        log.append(f"{pid} filled {o['direction']} {inst} at {v:g} ({d}); carried {100 * carried:.2f}% of the account "
+                   f"from {old_id}, traded {100 * traded:.2f}%")
+        pos = positions(records)
+    return log
+
+
+def forecast_outcome(f: dict, marks_rows: list[dict], today: date) -> dict | None:
+    """C08: how a forecast resolves (janus/watchlist.yaml): the base mark is the first first-hand daily mark dated on
+    or after the forecast's date; the end mark the first dated on or after the 20th weekday after the base mark's
+    date; YES when the end mark is strictly beyond the base mark in the ``yes_if`` direction. None until both exist."""
+    ser = [x for x in series(marks_rows, f["instrument"]) if x[0] <= today]
+    fd = parse_date(f["date"])
+    base = next((x for x in ser if x[0] >= fd), None)
+    if not base:
+        return None
+    target = add_weekdays(base[0], int(f.get("horizon_trading_days") or 20))
+    end = next((x for x in ser if x[0] >= target), None)
+    if not end:
+        return {"base_date": base[0].isoformat(), "base_value": base[1], "target_date": target.isoformat()}
+    yes = (end[1] < base[1]) if f["yes_if"] == "lower" else (end[1] > base[1])
+    o = 1 if yes else 0
+    def brier(p):
+        return round((float(p) / 100.0 - o) ** 2, 6)
+    return {"base_date": base[0].isoformat(), "base_value": base[1], "target_date": target.isoformat(),
+            "end_date": end[0].isoformat(), "end_value": end[1], "outcome": o, "answer": "YES" if yes else "NO",
+            "brier_final": brier(f["p_final"]), "brier_initial": brier(f["p_initial"]),
+            "brier_market": brier(f["market_probability"]), "mark_source": end[2].get("source")}
+
+
+def resolve_forecasts(records: list[dict], marks_rows: list[dict], today: date, path: Path | None = RECORDS) -> list[str]:
+    """Append a ``forecast_resolution`` for every C08 forecast whose end mark has arrived (whether or not a position
+    resulted). Run by ``mark`` (ledger-daily and every scripts/ledger_commit.sh write)."""
+    done = {r["forecast_id"] for r in records if r["type"] == "forecast_resolution"}
+    log = []
+    for f in [r for r in records if r["type"] == "forecast" and r["forecast_id"] not in done]:
+        res = forecast_outcome(f, marks_rows, today)
+        if not res or "outcome" not in res:
+            continue
+        append(records, {"type": "forecast_resolution", "forecast_id": f["forecast_id"], "instrument": f["instrument"],
+                         "forecast_date": f["date"], "date": today.isoformat(), "p_final": f["p_final"],
+                         "p_initial": f["p_initial"], "market_probability": f["market_probability"], **res}, path)
+        log.append(f"{f['forecast_id']} ({f['instrument']}, {f['date']}) resolved {res['answer']}: Brier "
+                   f"{res['brier_final']:.4f} (p {f['p_final']}%)")
+    return log
+
+
+def forecast_rows(records: list[dict]) -> list[dict]:
+    """Every C08 forecast with its resolution, if any."""
+    res = {r["forecast_id"]: r for r in records if r["type"] == "forecast_resolution"}
+    out = []
+    for f in (r for r in records if r["type"] == "forecast"):
+        r = res.get(f["forecast_id"], {})
+        out.append({k: f.get(k) for k in ("forecast_id", "instrument", "date", "question", "yes_if", "p_initial",
+                                          "p_final", "market_probability", "market_basis", "reasoning", "excluded")}
+                   | {"opposition_probability_view_wrong": (f.get("opposition") or {}).get("probability_view_wrong"),
+                      "status": "resolved" if r else "open",
+                      **{k: r.get(k) for k in ("base_date", "end_date", "base_value", "end_value", "outcome", "answer",
+                                               "brier_final", "brier_initial", "brier_market")}})
+    return out
+
+
+def fund_calls(records: list[dict]) -> list[dict]:
+    """C08 rule 6: the fund allocation rule's resolved calls (docs/fund/allocation.md). One forecast per instrument
+    per non-overlapping 20-trading-day window: per instrument, in the order the forecasts were made, the first
+    forecast counts, and the next one counted is the first whose base mark is dated on or after the end mark of the
+    last one counted. Which forecast counts depends only on dates, never on outcomes. Only resolved calls are listed;
+    the chain of windows stops at a counted forecast that has not resolved yet."""
+    out = []
+    rows = forecast_rows(records)
+    for inst in dict.fromkeys(r["instrument"] for r in rows):
+        last_end = None
+        for r in (x for x in rows if x["instrument"] == inst):
+            if r["status"] != "resolved":            # its base and end are not known yet, nor any later one's
+                break
+            if last_end is not None and r["base_date"] < last_end:
+                continue                             # inside the last counted window
+            out.append(r)
+            last_end = r["end_date"]
+    return sorted(out, key=lambda r: (r["end_date"], r["forecast_id"]))
+
+
+def forecast_summary(records: list[dict]) -> dict:
+    rows = forecast_rows(records)
+    done = [r for r in rows if r["status"] == "resolved"]
+    calls = fund_calls(records)
+    def mean(xs):
+        return round(sum(xs) / len(xs), 4) if xs else None
+    return {"n": len(rows), "n_resolved": len(done),
+            "brier_final": mean([r["brier_final"] for r in done]),
+            "brier_initial": mean([r["brier_initial"] for r in done]),
+            "brier_market": mean([r["brier_market"] for r in done]),
+            "fund_calls": len(calls), "fund_brier_final": mean([r["brier_final"] for r in calls]),
+            "fund_brier_market": mean([r["brier_market"] for r in calls])}
+
+
 def _public_error(e: str) -> str:
     """An error as written to the public failed-review record: details of futures errors are withheld, because
     their numbers can derive from licensed settlement prices (rule 7)."""
@@ -1558,6 +2102,16 @@ def budget_status(records: list[dict], today: date) -> dict:
     out = {"risk_used_pct": risk, "budget_pct": list(RISK_BUDGET), "typical_positions": list(TYPICAL_POSITIONS),
            "flags": []}
     if risk >= RISK_BUDGET[0] - 1e-9:
+        return out
+    if last.get("c08"):
+        # C08: the CLI sets the book inside 3-10%; below_budget is gone, and only a named data failure excludes an
+        # instrument. Below 3% otherwise (stops between reviews, a capacity cut) is flagged until the next review.
+        if last.get("data_failure") and float(last.get("risk_after_pct") or 0) < RISK_BUDGET[0] - 1e-9:
+            names = ", ".join(sorted(_inst(d) for d in last["data_failure"] if isinstance(d, dict)))
+            out["reason"] = f"C08 book: data failure named on {names} by the {last['date']} review"
+        else:
+            out["flags"].append(f"{risk:.2f}% at risk, below the {RISK_BUDGET[0]:g}% budget: the C08 book is reset "
+                                "into 3-10% at the next daily review")
         return out
     bb, dd = last.get("below_budget"), last.get("deferred_ideas")
     until = parse_date((bb or {}).get("until")) if isinstance(bb, dict) else None
@@ -1706,7 +2260,22 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
     v = verify(records)
     if not v["ok"]:
         return {"ok": False, "errors": [f"the Janus chain does not verify: {v['error']}"], "appended": []}
-    reviews, new, errors = validate(ans, records, marks_rows, today, now)
+    c08 = ans.get("session") == "daily_review" and today >= C08_FROM
+    plan = None
+    if c08:                                         # config change C08: forced forecasts, the CLI sets the book
+        wl = load_watchlist()
+        plan, errors = validate_c08(ans, records, marks_rows, today, now, wl)
+        reviews, new = [], []
+    else:
+        reviews, new, errors = validate(ans, records, marks_rows, today, now)
+    if c08 and not errors:
+        if dry_run:
+            return {"ok": True, "errors": [], "dry_run": True, "appended": [], "risk_after_pct": plan["risk_after_pct"],
+                    "would_close": [a["id"] for a in plan["actions"] if a["action"] == "close"],
+                    "would_hold": [a["id"] for a in plan["actions"] if a["action"] == "hold"],
+                    "would_open": [(o["instrument"], o["direction"], o["risk_pct"]) for o in plan["opens"]],
+                    "targets": plan["targets"]}
+        return _apply_c08(ans, plan, records, today, now, path, wl)
     if errors and not dry_run and ans.get("session") == "daily_review":
         # C06 rule 3 (closes Q004): a rejected daily review is recorded as failed, so the quick check flags it the
         # same day. Nothing else is appended; the session fixes every error and proposes again.
@@ -1719,6 +2288,7 @@ def apply_proposal(ans: dict, now: datetime | None = None, path: Path | None = R
                                **({"now_utc": str(ans["time_anchor"]["now_utc"])[:40]}
                                   if isinstance(ans.get("time_anchor"), dict) and ans["time_anchor"].get("now_utc")
                                   else {}),
+                               **({"c08": True} if c08 else {}),
                                "note": "rejected by the CLI: nothing in the proposal was applied (C06)"}, path)
         return {"ok": False, "errors": errors, "dry_run": False, "appended": [rec["seq"]], "failed_record": rec["seq"],
                 "would_open": [n["instrument"] for n in new], "would_review": [(r["id"], r["action"]) for r in reviews]}
@@ -1904,7 +2474,35 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                               "market_closed {holiday, calendar_url} from an official or exchange "
                                               "calendar listed in sources_read), and must open at the next session "
                                               "(carried forward in deferred_ideas while its market stays closed)"),
-                                "market_calendars": list(MARKET_CALENDAR_HOSTS)}},
+                                "market_calendars": list(MARKET_CALENDAR_HOSTS)},
+                        "c08": {"from": C08_FROM.isoformat(),
+                                "forecasts": ("every daily review gives forecasts: one per watchlist instrument "
+                                              "(janus/watchlist.yaml, below), each {instrument, p_initial (before The "
+                                              "Opposition), p_final, reasoning, opposition {case_against, "
+                                              "probability_view_wrong, model}}; probabilities are whole numbers from "
+                                              "1 to 99, never 50, that the question resolves YES; market_probability "
+                                              "/ market_basis / market_source optional (default 50, basis none). "
+                                              "Every forecast is logged and resolved with a Brier score"),
+                                "book": (f"the CLI sets the book: each instrument on the side of its final forecast "
+                                         f"(YES = long), risk {C08_RISK_PER_POINT:g}% per point of |p - 50| (at most "
+                                         f"{MAX_RISK_POS:g}% each), scaled into {RISK_BUDGET[0]:g}-{RISK_BUDGET[1]:g}% "
+                                         f"when outside it; rebalanced at each daily review with a "
+                                         f"{C08_NO_TRADE_BAND:.0%} no-trade band; mechanical stops from the watchlist"),
+                                "exclusions": ("only data_failure [{instrument, mark, last_mark}] (verified: the mark "
+                                               "is stale) excludes an instrument from the book; it is still forecast"),
+                                "not_used": list(C08_DISCRETIONARY),
+                                "opposition": "advisory: it never vetoes a forecast",
+                                "kept": ("sources_read (C05 a), time_anchor (C07 rule 3, now also covering every "
+                                         "forecast's reasoning), failed-review records and exit 3 (C06 rule 3), "
+                                         "licensed data never in public error text"),
+                                "superseded": ("C05 (b) sizing table, below_budget and weekend deferrals; C06 rules 1 "
+                                               "and 2; C07 rules 1, 2 and 4; discretionary new positions and reviews "
+                                               "(a quick check cannot close or tighten a C08 position)"),
+                                "fund_resolved_call": ("one forecast per instrument per non-overlapping 20-trading-day "
+                                                       "window (docs/fund/allocation.md)")}},
+            "watchlist": _watchlist_context(marks_rows, today),
+            "forecasts_open": [r for r in forecast_rows(records) if r["status"] == "open"][-40:],
+            "forecast_summary": forecast_summary(records),
             "daily_review_status": review_status(records, today), "risk_budget_status": budget_status(records, today),
             "flags": mandate_flags(records, today),
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
@@ -1912,6 +2510,16 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
                                                      "entry_date": (p.get("fill") or {}).get("entry_date")} for p in s["open"]],
             "universe": market_snapshot(marks_rows, today), "last_check": s["last_check"],
             "postmortems_due": [f"{c['book']}-{c['id']}" for c in PMm.due()]}
+
+
+def _watchlist_context(marks_rows: list[dict], today: date) -> list[dict]:
+    out = []
+    for w in load_watchlist():
+        ser = series(marks_rows, w["instrument"], actable_only=False)
+        out.append({k: w[k] for k in ("instrument", "name", "question", "yes_if", "yes_position", "horizon_trading_days",
+                                      "resolution_source", "stop")}
+                   | {"mark": ser[-1][1] if ser else None, "mark_date": ser[-1][0].isoformat() if ser else None})
+    return out
 
 
 def main(argv=None) -> int:

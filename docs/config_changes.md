@@ -12,9 +12,10 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C02 | 2026-11-04 | the 3 December 2026 rebalance (positions effective 2026-12) | **v1.1 added**, run live in parallel with v1.0: v1.1 = frozen v1.0 + exactly the T18 rule (risk-unit no-trade band 0.1 × the position's risk budget and partial rebalancing w + 0.5 (w* − w), replacing v1.0's 25% relative band). v1.0 remains the frozen control. | T18 passed its pre-registered rule (4 of 4 criteria at 1x costs; `results/T16-T19_risk_batch.md`). | None. No v1.0 file, parameter, input snapshot or result changed; `python -m em_macro.verify_v1` reproduces v1.0 exactly. v1.1 has its own code, outputs and freeze record (`docs/v1.1_freeze.md`). |
 | C03 | 2026-11-06 | the 3 December 2026 rebalance (positions effective 2026-12) | Paper capital for the algorithm (v1.0 and v1.1) set to US$500,000,000, replacing C01's US$10,000,000. Recorded before any live month is booked (no live month has been booked yet; November 2026 is booked on 3 December). | Capacity: to see the strategy at an institutional size, with capacity checks and a market-impact estimate shown beside the official P&L (diagnostic only). | None. All results stay in percentages of capital; only notional amounts change. `python -m em_macro.verify_v1` and `python -m em_macro.systematic_v11 verify` reproduce v1.0 and v1.1 byte for byte (2026-11-06). |
 | C04 | 2026-11-06 | the fund's start (the first date both members are live: 30 November 2026, v1.1's index start) | **Horizons fund view added**: a combined view of Algorithm v1.1 (risk share 90%; 80% from the 2026-11-07 amendment) and Janus (10%; 20% from the 2026-11-07 amendment), combined by risk (risk share ÷ trailing volatility, capital shares until 6 months of data). Janus's share changes only by the rule in `docs/fund/allocation.md`: 20% after 30 resolved calls with positive net P&L and a better Brier score than the market on those calls (amended 2026-11-06: every Janus position must record a market probability, 50 where none exists); 5% while its drawdown exceeds 10%. Amended 2026-11-07, before the fund starts and before any Janus call resolved: Janus starts at 20%; after 30 resolved calls, 30% with positive net P&L and a better Brier score than the market, 10% with negative net P&L or a worse Brier score; 5% while its drawdown exceeds 10%, overriding. My decisions stay outside. | To see the books as one fund without changing any of them. | None. The fund is read-only (`ledger/fund.py`): no book's record, P&L, rule or result changes, and no fund figure is written into any book. |
-| C05 | 2026-11-09 | the next Janus daily review (9 November 2026) | **Janus mandate**: (a) research is required: every daily review researches the main drivers across its universe (central banks, data, geopolitics, positioning) on the web before deciding and records what it read in `sources_read`; a review with empty `sources_read` is rejected and counts as failed, and the quick check flags it. (b) Risk budget: normally 2-6 positions and 3-10% of the account at risk, best ideas even at modest conviction (e.g. 55%), size scaled with conviction and edge over the market probability (a small edge: 0.25-0.5% at risk); below 3% only with a specific written reason tied to an identifiable event or condition; weekend and holiday reviews may defer entries but must research and name the ideas. Set blind: no Janus position had ever been opened. | The first four reviews (6-8 November) opened nothing with general "no edge" reasoning, three of them with no recorded research. | None. Janus is a separate paper book: no algorithm, frozen result or other book changes. All existing Janus limits stay (2% per position, 10% total, 8 open, capacity, costs, The Opposition, `market_probability`). |
-| C06 | 2026-11-10 | the 10 November 2026 daily review (23:07 UTC) | **Janus: hard 2-position minimum, dated event reasons, failed-review records**: (1) at least 2 open positions at all times; a dated `below_budget` reason may only let total risk fall below 3%, never the book below 2 positions; fewer than 2 only for a named data failure (which mark, how stale), and only for the instruments affected. (2) An event-based reason cites the event's date from an official calendar URL listed in `sources_read`, and expires at the end of the next trading day after the event. (3) The CLI rejects a review that breaks (1) or (2), and a rejected daily review writes a failed-review record (closes Q004). Approved by Ethan on 2026-11-10. | The 9 and 10 November reviews held no position under a `below_budget` reason, and the 10 November review dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET (correction K004). A rejected review left no record (Q004). | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing else in C05 changes. |
-| C07 | 2026-11-10 | the first Janus daily review after it was recorded (10 November 2026, 23:07 UTC) | **Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals only where the market is closed**: (1) no opened position may state a probability of 50%; the CLI rejects a proposal containing one. (2) When the C06 two-position minimum binds, the review lists at least 5 candidates across at least 2 asset classes; a candidate it dropped after The Opposition may be reopened only if it states why no other candidate is better. (3) Every review records its current UTC time and, for each event cited in a reason or thesis, whether it had already occurred; an event dated in the future cannot be described as released. (4) A deferred idea counts toward the minimum only if its market is closed on the review date, and must open at the next session. Approved by Ethan on 2026-11-10. | The 10 November 10:30 UTC review met C06's minimum with two 0.25% rates longs (J001, J002) at a stated probability of 50%, opened anyway after The Opposition put each near 43-44% to work, with no other asset class considered; and it described October CPI as "released at 08:30 ET on 10 Nov" at 10:30 UTC, three hours before the 13:30 UTC release. | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing in C05 or C06 changes except what C07 adds. |
+| C05 | 2026-11-09 | the next Janus daily review (9 November 2026) | **Janus mandate**: (a) research is required: every daily review researches the main drivers across its universe (central banks, data, geopolitics, positioning) on the web before deciding and records what it read in `sources_read`; a review with empty `sources_read` is rejected and counts as failed, and the quick check flags it. (b) Risk budget: normally 2-6 positions and 3-10% of the account at risk, best ideas even at modest conviction (e.g. 55%), size scaled with conviction and edge over the market probability (a small edge: 0.25-0.5% at risk); below 3% only with a specific written reason tied to an identifiable event or condition; weekend and holiday reviews may defer entries but must research and name the ideas. Set blind: no Janus position had ever been opened. *(b) superseded by C08 from 11 Nov 2026, except the 3-10% band and the limits.* | The first four reviews (6-8 November) opened nothing with general "no edge" reasoning, three of them with no recorded research. | None. Janus is a separate paper book: no algorithm, frozen result or other book changes. All existing Janus limits stay (2% per position, 10% total, 8 open, capacity, costs, The Opposition, `market_probability`). |
+| C06 | 2026-11-10 | the 10 November 2026 daily review (23:07 UTC) | **Janus: hard 2-position minimum, dated event reasons, failed-review records**: (1) at least 2 open positions at all times; a dated `below_budget` reason may only let total risk fall below 3%, never the book below 2 positions; fewer than 2 only for a named data failure (which mark, how stale), and only for the instruments affected. (2) An event-based reason cites the event's date from an official calendar URL listed in `sources_read`, and expires at the end of the next trading day after the event. (3) The CLI rejects a review that breaks (1) or (2), and a rejected daily review writes a failed-review record (closes Q004). Approved by Ethan on 2026-11-10. *Rules 1-2 superseded by C08 from 11 Nov 2026; rule 3 kept.* | The 9 and 10 November reviews held no position under a `below_budget` reason, and the 10 November review dated US CPI to 12 Nov when BLS lists 10 Nov 2026, 08:30 ET (correction K004). A rejected review left no record (Q004). | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing else in C05 changes. |
+| C07 | 2026-11-10 | the first Janus daily review after it was recorded (10 November 2026, 23:07 UTC) | **Janus: no 50% calls, a wider search under the minimum, a time anchor, deferrals only where the market is closed**: (1) no opened position may state a probability of 50%; the CLI rejects a proposal containing one. (2) When the C06 two-position minimum binds, the review lists at least 5 candidates across at least 2 asset classes; a candidate it dropped after The Opposition may be reopened only if it states why no other candidate is better. (3) Every review records its current UTC time and, for each event cited in a reason or thesis, whether it had already occurred; an event dated in the future cannot be described as released. (4) A deferred idea counts toward the minimum only if its market is closed on the review date, and must open at the next session. Approved by Ethan on 2026-11-10. *Rules 1, 2 and 4 superseded by C08 from 11 Nov 2026; rule 3 kept.* | The 10 November 10:30 UTC review met C06's minimum with two 0.25% rates longs (J001, J002) at a stated probability of 50%, opened anyway after The Opposition put each near 43-44% to work, with no other asset class considered; and it described October CPI as "released at 08:30 ET on 10 Nov" at 10:30 UTC, three hours before the 13:30 UTC release. | None. Janus is a separate paper book: no algorithm, frozen result, fund allocation rule or other book changes. Nothing in C05 or C06 changes except what C07 adds. |
+| C08 | 2026-11-11 | the 11 November 2026 daily review (23:07 UTC) | **Janus: forced forecasts and a mechanical book, replacing discretionary position selection**: (1) a watchlist, `janus/watchlist.yaml`: US10Y, GB10Y, DE10Y, JP10Y, EUR, GBP, JPY and AUD, each with a precise question (direction, 20 trading days, resolution source); (2) every daily review gives every instrument a probability, a whole number from 1 to 99 and never 50, before and after The Opposition; every forecast is logged and resolved automatically with Brier scores; (3) the CLI sets the book: each instrument on the side of its final forecast, risk proportional to \|p − 50\| inside C05's 3-10% band, rebalanced at each daily review with a 25% no-trade band; only a named data failure excludes an instrument; (4) The Opposition is advisory; (5) J001 and J002 are closed by the first C08 review; (6) a fund resolved call is one forecast per instrument per non-overlapping 20-trading-day window. Approved by Ethan on 2026-11-11. | The 10 November 23:07 UTC review (run record seq 238) held only J001 and J002, two rates longs stated at 50%, 0.5% at risk, under a `below_budget` reason tied to the FOMC a month away (9 Dec). Its other candidates sat at 48-50% with "no edge", and the one fresh idea (short US10Y) was dropped after The Opposition. Discretionary selection kept the book at the minimum, and it yields too few scored calls to judge Janus. | None on any other book: no algorithm, frozen result or other book changes. The fund allocation rule's thresholds and shares are unchanged; only what counts as a Janus resolved call is defined (`docs/fund/allocation.md`). The rules of C05, C06 and C07 that C08 supersedes are marked in their sections. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -423,6 +424,11 @@ defensible edge" reason. Three of them recorded no `sources_read` at all.
   `sources_read`), or no daily review since yesterday. The Janus page shows them with the last check.
 
 **(b) Risk budget.**
+
+> **Superseded by C08 from the 11 November 2026 daily review**, except the 3-10% band (now met by the CLI's
+> mechanical book) and the existing limits: discretionary choice of positions, "normally 2-6 positions", the sizing
+> table, `below_budget` and weekend or holiday `deferred_ideas`. See C08.
+
 - Janus normally holds 2-6 positions using 3-10% of the account at risk. It chooses its best ideas even at modest
   conviction (for example 55%).
 - Size scales with conviction and with the edge over the market probability. A small edge gets a small position,
@@ -451,6 +457,11 @@ where stated below; nothing else in C05 changes.
 "on 12 Nov". The Bureau of Labor Statistics lists the October 2026 CPI for **10 November 2026, 08:30 ET**
 (<https://www.bls.gov/schedule/news_release/cpi.htm>), so the reason rested on a wrong date (correction K004). And a
 rejected review left no record, so the quick check could not flag it the same day (queue item Q004).
+
+> **C06 under C08 (from the 11 November 2026 daily review):** rules 1 and 2 are **superseded** (the CLI's mechanical
+> book replaces the two-position minimum, and `below_budget` reasons, event-based or not, are gone); the
+> `data_failure` format and its check survive as C08's only exclusion. Rule 3 (failed-review records, exit 3) is
+> **kept**. See C08.
 
 **1. The minimum of 2 open positions is hard.**
 - C05's "normally 2-6 positions": the lower bound of 2 now holds at all times.
@@ -512,6 +523,11 @@ review at 23:07 UTC). It adds to C05 and C06; nothing in either changes except w
 - its `below_budget.reasoning` said "The October CPI released at 08:30 ET on 10 Nov drives every rates idea" at
   10:30 UTC, three hours before the release (08:30 ET is 13:30 UTC).
 
+> **C07 under C08 (from the 11 November 2026 daily review):** rules 1, 2 and 4 are **superseded** (rule 1 by C08's
+> forecasts, never 50; rule 2's candidates and rule 4's deferrals have nothing to select once the CLI sets the book).
+> Rule 3, the time anchor, is **kept** and now also covers each forecast's reasoning; so is the withholding of futures
+> details from failed-review records. See C08.
+
 **1. No 50% calls.** No opened position may state `probability` 50 (no view). The CLI rejects a proposal containing
 one. Deferred ideas are held to the same rule, because they must open at the next session (rule 4). A candidate that
 is not opened may be 50.
@@ -565,3 +581,135 @@ allocation rules (`docs/fund/allocation.md`) and the T25-T26 shadow files.
 **Where:** `ledger/janus.py` (`_check_c07`, `_check_no_coin_flips`, `_check_candidates`, `_check_time_anchor`,
 `deferred_toward_minimum`, `market_closed`, `_check_deferred_followup`; the C07 counting in `_check_min_positions`),
 `docs/janus/daily_review.md`, `docs/janus/quick_check.md`, `tests/test_janus_c07.py`.
+
+## C08 — Janus: forced forecasts on a watchlist, a mechanical book (2026-11-11)
+
+Approved by Ethan on 2026-11-11 and effective from that day's daily review (23:07 UTC; `C08_FROM` in
+`ledger/janus.py`). It replaces discretionary position selection with forced forecasts and mechanical sizing. Rules of
+C05, C06 and C07 that it supersedes are listed below and marked in their sections; the others are kept.
+
+**Why.** The 10 November review at 23:07 UTC (run record seq 238):
+- held only J001 and J002 (long US 10y, long UK 10y, each stated at 50%), 0.5% of the account at risk, under a
+  `below_budget` reason tied to the FOMC on 9 December, a month away;
+- listed its other candidates at 48-50% with "no edge";
+- dropped its one fresh idea (short US10Y) after The Opposition.
+
+Discretionary selection kept the book at the minimum, and it produces too few scored calls to judge Janus.
+
+**1. Watchlist** (`janus/watchlist.yaml`): eight instruments that Janus already marks daily from free public sources:
+US10Y, GB10Y, DE10Y, JP10Y (rates) and EUR, GBP, JPY, AUD (FX). Futures are left out because their settlements are
+licensed (rule 7), so a resolution derived from them could not be published. Each instrument has a precise
+question: does the mark move in the `yes_if` direction over 20 trading days (yields lower, EUR/USD and GBP/USD
+higher, yen per dollar and Australian dollars per dollar lower), resolved on that instrument's registry mark (FRED
+DGS10, BoE IUDMNPY, Bundesbank, MoF JGB, ECB and BoE reference rates). Every question resolves the same way:
+- **base mark:** the first first-hand daily mark dated on or after the forecast's date;
+- **target date:** the 20th weekday after the base mark's date;
+- **end mark:** the first first-hand daily mark dated on or after the target date;
+- **answer:** YES only if the end mark is strictly beyond the base mark in the `yes_if` direction (an unchanged
+  mark is NO).
+
+YES is the instrument's long side. Changing the file is a new config change.
+
+**2. Forecasts.**
+- Every daily review gives `forecasts`, one for every watchlist instrument, each with:
+  - `p_initial`: its probability of YES before The Opposition;
+  - `p_final`: its final probability;
+  - `reasoning`, and The Opposition's `case_against`.
+- Both probabilities are whole numbers from 1 to 99, never 50. The CLI rejects a review that misses an instrument
+  or breaks the range.
+- `market_probability` is optional per forecast: 50 with basis `none` unless a market-implied figure is given, as
+  under C04.
+- Every forecast is logged (record `forecast`, id `JF0001`, ...) with its question, resolution source and
+  probabilities, whether or not a position results.
+- `python -m ledger.janus mark` resolves each forecast once its end mark arrives (record `forecast_resolution`), on
+  every ledger-daily run and every `scripts/ledger_commit.sh` write. Each resolution records the base and end
+  marks, the answer, and Brier scores for `p_final`, `p_initial` and the market probability.
+
+**3. Mechanical positions: the CLI, not Janus, sets the book.**
+- **Side:** each instrument goes to the side of its final forecast (above 50 long, below 50 short).
+- **Risk:** proportional to |p − 50|, at 0.1% of the account per point and at most 2% per position. When that total
+  is outside C05's 3-10% band, it is scaled to the nearer edge; a position held at the 2% cap passes its excess to
+  the others.
+- **Stop:** the watchlist's mechanical stop, set from the latest mark on the losing side (about twice a typical
+  20-trading-day move). It defines the % at risk as before.
+- **Rebalancing:** at each daily review, against the 25% no-trade band.
+  - A held position on the target side is kept while its target risk is within 25% of its current risk.
+  - Otherwise it is resized: closed and replaced at the same next mark, with costs charged only on the notional
+    actually traded.
+  - It is flipped when the forecast changes side.
+  - If keeping positions inside the band would leave the total outside 3-10%, everything trades to target.
+- **Exclusions:** `below_budget` reasons, event-based or not, are removed. Only a named `data_failure` on an
+  instrument (C06's format, verified against the marks: the mark must be stale) excludes it from the book. It is
+  still forecast.
+- **What the session may not send:** a daily review may not include `new_positions`, `reviews`, `below_budget`,
+  `candidates` or `deferred_ideas`. A quick check may not close or tighten a C08 position.
+- **Unchanged:** fills at the next official daily mark, the existing limits (2% per position, 10% in total, 8 open,
+  capacity) and costs.
+- **Post-mortems:** a resize continues the same view, as the algorithm's resizes do, so it needs none
+  (`ledger/postmortem.py`). Side flips, stops, exclusions and rule 5's closes are real closes and get one.
+
+**4. The Opposition stays, advisory.** It argues against each forecast before `p_final`. It can never veto one: the CLI
+never compares its view with the probabilities and never drops a forecast or a position because of it.
+
+**5. J001 and J002.** The first daily review under C08 closes them, and nothing in the proposal can stop it. Every
+position not set under C08 gets:
+- a `review` record with action `close` ("C08 rule 5: discretionary position closed");
+- a `close_request` filled at the next official daily mark, or a `cancel` if the order is still unfilled.
+
+No existing record is edited: J001, J002 and the runs of 10 November stand as written.
+
+**6. Fund allocation rule** (`docs/fund/allocation.md`):
+- **Resolved call:** one forecast per instrument per non-overlapping 20-trading-day window. Per instrument, the first
+  C08 forecast counts. The next one counted is the first whose base mark is dated on or after the end mark of the
+  last one counted. Which forecast counts depends only on dates, never on outcomes.
+- **Brier scores:** Janus's uses `p_final`, the market's uses `market_probability`.
+- **P&L:** with positions now set mechanically, "net P&L after costs on those calls" is Janus's net P&L from the end
+  of 10 November 2026 to the evaluation date.
+- **Unchanged:** the 30-call threshold, the shares and the drawdown override (`fund_calls` in Janus's summary;
+  `ledger/fund.py`).
+
+**7. Kept and superseded.**
+
+| rule | under C08 |
+|---|---|
+| C05 (a) research in `sources_read`; a review without it fails | kept |
+| C05 (b) 3-10% at risk | kept, met by the mechanical book; the quick check flags the account below 3% |
+| C05 (b) discretionary best ideas, "normally 2-6 positions", the sizing table, `below_budget`, weekend and holiday `deferred_ideas` | superseded (rule 3) |
+| existing limits: 2% per position, 10% in total, 8 open, capacity, costs, fills at the next daily mark | kept |
+| The Opposition on every new position | superseded by The Opposition on every forecast, advisory (rule 4) |
+| `market_probability` on every position | kept, on every forecast (default 50, basis `none`) |
+| C06 rule 1, two-position minimum | superseded; its `data_failure` format is the only exclusion |
+| C06 rule 2, dated event reasons and their expiry | superseded (`below_budget` removed) |
+| C06 rule 3, failed-review records and exit 3 | kept |
+| C07 rule 1, no 50% calls | superseded by rule 2 (no forecast at 50) |
+| C07 rule 2, candidates when the minimum binds | superseded |
+| C07 rule 3, time anchor | kept, and covers each forecast's reasoning |
+| C07 rule 4, deferrals | superseded |
+| no licensed data in public error text (futures errors withheld from failed-review records) | kept |
+| a daily review reviews every open position; no-trade reasoning; a quick check may close or tighten | superseded for C08 positions (the CLI sets them) |
+
+**Rejections.** As under C06, a rejected daily review appends one failed-review record (marked `c08`) and nothing
+else, and the CLI exits 3. `--dry-run` writes nothing and shows the book the CLI would set.
+
+**Records.** No record is edited. Earlier reviews are not re-judged. The 10 November 23:07 UTC review is replayed
+under C08 in `tests/test_janus_c08.py` (see "Replay" below).
+
+**Replay of the 10 November 23:07 UTC review** (`test_the_10_nov_2307_review_replayed_under_c08`):
+- **As recorded, C08 rejects it:**
+  - it gives no forecasts;
+  - it sends `reviews`, `below_budget` and `candidates`, which C08 does not use;
+  - its FOMC `below_budget` reason could not keep the book at 0.5%.
+- **With its own stated views turned into forecasts:**
+  - the views it stated: short US10Y at 45% is 55% YES, long JPY 48, short AUD 48 is 52% YES, long DE10Y 48;
+  - GB10Y moved off its 50 to 51, because C08 forbids 50;
+  - EUR, GBP and JP10Y, which it never considered, forced to a side.
+- **The CLI's book:** it closes J001 and J002 (cancels, as both were still unfilled), places eight orders at
+  3.00% of the account at risk (the 1.5% raw total scaled up to the band; US10Y long 1.00%), and logs eight
+  forecasts that resolve 20 trading days after their base marks.
+
+**Where:** `janus/watchlist.yaml`; `ledger/janus.py` (`C08_*`, `load_watchlist`, `validate_c08`, `_check_forecasts`,
+`_check_c08_data_failures`, `c08_targets`, `c08_plan`, `_apply_c08`, `c08_rebalance_fills`, `resolve_forecasts`,
+`forecast_outcome`, `fund_calls`, `forecast_summary`; the C08 branches of `apply_proposal`, `validate`, `process`,
+`budget_status`, `summarize` and `context`); `ledger/fund.py` (`janus_record_c08`); `ledger/postmortem.py` (no
+post-mortem for a resize); `docs/janus/daily_review.md`,
+`docs/janus/quick_check.md`, `docs/fund/allocation.md`, `data/janus/README.md`; `tests/test_janus_c08.py`.

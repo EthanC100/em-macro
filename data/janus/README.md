@@ -43,6 +43,15 @@ edited. A fill, a stop change, a close or a review is a new record.
 | `postmortem` | daily review | the automatic post-mortem of a closed position |
 | `no_trade` | daily review | nothing opened, with the reasoning |
 | `check` | quick check | nothing changed: time, positions checked, one-line result |
+| `forecast` | daily review (C08) | a forced forecast: instrument, question, YES direction, 20-trading-day horizon, resolution source, `p_initial` (before The Opposition), `p_final`, market probability, reasoning, The Opposition's case (`JF0001`, ...) |
+| `forecast_resolution` | `mark` (C08) | a forecast resolved: base and end marks, answer (YES/NO), Brier scores for `p_final`, `p_initial` and the market |
+
+**From config change C08 (11 November 2026):** Janus forecasts every instrument of `janus/watchlist.yaml` at each
+daily review, and the CLI sets the book. Its `open` records carry `c08: true`, `forecast_id`, the mechanical
+`stop_rule`, and `replaces` (a resize) or `flips` (a side flip). Its `open`, `review` and `close_request` records are set
+by the CLI (`set_by` "CLI (C08)"; a close carries its `close_reason`). A resize fills at one mark: the `close` of the old position and
+the `fill` of the new one record the notional carried over (`carried_notional_frac`), and costs are charged only on
+the notional traded.
 
 ## Universe and data sources
 

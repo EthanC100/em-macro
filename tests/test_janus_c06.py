@@ -39,6 +39,13 @@ def no_store(tmp_path, monkeypatch):
     monkeypatch.setenv("EM_MACRO_DATA", str(tmp_path / "no-store"))
 
 
+@pytest.fixture(autouse=True)
+def before_c08(monkeypatch):
+    """Config change C08 (11 Nov 2026, tests/test_janus_c08.py) replaced discretionary selection, superseding C06 rules
+    1-2. These tests keep the C06 code tested as it ran before C08, with C08 switched off for the dates they use."""
+    monkeypatch.setattr(J, "C08_FROM", date(2099, 1, 1))
+
+
 TWO = [pos(instrument="US10Y", stop=5.10, risk_pct=0.25), pos(instrument="DE10Y", stop=3.50, risk_pct=0.25)]
 
 

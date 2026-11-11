@@ -204,7 +204,8 @@ def test_cli_rejects_a_bad_proposal_with_exit_1(tmp_path):
     env.pop("DATA_REPO_READ_TOKEN", None)
     out = subprocess.run([sys.executable, "-m", "ledger.janus", "propose", "--file", str(f), "--dry-run"], cwd=ROOT,
                          capture_output=True, text=True, env=env)
-    assert out.returncode == 1 and "REJECTED" in out.stderr and "per-position limit" in out.stdout
+    # the CLI's clock is past C08 (11 Nov 2026), under which a daily review may not open a position at all
+    assert out.returncode == 1 and "REJECTED" in out.stderr and "new_positions is not used under C08" in out.stdout
 
 
 def test_no_janus_trigger_workflows():

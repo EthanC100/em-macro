@@ -22,6 +22,13 @@ ANCHOR = {"now_utc": "2026-11-10T23:07:00Z", "events": [CPI]}
 TWO = [pos(instrument="US10Y", stop=5.10, risk_pct=0.25), pos(instrument="DE10Y", stop=3.50, risk_pct=0.25)]
 
 
+@pytest.fixture(autouse=True)
+def before_c08(monkeypatch):
+    """Config change C08 (11 Nov 2026, tests/test_janus_c08.py) superseded C07 rules 1, 2 and 4. These tests keep the
+    C07 code tested as it ran before C08, with C08 switched off for the dates they use (11-16 Nov)."""
+    monkeypatch.setattr(J, "C08_FROM", date(2099, 1, 1))
+
+
 def cand(inst, direction="long", outcome="not_opened", opposition="none", **over):
     return {"instrument": inst, "direction": direction, "probability": 56, "market_probability": 50,
             "outcome": outcome, "opposition": opposition, "reason": "ranked on edge over the market probability", **over}
@@ -374,24 +381,4 @@ def test_c07_is_recorded_in_the_config_changes_and_the_runbooks():
     assert "| C07 | 2026-11-10 |" in doc and "## C07" in doc and "Approved by Ethan on 2026-11-10" in doc
     for f in ("docs/janus/daily_review.md", "docs/janus/quick_check.md"):
         assert "C07" in (ROOT / f).read_text(encoding="utf-8")
-    rb = (ROOT / "docs/janus/daily_review.md").read_text(encoding="utf-8")
-    example = json.loads(rb.split("`/tmp/janus_review.json` (C07 format):\n\n```json\n", 1)[1].split("\n```", 1)[0])
-    assert {"time_anchor", "candidates"} <= set(example) and example["new_positions"][0]["probability"] != 50
-
-
-def test_the_runbook_example_passes_the_cli(tmp_path):
-    """The C07-format example in docs/janus/daily_review.md, with its placeholders filled and the blocks that do not
-    apply left out, passes: the book holds J001, the example opens a second position, so the minimum binds."""
-    rb = (ROOT / "docs/janus/daily_review.md").read_text(encoding="utf-8")
-    ex = json.loads(rb.split("`/tmp/janus_review.json` (C07 format):\n\n```json\n", 1)[1].split("\n```", 1)[0])
-    for k in ("data_failure", "deferred_ideas", "market_holiday"):
-        ex.pop(k)
-    ex.update(sources_read=SR, model="claude-opus-5-5")
-    ex["new_positions"][0]["sources"] = [{"title": "FOMC statement", "url": "https://www.federalreserve.gov/x"}]
-    ex["below_budget"]["reasoning"] = "Size up after the print is digested."
-    ex["reviews"][0]["reasoning"] = "On track."
-    assert J.apply_proposal(review(sources_read=SR, new_positions=[pos(instrument="DE10Y", stop=3.50, risk_pct=0.25)]),
-                            now=datetime(2026, 11, 9, 23, 7, tzinfo=UTC), path=tmp_path / "r.jsonl",
-                            marks_rows=marks("2026-11-06"))["ok"]
-    res = J.apply_proposal(ex, now=T, path=tmp_path / "r.jsonl", marks_rows=marks())
-    assert res["ok"], res["errors"]
+    # the runbook's example is in the C08 format from 11 Nov 2026 (checked in tests/test_janus_c08.py)

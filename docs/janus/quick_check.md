@@ -8,8 +8,10 @@ It never feeds the algorithm, and no edge is claimed. Keep the check short (aim 
 - Never edit, create or delete anything under `data/janus/` or `data/ledger/` yourself. Every change goes through
   `scripts/janus_commit.sh`, which runs the CLI on a fresh `main`, commits and pushes. Keep your scratch files in
   `/tmp`, never in the repository.
-- A quick check never opens a position. It may close one, or tighten a stop. It never widens a stop: the CLI
-  rejects that.
+- A quick check never opens a position. **From config change C08 (11 November 2026) the CLI sets the book at each
+  daily review, so a quick check cannot close or tighten a C08 position either: it records a check.** It may still
+  close, or tighten the stop of, a position opened before C08 (J001, J002) until the first C08 review closes it. It
+  never widens a stop: the CLI rejects that.
 - Push to `main` (the script does this). Do not create a branch or a pull request.
 - Trades fill at the **next official daily mark**, not at the price you see now. The price now is for judgement
   only.
@@ -44,7 +46,8 @@ From it, note the following. If a module is missing, run `pip install -q -r requ
     or a deferred idea not opened at the next session), or empty `sources_read`;
   - no daily review since yesterday;
   - the account below 3% at risk without a current specific reason (an event-based reason expires at the end of
-    the next trading day after the event, C06).
+    the next trading day after the event, C06). Under C08 there is no such reason: the C08 book sits in 3-10%
+    unless a stop was hit since the review or a data failure was named, and the next daily review resets it.
 
   The CLI attaches them to your check record by itself. Also start your `--result` line with `FLAG:` and the flag,
   for example `FLAG: daily review 2026-11-08 failed (empty sources_read); no change`. A quick check never opens a
@@ -60,7 +63,8 @@ For each open position, use web search for:
 - **News since the last check** that bears on the **thesis**, and on each **"what would change my mind"** trigger:
   data releases, central-bank statements, political events, supply news for energy.
 
-Something has **changed** only if one of these holds:
+Under C08 a change is **noted** in the check's result, never acted on: positions follow the daily review's
+forecasts. For a position opened before C08 (J001, J002), something has **changed** only if one of these holds:
 - a "change my mind" trigger has fired;
 - the thesis is contradicted by new facts;
 - the price is close enough to the stop that tightening (to lock in a gain) or closing (cutting a broken trade)
@@ -68,9 +72,10 @@ Something has **changed** only if one of these holds:
 
 Ordinary noise is not a change.
 
-## 3. If something changed: act through the CLI
+## 3. If something changed: act through the CLI (positions opened before C08 only)
 
-Write `/tmp/janus_quick.json` with **only the positions you act on**:
+Skip this step for C08 positions: the CLI rejects a quick check that closes or tightens one. Write
+`/tmp/janus_quick.json` with **only the positions you act on**:
 
 ```json
 {"session": "quick_check", "model": "<your model string>", "session_url": "<this session's URL if known>",
