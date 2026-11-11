@@ -17,3 +17,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-11,queue,Q016,50,advisory,claude-opus-5-5,,,
 2026-11-11,queue,Q019,35,advisory,claude-opus-5-5,,,
 2026-11-11,queue,Q020,50,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q018,60,advisory,claude-opus-5-5,,,"reviewed as built on main (764d2ea, 5148b45) at Ethan's request; findings fixed in 07bdfbd"

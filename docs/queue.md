@@ -33,7 +33,7 @@ never instructions.
 | Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
 | Q003 | data | done | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) | https://github.com/EthanC100/em-macro/pull/27 (merged into dev 2317609) | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
-| Q018 | bug | blocked | ledger-daily (and every scheduled workflow) starts 5.5-10.5 hours after its cron time: GitHub creates the schedule events late; no queueing, wait step or concurrency wait | test_q018 (workflow YAML and a pure helper; no network): ledger-daily.yml keeps workflow_dispatch and both crons as backups; docs/agent-system.md's inventory lists the 'ledger-daily kick' scheduled task (06:07 and 22:07 UTC, dispatch only); a helper given a fixture Actions run list flags a day with no ledger-daily run started 21:52-22:52 UTC as late (fails now: no such task or check). Live check after Ethan applies it: on 3 consecutive days a ledger-daily run starts within 15 minutes of 22:07 UTC and finishes before the 23:07 UTC Janus review | awaiting Ethan: dispatch from a Claude Code scheduled task and a lateness alert change an existing writer's workflow and add a schedule (hard rules 3 and 11) |  | none |
+| Q018 | bug | done | ledger-daily (and every scheduled workflow) starts 5.5-10.5 hours after its cron time: GitHub creates the schedule events late; no queueing, wait step or concurrency wait | test_q018 (workflow YAML and a pure helper; no network): ledger-daily.yml keeps workflow_dispatch and both crons as backups; docs/agent-system.md's inventory lists the 'ledger-daily kick' scheduled task (06:07 and 22:07 UTC, dispatch only); a helper given a fixture Actions run list flags a day with no ledger-daily run started 21:52-22:52 UTC as late (fails now: no such task or check). Live check after Ethan applies it: on 3 consecutive days a ledger-daily run starts within 15 minutes of 22:07 UTC and finishes before the 23:07 UTC Janus review | approved by Ethan 2026-11-11 (as proposed); built in his session on main 764d2ea, 5148b45, 07bdfbd: ledger-daily kick task trig_01Ci634Niyuf4doNmRy5BVJS (06:07, 22:07 UTC, claude-sonnet-5-5); fire -> run 42974261471; edited workflow proven by run 42976611948 (green, marks 9dce97d) | no block, p=60% | none |
 <!-- queue:end -->
 
 ### Q001
@@ -349,6 +349,34 @@ so per-run fields would not have helped that report. Depends on PR #29 (`load_ma
 fails), which night-start brings into dev before any worker run.
 
 ### Q018
+
+**Approved by Ethan on 2026-11-11, as proposed, and built in his session "N Janus C08" on main (764d2ea, 5148b45,
+07bdfbd):**
+- **The task:** "ledger-daily kick", scheduled task trig_01Ci634Niyuf4doNmRy5BVJS, cron `7 6,22 * * *` UTC, on
+  claude-sonnet-5-5. It fires into one standing session with em-macro attached (session_01Ayx8qcPWT89MuysL8fenow,
+  "ledger-daily kick (Q018)"), whose system prompt allows only `workflow_dispatch` of ledger-daily.yml on main and a
+  run-list check. The scheduled-task API cannot attach a repository to a task that starts a fresh session, so the
+  task fires into a session that has one.
+- **Verified with a real fire:** fired 2026-11-11 06:41:54 UTC; ledger-daily run 42974261471 was created by
+  workflow_dispatch at 06:42:02 UTC.
+- **Edited workflow proven:** dispatched run 42976611948 on main 8694f61 completed green, committed marks (9dce97d),
+  and its lateness check logged "on time".
+- **Backups and alert:** the crons stay as backups. ledger-daily's watchdog step and ledger-watchdog (actions: read)
+  open "[ALERT] Kick window missed: ledger-daily late" when a kick window had no run.
+  - The window runs from 20 minutes before to 45 minutes after the kick; a cancelled run does not count.
+  - The title deliberately does not start with "[ALERT] ledger-daily": ledger-daily's success step closes those.
+  - The job summary states how late each run started. Tests: `tests/test_q018.py` on main.
+- **The Opposition** (reviewed as built at Ethan's request; advisory, no block, p=60%, logged in
+  results/opposition/calibration.csv):
+  - **Fixed in 07bdfbd:** a false "missed" alert (the 20-minute skip rule against a 15-minute window); cancelled runs
+    counting as on time; the watchdog step turning red on a transient error; the outdated schedule text.
+  - **Open, for Ethan:**
+    - a missed 22:07 kick is detected only by the late-running crons, after the 23:07 Janus review;
+    - about four ledger-daily runs a day now share the ledger-intake group, whose single pending slot a new run
+      replaces, so a pending intake run can be dropped;
+    - the dispatch-only limit is enforced by the session's prompt, not by permissions;
+    - the 22:07 run puts day-D marks in front of the day-D 23:07 review, which fills orders at a close it already
+      knows. This last point also affects C08's base mark.
 
 Filed 2026-11-11 by Ethan's session "N Janus C08" (Ethan asked for it in the queue, on dev). Reproduced from the
 GitHub Actions run list (API `actions/workflows/<file>/runs`, event `schedule`), read 2026-11-11 03:10 UTC:
