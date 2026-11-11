@@ -49,6 +49,24 @@ def test_most_advanced_status_wins(dev_s, main_s, want):
     assert by_id(out)["Q001"]["status"] == want
 
 
+def test_one_sided_change_wins_over_rank():
+    """Ethan, 11 Nov: rank decides only when both sides changed the row. A stale blocked row on main (equal to the
+    base, e.g. after a refused promotion) never undoes an unblock or an in-progress item on dev."""
+    base = queue([row("Q012", "blocked", "waiting"), row("Q013", "approved")])
+    main = queue([row("Q012", "blocked", "waiting"), row("Q013", "approved")])
+    for dev_s in ("approved", "in-progress", "proposed"):
+        out = by_id(M.merge_queue(base, queue([row("Q012", dev_s, "unblocked"), row("Q013", "approved")]), main))
+        assert out["Q012"]["status"] == dev_s
+    # and the mirror: only main changed it (dev equal to base) -> main, even to a lower rank
+    dev = queue([row("Q012", "blocked", "waiting"), row("Q013", "approved")])
+    main2 = queue([row("Q012", "approved", "unblocked on main"), row("Q013", "approved")])
+    assert by_id(M.merge_queue(base, dev, main2))["Q012"]["status"] == "approved"
+    # both changed: rank decides
+    out = by_id(M.merge_queue(base, queue([row("Q012", "approved", "x"), row("Q013", "approved")]),
+                              queue([row("Q012", "done", "y"), row("Q013", "approved")])))
+    assert out["Q012"]["status"] == "done"
+
+
 def test_equal_status_one_sided_change_wins_else_dev():
     base = queue([row("Q001", "blocked", "awaiting Ethan"), row("Q002", "approved")])
     dev = queue([row("Q001", "blocked", "awaiting Ethan"), row("Q002", "approved", "dev note")])

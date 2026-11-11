@@ -2,9 +2,10 @@
 
 Only these files are resolved automatically (whether git reports a conflict in them or not):
 
-* ``docs/queue.md``: rows merged by id. The most advanced status wins (done > blocked > in-progress > approved >
-  proposed). On equal status, a side that left the row as it was at the merge base yields to the side that changed
-  it; if both changed it, dev's row is kept. Rows keep dev's order; rows only main has are appended in main's order.
+* ``docs/queue.md``: rows merged by id, three-way. A side that left the row as it was at the merge base yields to
+  the side that changed it, whatever the status (so a stale ``blocked`` row on main cannot undo an unblock on dev).
+  When both sides changed it, the most advanced status wins (done > blocked > in-progress > approved > proposed),
+  and on equal status dev's row is kept. A row new on both sides is ranked the same way. Rows keep dev's order; rows only main has are appended in main's order.
   Evidence sections (``### Qnnn``) follow the same three-way rule (one-sided change wins, else the winning row's
   side), and are written in id order. The text around the table is dev's unless only main changed it.
 * ``docs/agent-state.json`` and ``results/opposition/calibration.csv``: dev's version, always.
@@ -68,13 +69,17 @@ def merge_rows(base: list[dict], dev: list[dict], main: list[dict]) -> tuple[lis
     order = [r["id"] for r in dev] + [r["id"] for r in main if r["id"] not in d]
     out, won = [], {}
     for i in order:
-        rd, rm = d.get(i), m.get(i)
-        if rm is None or (rd is not None and _rank(rd) > _rank(rm)):
+        rd, rm, rb = d.get(i), m.get(i), b.get(i)
+        if rm is None or rd == rm:
             side = "dev"
-        elif rd is None or _rank(rm) > _rank(rd):
+        elif rd is None:
             side = "main"
-        else:   # same status: three-way on the whole row, dev on a two-sided change
-            side = "main" if (rd == b.get(i) and rm != b.get(i)) else "dev"
+        elif rb is not None and rm == rb:       # only dev changed the row: dev wins, whatever the status
+            side = "dev"
+        elif rb is not None and rd == rb:       # only main changed it
+            side = "main"
+        else:                                   # both changed it (or new on both): rank, then dev
+            side = "main" if _rank(rm) > _rank(rd) else "dev"
         won[i] = side
         out.append(dict(rd if side == "dev" else rm))
     return out, won
