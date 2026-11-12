@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import seed_ledger
+from conftest import frozen_copy, seed_ledger
 from ledger import build, intake, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,11 +17,11 @@ LIVE_START_MONTH = "2026-11"  # first live month (positions from the 3 Nov 2026 
 
 
 def _live_results():
-    """(number of current positions, number of live months) from the committed results, which
-    the monthly workflow rewrites before running the tests."""
-    with open(ROOT / "results/systematic/positions.csv", newline="") as f:
+    """(number of current positions, number of live months) from the frozen copies of the results the build reads
+    (conftest.frozen_repo, Q025): the monthly workflow rewrites the live ones before it runs the tests."""
+    with open(frozen_copy("results/systematic/positions.csv"), newline="") as f:
         n_pos = sum(1 for _ in csv.DictReader(f))
-    with open(ROOT / "results/systematic/paper_pnl.csv", newline="") as f:
+    with open(frozen_copy("results/systematic/paper_pnl.csv"), newline="") as f:
         n_live = sum(1 for r in csv.DictReader(f) if (r.get("month") or "") >= LIVE_START_MONTH)
     return n_pos, n_live
 
@@ -90,7 +90,7 @@ def test_brier_and_pnl():
 
 
 # ----------------------------------------------------------------------------- build
-def test_build_writes_site_and_json(tmp_path):
+def test_build_writes_site_and_json(tmp_path, frozen_repo):
     out = tmp_path / "app"
     info = build.build(out, today=TODAY)
     assert (out / "index.html").exists() and (out / "sw.js").exists() and (out / "manifest.webmanifest").exists()
@@ -174,9 +174,9 @@ def test_build_writes_site_and_json(tmp_path):
     assert sbs["versions"][0]["backtest"]["sharpe"] == pytest.approx(0.6536, abs=1e-4)
     assert sbs["versions"][1]["backtest"]["sharpe"] == pytest.approx(0.9163, abs=1e-4)
     assert sbs["versions"][1]["backtest"]["turnover_x_pa"] == pytest.approx(11.5997, abs=1e-4)
-    assert len(v11["positions"]) == sum(1 for _ in open(ROOT / "results/systematic_v1.1/positions.csv")) - 1
+    assert len(v11["positions"]) == sum(1 for _ in open(frozen_copy("results/systematic_v1.1/positions.csv"))) - 1
     el = json.loads((out / "data/elections.json").read_text())
-    if (ROOT / "data/elections/calendar.csv").exists():
+    if frozen_copy("data/elections/calendar.csv").exists():
         # the election tracker's calendar takes precedence over the historical event files (README section 14)
         assert el["sources"][0] == "data/elections/calendar.csv"
         mx = next(c for c in el["upcoming"] if c.get("id") == "mx-2027-legislative")
@@ -474,7 +474,7 @@ def test_scored_elections_count(tmp_path):
     assert build.count_scored_elections(p, TODAY)["scored"] == 1      # no score column: past votes count
 
 
-def test_evidence_groups_and_status(tmp_path):
+def test_evidence_groups_and_status(tmp_path, frozen_repo):
     out = tmp_path / "app"
     build.build(out, today=TODAY)
     ev = json.loads((out / "data/evidence.json").read_text())

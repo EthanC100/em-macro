@@ -17,6 +17,7 @@ from nightshift import promote as PR
 from nightshift import protected as P
 from nightshift import queue as Q
 from nightshift import state as S
+from conftest import frozen_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures/night"
@@ -89,7 +90,7 @@ def test_lock_counter_and_stale_takeover():
     assert st["runs_used"] == 0 and st["night"] == "2026-11-10"
 
 
-def test_state_file_in_repo_is_valid():
+def test_state_file_in_repo_is_valid(frozen_repo):
     st = S.load()
     assert set(S.empty()) <= set(st)
 
@@ -160,7 +161,7 @@ def test_queue_parse_auto_approve_and_roundtrip():
 
 
 def test_real_queue_is_valid():
-    items = Q.parse((ROOT / "docs/queue.md").read_text(encoding="utf-8"))
+    items = Q.parse(frozen_copy("docs/queue.md").read_text(encoding="utf-8"))
     assert items and not Q.validate(items)
     assert not any("D003" in i["title"] and "FRED" in i["title"] for i in items)   # fixed by K002, not seeded
 
@@ -356,7 +357,7 @@ def test_lab_sleeve_pnl_from_daily_marks_and_stop():
     assert sp["status"] == "closed (stop)" and sp["pnl_pct"] == -0.5      # stop costs exactly risk_pct
 
 
-def test_lab_is_its_own_page_and_no_other_book_reads_it():
+def test_lab_is_its_own_page_and_no_other_book_reads_it(frozen_repo):
     for f in ["ledger/books.py", "ledger/fund.py", "ledger/janus.py", "em_macro/t2526.py", "ledger/changes.py"]:
         t = (ROOT / f).read_text(encoding="utf-8")
         assert "from lab" not in t and "import lab" not in t, f
@@ -442,7 +443,7 @@ def test_claude_md_keeps_existing_notes_and_adds_hard_rules():
         assert must.lower() in t.lower(), must
 
 
-def test_morning_report_lists_real_merges_and_reads_janus():
+def test_morning_report_lists_real_merges_and_reads_janus(frozen_repo):
     from nightshift import morning as M
     assert M.MERGE_SUBJECT.match("Merge Q003: todo counts") and M.MERGE_SUBJECT.match("night-start: merge main into dev")
     assert not M.MERGE_SUBJECT.match("night-worker: lock (dry run)")

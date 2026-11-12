@@ -1,0 +1,673 @@
+{
+ "AUD|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXUSAL",
+  "v0": 1.539645881447267,
+  "v1": 1.6289297931259163
+ },
+ "AUD|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSAL",
+  "v0": 1.1678150181011329,
+  "v1": 1.52114390021296
+ },
+ "AUD|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSAL",
+  "v0": 1.3774104683195594,
+  "v1": 1.563966218329684
+ },
+ "BR10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_BR",
+  "v0": 6.9126,
+  "v1": 7.96471
+ },
+ "BR10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_BR",
+  "v0": 13.65,
+  "v1": 17.51
+ },
+ "BR10Y|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_BR",
+  "v0": 10.76,
+  "v1": 12.1574
+ },
+ "BRENT 2027-03|covid": null,
+ "BRENT 2027-03|gfc": null,
+ "BRENT 2027-03|rates2022": null,
+ "BRENT|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DCOILBRENTEU",
+  "v0": 51.31,
+  "v1": 14.85
+ },
+ "BRENT|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DCOILBRENTEU",
+  "v0": 113.49,
+  "v1": 60.0
+ },
+ "BRENT|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DCOILBRENTEU",
+  "v0": 77.24,
+  "v1": 93.3
+ },
+ "BRL|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_BR",
+  "v0": 4.4906,
+  "v1": 5.1855
+ },
+ "BRL|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_BR",
+  "v0": 1.6349,
+  "v1": 2.123
+ },
+ "BRL|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_BR",
+  "v0": 5.5749,
+  "v1": 5.2464
+ },
+ "CAD|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXCAUS",
+  "v0": 1.3411,
+  "v1": 1.4123
+ },
+ "CAD|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXCAUS",
+  "v0": 1.0631,
+  "v1": 1.2158
+ },
+ "CAD|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXCAUS",
+  "v0": 1.2777,
+  "v1": 1.3639
+ },
+ "CHF|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXSZUS",
+  "v0": 0.9671,
+  "v1": 0.9627
+ },
+ "CHF|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXSZUS",
+  "v0": 1.1019,
+  "v1": 1.1669
+ },
+ "CHF|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXSZUS",
+  "v0": 0.9146,
+  "v1": 1.0006
+ },
+ "COPPER|covid": null,
+ "COPPER|gfc": null,
+ "COPPER|rates2022": null,
+ "CORN|covid": null,
+ "CORN|gfc": null,
+ "CORN|rates2022": null,
+ "DE10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "Bundesbank BBSIS 10y",
+  "v0": -0.61,
+  "v1": -0.47
+ },
+ "DE10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "Bundesbank BBSIS 10y",
+  "v0": 4.27,
+  "v1": 4.08
+ },
+ "DE10Y|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "Bundesbank BBSIS 10y",
+  "v0": -0.24,
+  "v1": 2.19
+ },
+ "EUR|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXUSEU",
+  "v0": 1.1001,
+  "v1": 1.1016
+ },
+ "EUR|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSEU",
+  "v0": 1.4669,
+  "v1": 1.2682
+ },
+ "EUR|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSEU",
+  "v0": 1.1318,
+  "v1": 0.9885
+ },
+ "FR-DE|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "leg_yield": -0.295,
+  "monthly": false,
+  "source": "Riksbank FRGVB10Y minus Riksbank DEGVB10Y",
+  "v0": 31.3,
+  "v1": 46.0
+ },
+ "FR-DE|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "leg_yield": 4.377,
+  "monthly": false,
+  "source": "Riksbank FRGVB10Y minus Riksbank DEGVB10Y",
+  "v0": 20.7,
+  "v1": 47.4
+ },
+ "FR-DE|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "leg_yield": 0.2,
+  "monthly": false,
+  "source": "Riksbank FRGVB10Y minus Riksbank DEGVB10Y",
+  "v0": 37.7,
+  "v1": 53.8
+ },
+ "GB-DE|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "leg_yield": 0.5035,
+  "monthly": false,
+  "source": "Bank of England IUDMNPY minus Bundesbank BBSIS 10y",
+  "v0": 111.35,
+  "v1": 88.9
+ },
+ "GB-DE|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "leg_yield": 4.5611,
+  "monthly": false,
+  "source": "Bank of England IUDMNPY minus Bundesbank BBSIS 10y",
+  "v0": 29.11,
+  "v1": 56.67
+ },
+ "GB-DE|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "leg_yield": 1.013,
+  "monthly": false,
+  "source": "Bank of England IUDMNPY minus Bundesbank BBSIS 10y",
+  "v0": 125.3,
+  "v1": 150.52
+ },
+ "GB10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "Bank of England IUDMNPY",
+  "v0": 0.5035,
+  "v1": 0.419
+ },
+ "GB10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "Bank of England IUDMNPY",
+  "v0": 4.5611,
+  "v1": 4.6467
+ },
+ "GB10Y|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "Bank of England IUDMNPY",
+  "v0": 1.013,
+  "v1": 3.6952
+ },
+ "GBP|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXUSUK",
+  "v0": 1.2778,
+  "v1": 1.2454
+ },
+ "GBP|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSUK",
+  "v0": 1.819,
+  "v1": 1.6165
+ },
+ "GBP|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXUSUK",
+  "v0": 1.35,
+  "v1": 1.1515
+ },
+ "GOLD|covid": null,
+ "GOLD|gfc": null,
+ "GOLD|rates2022": null,
+ "HEATOIL|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DHOILNYH",
+  "v0": 1.45,
+  "v1": 0.972
+ },
+ "HEATOIL|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DHOILNYH",
+  "v0": 3.15,
+  "v1": 2.085
+ },
+ "HEATOIL|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DHOILNYH",
+  "v0": 2.211,
+  "v1": 4.293
+ },
+ "IDR|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_ID",
+  "v0": 14316.0,
+  "v1": 16347.0
+ },
+ "IDR|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_ID",
+  "v0": 9193.5,
+  "v1": 11024.0
+ },
+ "IDR|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_ID",
+  "v0": 14285.2,
+  "v1": 15549.2
+ },
+ "JP10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "Japan MoF jgbcme_all.csv 10Y",
+  "v0": -0.153,
+  "v1": 0.031
+ },
+ "JP10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "Japan MoF jgbcme_all.csv 10Y",
+  "v0": 1.421,
+  "v1": 1.473
+ },
+ "JP10Y|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "Japan MoF jgbcme_all.csv 10Y",
+  "v0": 0.089,
+  "v1": 0.253
+ },
+ "JPY|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DEXJPUS",
+  "v0": 108.12,
+  "v1": 107.53
+ },
+ "JPY|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DEXJPUS",
+  "v0": 108.69,
+  "v1": 98.28
+ },
+ "JPY|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DEXJPUS",
+  "v0": 115.17,
+  "v1": 148.63
+ },
+ "MX10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_MX",
+  "v0": 6.83585,
+  "v1": 7.08674
+ },
+ "MX10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_MX",
+  "v0": 8.43805,
+  "v1": 8.85777
+ },
+ "MX10Y|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_MX",
+  "v0": 7.57,
+  "v1": 9.84
+ },
+ "MXN|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_MX",
+  "v0": 19.73,
+  "v1": 23.448
+ },
+ "MXN|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_MX",
+  "v0": 10.297,
+  "v1": 12.705
+ },
+ "MXN|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_MX",
+  "v0": 20.514,
+  "v1": 19.848
+ },
+ "NATGAS|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DHHNGSP",
+  "v0": 1.79,
+  "v1": 1.71
+ },
+ "NATGAS|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DHHNGSP",
+  "v0": 8.24,
+  "v1": 6.18
+ },
+ "NATGAS|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DHHNGSP",
+  "v0": 3.82,
+  "v1": 5.02
+ },
+ "PL-DE|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "leg_yield": 1.78,
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_PL minus Bundesbank BBSIS 10y",
+  "v0": 239.0,
+  "v1": 214.0
+ },
+ "PL-DE|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "leg_yield": 6.06546,
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_PL minus Bundesbank BBSIS 10y",
+  "v0": 179.55,
+  "v1": 246.4
+ },
+ "PL-DE|rates2022": {
+  "d0": "2021-12-30",
+  "d1": "2022-10-31",
+  "leg_yield": 3.61,
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_PL minus Bundesbank BBSIS 10y",
+  "v0": 385.0,
+  "v1": 614.0
+ },
+ "PLN|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_PL",
+  "v0": 3.93008,
+  "v1": 4.1174
+ },
+ "PLN|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_PL",
+  "v0": 2.2702,
+  "v1": 2.8112
+ },
+ "PLN|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_PL",
+  "v0": 4.05443,
+  "v1": 4.7385
+ },
+ "RBOB|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DGASNYH",
+  "v0": 1.458,
+  "v1": 0.543
+ },
+ "RBOB|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DGASNYH",
+  "v0": 2.9,
+  "v1": 1.567
+ },
+ "RBOB|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DGASNYH",
+  "v0": 2.274,
+  "v1": 3.127
+ },
+ "SILVER|covid": null,
+ "SILVER|gfc": null,
+ "SILVER|rates2022": null,
+ "SOYBEANS|covid": null,
+ "SOYBEANS|gfc": null,
+ "SOYBEANS|rates2022": null,
+ "TR10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_TR",
+  "v0": 13.35,
+  "v1": 13.55
+ },
+ "TR10Y|gfc": null,
+ "TR10Y|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_TR",
+  "v0": 24.64,
+  "v1": 11.17
+ },
+ "TRY|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_TR",
+  "v0": 6.20677,
+  "v1": 6.56504
+ },
+ "TRY|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_TR",
+  "v0": 1.1772,
+  "v1": 1.5238
+ },
+ "TRY|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv FX_TR",
+  "v0": 13.2905,
+  "v1": 18.573
+ },
+ "US10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DGS10",
+  "v0": 1.13,
+  "v1": 0.7
+ },
+ "US10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DGS10",
+  "v0": 3.83,
+  "v1": 4.01
+ },
+ "US10Y|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DGS10",
+  "v0": 1.52,
+  "v1": 4.1
+ },
+ "WHEAT|covid": null,
+ "WHEAT|gfc": null,
+ "WHEAT|rates2022": null,
+ "WTI|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "FRED DCOILWTICO",
+  "v0": 44.83,
+  "v1": 20.51
+ },
+ "WTI|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "FRED DCOILWTICO",
+  "v0": 115.55,
+  "v1": 68.1
+ },
+ "WTI|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "FRED DCOILWTICO",
+  "v0": 75.33,
+  "v1": 86.54
+ },
+ "ZA10Y|covid": {
+  "d0": "2020-02-28",
+  "d1": "2020-03-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_ZA",
+  "v0": 9.39,
+  "v1": 11.99
+ },
+ "ZA10Y|gfc": {
+  "d0": "2008-08-29",
+  "d1": "2008-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_ZA",
+  "v0": 9.08,
+  "v1": 9.12
+ },
+ "ZA10Y|rates2022": {
+  "d0": "2021-12-31",
+  "d1": "2022-10-31",
+  "monthly": false,
+  "source": "data/processed/daily_panel.csv Y10_ZA",
+  "v0": 9.82,
+  "v1": 11.68
+ }
+}

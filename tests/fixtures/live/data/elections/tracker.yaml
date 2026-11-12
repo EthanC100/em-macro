@@ -1,0 +1,152 @@
+# Per-election configuration for the election tracker (paper, observation only: positions are logged with size 0).
+#
+# page               Wikipedia election page (date refresh; results)
+# poll_page          Wikipedia opinion-polling page (weekly snapshots within 90 days of the vote)
+# race_kind          party | candidate | two_option   (normalisation, docs/elections/ORIGINAL_STUDY.md section 2)
+# options            {option: regex matched against poll-table column headers}
+# table_filter       regex the section heading above a poll table must match (skips scenario/regional tables)
+# exclude_from_base  regexes of non-vote columns removed from the base for party races ([] = as published;
+#                    default: undecided/don't-know columns, the study's ZA/TR/ID rule; Mexico: effective vote)
+# exclude_pollsters  regex of pollster labels to drop (party-commissioned polls); aggregators are always dropped
+# result_match       {option: regex matched against the first cells of the results table}
+# market_preferred   option the pre-vote analyst coverage calls market-friendly; null = not classified (excluded)
+#                    Set it, with the justification and sources, BEFORE the pre-registration date (vote - 14 days).
+# yahoo              Yahoo Finance ticker, local currency per USD
+#
+# Fields left null are filled in when the election comes within 90 days; the daily job opens an
+# issue when a field the next step needs is missing.
+
+elections:
+  mx-2027-legislative:
+    iso2: MX
+    tz: America/Mexico_City
+    page: "2027 Mexican legislative election"
+    poll_page: "Opinion polling for the 2027 Mexican legislative election"
+    race_kind: party
+    options: {Morena: "Morena", PAN: "PAN", PRI: "PRI", MC: "MC", PVEM: "PVEM", PT: "PT"}
+    table_filter: "^20\\d\\d$"
+    exclude_from_base: ["und", "^none$"]
+    result_match:
+      Morena: "Morena|National Regeneration"
+      PAN: "National Action|\\bPAN\\b"
+      PRI: "Institutional Revolutionary|\\bPRI\\b"
+      MC: "Citizens' Movement|Movimiento Ciudadano|\\bMC\\b"
+      PVEM: "Ecologist Green|\\bPVEM\\b"
+      PT: "Labor Party|Labour Party|\\bPT\\b"
+    quantity: >-
+      Vote margin (pp) between the two leading individual parties in the final poll average (on current polls
+      Morena and PAN), on the effective vote (undecided and "none" removed from the base), as in the study's
+      Mexico midterm rows (2009, 2015, 2021). Result: national Chamber of Deputies vote shares of valid votes.
+    quantity_note: >-
+      The market-relevant stake is whether Morena and its allies (PVEM, PT) keep a two-thirds supermajority in the
+      Chamber, which lets them amend the constitution (as with the 2024 judicial reform). The study's party margin
+      does not measure this (its 2024 Mexico row was left uncoded for that reason). Seat outcomes are not used
+      by the signal; read them from the results page.
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "MXN=X"
+
+  pl-2027-parliamentary:
+    iso2: PL
+    tz: Europe/Warsaw
+    page: "Next Polish parliamentary election"
+    poll_page: "Opinion polling for the next Polish parliamentary election"
+    race_kind: party
+    options: {KO: "KO", PiS: "PiS", Konfederacja: "Konfederacja", KKP: "KKP", Lewica: "Lewica", PSL: "PSL", "Polska 2050": "Polska 2050", Razem: "Razem"}
+    table_filter: "^20\\d\\d$"
+    exclude_from_base: []      # as published, as in the study's Poland rows (don't-knows kept in the base)
+    result_match:
+      KO: "Civic Coalition|\\bKO\\b"
+      PiS: "Law and Justice|\\bPiS\\b"
+      Konfederacja: "Confederation|Konfederacja"
+      KKP: "Polish Crown|\\bKKP\\b"
+      Lewica: "Lewica|The Left|New Left"
+      PSL: "Polish People's Party|\\bPSL\\b"
+      "Polska 2050": "Poland 2050|Polska 2050"
+      Razem: "Razem|Together"
+    quantity: >-
+      Vote margin (pp) between the two leading parties in the final poll average (on current polls KO and PiS),
+      shares as published (don't-knows kept in the base), as in the study's Poland parliamentary rows.
+    quantity_note: >-
+      Government formation depends on coalition seat totals (KO with partners vs PiS with Konfederacja/KKP); the
+      two-party margin is the study's quantity and is the only one used for the signal.
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "PLN=X"
+
+  cz-2028-presidential:
+    iso2: CZ
+    tz: Europe/Prague
+    page: "Next Czech presidential election"
+    poll_page: null
+    race_kind: candidate
+    options: null
+    result_match: null
+    quantity: "Vote margin (pp) between the two leading candidates, candidate shares rescaled to sum to 100 (round 1); two-option shares (run-off)."
+    quantity_note: null
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "CZK=X"
+
+  my-2028-general:
+    iso2: MY
+    tz: Asia/Kuala_Lumpur
+    page: "Next Malaysian general election"
+    poll_page: null
+    race_kind: party
+    options: null
+    result_match: null
+    quantity: "Vote margin (pp) between the two leading coalitions in the final poll average (coalitions contest as blocs in Malaysia)."
+    quantity_note: "Malaysian polling is sparse; the event may fail the poll rule (fewer than 2 pollsters in 21 days) and be excluded."
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "MYR=X"
+
+  kr-2028-legislative:
+    iso2: KR
+    tz: Asia/Seoul
+    page: "Next South Korean legislative election"
+    poll_page: "Opinion polling for the next South Korean legislative election"
+    race_kind: party
+    options: null
+    result_match: null
+    quantity: "Vote margin (pp) between the two leading parties (proportional list vote) in the final poll average."
+    quantity_note: "Korea bans publication of new polls in the final 6 days, so the 7-day window will usually widen to 10 or 21 days."
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "KRW=X"
+
+  ph-2028-general:
+    iso2: PH
+    tz: Asia/Manila
+    page: "2028 Philippine presidential election"
+    poll_page: "Opinion polling for the 2028 Philippine presidential election"
+    race_kind: candidate
+    options: null
+    result_match: null
+    quantity: "Vote margin (pp) between the two leading presidential candidates, candidate shares rescaled to sum to 100 (as for the study's same-day general elections)."
+    quantity_note: null
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "PHP=X"
+
+  tr-2028-general:
+    iso2: TR
+    tz: Europe/Istanbul
+    page: "Next Turkish presidential election"
+    poll_page: null
+    race_kind: candidate
+    options: null
+    result_match: null
+    quantity: "Vote margin (pp) between the two leading presidential candidates, round 1 (as in the study's Turkey 2018 and 2023 rows)."
+    quantity_note: "Turkey bans poll publication in the final 10 days; the study used roughly the final 3 weeks. TRY fails the AREAER floating rule (crawl-like, 2023) and is kept only because it is in the original study's universe."
+    market_preferred: null
+    market_sign_justification: null
+    market_sign_sources: []
+    yahoo: "TRY=X"

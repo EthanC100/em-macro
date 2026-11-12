@@ -19,6 +19,7 @@ from em_macro import systematic_v11 as V11
 from em_macro import t18_rebal as T18
 from em_macro.config import ROOT
 
+from conftest import frozen_copy
 from test_tstrend import _toy_inputs
 
 V1 = ["carry", "trend", "value"]
@@ -89,11 +90,12 @@ def test_sample_labels():
 
 
 # ------------------------------------------------------------------ monthly update
-def test_update_writes_only_v11_folders(inp, tmp_path, monkeypatch):
+def test_update_writes_only_v11_folders(inp, tmp_path, monkeypatch, frozen_repo):
+    """v1.0's files are the frozen mirror's (Q025): the modules point at it, so a write there would show."""
     monkeypatch.setattr(SY, "build_inputs", lambda: inp)
-    before = {p: (ROOT / "results/systematic" / p).read_bytes() for p in ("positions.csv", "paper_pnl.csv")}
+    before = {p: (frozen_repo / "results/systematic" / p).read_bytes() for p in ("positions.csv", "paper_pnl.csv")}
     pos = V11.stage_update(out=tmp_path / "v11", compare_dir=tmp_path / "cmp")
-    after = {p: (ROOT / "results/systematic" / p).read_bytes() for p in before}
+    after = {p: (frozen_repo / "results/systematic" / p).read_bytes() for p in before}
     assert before == after                                         # v1.0's outputs untouched
     res, _ = V11.run(inp)
     W, t = res.attrs["weights"], inp["months"][-1]
@@ -140,14 +142,15 @@ def test_committed_cost_diagnostic():
 
 
 def test_committed_live_outputs_are_consistent():
-    d = ROOT / "results/systematic_v1.1"
-    pnl = pd.read_csv(d / "paper_pnl.csv")
-    pos = pd.read_csv(d / "positions.csv")
+    """On the frozen copies (Q025): systematic-monthly rewrites the live files before it runs the tests, and a v1.1
+    step that fails (continue-on-error) must never stop v1.0's commit through this test."""
+    pnl = pd.read_csv(frozen_copy("results/systematic_v1.1/paper_pnl.csv"))
+    pos = pd.read_csv(frozen_copy("results/systematic_v1.1/positions.csv"))
     live = pnl[pnl["sample"] == "live paper trading (v1.1)"]
     assert (live["month"] >= V11.LIVE_START_MONTH).all()
     assert (pnl.loc[pnl["month"] >= V11.LIVE_START_MONTH, "sample"] == "live paper trading (v1.1)").all()
     assert pos["as_of"].nunique() == 1 and (pos["version"] == "v1.1").all()
-    cmp = pd.read_csv(ROOT / "results/live_compare/turnover.csv").set_index("month")
+    cmp = pd.read_csv(frozen_copy("results/live_compare/turnover.csv")).set_index("month")
     m = pnl.set_index("month")["turnover"]
     assert np.allclose(cmp.loc[m.index, "v1.1_turnover"], m, atol=1e-6)
     # the T18 test period inside v1.1's paper P&L equals T18's committed monthly returns at 6 decimals,

@@ -150,7 +150,7 @@ def test_before_go_live_the_book_shows_its_start(live):
     assert not (live["root"] / "data/commodities").exists()
 
 
-def test_outside_the_fund_and_wired_into_the_app():
+def test_outside_the_fund_and_wired_into_the_app(frozen_repo):
     from ledger import fund as F
     assert set(F.SHARES) == {"algorithm v1.1", "janus"}
     html = (ROOT / "ledger/site/index.html").read_text()

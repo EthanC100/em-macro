@@ -1,0 +1,2 @@
+time_utc,purpose,ref,model,status,input_tokens,output_tokens,web_searches,request_id
+2026-11-06T04:36:17+00:00,janus run,2026-11-06,claude-opus-5-5,ok,106757,3789,12,
