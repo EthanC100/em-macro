@@ -16,9 +16,11 @@ stopped, busy writers, Actions API readable), else ``stop`` (exit 4). It never a
 ``max_hypotheses_per_night`` says. Plain ``next`` and ``check`` are unchanged.
 
 Q019: night-explorer is gated. ``check night-explorer``, ``next`` and ``state acquire night-explorer`` never let it
-run until origin/main (fetched fresh) has the built exploration manifest and extract and its CODEOWNERS protected
-block covers the loader, the extract, the manifest and nightshift/logs.py (``explore_data.explorer_gate``). If the
-gate cannot be evaluated, it is closed (fail safe).
+run until origin/main (fetched fresh) has the built exploration manifest (config/exploration_manifest.json), its
+CODEOWNERS protected block covers the loader, the sandbox, the manifest and nightshift/logs.py, and its night-explorer
+routine runs the explorer in the sandbox (``explore_data.explorer_gate``). The gate is evaluated whenever a caller
+does not pass it, and if it cannot be evaluated it is closed (fail safe). ``explore_sandbox create`` applies the same
+gate again, in protected code.
 """
 from __future__ import annotations
 
@@ -70,7 +72,7 @@ def in_busy_window(now: datetime, cfg: dict) -> str | None:
     return None
 
 
-def explorer_gate() -> list[str]:
+def gate_reasons() -> list[str]:
     """Q019: why night-explorer may not run (empty = may run). Any failure closes the gate."""
     try:
         return [str(r) for r in ED.explorer_gate()]
@@ -80,13 +82,15 @@ def explorer_gate() -> list[str]:
 
 def gate_for(routine: str) -> list[str] | None:
     """The gate's reasons for night-explorer; None (not applicable) for every other routine."""
-    return explorer_gate() if routine == "night-explorer" else None
+    return gate_reasons() if routine == "night-explorer" else None
 
 
 def check(routine: str, now: datetime, cfg: dict, st: dict, busy: list[str] | None,
           allow_unknown: bool = False, explorer_gate: list[str] | None = None) -> dict:
-    """``explorer_gate``: the Q019 gate's reasons (``main`` and ``state acquire`` always pass them for
-    night-explorer); a non-empty list refuses night-explorer."""
+    """``explorer_gate``: the Q019 gate's reasons for night-explorer; a non-empty list refuses it. When it is not
+    given (None) for night-explorer, the gate is evaluated here, so no caller can skip it by omission."""
+    if routine == "night-explorer" and explorer_gate is None:
+        explorer_gate = gate_reasons()
     S.roll_night(st, now)
     cap = C.run_cap(cfg)
     reasons = []
@@ -114,7 +118,8 @@ def check(routine: str, now: datetime, cfg: dict, st: dict, busy: list[str] | No
 
 def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer_runs_tonight: int,
                  explorer_gate: list[str] | None = None) -> dict:
-    """``explorer_gate``: the Q019 gate's reasons (``main`` always passes them); non-empty: never night-explorer."""
+    """``explorer_gate``: the Q019 gate's reasons; non-empty: never night-explorer. When it is not given (None) and
+    the explorer would otherwise be next, the gate is evaluated here (fail safe)."""
     S.roll_night(st, now)
     cap = C.run_cap(cfg)
     if st.get("chain_stopped"):
@@ -126,6 +131,10 @@ def next_routine(now: datetime, cfg: dict, st: dict, items: list[dict], explorer
     n_appr = len(Q.approved(items))
     explorer_left = explorer_runs_tonight < int((cfg.get("explorer") or {}).get("max_hypotheses_per_night", 3))
     gated = ""
+    if n_appr and st.get("last_kind") != "worker":         # the worker's turn whatever the gate says
+        return {"next": "night-worker", "why": f"{n_appr} approved item(s)"}
+    if explorer_left and explorer_gate is None:
+        explorer_gate = gate_reasons()
     if explorer_left and explorer_gate:
         explorer_left, gated = False, "; night-explorer gated (Q019): " + "; ".join(explorer_gate)
     if n_appr and (st.get("last_kind") != "worker" or not explorer_left):
@@ -181,7 +190,7 @@ def main(argv=None) -> int:
         v = next_for_worker(now, cfg, st, items, busy_runs(cfg))
         print(json.dumps(v, indent=1))
         return 0 if v["next"] == "night-worker" else 4
-    print(json.dumps(next_routine(now, cfg, st, items, explorer_runs(st), explorer_gate=explorer_gate()), indent=1))
+    print(json.dumps(next_routine(now, cfg, st, items, explorer_runs(st)), indent=1))   # gate evaluated if needed
     return 0
 
 
