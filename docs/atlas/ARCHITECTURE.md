@@ -187,7 +187,7 @@ its place in the sequence and its number of families fix the levels at which its
    window), and the critic record hashes.
 4. Commit the spec files and the manifest; append `batch_freeze` to the ledger and the registry.
 5. **Signed tag** `atlas-batch-<NNNN>` on that commit, signed with Ethan's key on the iMac (a cloud session cannot
-   sign as Ethan; AUDIT §2).
+   sign as Ethan: section 8).
 6. **External timestamp** of the manifest hash (OpenTimestamps by default; the proof file is committed). GitHub's
    push time is a second, weaker witness.
 7. Only after steps 1-6 may a designated evaluation of that batch start. The runner checks the tag's signature and

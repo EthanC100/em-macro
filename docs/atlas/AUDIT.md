@@ -79,7 +79,8 @@ hard end date unless the subscription is renewed, and Databento history starts i
 
 48 test files in `tests/`. Baseline on `a2e24fa` in this session: **705 passed, 127 skipped** in 3 minutes 25 seconds
 (`python -m pytest -q -p no:cacheprovider tests`, exit code 0, output not piped), without the private data store
-attached. Two properties bind Atlas tests:
+attached (the skips are tests that need the private Norgate snapshot, the v1.0 commit that a shallow clone lacks,
+or an opt-in download). Two properties bind Atlas tests:
 
 1. **Tests gate existing writers.** `systematic-monthly` runs `python -m pytest -q tests` before it commits the
    rebalance, and ledger-daily runs four test files before it commits marks. A new test that fails on main would
