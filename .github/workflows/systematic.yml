@@ -8,13 +8,27 @@
 # from being committed, but it still opens (or comments on) the alert issue.
 # If any step fails, the last step opens (or comments on) a GitHub issue
 # "[ALERT] systematic-monthly failed <date>" with the failing step and the end of its log.
+#
+# 2026-11-12 (Q002, approved by Ethan): GitHub creates this repository's schedule events hours late and can drop
+# them, and the 3 Nov 2026 run failed with no automatic retry. The "systematic-monthly kick" Claude Code scheduled
+# task dispatches this workflow at 07:23 UTC on the 3rd with only_if_due=true (docs/agent-system.md); the 3rd's cron
+# stays as backup 1 and a cron on the 4th is backup 2. The `due` job (em_macro/rebalance_due.py) lets the update job
+# run only if this month's rebalance has not run yet (main's rebalance_log.csv, fetched fresh), so at most one of them
+# rebalances. A manual "Run workflow" (only_if_due false) always runs. The gate never changes what the update job
+# computes: its steps are as before.
 name: systematic-monthly
 
 on:
   schedule:
-    - cron: "23 7 3 * *"     # 07:23 UTC on the 3rd of every month, after month-end data are published
+    - cron: "23 7 3 * *"     # backup 1 (Q002): 07:23 UTC on the 3rd of every month, after month-end data are published
+    - cron: "23 7 4 * *"     # backup 2 (Q002): the 4th, if the 3rd's runs failed or were dropped (logged LATE by 1 day)
     - cron: "37 6 * * 1,4"   # Monday and Thursday: keep the raw-download cache alive (see keep-cache)
-  workflow_dispatch:
+  workflow_dispatch:         # primary (Q002): the systematic-monthly kick, 07:23 UTC on the 3rd; and manual re-runs
+    inputs:
+      only_if_due:
+        description: "Run only if this month's rebalance has not run yet (the kick). Leave unticked for a manual re-run."
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -25,8 +39,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Q002: is this month's rebalance still due? Reads main's rebalance log after a fresh fetch (a scheduled run that
+  # waited behind the kick's run has a checkout older than that run's commit). Writes nothing.
+  due:
+    if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *' || github.event.schedule == '23 7 4 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Is this month's rebalance due?
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          ONLY_IF_DUE: ${{ inputs.only_if_due || false }}
+        run: |
+          log="$RUNNER_TEMP/rebalance_log.csv"
+          if ! { git fetch --quiet --no-tags --depth=1 origin main && \
+                 git show FETCH_HEAD:results/systematic/rebalance_log.csv > "$log"; }; then
+            rm -f "$log"     # unreadable: the gate runs the update (fail-open)
+          fi
+          python3 -m em_macro.rebalance_due --event "$EVENT" --only-if-due "$ONLY_IF_DUE" --log "$log" | tee "$RUNNER_TEMP/gate.txt"
+          cat "$RUNNER_TEMP/gate.txt" >> "$GITHUB_OUTPUT"
+          echo "### Rebalance gate (Q002): $(grep '^reason=' "$RUNNER_TEMP/gate.txt" | cut -d= -f2-)" >> "$GITHUB_STEP_SUMMARY"
+
   update:
-    if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *'
+    needs: due
+    # runs when the gate says so; also if the gate job itself failed (fail-open), never when it was skipped
+    if: ${{ !cancelled() && needs.due.result != 'skipped' && (needs.due.result == 'failure' || needs.due.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
