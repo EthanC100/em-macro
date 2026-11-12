@@ -1,10 +1,6 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "promote",
-  "acquired_at": "2026-11-13T05:32:18+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qa8WFs5C99Ff4VuNG8"
- },
+ "lock": null,
  "night": "2026-11-12",
  "runs_used": 4,
  "last_kind": "worker",
@@ -171,6 +167,16 @@
    "note": "Q010 implemented, PR #59 opened into dev",
    "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
    "run": 4
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-13T05:32:18+08:00",
+   "finished_at": "2026-11-13T05:40:48+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "checks ok; PR #60 opened for promote-merge",
+   "session": "https://claude.ai/code/session_01Ayx8qa8WFs5C99Ff4VuNG8"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
