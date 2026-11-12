@@ -129,8 +129,8 @@ def test_next_for_worker_never_answers_explorer(env, monkeypatch, tmp_path, caps
     _queue(tmp_path, monkeypatch, 2)
     st = S.empty() | {"night": "2026-11-09", "runs_used": 1, "last_kind": "worker"}
     # plain next (unchanged) alternates to the explorer here ...
-    assert G.next_routine(NOW, _cfg(hyp=3), json.loads(json.dumps(st)), Q.parse(Q.QUEUE.read_text()), 0)["next"] \
-        == "night-explorer"
+    assert G.next_routine(NOW, _cfg(hyp=3), json.loads(json.dumps(st)), Q.parse(Q.QUEUE.read_text()), 0,
+                          explorer_gate=[])["next"] == "night-explorer"      # Q019 gate passed open explicitly
     # ... the worker's own question never does, even with explorer hypotheses left
     code, out = _next_for(env, monkeypatch, st, capsys)
     assert code == 0 and out["next"] == "night-worker", out

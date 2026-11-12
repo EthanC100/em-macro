@@ -83,7 +83,8 @@ def test_valid_daily_review_opens_with_opposition_and_entry_at_next_mark(tmp_pat
     (dict(model=""), "model is required"),
     (dict(session="weekly"), "session must be one of"),
 ])
-def test_rule_breaking_proposals_are_rejected_whole(tmp_path, bad, expect):
+def test_rule_breaking_proposals_are_rejected_whole(tmp_path, monkeypatch, bad, expect):
+    monkeypatch.setenv("EM_MACRO_DATA", str(tmp_path / "no-store"))   # Q008: never the machine's ../em-macro-data
     path = tmp_path / "r.jsonl"
     res = J.apply_proposal(review(**bad), now=NOW, path=path, marks_rows=MARKS)
     assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]

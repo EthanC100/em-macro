@@ -72,6 +72,18 @@ def promoted(day: date, main: str = "origin/main") -> str:
     return f"NOT MERGED - {pr + ' left open; ' if pr else ''}{why}"
 
 
+CHECK_RESULT_MAX = 240     # a quick-check result is one record: shown whole up to two phone lines
+
+
+def _clip_words(text: str, n: int = CHECK_RESULT_MAX) -> str:
+    """One line, never a partial word: whole up to n characters, else cut at the last word boundary + "..."."""
+    text = " ".join(text.split())
+    if len(text) <= n:
+        return text
+    head = text[:n - 2]                    # n - 3 characters plus one, to see whether a word ends at n - 3
+    return (head.rsplit(" ", 1)[0] if " " in head else "") + "..."
+
+
 MERGE_SUBJECT = re.compile(r"^(Merge Q\d{3,}|Q\d{3,}:|night-start: merge main)")
 
 
@@ -130,7 +142,7 @@ def janus_section(today: date) -> list[str]:
     if flags:
         lines.append("Flags: " + "; ".join(flags))
     if last_check:
-        lines.append(f"Last quick check {last_check.get('recorded_at', '')[:16]}Z: {last_check.get('result', '')[:120]}")
+        lines.append(f"Last quick check {last_check.get('recorded_at', '')[:16]}Z: {_clip_words(last_check.get('result') or '')}")
     return lines
 
 

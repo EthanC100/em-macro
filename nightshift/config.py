@@ -28,10 +28,13 @@ MAIN_REMOTE, MAIN_BRANCH = "origin", "main"
 CONFIG_REL = "config/night.yaml"
 
 
-def load_main(repo: Path = ROOT, remote: str = MAIN_REMOTE, branch: str = MAIN_BRANCH) -> dict:
+def load_main(repo: Path | None = None, remote: str = MAIN_REMOTE, branch: str = MAIN_BRANCH) -> dict:
     """config/night.yaml as it is on main right now: fetched fresh (never a stale local ref, never the dev
     checkout), so safe mode, caps and windows Ethan sets on main take effect on the next run, whatever dev holds.
-    Raises MainConfigError if the fetch, the read or the parse fails."""
+    Raises MainConfigError if the fetch, the read or the parse fails. ``repo`` defaults to ROOT as it is at call time
+    (Q019: main's code, extracted outside the checkout, points ROOT at the checkout it works on)."""
+    repo = Path(repo) if repo is not None else ROOT
+
     def git(*a: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *a], cwd=repo, capture_output=True, text=True, timeout=120)
     try:

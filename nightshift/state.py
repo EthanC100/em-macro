@@ -153,7 +153,7 @@ def main(argv=None) -> int:
     if a.cmd == "acquire":
         if a.routine in COUNTED:                # Q020: the guard binds every counted run, so every item of a loop
             from . import guard as G            # (local import: guard imports this module)
-            v = G.check(a.routine, now, cfg, load(path), G.busy_runs(cfg))
+            v = G.check(a.routine, now, cfg, load(path), G.busy_runs(cfg), explorer_gate=G.gate_for(a.routine))
             if not v["go"]:
                 print("refused: guard check failed: " + "; ".join(v["reasons"]))
                 return 3
