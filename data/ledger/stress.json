@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 4.902,
+    "janus": 4.892,
     "me": 0.526
    },
    "positions": [
@@ -214,7 +214,7 @@
      "book": "janus",
      "id": "J003",
      "instrument": "US10Y",
-     "pnl_pct": 0.061,
+     "pnl_pct": 0.05,
      "move": "3.83 -> 4.01 (2008-08-29 to 2008-10-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -339,7 +339,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 2.846,
+    "janus": 2.875,
     "me": 0.29
    },
    "positions": [
@@ -563,7 +563,7 @@
      "book": "janus",
      "id": "J003",
      "instrument": "US10Y",
-     "pnl_pct": -0.167,
+     "pnl_pct": -0.138,
      "move": "1.13 -> 0.7 (2020-02-28 to 2020-03-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -676,7 +676,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -4.913,
+    "janus": -5.084,
     "me": 0.317
    },
    "positions": [
@@ -900,7 +900,7 @@
      "book": "janus",
      "id": "J003",
      "instrument": "US10Y",
-     "pnl_pct": 0.981,
+     "pnl_pct": 0.81,
      "move": "1.52 -> 4.1 (2021-12-31 to 2022-10-31)",
      "source": "FRED DGS10",
      "monthly": false
