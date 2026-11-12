@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-11",
- "at": "2026-11-11T22:19:58+00:00",
+ "as_of": "2026-11-12",
+ "at": "2026-11-12T06:18:38+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,7 +77,7 @@
   }
  },
  "index": {
-  "algorithm v1.0": 99.8096,
+  "algorithm v1.0": 100.0041,
   "algorithm v1.1": 100.0,
   "janus": 99.9569,
   "me": 98.9591
@@ -96,6 +96,76 @@
    "net": null,
    "reason": null,
    "status": "open"
+  },
+  "J003": {
+   "direction": "short",
+   "instrument": "US10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J004": {
+   "direction": "short",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J005": {
+   "direction": "short",
+   "instrument": "DE10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J006": {
+   "direction": "short",
+   "instrument": "JP10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J007": {
+   "direction": "short",
+   "instrument": "EUR",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J008": {
+   "direction": "short",
+   "instrument": "GBP",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J009": {
+   "direction": "long",
+   "instrument": "JPY",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J010": {
+   "direction": "short",
+   "instrument": "AUD",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J011": {
+   "direction": "short",
+   "instrument": "BRL",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J012": {
+   "direction": "short",
+   "instrument": "MXN",
+   "net": null,
+   "reason": null,
+   "status": "pending"
   }
  },
  "janus_no_trades": 8,

@@ -1,13 +1,73 @@
 {
- "since": "2026-11-11T17:27:59+00:00",
- "at": "2026-11-11T22:19:58+00:00",
+ "since": "2026-11-11T22:19:58+00:00",
+ "at": "2026-11-12T06:18:38+00:00",
  "items": [
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": -0.0993,
-   "text": "algorithm v1.0: -0.10 index points (to 99.81)"
+   "change": 0.1945,
+   "text": "algorithm v1.0: +0.19 index points (to 100.00)"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J003",
+   "text": "Janus opened J003: short US10Y"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J004",
+   "text": "Janus opened J004: short GB10Y"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J005",
+   "text": "Janus opened J005: short DE10Y"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J006",
+   "text": "Janus opened J006: short JP10Y"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J007",
+   "text": "Janus opened J007: short EUR"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J008",
+   "text": "Janus opened J008: short GBP"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J009",
+   "text": "Janus opened J009: long JPY"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J010",
+   "text": "Janus opened J010: short AUD"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J011",
+   "text": "Janus opened J011: short BRL"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J012",
+   "text": "Janus opened J012: short MXN"
   }
  ]
 }
