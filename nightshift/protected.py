@@ -22,8 +22,15 @@ ALWAYS = ["/config/night.yaml", "/ledger/v1_rules.py", "/results/v1_rules/", "/c
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:
+    out = block_patterns(path.read_text(encoding="utf-8"))
+    return out + [p for p in ALWAYS if p not in out]
+
+
+def block_patterns(text: str) -> list[str]:
+    """The patterns inside one CODEOWNERS text's protected block only (no ALWAYS list): used to read main's copy
+    through git show (Q019's explorer gate). Raises ValueError if the block is missing or empty."""
     out, on = [], False
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         s = line.strip()
         if s == "# protected:start":
             on = True
@@ -34,7 +41,7 @@ def patterns(path: Path = CODEOWNERS) -> list[str]:
             out.append(s.split()[0])
     if not out:
         raise ValueError("no protected paths found in CODEOWNERS")
-    return out + [p for p in ALWAYS if p not in out]
+    return out
 
 
 def matches(pattern: str, path: str) -> bool:
