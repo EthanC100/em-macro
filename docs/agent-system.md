@@ -69,7 +69,7 @@ repository uses it to push here; it would act as EthanC100 if it did. Deploy key
 | night-worker.md | API trigger (chain) + hourly :35, 22:35-04:35 (fallback) | Sonnet 5.5 / medium | implementer, opposition (Opus 5.5, high) | `night/<Qid>` branch + PR into dev; queue, state |
 | night-explorer.md | API trigger (chain) + hourly :05, 23:05-04:05 (fallback) | Opus 5.5 / high (Sonnet / medium in safe mode) | explorer (Opus 5.5, high), opposition | `dev`: exploration log, sleeves, prereg drafts |
 | pr-review.md | GitHub `pull_request.opened`, base `dev` | Sonnet 5.5 / medium | opposition | merges `night/*` PRs into dev; queue |
-| promote.md | 05:30 and 06:30 | Sonnet 5.5 / medium | — | PR dev -> main (auto-merge) or nothing; `results/night/promote/` on dev |
+| promote.md | 05:30 and 06:30 | Sonnet 5.5 / medium | — | PR dev -> main (merged by the promote-merge workflow when everything passes); `results/night/promote/` on dev |
 | morning-report.md | API trigger from promote + 06:50 (fallback) | Sonnet 5.5 / medium | reporter (Sonnet 5.5, medium) | `results/night/morning/` on dev |
 | weekly-brief.md | Saturdays 08:00 | Sonnet 5.5 / medium | reporter | `briefs/` on dev; Gmail draft |
 
@@ -104,8 +104,14 @@ main's files directly, so the Janus quick checks (every 30 minutes, all night) n
 4. **05:30 promote**: `python -m nightshift.promote` on the exact tree the PR would produce (main merged with dev):
    (d) conflict-free, (c) no protected path changed on dev, (a) the full suite passes, (b) the Ledger rebuilt from
    scratch on main and on that tree with the same `--today` and the same em-macro-data snapshot matches exactly
-   except for app files the night's merged items list under "ledger diff", and both audit chains verify. All pass:
-   a PR dev -> main with auto-merge. Any fails: no PR, reasons in the morning report.
+   except for app files the night's merged items list under "ledger diff", and both audit chains verify. Promote
+   opens (or reuses) one PR dev -> main either way and records the checks, naming the PR, on dev. The
+   **promote-merge** workflow (`.github/workflows/promote-merge.yml`, main's `nightshift/promote_merge.py`; added
+   2026-11-12 because branch rules, and so auto-merge, are not applied) runs when the tests workflow completes on
+   the PR and merges it (merge commit, pinned to the checked head) only if the tests are green, promote's report
+   names the PR with ok, dev changed only bookkeeping (results/night/, docs/agent-state.json) after the checked
+   commit, no protected path changed and there is no conflict. Otherwise it merges nothing, leaves the PR open and
+   comments why; the morning report flags the promotion as not merged.
 5. **Morning report** (one phone screen): Promoted to main, Merged into dev, Failed or empty runs (verified against
    dev and the logs, not the run status), Janus (C05 compliance and positions, read from the existing reviews and
    quick checks), Lab sleeves, Explorer findings, Pre-registrations awaiting Ethan, Usage, Needs Ethan (max 3).
