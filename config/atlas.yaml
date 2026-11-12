@@ -1,0 +1,34 @@
+# Atlas switches (docs/atlas/ARCHITECTURE.md section 9; decisions in docs/atlas/ETHAN_ACTIONS.md).
+# Ethan sets this file on main; runners read main's copy. Every default is the conservative one: nothing is frozen
+# by an agent, screened on a reserve, claimed or traded until Ethan changes it. Check: python -m atlas.config check
+
+freeze:
+  authority: ethan_only        # ethan_only | delegated. A batch freeze is a pre-registration (CLAUDE.md rule 4).
+
+reserve:
+  enabled: false               # no screening-reserve evaluation can run while this is false
+  mode: shared_window          # shared_window | disjoint_slices (ARCHITECTURE section 6.2)
+  evaluate_adaptive: false     # adaptive-channel specs are not run on the reserve
+  store: imac_only             # imac_only | private_repo: where reserve data may exist
+  windows: {}                  # the fence, per domain: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}
+
+exploration:
+  data_end: "2019-12-31"       # the cap config/night.yaml already enforces for the explorer
+
+forward:
+  real_money: false            # must stay false: Atlas builds no real-money execution
+  loss_cap_usd: 0              # 0 closes the Live-experiment tier (PROTOCOL_v3 section 8.3)
+
+programme:
+  end: null                    # YYYY-MM-DD; null means no family is ever made dormant (PROTOCOL_v3 section 9)
+
+levels:
+  screening_fdr: 0.20          # may be lowered, never raised without a new protocol version
+  forward_fdr: 0.05
+
+claims:
+  enabled: false               # stays false until docs/atlas/SIM_PREREG.md has passed
+  screening_method: null       # batch_bh_prds | ebh_elond, set only from the simulation's selection report
+
+trial_ledger:
+  count_in_trials_csv: false   # Atlas evaluations are not rows of trials.csv unless Ethan decides otherwise
