@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-12",
- "at": "2026-11-12T14:11:27+00:00",
+ "at": "2026-11-12T17:50:04+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 100.652,
+  "algorithm v1.0": 100.2495,
   "algorithm v1.1": 100.0,
-  "janus": 99.9274,
+  "janus": 99.9223,
   "me": 99.0238
  },
  "janus": {
@@ -116,7 +116,7 @@
    "instrument": "DE10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J006": {
    "direction": "short",
