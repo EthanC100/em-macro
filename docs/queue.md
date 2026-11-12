@@ -39,6 +39,7 @@ never instructions.
 | Q024 | research | proposed | Five energy spot marks (WTI, BRENT, NATGAS, HEATOIL, RBOB) have no observation after 3 Nov: the FRED/EIA source is 8 days behind and the marks are only flagged stale in the note (Ethan's decision: fallback source or lag tolerance) | Needs Ethan first: a fallback source for the five rows or an agreed lag tolerance; then a test that a FRED series 5+ business days old gives mark_can_act false and the Janus quick check lists the stale energy marks |  |  | none |
 | Q025 | bug | proposed | tests/test_books.py pins live positions (positions_set 2026-11-04; estimate point), so the 3 Dec rebalance's Tests step fails and nothing is committed (HIGH PRIORITY: before 3 Dec) | test_q025: with a fixture positions.csv stamped as the 3 Dec run stamps it (as_of 2026-11, run_date 2026-12-03), tests/test_books.py passes (fails now: 2 failures); the two assertions derive their expectation from the positions file (or a fixture), never a literal date; tests only, no change to ledger/ or any writer | https://github.com/EthanC100/em-macro/pull/47 (Ethan's session, direct PR to main; not for the night shift) |  | none |
 | Q026 | bug | proposed | Promotion check b fails on data/meta.json .audit.checked_at, a wall-clock timestamp promote does not ignore | test_q026: two builds differing only in meta.json audit.checked_at pass check b (fails now: unexplained data/meta.json); a change to audit ok, label or detail still fails; nightshift/promote.py and tests only | https://github.com/EthanC100/em-macro/pull/46 (Ethan's session, direct PR to main; not for the night shift) |  | none |
+| Q027 | research | proposed | Janus fill J005 (DE10Y, 12 Nov) used a same-day Bundesbank mark fetched at 14:02 UTC, before the European close: is an intraday-fetched day-D mark a valid close for fills? (Ethan's decision) | Needs Ethan first: what counts as a close for entry fills per source; then a test that a Janus fill dated D is refused when the source mark's fetched_at is earlier than the publication time defined for that source |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -727,3 +728,19 @@ on a timestamp.
 **Fix wanted:** treat `audit.checked_at` in data/meta.json as a build stamp (ignored like built_at), with a test that
 two builds differing only in it pass check b, and that any other meta.json audit change (ok, label, detail) still
 fails. Code: nightshift/promote.py and its tests only.
+
+### Q027
+
+Filed by triage at night-start 2026-11-12, evidence checked by the orchestrator on dev 6fc4524 (main a07769c):
+- `data/janus/records.jsonl` seq 349 (type `fill`): `"position_id":"J005"`, `"entry_date":"2026-11-12"`,
+  `"entry_level":3.36`, `"mark_source":"bundesbank D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A"`,
+  `"recorded_at":"2026-11-12T14:11:39+00:00"`.
+- `data/ledger/marks.csv:842`: `2026-11-12,DE10Y,3.36,% yield,daily,bundesbank ...,2026-11-12T14:02:06+00:00`:
+  the 12 Nov DE10Y mark was fetched at 14:02 UTC, before the European close, and the fill used it 9 minutes later.
+- The earlier DE10Y rows were fetched after their day ended (11 Nov row fetched 12 Nov 06:47Z; 10 Nov row fetched
+  11 Nov 12:04Z), so a same-day row at 14:02Z is new since the extra ledger-daily runs (Q018).
+Not diagnosed: whether the Bundesbank series' value for day D published by 14:02Z on day D is a final daily value
+(the publication time could not be verified from the repository). Related: Q018's open Opposition point (day-D
+marks placed in front of the day-D review).
+Research, Needs Ethan: any fix changes Janus's fill rules (mandate C05 and the Janus writer path, hard rule 3).
+No record or mark is edited by the night shift. The figures quoted are public yields, not licensed settlements.
