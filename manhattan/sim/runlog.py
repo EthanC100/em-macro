@@ -26,6 +26,7 @@ from . import seeds
 RUNS = prereg.ROOT / "results/manhattan_sim/runs.jsonl"
 PROTOCOL = "docs/manhattan/PROTOCOL_v3.md"
 TAG = "manhattan-sim-confirm-{k}"
+OUTPUTS = ":(exclude)results/manhattan_sim"     # the log and the results are outputs: they do not make a tree dirty
 FIELDS = ("run_id", "event", "time_utc", "commit", "dirty", "protocol_sha256", "prereg_sha256", "scenario", "size",
           "heldout_set", "label", "replications", "seeds", "status")
 
@@ -42,9 +43,9 @@ def _git(*args: str, root: Path = prereg.ROOT) -> str:
 
 
 def git_state(root: Path = prereg.ROOT) -> dict:
-    """Commit, whether tracked files differ from it, and the tags on it."""
+    """Commit, whether tracked files other than this package's own outputs differ from it, and the tags on it."""
     return {"commit": _git("rev-parse", "HEAD", root=root) or "unknown",
-            "dirty": bool(_git("status", "--porcelain", "--untracked-files=no", root=root)),
+            "dirty": bool(_git("status", "--porcelain", "--untracked-files=no", "--", ".", OUTPUTS, root=root)),
             "tags": [t for t in _git("tag", "--points-at", "HEAD", root=root).splitlines() if t]}
 
 

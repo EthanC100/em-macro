@@ -177,3 +177,112 @@ def power_difference(reps_by_scenario: dict[str, list[dict]]) -> dict:
             "difference": float(np.mean(point["i"]) - np.mean(point["ii"])), "lo": float(lo), "hi": float(hi),
             "by_scenario": {sid: {"i": float(point["i"][j]), "ii": float(point["ii"][j])}
                             for j, sid in enumerate(cr.POWER_SCENARIOS)}}
+
+
+# ------------------------------------------------------------------ size HB: M7, M8, M9 (SIM_PREREG V6-V8)
+
+def _ece(n: np.ndarray, true: np.ndarray, p: np.ndarray) -> float:
+    """Expected calibration error over bins with at least 200 observations: the count-weighted mean absolute gap
+    between stated and observed frequency. NaN when no bin is large enough."""
+    ok = n >= cr.SMALL_GROUP
+    if not ok.any():
+        return math.nan
+    return float(np.sum(np.abs(p[ok] - true[ok])) / n[ok].sum())
+
+
+def ece_ci(reps_bins: list[tuple], rng: np.random.Generator | None = None) -> tuple[float, float, float]:
+    """ECE of the pooled reliability curve, with a percentile interval from resampling whole replications.
+    ``reps_bins`` holds, per replication, (counts, true counts, sums of stated probability) by bin."""
+    if not reps_bins:
+        return math.nan, math.nan, math.nan
+    arr = np.array(reps_bins, dtype=float)                           # (R, 3, bins)
+    rng = rng or np.random.default_rng(20261112)
+    est = _ece(*arr.sum(axis=0))
+    idx = rng.integers(0, arr.shape[0], size=(cr.BOOTSTRAP_RESAMPLES, arr.shape[0]))
+    boots = np.array([_ece(*arr[i].sum(axis=0)) for i in idx])
+    if np.isnan(boots).all():
+        return est, math.nan, math.nan
+    lo, hi = np.nanpercentile(boots, [2.5, 97.5])
+    return est, float(lo), float(hi)
+
+
+def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
+    """Every metric of an HB scenario run. Reviews at which the model did not converge carry no ``Π`` and are
+    counted, not hidden."""
+    rows: list[Row] = []
+    R = len(reps)
+    default_sampler = all(tuple(r.get("sampler", ())) == (1000, 1000) for r in reps)
+    pilot = R < cr.REPLICATIONS["HB"] or not default_sampler
+    years = [str(y) for y in reps[0]["eval_years"]]
+    name = {"i": "candidate (i)", "ii": "candidate (ii)"}
+
+    def add(metric, what, est, kind, n, criterion="", limit=None, upper=True, evaluated=True):
+        e, lo, hi = est
+        thr, verdict = "", "reported"
+        if limit is not None:
+            thr = ("upper bound ≤ " if upper else "lower bound ≥ ") + f"{limit:g}"
+            verdict = _verdict(hi if upper else lo, limit, upper, True, pilot, evaluated)
+        rows.append(Row(metric, what, e, lo, hi, n, kind, criterion if limit is not None else "", thr,
+                        limit is not None, verdict))
+
+    for y in years:
+        revs = [r["reviews"][y] for r in reps if y in r["reviews"]]
+        ok = [v for v in revs if v.get("review_ok")]
+        rows.append(Row("fit", f"year {y}: reviews with all six fits converged", len(ok) / len(revs) if revs else None,
+                        None, None, len(revs), "share",
+                        verdict=f"{len(ok)} of {len(revs)} reviews; a review that is not converged changes no tier"))
+        if revs:
+            rows.append(Row("fit", f"year {y}: worst R-hat / smallest ESS / divergences (medians over reviews)", None,
+                            None, None, len(revs), "text",
+                            verdict=" / ".join([f"{np.median([max(v['rhat_max']) for v in revs]):.3f}",
+                                                f"{np.median([min(v['ess_min']) for v in revs]):.0f}",
+                                                f"{np.median([sum(v['divergences']) for v in revs]):.0f}"])))
+            rows.append(Row("cost", f"year {y}: seconds for the six fits", float(np.mean([sum(v["fit_seconds"]) for v in revs])),
+                            None, None, len(revs), "mean"))
+        decided = y in ("4", "10")
+        if not ok:
+            continue
+        g = lambda k: np.array([v[k] for v in ok], dtype=float)
+        for cut, key in ((0.80, "pimin80"), (0.40, "pimin40")):
+            n_obs = int(g(f"{key}_n").sum())
+            add("M7", f"year {y}: share with a true edge among families with Π^min ≥ {cut} ({n_obs} family observations)",
+                ratio_ci(g(f"{key}_true"), g(f"{key}_n")), "ratio", n_obs,
+                "V6" if decided else "", cr.V6_SHARE_MIN[cut] if decided else None, upper=False,
+                evaluated=n_obs >= cr.SMALL_GROUP)
+        add("M7", f"year {y}: expected calibration error of the central model",
+            ece_ci([(v["cal_n"], v["cal_true"], v["cal_p"]) for v in ok]), "ratio", int(g("n_eval").sum()),
+            "V6" if decided else "", cr.V6_ECE_MAX if decided else None)
+        if scenario == "D01":
+            add("M7", f"year {y}: share of family evaluations with Π^min ≥ 0.80 (no edges exist)",
+                ratio_ci(g("pimin80_n"), g("n_eval")), "ratio", int(g("n_eval").sum()),
+                "V6" if decided else "", cr.V6_D01_HIGH_MAX if decided else None)
+        for cand in ("i", "ii"):
+            for grp, label in (("prom", "Promising or higher"), ("supp", "Statistically supported or higher")):
+                n_obs = int(g(f"m9_{grp}_{cand}_n").sum())
+                est = ratio_ci(g(f"m9_{grp}_{cand}_model"), g(f"m9_{grp}_{cand}_n"))
+                e, lo, hi = est
+                thr, verdict = "", "reported"
+                if decided:
+                    thr = f"upper bound ≤ +{cr.V8_BIAS_MAX:g} and lower bound ≥ {cr.V8_BIAS_MIN:g}"
+                    if n_obs < cr.SMALL_GROUP:
+                        verdict = "not evaluated: fewer than 200 observations"
+                    elif pilot:
+                        verdict = "pilot: not decided"
+                    else:
+                        verdict = "pass" if (hi <= cr.V8_BIAS_MAX and lo >= cr.V8_BIAS_MIN) else "FAIL"
+                rows.append(Row("M9", f"year {y}: bias of the model's Sharpe ratio, {label}, {name[cand]} ({n_obs} obs.)",
+                                e, lo, hi, n_obs, "ratio", "V8" if decided else "", thr, decided, verdict))
+                add("M9", f"year {y}: bias of the naive estimate, {label}, {name[cand]}",
+                    ratio_ci(g(f"m9_{grp}_{cand}_naive"), g(f"m9_{grp}_{cand}_n")), "ratio", n_obs)
+    for cand in ("i", "ii"):
+        den = col(reps, f"m8_den_{cand}")
+        add("M8", f"premature elimination: families with a true edge that end dormant, {name[cand]}",
+            ratio_ci(col(reps, f"m8_num_{cand}"), den), "ratio", int(den.sum()), "V7", cr.V7_ELIM_MAX)
+        rows.append(Row("info", f"at the end, {name[cand]}: passed screening / Promising / supported / dormant (means)",
+                        None, None, None, R, "text",
+                        verdict=" / ".join(f"{col(reps, k + cand).mean():.1f}" for k in
+                                           ("screened_", "end_promising_", "end_supported_", "end_dormant_"))))
+    rows.append(Row("cost", "seconds per replication", float(col(reps, "seconds").mean()), None, None, R, "mean"))
+    rows.append(Row("info", "sampler (warm-up, kept draws per chain; 4 chains)", None, None, None, R, "text",
+                    verdict=", ".join(sorted({f"{r['sampler'][0]}/{r['sampler'][1]}" for r in reps}))))
+    return rows
