@@ -40,6 +40,7 @@ from functools import partial
 
 import numpy as np
 from scipy import stats as _st
+from scipy.linalg import solve_triangular
 
 THETA_MIN = 0.25
 W_ROBUST, S_ROBUST = 0.10, 1.5
@@ -187,15 +188,17 @@ def _model(d: dict, spec: Spec, n: dict):
     a = A[d["fam"]] + sigma_dom * eps
     theta = rho[d["fam"]] * a + delta
     numpyro.deterministic("theta_f", rho * A * d["now"])
-    if spec.diagonal:
-        numpyro.sample("a_hat", dist.Normal(a, psi_H * d["sd_H"]), obs=d["a_hat"])
-        if n["n_fwd"]:
-            numpyro.sample("theta_hat", dist.Normal(theta[d["fwd"]] * d["avg"], psi_F * d["sd_F"]), obs=d["theta_hat"])
-    else:
-        numpyro.sample("a_hat", dist.MultivariateNormal(a, scale_tril=psi_H * d["L_H"]), obs=d["a_hat"])
-        if n["n_fwd"]:
-            numpyro.sample("theta_hat", dist.MultivariateNormal(theta[d["fwd"]] * d["avg"], scale_tril=psi_F * d["L_F"]),
-                           obs=d["theta_hat"])
+    # Likelihood. y ~ MVN(mean, ψ² Σ) with Σ = L L' is written through the whitened residual r = L⁻¹(y − mean)/ψ:
+    # log p = −½ r'r − n log ψ − log|L| − (n/2) log 2π. L⁻¹ is computed once per fit, so a gradient costs one
+    # matrix-vector product instead of a triangular solve. For S4 (diagonal) L⁻¹ is diagonal.
+    def loglik(y, mean, W, logdet, psi):
+        r = (W @ (y - mean)) / psi
+        k = y.shape[0]
+        return -0.5 * jnp.sum(r * r) - k * jnp.log(psi) - logdet - 0.5 * k * math.log(2.0 * math.pi)
+
+    numpyro.factor("a_hat", loglik(d["a_hat"], a, d["W_H"], d["logdet_H"], psi_H))
+    if n["n_fwd"]:
+        numpyro.factor("theta_hat", loglik(d["theta_hat"], theta[d["fwd"]] * d["avg"], d["W_F"], d["logdet_F"], psi_F))
 
 
 def _prepare(data: Data, spec: Spec) -> dict:
@@ -207,12 +210,18 @@ def _prepare(data: Data, spec: Spec) -> dict:
            "mech": jnp.asarray(data.mech), "fam": jnp.asarray(data.fam), "fwd": jnp.asarray(data.fwd),
            "a_hat": jnp.asarray(data.a_hat), "theta_hat": jnp.asarray(data.theta_hat),
            "avg": jnp.asarray(avg[data.fam[data.fwd]]), "now": jnp.asarray(now)}
-    if spec.diagonal:
-        out["sd_H"] = jnp.asarray(np.sqrt(np.diag(data.cov_H)))
-        out["sd_F"] = jnp.asarray(np.sqrt(np.diag(data.cov_F))) if data.fwd.size else jnp.zeros(0)
-    else:
-        out["L_H"] = jnp.asarray(np.linalg.cholesky(data.cov_H))
-        out["L_F"] = jnp.asarray(np.linalg.cholesky(data.cov_F)) if data.fwd.size else jnp.zeros((0, 0))
+    for name, cov in (("H", data.cov_H), ("F", data.cov_F)):
+        if cov.shape[0] == 0:
+            out[f"W_{name}"], out[f"logdet_{name}"] = jnp.zeros((0, 0)), 0.0
+            continue
+        if spec.diagonal:                                         # S4: no cross-correlation
+            sd = np.sqrt(np.diag(cov))
+            W, logdet = np.diag(1.0 / sd), float(np.log(sd).sum())
+        else:
+            Lc = np.linalg.cholesky(cov)
+            W = solve_triangular(Lc, np.eye(Lc.shape[0]), lower=True)
+            logdet = float(np.log(np.diag(Lc)).sum())
+        out[f"W_{name}"], out[f"logdet_{name}"] = jnp.asarray(W), logdet
     return out
 
 

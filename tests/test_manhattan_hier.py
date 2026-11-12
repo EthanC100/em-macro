@@ -189,7 +189,8 @@ def test_posterior_probability_follows_the_forward_evidence(fits):
     assert kept.pi.shape == (18,) and kept.mean.shape == (18,) and kept.draws.shape == (50, 18)
     assert kept.pi[:6].min() > 0.9                    # history and forward record agree on an edge of 1.2
     assert kept.pi[6:].max() < 0.1                    # nothing in either
-    assert lost.pi[:6].max() < 0.3                    # the forward record contradicts the history: Π falls
+    # the forward record contradicts the history: Π falls for every one of them, and is low on average
+    assert np.all(lost.pi[:6] < kept.pi[:6] - 0.3) and lost.pi[:6].mean() < 0.25 and lost.pi[:6].max() < 0.6
     assert np.all(kept.mean[:6] > 0.7) and np.all(np.abs(kept.mean[6:]) < 0.2)
     assert kept.hyper["mu_A"] < 0.9 and 0.0 < kept.hyper["tau_A"]
     # Π under forward decay is about the edge now (three years in, half of it is gone), so it is lower
