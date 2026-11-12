@@ -1,12 +1,8 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "night-worker",
-  "acquired_at": "2026-11-13T00:14:03+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn"
- },
+ "lock": null,
  "night": "2026-11-12",
- "runs_used": 2,
+ "runs_used": 3,
  "last_kind": "worker",
  "chain_stopped": null,
  "log": [
@@ -142,6 +138,19 @@
    "note": "Q008 implemented, PR #57 opened into dev",
    "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
    "run": 2
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-13T00:14:03+08:00",
+   "finished_at": "2026-11-13T00:25:45+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q007"
+   ],
+   "commits": [],
+   "note": "Q007 implemented, PR #58 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
+   "run": 3
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
