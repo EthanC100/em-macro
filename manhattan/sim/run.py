@@ -3,6 +3,7 @@
     python -m manhattan.sim.run --scenario D01 --size STD --reps 2000
     python -m manhattan.sim.run --plan development --reps-std 16 --reps-hb 4 --label pilot
     python -m manhattan.sim.run --scenario H01 --size STD --reps 2000 --confirm 1     # needs the tag
+    python -m manhattan.sim.run --prereg v2 --plan development                        # v1, with v2 for what v2 changed
 
 Every replication's record is appended to ``results/manhattan_sim/reps/<scenario>_<size>_<branch>.jsonl`` as soon
 as it finishes, with the hash of the simulation code that produced it. A later call **continues** from the
@@ -11,6 +12,11 @@ made by different code are never pooled. Every call adds a start and an end reco
 
 ``--reps`` is the total wanted. Fewer than the pre-registered count (2,000 at STD and LONG, 400 at HB) is a
 pilot and is labelled as one everywhere.
+
+``--prereg v2`` runs the parts that docs/manhattan/SIM_PREREG_v2.md changed with Protocol v3.1's code: D11 (the
+hedge-aware SPA test), its hedged twins ``D01h`` ... ``D08h`` and every scenario at HB (the analytic hierarchical
+model). Their records go to ``results/manhattan_sim/v2/reps/``. Every other run is version 1's, by version 1's
+code, into version 1's files, exactly as without the flag. Without the flag nothing of version 2 runs.
 """
 from __future__ import annotations
 
@@ -26,9 +32,9 @@ from datetime import datetime, timezone
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from manhattan import prereg
+from manhattan import prereg, prereg_v2
 
-from . import criteria, runlog, seeds, world
+from . import criteria, criteria_v2, runlog, seeds, world
 
 OUT = prereg.ROOT / "results/manhattan_sim"
 CODE_FILES = ("manhattan/stats/schedule.py", "manhattan/stats/blocklen.py", "manhattan/stats/bootstrap.py",
@@ -36,28 +42,47 @@ CODE_FILES = ("manhattan/stats/schedule.py", "manhattan/stats/blocklen.py", "man
               "manhattan/stats/elond.py", "manhattan/stats/hedge.py", "manhattan/sim/seeds.py",
               "manhattan/sim/world.py", "manhattan/sim/pipeline.py")
 CODE_FILES_HB = CODE_FILES + ("manhattan/stats/hier.py", "manhattan/stats/tiers.py", "manhattan/sim/hb.py")
+# version 2 (SIM_PREREG_v2): the files above stay byte-for-byte what they were, so version 1's records keep
+# their code hash; the code of the changed parts is in new files
+CODE_FILES_V2 = CODE_FILES + ("manhattan/stats/spa_hedged.py", "manhattan/sim/pipeline_v2.py")
+CODE_FILES_V2_HB = CODE_FILES + ("manhattan/stats/tiers.py", "manhattan/sim/hb.py", "manhattan/ledger.py",
+                                 "manhattan/stats/hier_analytic.py", "manhattan/sim/hb_v2.py")
+PREREGS = ("v1", "v2")
 
 
-def code_hash(size: str = "STD", root: Path = prereg.ROOT) -> str:
+def route(scenario: str, size: str, prereg_version: str = "v1") -> str:
+    """Which code makes this run: ``"v2"`` for what SIM_PREREG_v2 changed (when that version is asked for),
+    ``"v1"`` for everything else."""
+    if prereg_version not in PREREGS:
+        raise ValueError(f"unknown pre-registration version {prereg_version}")
+    if prereg_version == "v2" and (criteria_v2.is_twin(scenario) or size == "HB" or scenario in criteria_v2.HEDGED_FULL):
+        return "v2"
+    return "v1"
+
+
+def code_hash(size: str = "STD", root: Path = prereg.ROOT, version: str = "v1") -> str:
     """SHA-256 over the source files that determine a run's numbers (path and bytes), so that every result
     names the code that made it. Files that only report or log are not part of it."""
     h = hashlib.sha256()
-    for rel in (CODE_FILES_HB if size == "HB" else CODE_FILES):
+    files = {("v1", False): CODE_FILES, ("v1", True): CODE_FILES_HB,
+             ("v2", False): CODE_FILES_V2, ("v2", True): CODE_FILES_V2_HB}[(version, size == "HB")]
+    for rel in files:
         p = root / rel
         h.update(rel.encode())
         h.update(p.read_bytes() if p.exists() else b"")
     return h.hexdigest()[:16]
 
 
-def reps_path(scenario: str, size: str, branch: int, out: Path = OUT) -> Path:
-    return out / "reps" / f"{scenario}_{size}_b{branch}.jsonl"
+def reps_path(scenario: str, size: str, branch: int, out: Path = OUT, version: str = "v1") -> Path:
+    base = out / "v2" if version == "v2" else out
+    return base / "reps" / f"{scenario}_{size}_b{branch}.jsonl"
 
 
 def load_reps(scenario: str, size: str, branch: int = seeds.DEVELOPMENT, out: Path = OUT,
-              code: str | None = None) -> list[dict]:
+              code: str | None = None, version: str = "v1") -> list[dict]:
     """Replication records on file (plain or gzipped), optionally only those made by one code hash; one per
     replication number, in order."""
-    path = reps_path(scenario, size, branch, out)
+    path = reps_path(scenario, size, branch, out, version)
     rows = []
     for p, opener in ((path, open), (path.with_suffix(".jsonl.gz"), gzip.open)):
         if p.exists():
@@ -72,8 +97,16 @@ def load_reps(scenario: str, size: str, branch: int = seeds.DEVELOPMENT, out: Pa
 
 
 def _one(args):
-    scenario, size, rep, branch, sha = args
+    scenario, size, rep, branch, sha, version = args
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if version == "v2":
+        if size == "HB":
+            from . import hb_v2
+            return hb_v2.run_replication(scenario, rep, branch=branch, sha=sha)
+        from . import pipeline_v2
+        if criteria_v2.is_twin(scenario):
+            return pipeline_v2.run_spa_replication(scenario, rep, branch=branch, sha=sha, size_name=size)
+        return pipeline_v2.run_replication(scenario, size, rep, branch=branch, sha=sha)
     if size == "HB":
         from . import hb
         return hb.run_replication(scenario, rep, branch=branch, sha=sha)
@@ -83,30 +116,39 @@ def _one(args):
 
 def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = None, confirm: int | None = None,
                  workers: int = 1, out: Path = OUT, log: Path | None = None, quiet: bool = False,
-                 pooled_rerun: bool = False) -> list[dict]:
+                 pooled_rerun: bool = False, prereg_version: str = "v1") -> list[dict]:
     """Bring a scenario run up to ``reps`` replications. Returns all of this code's replication records."""
-    if scenario not in world.SCENARIOS and not world.is_heldout(scenario):
+    twin = criteria_v2.is_twin(scenario)
+    if twin and prereg_version != "v2":
+        raise SystemExit(f"{scenario} is a scenario of SIM_PREREG_v2: pass --prereg v2")
+    if twin and size != "STD":
+        raise SystemExit(f"{scenario} is pre-registered at size STD only (SIM_PREREG_v2 section 3)")
+    if not twin and scenario not in world.SCENARIOS and not world.is_heldout(scenario):
         raise SystemExit(f"unknown scenario {scenario}")
     held = world.is_heldout(scenario)
-    if not held and size not in world.SCENARIOS[scenario].sizes:
+    if not held and not twin and size not in world.SCENARIOS[scenario].sizes:
         raise SystemExit(f"{scenario} is not pre-registered at size {size} (SIM_PREREG section 3.1)")
+    version = route(scenario, size, prereg_version)
     branch = seeds.confirmation_branch(confirm, pooled_rerun) if confirm is not None else seeds.DEVELOPMENT
-    need = criteria.REPLICATIONS[size]
+    need = criteria_v2.replications(scenario, size)
     label = label or ("pilot" if reps < need else ("confirmation" if confirm else "full"))
     if reps < need and label not in ("pilot", "test"):
         raise SystemExit(f"{reps} replications is fewer than the pre-registered {need}: label it pilot")
-    code = code_hash(size)
+    code = code_hash(size, version=version)
     log = log or out / "runs.jsonl"
-    done = load_reps(scenario, size, branch, out, code)
+    done = load_reps(scenario, size, branch, out, code, version)
     todo = [r for r in range(reps) if r not in {d["rep"] for d in done}]
+    options = {"code": code, "already_on_file": len(done), "to_run": len(todo), "workers": workers,
+               "required_replications": need}
+    if version == "v2":             # refuses to start if SIM_PREREG_v2.md no longer matches its recorded hash
+        options.update(prereg_version="v2", prereg_v2_sha256=prereg_v2.prereg_v2_hash(),
+                       protocol_v31_sha256=prereg_v2.protocol_v31_hash())
     rec = runlog.start(scenario=scenario, size=size, is_heldout=held, confirm=confirm, label=label,
-                       reps=range(todo[0] if todo else reps, reps), branch=branch,
-                       options={"code": code, "already_on_file": len(done), "to_run": len(todo), "workers": workers,
-                                "required_replications": need}, path=log)
+                       reps=range(todo[0] if todo else reps, reps), branch=branch, options=options, path=log)
     if held:
         runlog.finish(rec, "failed", 0, path=log, extra={"reason": "held-out worlds are not built yet"})
         raise SystemExit("held-out worlds are not built yet (MANHATTAN_PROGRESS.md, milestone C, remaining)")
-    path = reps_path(scenario, size, branch, out)
+    path = reps_path(scenario, size, branch, out, version)
     path.parent.mkdir(parents=True, exist_ok=True)
     sha = seeds.prereg_hash()
     completed, status, t0 = 0, "completed", time.time()
@@ -122,7 +164,7 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
                 heartbeat(out, scenario=scenario, size=size, on_file=len(done), wanted=reps, run_id=rec["run_id"])
                 if not quiet:
                     print(f"{scenario} {size} rep {r['rep']} done ({len(done)}/{reps}, {time.time() - t0:.0f}s)", flush=True)
-            jobs = [(scenario, size, r, branch, sha) for r in todo]
+            jobs = [(scenario, size, r, branch, sha, version) for r in todo]
             if workers <= 1:
                 for j in jobs:
                     save(_one(j))
@@ -156,16 +198,17 @@ def heartbeat(out: Path = OUT, **fields) -> None:
     tmp.replace(out / HEARTBEAT)
 
 
-def status(out: Path = OUT, stale_minutes: float = 90.0) -> tuple[str, bool]:
+def status(out: Path = OUT, stale_minutes: float = 90.0, prereg_version: str = "v1") -> tuple[str, bool]:
     """A progress table for every development run, and whether the heartbeat is fresh. Replications are counted
     for the code now checked out; a replication of a long scenario can take minutes, hence the generous limit."""
-    lines = ["scenario size  on file  pre-registered"]
+    lines = ["scenario size  on file  pre-registered" + ("  code" if prereg_version == "v2" else "")]
     left = 0
-    for scenario, size in development_plan():
-        n = len(load_reps(scenario, size, seeds.DEVELOPMENT, out, code_hash(size)))
-        need = criteria.REPLICATIONS[size]
+    for scenario, size in development_plan(prereg_version):
+        version = route(scenario, size, prereg_version)
+        n = len(load_reps(scenario, size, seeds.DEVELOPMENT, out, code_hash(size, version=version), version))
+        need = criteria_v2.replications(scenario, size)
         left += max(0, need - n)
-        lines.append(f"{scenario:8s} {size:5s} {n:7d}  {need}")
+        lines.append(f"{scenario:8s} {size:5s} {n:7d}  {need}" + (f"  {version}" if prereg_version == "v2" else ""))
     hb_path, fresh = out / HEARTBEAT, False
     if hb_path.exists():
         hb = json.loads(hb_path.read_text(encoding="utf-8"))
@@ -180,13 +223,14 @@ def status(out: Path = OUT, stale_minutes: float = 90.0) -> tuple[str, bool]:
     return "\n".join(lines), fresh or left == 0
 
 
-def compact(out: Path = OUT) -> list[str]:
+def compact(out: Path = OUT, prereg_version: str = "v1") -> list[str]:
     """Gzip the replication files of runs that have reached their pre-registered count (they are a few MB each)."""
     done = []
-    for scenario, size in development_plan():
-        path = reps_path(scenario, size, seeds.DEVELOPMENT, out)
-        reps = load_reps(scenario, size, seeds.DEVELOPMENT, out)
-        if path.exists() and len(reps) >= criteria.REPLICATIONS[size]:
+    for scenario, size in development_plan(prereg_version):
+        version = route(scenario, size, prereg_version)
+        path = reps_path(scenario, size, seeds.DEVELOPMENT, out, version)
+        reps = load_reps(scenario, size, seeds.DEVELOPMENT, out, version=version)
+        if path.exists() and len(reps) >= criteria_v2.replications(scenario, size):
             with gzip.open(path.with_suffix(".jsonl.gz"), "wt", encoding="utf-8") as f:
                 for r in reps:
                     f.write(json.dumps(r, sort_keys=True, separators=(",", ":"), default=float) + "\n")
@@ -219,11 +263,14 @@ def v10a_check(reps: int = 2, batches: int = 3, out: Path = OUT, log: Path | Non
     return result
 
 
-def development_plan() -> list[tuple[str, str]]:
-    """Every (scenario, size) of SIM_PREREG section 3.1, STD and LONG first."""
-    order = {"STD": 0, "LONG": 1, "HB": 2}
-    plan = [(s.id, z) for s in world.SCENARIOS.values() for z in s.sizes]
-    return sorted(plan, key=lambda p: order[p[1]])
+def development_plan(prereg_version: str = "v1") -> list[tuple[str, str]]:
+    """Every (scenario, size) of SIM_PREREG section 3.1, STD and LONG first; with ``"v2"``, also the hedged
+    twins of SIM_PREREG_v2 section 3 (after the STD runs, before the HB ones)."""
+    order = {"STD": 0, "LONG": 1, "HB": 3}
+    plan = [(s.id, z, order[z]) for s in world.SCENARIOS.values() for z in s.sizes]
+    if prereg_version == "v2":
+        plan += [(t, "STD", 2) for t in criteria_v2.TWINS]
+    return [(s, z) for s, z, _ in sorted(plan, key=lambda p: p[2])]
 
 
 def main(argv=None) -> int:
@@ -247,14 +294,19 @@ def main(argv=None) -> int:
     ap.add_argument("--status", action="store_true", help="print progress; exit 1 if the heartbeat is stale")
     ap.add_argument("--stale-minutes", type=float, default=90.0)
     ap.add_argument("--compact", action="store_true", help="gzip the replication files of completed runs")
+    ap.add_argument("--prereg", choices=list(PREREGS), default="v1",
+                    help="v2: run what SIM_PREREG_v2 changed (D11, its hedged twins, every HB scenario) with "
+                         "Protocol v3.1's code; everything else stays version 1's")
+    ap.add_argument("--reps-twin", type=int, default=criteria_v2.REPLICATIONS_TWIN,
+                    help="with --plan and --prereg v2: replications of each hedged twin")
     a = ap.parse_args(argv)
     try:
         if a.status:
-            text, ok = status(a.out, a.stale_minutes)
+            text, ok = status(a.out, a.stale_minutes, a.prereg)
             print(text)
             return 0 if ok else 1
         if a.compact:
-            print("\n".join(compact(a.out)) or "nothing to compact")
+            print("\n".join(compact(a.out, a.prereg)) or "nothing to compact")
             return 0
         if a.v10a:
             res = v10a_check(out=a.out)
@@ -263,14 +315,16 @@ def main(argv=None) -> int:
         if a.plan:
             sizes, only = a.sizes.split(","), [s for s in a.only.split(",") if s]
             count = {"STD": a.reps_std, "LONG": a.reps_long or a.reps_std, "HB": a.reps_hb}
-            for scenario, size in development_plan():
+            for scenario, size in development_plan(a.prereg):
                 if size in sizes and (not only or scenario in only):
-                    run_scenario(scenario, size, count[size], label=a.label, workers=a.workers, out=a.out)
+                    n = a.reps_twin if criteria_v2.is_twin(scenario) else count[size]
+                    run_scenario(scenario, size, n, label=a.label, workers=a.workers, out=a.out,
+                                 prereg_version=a.prereg)
             return 0
         if not (a.scenario and a.size and a.reps):
             ap.error("give --scenario, --size and --reps, or --plan")
         run_scenario(a.scenario, a.size, a.reps, label=a.label, confirm=a.confirm, workers=a.workers, out=a.out,
-                     pooled_rerun=a.pooled_rerun)
+                     pooled_rerun=a.pooled_rerun, prereg_version=a.prereg)
         return 0
     except runlog.HeldOutRefused as e:
         print(f"refused: {e}", file=sys.stderr)
