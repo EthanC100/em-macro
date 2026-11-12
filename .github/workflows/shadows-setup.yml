@@ -1,3 +1,6 @@
+# 2026-11-12 (Ethan): main only. The setup job runs only on a workflow_dispatch from refs/heads/main. A run from any
+# other branch or tag, or on any other event, runs nothing (tests/test_systematic_main_only.py). Writer workflows are
+# dispatched only by the dispatch-only kick session or by Ethan (CLAUDE.md rule 16).
 name: shadows-setup
 
 # One-off set-up of the T25-T26 zero-size live shadows (docs/prereg/T25-T26_live_shadows.md, Amendment 1 A1.2 and
@@ -37,6 +40,7 @@ concurrency:
 
 jobs:
   setup:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 240           # run #1 was cancelled at 60 minutes, 8 markets in (sequential, one request each)
     defaults:

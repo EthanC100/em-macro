@@ -11,6 +11,10 @@
 # the month already rebalanced: the kick's or a backup's second attempt, or a safe-check dispatch), and the
 # Monday/Thursday keep-cache runs end "success" with no update at all; none of them books a month-end. If the API
 # cannot be read, it runs (re-evaluating is idempotent; a missed month-end is worse).
+# 2026-11-12 (Ethan): main only. Both jobs run only from refs/heads/main: on a workflow_dispatch, or after a
+# systematic-monthly run of main (never a run of another branch or of a pull request). A run from any other branch or
+# tag, or on any other event, runs nothing (tests/test_systematic_main_only.py). Writer workflows are dispatched only
+# by the dispatch-only kick session or by Ethan (CLAUDE.md rule 16).
 name: v1-rules-monitor
 
 on:
@@ -30,6 +34,7 @@ concurrency:
 jobs:
   # Did the triggering systematic-monthly run's `update` job run and succeed? Reads the run's jobs; writes nothing.
   ran:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -60,7 +65,7 @@ jobs:
   monitor:
     needs: ran
     # only when the monthly update ran and succeeded (or by hand); never after a gate skip or a keep-cache run
-    if: needs.ran.outputs.run == 'true'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')) && needs.ran.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
