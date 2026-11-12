@@ -8,6 +8,10 @@
 #
 # Repository settings needed once: Settings > Actions > General > Workflow permissions = "Read and
 # write permissions".
+# 2026-11-12 (Ethan): main only. The daily job runs only on a schedule event or a workflow_dispatch from
+# refs/heads/main. A run from any other branch or tag, or on any other event, runs nothing
+# (tests/test_systematic_main_only.py). Writer workflows are dispatched only by the dispatch-only kick session or by
+# Ethan (CLAUDE.md rule 16).
 name: ledger-daily
 
 # 2026-11-06: runs on 4 and 5 Nov were green but committed nothing: `git add` listed automation_log.csv and
@@ -36,6 +40,7 @@ concurrency:
 
 jobs:
   daily:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:

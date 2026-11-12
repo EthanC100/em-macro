@@ -1,0 +1,9 @@
+as_of,effective_from,book,instrument,description,side,size_pct_of_capital,risk_share_pct,instrument_vol_pct,carry_z,trend_z,value_z,cost_pct_per_trade,scheduled_date,run_date
+2026-10,2026-11,bond,MX10Y,Mexico 10y local-currency bond (excess over local policy rate),long,125.850,19.400,5.590,1.117,-0.098,-0.274,0.100,2026-11-03,2026-11-04
+2026-10,2026-11,bond,TR10Y,Turkey 10y local-currency bond (excess over local policy rate),short,-45.320,19.400,15.510,-1.115,-1.168,1.482,0.300,2026-11-03,2026-11-04
+2026-10,2026-11,fx,TRY,TRY vs USD (Turkey),long,95.780,10.200,3.850,2.657,1.338,-1.079,0.300,2026-11-03,2026-11-04
+2026-10,2026-11,fx,IDR,IDR vs USD (Indonesia),long,56.310,10.200,6.550,-0.385,-0.180,1.532,0.300,2026-11-03,2026-11-04
+2026-10,2026-11,fx,BRL,BRL vs USD (Brazil),long,34.810,10.200,10.600,0.395,-0.009,0.371,0.100,2026-11-03,2026-11-04
+2026-10,2026-11,fx,MXN,MXN vs USD (Mexico),short,-37.780,10.200,9.760,-0.311,-0.815,0.328,0.100,2026-11-03,2026-11-04
+2026-10,2026-11,fx,PLN,PLN vs USD (Poland),short,-44.380,10.200,8.310,-0.580,-0.798,-0.056,0.100,2026-11-03,2026-11-04
+2026-10,2026-11,fx,EUR,EUR vs USD (euro area),short,-52.410,10.200,7.040,-0.702,-0.543,0.265,0.100,2026-11-03,2026-11-04

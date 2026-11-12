@@ -1,19 +1,23 @@
-"""Books, audit seals, what-changed and stress tests (ledger/books.py, audit.py, changes.py, stress.py)."""
+"""Books, audit seals, what-changed and stress tests (ledger/books.py, audit.py, changes.py, stress.py).
+
+The books and the site are built from the frozen copies of the writers' files (conftest.frozen_repo, Q025), never
+the live ones: systematic-monthly rewrites results/systematic*/ and then runs this suite before it commits."""
 import json
 import shutil
 from datetime import date
 
 import pytest
 
-from conftest import seed_ledger
+from conftest import frozen_modules, seed_ledger
 from ledger import audit, books, build, changes, pricing as PX, stress
 
 TODAY = date(2026, 11, 6)
 
 
 @pytest.fixture(scope="module")
-def bk():
-    return books.build_books(TODAY, build.build_algorithm())
+def bk(frozen_root):
+    with frozen_modules(frozen_root):
+        return books.build_books(TODAY, build.build_algorithm())
 
 
 def test_three_books_with_colours_and_live_starts(bk):
@@ -89,7 +93,7 @@ def test_pricing_conventions():
     assert PX.stop_hit("spread", "short", 159, 115, 110) and not PX.stop_hit("spread", "short", 159, 115, 150)
 
 
-def test_site_has_three_books_audit_badge_offline_and_no_stale_labels(tmp_path):
+def test_site_has_three_books_audit_badge_offline_and_no_stale_labels(tmp_path, frozen_repo):
     site = build.SITE_SRC
     html = (site / "index.html").read_text()
     js = (site / "app.js").read_text()

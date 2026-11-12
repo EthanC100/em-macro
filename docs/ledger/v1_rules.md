@@ -19,8 +19,9 @@ Measured on the official month-end v1.0 index from the 1 Nov 2026 live start.
 
 ## The monitor (flags only)
 
-`python -m ledger.v1_rules monitor` runs in `.github/workflows/v1-rules-monitor.yml` after every successful
-`systematic-monthly` run. It reads what that run committed and writes only:
+`python -m ledger.v1_rules monitor` runs in `.github/workflows/v1-rules-monitor.yml` after every `systematic-monthly`
+run whose `update` job ran and succeeded (not after a run whose due gate skipped the update, nor after a
+keep-cache run), and by hand. It reads what that run committed and writes only:
 
 - `data/ledger/v1_rules.json`: the latest month-end evaluation (index, live peak, drawdown, live Sharpe, carry
   spread against the threshold, each rule's status) and `flags`, one line per triggered rule;

@@ -1,3 +1,6 @@
+# 2026-11-12 (Ethan): main only. The recommit job runs only on a workflow_dispatch from refs/heads/main. A run from
+# any other branch or tag, or on any other event, runs nothing (tests/test_systematic_main_only.py). Writer workflows
+# are dispatched only by the dispatch-only kick session or by Ethan (CLAUDE.md rule 16).
 name: private-commitments
 
 # Salted commitments for a private (licensed) entry (ledger/commitments.py). Run by hand:
@@ -27,6 +30,7 @@ concurrency:
 
 jobs:
   recommit:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:

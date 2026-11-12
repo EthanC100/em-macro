@@ -1,0 +1,109 @@
+# Merges the night shift's promotion PR (dev -> main) when promote's checks and the tests workflow have passed
+# (Ethan, 2026-11-12: branch rules are not applied, so GitHub auto-merge is not available). It runs each time the
+# `tests` workflow completes. The decision is made by MAIN's code (nightshift/promote_merge.py, MAIN's CODEOWNERS),
+# never by dev's: dev cannot approve itself. It merges with a merge commit pinned to the head it checked; otherwise
+# it merges nothing, leaves the PR open and comments why, and the morning report flags the promotion as not merged.
+#
+# Main only: workflow_run always runs on the default branch, and the job also requires refs/heads/main. Nobody
+# dispatches it (no workflow_dispatch; CLAUDE.md rule 16). A merge made with GITHUB_TOKEN starts no push-triggered
+# workflow, so after a merge it dispatches ledger-pages (the app rebuild) itself. GITHUB_TOKEN cannot merge a PR that
+# changes .github/workflows/: such a promotion fails to merge and stays open (night work never changes workflows).
+name: promote-merge
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+
+permissions:
+  contents: write            # the merge
+  pull-requests: write       # the PR comment
+  actions: write             # dispatch ledger-pages after a merge
+
+concurrency:
+  group: promote-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: >-
+      github.ref == 'refs/heads/main' && github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_branch == 'dev' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash          # -eo pipefail
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install pyyaml
+
+      - name: Decide (main's code)
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          git fetch -q origin main dev
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/run.json"
+          number=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&base=main&head=${GITHUB_REPOSITORY_OWNER}:dev" \
+                     --jq '.[0].number // empty')
+          echo '{}' > "$RUNNER_TEMP/pr.json"
+          if [ -n "$number" ]; then
+            for i in 1 2 3 4 5 6; do          # GitHub computes `mergeable` lazily
+              gh api "repos/$GITHUB_REPOSITORY/pulls/$number" > "$RUNNER_TEMP/pr.json"
+              [ "$(jq -r '.mergeable' "$RUNNER_TEMP/pr.json")" != "null" ] && break
+              sleep 10
+            done
+            git fetch -q origin "$(jq -r '.head.sha' "$RUNNER_TEMP/pr.json")" || true
+          fi
+          python -m nightshift.promote_merge decide --pr "$RUNNER_TEMP/pr.json" --run "$RUNNER_TEMP/run.json" \
+            --repo-name "$GITHUB_REPOSITORY" --out "$RUNNER_TEMP/decision.json" \
+            --comment-file "$RUNNER_TEMP/comment.md"
+          {
+            echo "action=$(jq -r .action "$RUNNER_TEMP/decision.json")"
+            echo "number=$(jq -r '.number // empty' "$RUNNER_TEMP/decision.json")"
+            echo "sha=$(jq -r '.sha // empty' "$RUNNER_TEMP/decision.json")"
+          } >> "$GITHUB_OUTPUT"
+          { echo "### promote-merge"; cat "$RUNNER_TEMP/comment.md"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Merge (merge commit, pinned to the checked head)
+        id: merge
+        if: steps.decide.outputs.action == 'merge'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.decide.outputs.number }}
+          SHA: ${{ steps.decide.outputs.sha }}
+        run: |
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$NUMBER/merge" -f merge_method=merge -f sha="$SHA" \
+            -f commit_title="Night shift: promote dev (PR #$NUMBER)"
+
+      - name: Comment on the PR
+        if: always() && (steps.decide.outputs.action == 'merge' || steps.decide.outputs.action == 'hold')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.decide.outputs.number }}
+          MERGED: ${{ steps.merge.outcome }}
+        run: |
+          body="$RUNNER_TEMP/comment.md"
+          if [ "${{ steps.decide.outputs.action }}" = "merge" ] && [ "$MERGED" != "success" ]; then
+            printf '<!-- promote-merge -->\n**promote-merge: the merge call failed.** The PR stays open; the morning report flags it. See %s\n' \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$body"
+          fi
+          gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+
+      - name: Rebuild the Ledger app after a merge
+        if: steps.merge.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ledger-pages.yml --repo "$GITHUB_REPOSITORY" --ref main || echo "could not dispatch ledger-pages (it also runs on its schedule)"

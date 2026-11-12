@@ -1,0 +1,8 @@
+id,country,currency,date,type,rounds,status,source_url
+mx-2027-legislative,Mexico,MXN,2027-06-06,legislative,1,scheduled,https://en.wikipedia.org/w/index.php?title=2027_Mexican_legislative_election&oldid=1380760032
+pl-2027-parliamentary,Poland,PLN,2027-11-11,legislative,1,due_by,https://en.wikipedia.org/w/index.php?title=Next_Polish_parliamentary_election&oldid=1382295093
+cz-2028-presidential,Czech Republic,CZK,2028-01-31,presidential,2,due_by,https://en.wikipedia.org/w/index.php?title=Next_Czech_presidential_election&oldid=1379559412
+my-2028-general,Malaysia,MYR,2028-02-17,legislative,1,due_by,https://en.wikipedia.org/w/index.php?title=Next_Malaysian_general_election&oldid=1383372833
+kr-2028-legislative,South Korea,KRW,2028-04-12,legislative,1,scheduled,https://en.wikipedia.org/w/index.php?title=Next_South_Korean_legislative_election&oldid=1380897744
+ph-2028-general,Philippines,PHP,2028-05-08,general,1,scheduled,https://en.wikipedia.org/w/index.php?title=2028_Philippine_general_election&oldid=1383532679
+tr-2028-general,Turkey,TRY,2028-05-14,general,2,due_by,https://en.wikipedia.org/w/index.php?title=Next_Turkish_presidential_election&oldid=1382275180

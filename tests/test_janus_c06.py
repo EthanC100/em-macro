@@ -14,6 +14,7 @@ from conftest import seed_ledger
 from ledger import audit
 from ledger import janus as J
 from test_janus import SOURCES_READ, _m, pos, review
+from conftest import frozen_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 T = datetime(2026, 11, 10, 23, 7, tzinfo=timezone.utc)          # Tuesday: the first review under C06
@@ -288,7 +289,7 @@ def test_ledger_commit_pushes_the_failed_record_and_exits_3(tmp_path):
 # ----------------------------------------------------------------------------- K004: the 10 Nov review
 def _janus_until(seq):
     out = []
-    for line in (ROOT / "data/janus/records.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in frozen_copy("data/janus/records.jsonl").read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
         if r["seq"] > seq:
             break
@@ -307,12 +308,12 @@ def test_10_nov_review_reason_expires_at_the_end_of_11_nov():
     assert fl and "expired at the end of 2026-11-11" in fl[0] and "K004" in fl[0]
 
 
-def test_janus_correction_annotates_without_editing(tmp_path):
+def test_janus_correction_annotates_without_editing(tmp_path, frozen_repo):
     seed_ledger(tmp_path)
     seals = tmp_path / "data/ledger/seals.jsonl"
     shutil.copy(ROOT / "tests/fixtures/ledger/decisions.csv", tmp_path / "data/ledger/decisions.csv")
     jp = tmp_path / "records.jsonl"
-    shutil.copy(ROOT / "data/janus/records.jsonl", jp)
+    shutil.copy(frozen_copy("data/janus/records.jsonl"), jp)
     rec = audit.correct_janus(199, {"below_budget.until": "2026-11-11 (C06)"}, "CPI is on 10 Nov", path=seals,
                               janus_path=jp, now="2026-11-10T12:00:00+00:00")
     assert rec["kind"] == "janus" and rec["record_edited"] is False and rec["janus_seq"] == 199
@@ -329,7 +330,7 @@ def test_janus_correction_annotates_without_editing(tmp_path):
 
 
 def test_k004_is_in_the_corrections_log():
-    seals = [json.loads(x) for x in (ROOT / "data/ledger/seals.jsonl").read_text().splitlines() if x.strip()]
+    seals = [json.loads(x) for x in frozen_copy("data/ledger/seals.jsonl").read_text().splitlines() if x.strip()]
     k4 = [s for s in seals if s.get("correction_id") == "K004"]
     assert len(k4) == 1 and k4[0]["kind"] == "janus" and k4[0]["janus_seq"] == 199
     f = k4[0]["fields"]

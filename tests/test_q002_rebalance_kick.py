@@ -40,7 +40,7 @@ def test_the_workflow_has_the_kick_input_and_two_backup_schedules():
     assert update["needs"] == "due"
     assert "needs.due.outputs.run == 'true'" in update["if"] and "needs.due.result == 'failure'" in update["if"]
     assert "needs.due.result != 'skipped'" in update["if"]                            # keep-cache never rebalances
-    assert doc["jobs"]["keep-cache"]["if"] == "github.event_name == 'schedule' && github.event.schedule == '37 6 * * 1,4'"
+    assert "github.event.schedule == '37 6 * * 1,4'" in doc["jobs"]["keep-cache"]["if"]
     assert doc["concurrency"] == {"group": "systematic-monthly", "cancel-in-progress": False}
 
 

@@ -1,0 +1,2 @@
+First Janus run requested from the build session on 2026-11-06 (branch build/ledger-v2).
+Changing this file on build/ledger-v2 starts janus-weekly; on main use Actions > janus-weekly > Run workflow.

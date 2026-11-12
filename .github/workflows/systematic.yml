@@ -16,6 +16,11 @@
 # run only if this month's rebalance has not run yet (main's rebalance_log.csv, fetched fresh), so at most one of them
 # rebalances. A manual "Run workflow" (only_if_due false) always runs. The gate never changes what the update job
 # computes: its steps are as before.
+#
+# 2026-11-12 (Ethan): main only. The due, update and keep-cache jobs run only on a schedule event or a
+# workflow_dispatch, and only from refs/heads/main: a dispatch from any other branch (run #9 came from
+# test/kick-gate) or any other event runs nothing. The workflow has no pull_request or push trigger; the guard holds
+# even if one is ever added. The due gate's tests run in the tests workflow (tests/test_q002_rebalance_kick.py).
 name: systematic-monthly
 
 on:
@@ -42,7 +47,7 @@ jobs:
   # Q002: is this month's rebalance still due? Reads main's rebalance log after a fresh fetch (a scheduled run that
   # waited behind the kick's run has a checkout older than that run's commit). Writes nothing.
   due:
-    if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *' || github.event.schedule == '23 7 4 * *'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '23 7 3 * *' || github.event.schedule == '23 7 4 * *')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -74,7 +79,8 @@ jobs:
   update:
     needs: due
     # runs when the gate says so; also if the gate job itself failed (fail-open), never when it was skipped
-    if: ${{ !cancelled() && needs.due.result != 'skipped' && (needs.due.result == 'failure' || needs.due.outputs.run == 'true') }}
+    # main only (hard guard, independent of the due job): schedule or workflow_dispatch from refs/heads/main
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && !cancelled() && needs.due.result != 'skipped' && (needs.due.result == 'failure' || needs.due.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
@@ -304,7 +310,7 @@ jobs:
   # GitHub deletes caches that are not accessed for 7 days, so a monthly run would never find the
   # previous month's copy.  Restoring it twice a week keeps the newest raw-downloads cache alive.
   keep-cache:
-    if: github.event_name == 'schedule' && github.event.schedule == '37 6 * * 1,4'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'schedule' && github.event.schedule == '37 6 * * 1,4'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
