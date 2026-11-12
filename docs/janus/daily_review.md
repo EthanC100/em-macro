@@ -108,7 +108,9 @@ probability, and the CLI never checks your probability against its view.
 - C07 rules 1, 2 and 4: no 50% positions (now: no 50% forecasts), `candidates`, and deferrals.
 - Reviewing every open position with hold, close or tighten_stop, and `no_trade_reasoning`.
 
-**Existing limits stay:** 2% at risk per position, 10% in total, 8 open positions, capacity, and costs.
+**Existing limits stay:** 2% at risk per position, 10% in total (the CLI keeps the book in 3-10%), capacity, and costs.
+There is no cap on the number of positions: the book holds every watchlist instrument (config change C13; the old cap
+of 8 applied to discretionary positions).
 
 **Hard rules for this session**
 - Never edit, create or delete anything under `data/janus/` or `data/ledger/` yourself. Every change goes through
@@ -120,8 +122,8 @@ probability, and the CLI never checks your probability against its view.
   - no discretionary fields: `new_positions`, `reviews`, `below_budget`, `candidates`, `deferred_ideas`;
   - `data_failure` only for a mark that really is stale;
   - a `time_anchor` covering every cited event, with nothing in the future described as released.
-- The CLI sets the book within the existing limits: at most 2% at risk per position, 10% in total, 8 open
-  positions, and capacity (notional at most 10% of daily volume and below 80% of any position limit; a size above
+- The CLI sets the book within the existing limits: at most 2% at risk per position, 3-10% in total, no cap on the
+  number of positions (C13), and capacity (notional at most 10% of daily volume and below 80% of any position limit; a size above
   capacity is cut and the cut recorded).
 - Conventions on the watchlist: yields `long` = long the bond; FX `long` = long the named currency (EUR, GBP, the
   yen, the Australian dollar, the real, the peso). YES on every question is the long side.

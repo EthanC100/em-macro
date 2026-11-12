@@ -20,6 +20,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C10 | 2026-11-11 | the next ledger-daily run (11 November 2026), before C08's first daily review (23:07 UTC) | **GBP marked on the ECB cross**: US dollars per pound = the ECB's US dollars per euro divided by its pounds per euro (as JPY and AUD), replacing the Bank of England's XUDLUSS; the watchlist's GBP question resolves on it. Approved by Ethan on 2026-11-11. | The Bank of England's XUDLUSS arrived one business day late on every run, and its database refused at least one run from GitHub's servers (6 Nov 03:57 UTC: "no observations", FRED fallback) and refuses cloud sessions outright. The ECB reference rates are published the same day (16:00 CET). | None on any other book: no decision, forecast or position uses GBP. |
 | C11 | 2026-11-11 | C08's first daily review (11 November 2026, 23:07 UTC) | **No mark the review can already see**: a C08 review's forecast base marks (and so its resolution windows) and the fills of its orders, resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date, rolling forward over weekends and holidays. Approved by Ethan on 2026-11-11. | With Q018's 22:07 UTC ledger-daily run, day-D marks are in place before the 23:07 UTC day-D review: a base mark or fill at that close is a price the forecaster already knows, with hours of later moves visible (the ECB fixes at 14:15 CET), which would inflate the Brier scores and the fund rule built on them. Raised by The Opposition's review of Q018. | None on any other book, and none on records before C08. |
 | C12 | 2026-11-11 | the shadows' first live rebalance (positions from the 3 December 2026 settlement), once ledger-daily confirms go-live (expected 4 December 2026) | **Commodities book added**: a fourth Ledger book that runs the T26 shadow at paper size. Returns = the T26 shadow's monthly net returns (decisive costs) × **k = 1.1028**, fixed once so the T22 design-period backtest (2000-01..2019-12) runs at 10% annual volatility (10% ÷ 9.0675%). Paper capital US$100,000,000, for contract counts only; results in % (excess of cash, total return incl. T-bill as in the other books). Outside the Horizons fund. | To see the trend sleeve at a real paper size, with contract counts, alongside the zero-size shadow. | None. The book only reads the shadow's output; no signal, universe, timing, cost or rule changes, and the T25-T26 pre-registration, its amendments, GO_LIVE.json and the prelive files are untouched. The shadow's evaluation (15 Dec 2031) uses the shadow's own returns. The Fund rule (C04) is unchanged. |
+| C13 | 2026-11-12 | every C08 daily review (from 11 November 2026) | **No position-count cap for C08 books**: the cap of 8 open positions does not apply to a C08 book, which holds a position on every watchlist instrument (10). The 2% per-position cap and the 3-10% total band still apply. Approved by Ethan on 2026-11-12. | C08 sets a position on every watchlist instrument (10 after C09), above the cap of 8, which was written for discretionary positions. The first C08 review (11 November, 23:15 UTC) placed 10 orders: C08's code path never applied the cap, so this records what it does. | None on any other book. No record changes: the app and `context` stop showing a cap of 8 once a C08 review exists. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -684,7 +685,7 @@ No existing record is edited: J001, J002 and the runs of 10 November stand as wr
 | C05 (a) research in `sources_read`; a review without it fails | kept |
 | C05 (b) 3-10% at risk | kept, met by the mechanical book; the quick check flags the account below 3% |
 | C05 (b) discretionary best ideas, "normally 2-6 positions", the sizing table, `below_budget`, weekend and holiday `deferred_ideas` | superseded (rule 3) |
-| existing limits: 2% per position, 10% in total, 8 open, capacity, costs, fills at the next daily mark | kept |
+| existing limits: 2% per position, 10% in total, 8 open, capacity, costs, fills at the next daily mark | kept, except the cap of 8 open positions: removed for C08 books by C13 |
 | The Opposition on every new position | superseded by The Opposition on every forecast, advisory (rule 4) |
 | `market_probability` on every position | kept, on every forecast (default 50, basis `none`) |
 | C06 rule 1, two-position minimum | superseded; its `data_failure` format is the only exclusion |
@@ -951,3 +952,27 @@ against the 10% target, and a plain-English note on the strategy.
 - before go-live the book shows its start date;
 - the book is outside the fund.
 
+## C13 — Janus: no position-count cap for C08 books (2026-11-12)
+
+Approved by Ethan on 2026-11-12.
+
+**Why.** C08 replaced discretionary selection with a position on every watchlist instrument, and C09 widened the
+watchlist to 10 instruments. The cap of 8 open positions (`MAX_OPEN`) was written for discretionary books:
+- it is enforced only where Janus proposed positions (`validate`);
+- C08's mechanical book never applied it.
+
+The first C08 review (11 November 2026, run record seq 294) placed 10 orders at 3.0% at risk in total. The app then
+showed Janus as "10 of 8" open.
+
+**The rule.**
+- **Count:** a C08 book has no position-count cap. `max_open_for` reports none once an accepted C08 daily review
+  exists, and the app shows "n open" instead of "n of 8".
+- **Per position:** at most 2% at risk (`MAX_RISK_POS` in `c08_targets`; the capacity cut can only lower it).
+- **In total:** within C05's 3-10% band (`c08_targets` scales into it). Below 3% only when a named data failure leaves
+  too few instruments for 3% at 2% each.
+- **Before C08:** positions decided before C08 keep the cap of 8 in `validate`. No such proposal can be made any more.
+
+**Unchanged.** Everything else in C08-C11, every record, and the fund rule.
+
+**Where:** `ledger/janus.py` (`C13_FROM`, `max_open_for`; the summary's and `context`'s `max_open`),
+`ledger/site/app.js`, `docs/janus/daily_review.md`, `data/janus/README.md`, `tests/test_janus_c13.py`.
