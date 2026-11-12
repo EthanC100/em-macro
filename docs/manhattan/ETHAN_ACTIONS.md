@@ -2,14 +2,16 @@
 
 Recorded 2026-11-12; updated the same day by session "4M Manhattan C: simulation lab" (items 5 and 13 closed,
 items 14 to 18 added) and by session "5M Manhattan C: protocol 3.1 and prereg v2" (item 19 added; items 14 and 15
-answered by the draft of Protocol v3.1, which item 19 adopts; item 16 re-estimated). Each item is something no
+answered by the draft of Protocol v3.1, which item 19 adopts; item 16 re-estimated; item 20 added and item 10
+updated by milestone E). Each item is something no
 agent may decide or do under the CLAUDE.md hard rules, or cannot do from a cloud session. For each: the
 conservative default now in force, what it blocks, and what to do. Nothing in this list was created, changed,
 bought or switched on by a session.
 
 **Order of urgency now:** item 19 (read and adopt Protocol v3.1 and version 2 of the simulation pre-registration:
 one paste into CODEOWNERS), then item 16 (start the simulation on the iMac: it now includes the model-fitting
-half), then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (about 5 May 2027).
+half), then items 2, 3 and 7 (they unblock the first real batch). Items 10 and 20 decide how far milestone E
+can go. Item 8 has a date (about 5 May 2027).
 
 | # | decision or action | default in force | blocks |
 |---|---|---|---|
@@ -22,7 +24,7 @@ half), then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a d
 | 7 | critic and generator definitions, routines | none added | the critic's "never sees outcomes" rule |
 | 8 | data licences and spending | no spending | futures history after May 2027; a tool-less generator |
 | 9 | programme parameters | conservative values | dormancy, live tier |
-| 10 | core factor definitions | none approved | every hedged return |
+| 10 | core factor definitions | none approved; **a proposal is written** (CORE_FACTORS_PROPOSAL.md) | every hedged return |
 | 11 | Manhattan tests inside the writers' workflows | skip there, fail elsewhere | nothing |
 | 12 | Manhattan and the trial ledger | separate | nothing |
 | 13 | merge the first PR; go-ahead for the simulation | **done** (PR #48 merged; session 4M was the go-ahead) | - |
@@ -32,6 +34,7 @@ half), then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a d
 | 17 | the simulation's sampler in requirements | separate file; no longer needed by the simulation | nothing |
 | 18 | housekeeping: the pre-rename branch | left in place | nothing |
 | 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched | the full run of D11 and of the model-fitting half |
+| 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
 
 ---
 
@@ -184,6 +187,12 @@ simulation runs; changing it afterwards needs a new protocol version and a new p
 Daily carry, trend, value and buy-and-hold returns per asset class do not exist (AUDIT §1.2). Phase E will propose
 definitions built from the frozen v1.0 signals and the T20-T22 sleeves. They decide what "core-hedged" means for
 every family, so they are yours to approve and are frozen before the first batch.
+
+**Status (session 5M, milestone E).** The proposal is written: [CORE_FACTORS_PROPOSAL.md](CORE_FACTORS_PROPOSAL.md).
+In one sentence: keep each frozen sleeve's monthly decision rule and let the new engine mark its positions
+daily, instead of designing new signals. It lists six choices that are yours (section 4), the first being
+whether to adopt that principle. Nothing in it is adopted. The engine already reproduces two of the currency
+factors against their frozen sources on public data to 2019 (`results/manhattan_engine/REPRODUCTION.md`).
 
 ## 11. Manhattan tests inside the writers' workflows
 
@@ -416,4 +425,33 @@ batch exists yet, so nothing is judged under two versions.
 
 **If you do not adopt.** Version 1 and Protocol 3.0.0 stand as they are. D11 then goes to the full run with a
 test the pilot shows to be oversized, and the model-fitting half stays out of reach (item 15).
+
+## 20. Access to em-macro-data for the futures half of milestone E
+
+**Why Ethan.** Which repositories a session may attach is a permission setting (hard rule 11), and the data are
+licensed (hard rule 7; Norgate Personal Use).
+
+**What happened (session 5M).** Milestone E's reproduction step asks for time-series momentum and carry to be
+reproduced on exploration dates before anything new is evaluated. On **public** data that is done: the engine
+reproduces the frozen carry benchmark and the frozen T01 trend signal on six currencies, 2005 to 2019
+(`results/manhattan_engine/REPRODUCTION.md`). The **published** results, and the repository's own futures
+sleeves (trials T20 to T22), are about dozens of futures markets, whose history is the Norgate snapshot in
+em-macro-data. The session asked to attach em-macro-data read-only; the environment reported the repository as
+attachable, and the attach itself was **refused by the session's permission settings**. The session did not
+look for another way in, and stopped there, as its brief said.
+
+**What it blocks.** The futures half of the reproduction (criterion E-08 is met for currencies only), and every
+commodity and financial-futures core factor of [CORE_FACTORS_PROPOSAL.md](CORE_FACTORS_PROPOSAL.md).
+
+**Options.**
+
+| option | what it means |
+|---|---|
+| (a) allow a build session to attach em-macro-data read-only | a permission rule for `add_repo` in the session's settings (the night-shift tasks already have em-macro-data read). The session would read the Norgate snapshot up to 2019-12-31 only, write nothing to em-macro-data, and keep every per-market series out of this repository |
+| (b) run the futures reproduction on the iMac | where the licensed data already live (item 4); the engine and the reproduction module run there unchanged once a futures loader is written |
+| (c) leave it | Manhattan's first families are then limited to currencies, the one asset class whose core factors can be built from public data |
+
+**Recommendation.** (a) for the reproduction (it reads history up to 2019 only, which any session may read), (b)
+for anything on the reserve or forward. Either way a futures loader must be written first: it reads each contract
+file from the top and stops at the cut-off, as `manhattan/factors/public_fx.py` does for the public panel.
 

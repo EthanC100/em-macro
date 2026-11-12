@@ -23,7 +23,7 @@ its acceptance criteria are written here first and its tests then pass, run as h
 | **B** | Architecture, Protocol v3, simulation pre-registration | **done** (PR #48 merged 2026-11-12). Drafts of the next versions, for Ethan to adopt: Protocol 3.1.0 and pre-registration version 2 (session 5M) | [ARCHITECTURE.md](ARCHITECTURE.md), [PROTOCOL_v3.md](PROTOCOL_v3.md) 3.0.0, [SIM_PREREG.md](SIM_PREREG.md) 1.0; drafts [PROTOCOL_v3.1.md](PROTOCOL_v3.1.md), [SIM_PREREG_v2.md](SIM_PREREG_v2.md) | B |
 | **C** | Simulation lab: both screening candidates, SPA, forward e-process, hierarchical model, dormancy; the pre-registered experiments, with confidence intervals | **code and tests done; pilot run, and rerun for the two repaired methods; NOT passed** (full run packaged for the iMac and now includes the model-fitting half; needs ETHAN_ACTIONS item 19; held-out worlds not coded): see "Milestone C: state (session 5M)" | `manhattan/stats/`, `manhattan/sim/`, `results/manhattan_sim/` | C, and the reference half of old H |
 | **D** | Registry, freezing workflow, generator templates, critic, ledger | **done against its criteria** (33 tests); not yet usable for a real batch: needs ETHAN_ACTIONS items 2, 3, 7 and a timestamp client: see "Milestone D: state" | `manhattan/spec.py`, `ledger.py`, `roles.py`, `generate/`, `freeze.py` | old D and F |
-| **E** | Point-in-time data layer and daily/event backtester; reproduce time-series momentum and cross-asset carry before anything new | **next; not started**; core factors need ETHAN_ACTIONS item 10 | `manhattan/engine/`, `factors/` | old E |
+| **E** | Point-in-time data layer and daily/event backtester; reproduce time-series momentum and cross-asset carry before anything new | **engine done and tested; reproduction done on public currency data; the futures half is blocked** (ETHAN_ACTIONS item 20); core factors proposed, not adopted (item 10): see "Milestone E: state" | `manhattan/engine/`, `manhattan/factors/`, `results/manhattan_engine/` | old E |
 | **F** | Historical screening and forward evaluation, wired only to methods that passed C | not started; needs a passed C and items 1, 2 | production wiring of `manhattan/stats/` | old H |
 | **G** | Reports with full denominators and labels | not started | report pages | new |
 | **H** | iMac runner package (launchd, checkpoints, heartbeat, watchdog, recovery) | not started; needs item 4 to install. The simulation's own run script (lock, checkpoints, heartbeat, status check, launchd template) exists and is a first piece: [SIM_RUNBOOK.md](SIM_RUNBOOK.md) | `manhattan/runner/` | old G |
@@ -151,16 +151,16 @@ first (the engine, the accounting, synthetic known-answer tests), then the repro
 
 | id | criterion (each is a test or a recorded run) | status |
 |---|---|---|
-| E-01 | **Point-in-time store** (`manhattan/engine/pit.py`). Every value carries the period it describes and the day it became available. A read as of day `T` returns, for each period, the latest value whose availability is on or before `T`, and nothing that became available later. A revision is a second value for the same period with a later availability; it never shows before that day and never erases the earlier value. Availability is an explicit date or the period plus the source's publication lag in days (the hypothesis spec's `data_sources[*].publication_lag_days`); a source with neither is refused. The store has a SHA-256 over its content (the ledger's data hash) that changes with any value, period or availability and does not depend on insertion order | |
-| E-02 | **Every read of dated data goes through `manhattan.roles.check_read`.** The store hands out data only through a reader bound to a caller, a domain and the fence of `config/manhattan.yaml`; the engine takes a reader, never a store. A read that touches reserve, embargo or forward dates is refused for a session, so with the default configuration nothing dated after 2019-12-31 can be read | |
-| E-03 | **Accounting** (`manhattan/engine/accounting.py`), each against a hand calculation: buy and hold reproduces the instrument's return; weights drift between trades; turnover is the absolute move from drifted to target weights; a proportional cost is charged on turnover in the period of the trade; a cash instrument is financed at its short rate for the calendar days held and an excess-return instrument is not; a missing price leaves the position at its last mark and the whole gap's return arrives when the price returns (no period is dropped); `net = gross − financing − cost` to rounding; all returns are per unit of capital | |
-| E-04 | **Daily backtester** (`manhattan/engine/backtest.py`). Positions for a period are a function of what was available at the decision cut-off only: the signal is handed a view as of that day and has no other access to data. Execution lag in periods, default 1 (the next available price; Protocol §2.1). Rebalancing daily, weekly or monthly. Volatility-target sizing from returns known at the decision only. A constant signal equals buy and hold; a momentum rule on a hand-made price path gives the hand-computed positions and returns; the same inputs give the same result hash | |
-| E-05 | **Event backtester** (`manhattan/engine/events.py`). One position per event, opened at the next available price after the event becomes known, held a fixed number of periods; zero return on days with no position (Protocol §1); overlapping events add; an event known late is traded late, never early; a hand-worked example | |
-| E-06 | **Look-ahead test** (`manhattan/engine/lookahead.py`). For a strategy, changing every value that becomes available after a cut-off changes no position and no return decided on or before it, bit for bit, at several cut-offs. The check **fails** when any one input is shifted forward (tomorrow's value stamped as available today), for each input in turn | |
-| E-07 | **Records.** An evaluation writes an `evaluation` record to a Manhattan ledger with the role `check_read` returned, the data hash, the result hash and the code version; an identical second run is a `rerun`, a different result a `nondeterminism`. An exploration-role evaluation also writes one row with `nightshift.logs.log_variant`, whose `code_ref` is the ledger record's hash, and which refuses a window ending after 2019-12-31 | |
-| E-08 | **Reproduction, exploration dates only** (to 2019-12-31), from data already in the repository: time-series momentum and carry, compared with published numbers and with the repository's own frozen results. Nothing new is evaluated until both reproduce. If the reproduction needs em-macro-data and the environment has no access, that is recorded in ETHAN_ACTIONS.md and the work stops there | |
-| E-09 | **Core factors.** Daily carry, trend, value and buy-and-hold definitions are proposed for Ethan (ETHAN_ACTIONS item 10); none is adopted | |
-| E-10 | **Hygiene.** No protected path changed; nothing existing is edited (`em_macro`, `ledger`, `lab`, `nightshift` are imported only); no licensed data and no row derived from it in the repository; the full suite passes with the runner's own exit code read | |
+| E-01 | **Point-in-time store** (`manhattan/engine/pit.py`). Every value carries the period it describes and the day it became available. A read as of day `T` returns, for each period, the latest value whose availability is on or before `T`, and nothing that became available later. A revision is a second value for the same period with a later availability; it never shows before that day and never erases the earlier value. Availability is an explicit date or the period plus the source's publication lag in days (the hypothesis spec's `data_sources[*].publication_lag_days`); a source with neither is refused. The store has a SHA-256 over its content (the ledger's data hash) that changes with any value, period or availability and does not depend on insertion order | **met**: `tests/test_manhattan_engine.py` (4 tests of the store) |
+| E-02 | **Every read of dated data goes through `manhattan.roles.check_read`.** The store hands out data only through a reader bound to a caller, a domain and the fence of `config/manhattan.yaml`; the engine takes a reader, never a store. A read that touches reserve, embargo or forward dates is refused for a session, so with the default configuration nothing dated after 2019-12-31 can be read | **met**: `tests/test_manhattan_engine.py` (the store has no public way to its data; the reader calls `check_read`; 2020 is refused with the repository's configuration) |
+| E-03 | **Accounting** (`manhattan/engine/accounting.py`), each against a hand calculation: buy and hold reproduces the instrument's return; weights drift between trades; turnover is the absolute move from drifted to target weights; a proportional cost is charged on turnover in the period of the trade; a cash instrument is financed at its short rate for the calendar days held and an excess-return instrument is not; a missing price leaves the position at its last mark and the whole gap's return arrives when the price returns (no period is dropped); `net = gross − financing − cost` to rounding; all returns are per unit of capital | **met**: `tests/test_manhattan_engine.py` (5 hand-worked accounts) |
+| E-04 | **Daily backtester** (`manhattan/engine/backtest.py`). Positions for a period are a function of what was available at the decision cut-off only: the signal is handed a view as of that day and has no other access to data. Execution lag in periods, default 1 (the next available price; Protocol §2.1). Rebalancing daily, weekly or monthly. Volatility-target sizing from returns known at the decision only. A constant signal equals buy and hold; a momentum rule on a hand-made price path gives the hand-computed positions and returns; the same inputs give the same result hash | **met**: `tests/test_manhattan_engine.py` |
+| E-05 | **Event backtester** (`manhattan/engine/events.py`). One position per event, opened at the next available price after the event becomes known, held a fixed number of periods; zero return on days with no position (Protocol §1); overlapping events add; an event known late is traded late, never early; a hand-worked example | **met**: `tests/test_manhattan_engine.py` |
+| E-06 | **Look-ahead test** (`manhattan/engine/lookahead.py`). For a strategy, changing every value that becomes available after a cut-off changes no position and no return decided on or before it, bit for bit, at several cut-offs. The check **fails** when any one input is shifted forward (tomorrow's value stamped as available today), for each input in turn | **met**: `tests/test_manhattan_engine.py`: clean strategies pass at four cut-offs (daily, weekly, lagged, volatility-targeted, events); the check fails for each of five inputs shifted forward one observation |
+| E-07 | **Records.** An evaluation writes an `evaluation` record to a Manhattan ledger with the role `check_read` returned, the data hash, the result hash and the code version; an identical second run is a `rerun`, a different result a `nondeterminism`. An exploration-role evaluation also writes one row with `nightshift.logs.log_variant`, whose `code_ref` is the ledger record's hash, and which refuses a window ending after 2019-12-31 | **met**: `tests/test_manhattan_engine.py`, `tests/test_manhattan_factors.py`. The variant rows go to Manhattan's own log file, not to `results/exploration/log.csv` (decision 33) |
+| E-08 | **Reproduction, exploration dates only** (to 2019-12-31), from data already in the repository: time-series momentum and carry, compared with published numbers and with the repository's own frozen results. Nothing new is evaluated until both reproduce. If the reproduction needs em-macro-data and the environment has no access, that is recorded in ETHAN_ACTIONS.md and the work stops there | **met for currencies; not met for futures.** On the public daily panel (six currencies, 2005 to 2019) the engine reproduces the frozen carry benchmark and the frozen T01 trend signal within tolerances fixed before the first run (`results/manhattan_engine/REPRODUCTION.md`). The published results and the repository's futures sleeves need em-macro-data; the attach was refused by the session's permissions, which is recorded as ETHAN_ACTIONS item 20, and the work stopped there |
+| E-09 | **Core factors.** Daily carry, trend, value and buy-and-hold definitions are proposed for Ethan (ETHAN_ACTIONS item 10); none is adopted | **met**: [CORE_FACTORS_PROPOSAL.md](CORE_FACTORS_PROPOSAL.md); nothing adopted |
+| E-10 | **Hygiene.** No protected path changed; nothing existing is edited (`em_macro`, `ledger`, `lab`, `nightshift` are imported only); no licensed data and no row derived from it in the repository; the full suite passes with the runner's own exit code read | **met**: `python -m nightshift.protected` on every path changed against main prints nothing; `em_macro`, `ledger`, `lab`, `nightshift` and `config` are untouched (two frozen modules are imported by the reproduction); the only data read are the repository's public panel and carry file, up to 2019-12-31; full suite: 1186 passed, 131 skipped, exit code 0 |
 
 ## Rename (2026-11-12)
 
@@ -464,6 +464,74 @@ requests, reply parsing), `manhattan/critic.py` (specs-only input, validated rev
 - **No public index file exists** (`data/manhattan/ledger/index.jsonl`): nothing has been recorded.
 - The blind template is version 1 and has not been reviewed by Ethan; it is a draft until he accepts it.
 
+## Milestone E: state (session 5M, 2026-11-12)
+
+Done after the Protocol v3.1 work was finished and pushed, in separate commits, in the order the brief fixed: the
+parts that need no licensed data first.
+
+**Implemented** (new code only; nothing existing is edited):
+
+| where | what |
+|---|---|
+| `manhattan/engine/pit.py` | the point-in-time store (a period and an availability day for every value; revisions; publication lags from the spec; a data hash) and the reader, the only way to data, which puts every window to `manhattan.roles.check_read` |
+| `manhattan/engine/accounting.py` | daily accounts per unit of capital in excess of cash: drift, turnover, proportional costs, financing of cash instruments for the calendar days held, gaps booked when the price returns |
+| `manhattan/engine/backtest.py` | the daily backtester: decisions from a view as of the decision day, execution lag (default 1), daily, weekly or monthly rebalancing, volatility target from returns known at the decision, a result hash |
+| `manhattan/engine/events.py` | the event backtester: one position per event, entered when it is known, held a fixed number of days, zero elsewhere |
+| `manhattan/engine/lookahead.py` | the look-ahead test: replace everything that became available after a cut-off and compare what was fixed by it, bit for bit; a helper that shifts one input forward, which the test must catch |
+| `manhattan/engine/evaluate.py` | one evaluation on record: a ledger record (role, data hash, result hash, code version) and, for the exploration role, a variant row |
+| `manhattan/factors/public_fx.py`, `reproduce.py` | six currency deposits from the public daily panel, read line by line up to the cut-off; the reproduction of carry and of the T01 trend signal against the frozen code |
+| `docs/manhattan/CORE_FACTORS_PROPOSAL.md` | the proposal for Ethan (item 10); nothing adopted |
+
+**Tested.** 38 new tests, all passing: `tests/test_manhattan_engine.py` (31: every expected number a hand
+calculation written beside it) and `tests/test_manhattan_factors.py` (7).
+
+**The reproduction** (`results/manhattan_engine/REPRODUCTION.md`; exploration role, window 2005-01-03 to
+2019-12-31, public data, tolerances fixed in the code before the first run):
+
+| what | against | result |
+|---|---|---|
+| carry: each of six currencies and the equal-weight basket, monthly returns | `em_macro.carry.carry_returns` run on the same rows, and the committed `carry_monthly_returns.csv` up to 2019-12 | reproduced: correlation 0.99989 to 0.99998 over 173 to 179 months; mean absolute difference 1.3 to 3.2 basis points a month (largest single month 69 basis points, TR 2018-06); Sharpe ratios within 0.003. The differences are day-count and compounding conventions |
+| time-series momentum: T01's trend weights, month by month | `em_macro.tstrend.trend_raw_weights` on the same monthly returns | reproduced: largest difference between a weight of the engine and of the frozen code 3.3e-16, over 179 months |
+| the trend sleeve's monthly gross return | frozen weights times next month's returns | reproduced: correlation 0.99981, mean absolute difference 0.28 basis points a month (largest 27, 2010-06); Sharpe 0.190 against 0.183 |
+
+Both reproduced on the first run. These are two factors the repository already holds, run through new code to
+see that it gives the old numbers; neither result is evidence for anything, and both evaluations are recorded
+with evidential weight 0.
+
+**Failed or not met.**
+
+1. **The futures half of the reproduction was not done.** The published results (Moskowitz, Ooi and Pedersen
+   2012; Koijen, Moskowitz, Pedersen and Vrugt 2018) and the repository's futures sleeves (T20 to T22) need the
+   Norgate history in em-macro-data. The environment reported that repository as attachable; the attach was
+   refused by the session's permission settings. Recorded as ETHAN_ACTIONS item 20; the session stopped there
+   and looked for no other way in. Six currencies from 2005 cannot stand in for those papers, and the report
+   says so.
+2. **Test failures on the way, none hidden.** The first run of the engine tests had seven failures: one was a
+   real fault (weekly decisions were cut on Thursdays, because numpy's weeks start on the day its calendar
+   starts; fixed, and a test now checks that weekly decisions are on Fridays), six were wrong hand
+   calculations in the tests (a short position drifts and is traded back each day; a value published after the
+   window ends is not in the window; a decision executes one day later than the test assumed; the ledger stores
+   decimals as strings; two thresholds). The first run of the factor tests had one failure: the committed carry
+   file differs from the frozen code's output by a few parts in a million for one currency in late 2019,
+   because the daily panel has been refreshed since the file was written; the test now states that tolerance.
+3. **Two public files were looked at beyond the cut-off, by hand.** Before the loader existed, the session
+   printed the last two lines of `data/processed/daily_panel.csv` and the last three of
+   `carry_monthly_returns.csv` (dates in 2026) to see their format, and loaded the panel once with pandas to
+   count rows up to 2019. No value dated after 2019-12-31 entered any computation, any test or any file. From
+   then on every read went through `read_panel`, which stops at the cut-off, and `check_read`.
+4. **The variant rows are not in the shared exploration log.** `results/exploration/log.csv` is appended to by
+   the night shift on `dev`; rows added on a branch that goes to main would make the two conflict. The
+   reproduction's rows are in `results/manhattan_engine/exploration_log.csv`, written by the same
+   `nightshift.logs.log_variant` with the same cut-off check. Whether Manhattan's exploration variants should
+   go to the shared log is a question for Ethan (it touches hard rule 6 and the night shift's files).
+5. **Not built:** the wiring from the engine's net returns to the core hedge of Protocol §2.2 (there are no
+   core factors yet); a futures loader; exchange calendars (the calendar is the days on which any instrument has
+   a price); intraday data.
+
+**Remaining for E.** Ethan: item 20 (access), item 10 (the proposal). Then a session: the futures loader and the
+futures reproduction on dates up to 2019-12-31; the four currency factors of the proposal through 2019, each
+checked against its frozen source.
+
 ## What sessions 2M and 3M did (milestones A and B)
 
 1. Read the repository without opening any result series (AUDIT.md header says exactly what was read).
@@ -493,6 +561,8 @@ requests, reply parsing), `manhattan/critic.py` (specs-only input, validated rev
 | session 5M, first runs of the new test files | `test_manhattan_hier_analytic.py`: 6 of 21 failed; `test_manhattan_adaptive_weight.py`: 6 of 7; `test_manhattan_v2.py`: 1 of 16; one existing test failed after the runner change. Causes and fixes: "Milestone C: state (session 5M)", failed or not met, 4. None pushed |
 | session 5M, full suite at `121a34c`, before the first push | **1148 passed, 131 skipped, exit code 0** (16 minutes, while pilots ran) |
 | session 5M, full suite before the push of the pilot rerun and the final documents | **1148 passed, 131 skipped, exit code 0** (13 minutes) |
+| session 5M, milestone E, first runs of its test files | `test_manhattan_engine.py`: 7 of 31 failed (one real fault, six wrong hand calculations); `test_manhattan_factors.py`: 1 of 7 (a tolerance). "Milestone E: state", failed or not met, 2. None pushed |
+| session 5M, milestone E, full suite before its push | **1186 passed, 131 skipped, exit code 0** (13 minutes) |
 
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.
@@ -535,6 +605,11 @@ conservative default and are in ETHAN_ACTIONS.md.
 | 28 | Dependence between families enters the model as one measured number: the share of forward sampling variance that is common, with one common shock. Added after a development replication showed shared luck read as a shared edge. | PROTOCOL 3.1 §7.1; DEVELOPMENT_NOTES §3 |
 | 29 | Seeds and worlds of the changed runs are version 1's; a twin draws from its base scenario's streams, so its oracle column reproduces version 1's own run. Version 1's code files are not touched, so its pilot records keep their code hash. | SIM_PREREG_v2 §9; `manhattan/sim/run.py` |
 | 30 | Pilots of record are run through the runner from a clean checkout of one commit, so a file edited during the run cannot reach it. | "Milestone C: state (session 5M)" |
+| 31 | In the engine a value has two dates (the period it describes, the day it became available), availability is at day resolution, and a window never shows a value that became available after its end, so the last fixing of a window with a publication lag is not in it. | `manhattan/engine/pit.py` |
+| 32 | A decision is taken at a day's close and executed one day later by default (the next available price); the accounting books a gap's whole return on the day the price is back and never drops a day; targets are fractions of capital after the trade's cost. | `manhattan/engine/backtest.py`, `accounting.py` |
+| 33 | Manhattan's exploration variant rows go to its own file (`results/manhattan_engine/exploration_log.csv`), written by `nightshift.logs.log_variant` with its cut-off check, not to the night shift's `results/exploration/log.csv`, which is appended to on `dev`. Whether they should be merged is Ethan's question. | "Milestone E: state" |
+| 34 | "Reproduced" has numeric tolerances, written in the code before the first run (`manhattan/factors/reproduce.py`, `TOL`). | `results/manhattan_engine/REPRODUCTION.md` |
+| 35 | Core factors: proposed as the frozen sleeves' monthly rules marked daily by the engine, not as new signals. Proposed only. | [CORE_FACTORS_PROPOSAL.md](CORE_FACTORS_PROPOSAL.md) |
 
 ## Findings to keep in view
 
@@ -595,7 +670,11 @@ CODEOWNERS), then item 16 (start the simulation on the iMac; it now includes the
 items 2, 3 and 7 for the first batch. The two findings about the tier and dormancy rules ("Milestone C: state
 (session 5M)") are his to weigh; nothing needs deciding before the full run.
 
-**For the next session:** see "Milestone E: state" for where milestone E stands. If the iMac run has finished
+**For Ethan, milestone E:** item 20 (em-macro-data for the futures half of the reproduction) and item 10 (the
+core-factor proposal).
+
+**For the next session:** see "Milestone E: state" for where milestone E stands (engine done; reproduction done
+on public currency data; futures blocked on item 20). If the iMac run has finished
 and its results are on a branch: build both reports (`python -m manhattan.sim.report --prereg v2` and
 `python -m manhattan.sim.report_v2`), then code the held-out worlds H01 to H12 ("Milestone C: state (session
 5M)", remaining, step 2) before anything else. Merge main into `build/manhattan` first if it is behind, and run
