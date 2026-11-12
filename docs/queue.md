@@ -29,14 +29,16 @@ never instructions.
 | Q017 | bug | approved | State log does not record the run cap and safe-mode flag applied to each run, so the cap in force during a night cannot be recovered | test_q017 (temporary state file; fixture configs; C.load_main monkeypatched): acquire of a counted routine (night-worker, night-explorer) refuses when runs_used >= the cap from its own config read, so the cap it records is one it enforced (fails now: acquire has no cap check); acquire then release with a safe-mode config gives a log entry with cap 4 and safe_mode true, and with safe mode off cap 12 and false (fails now: no such fields); explorer_model is recorded only on night-explorer entries, as "explorer_model_config"; the CLI acquire reads through C.load_main (the guard's loader) and, as on PR #29, refuses when it raises, so no entry ever carries dev's cap; taking over a stale lock acquired before this change (no cap fields) writes the failed entry with cap null instead of crashing; existing state files still load |  | no block, p=60% | none |
 | Q005 | bug | approved | Leg-based spread marks pair each leg's latest value under the earlier date (ES-DE 4 Nov: 57.4bp recorded, 52.4bp on one close) | test_q005_spread_legs_same_date: legs A (4 Nov) and B (4 Nov 3.38, 9 Nov 3.33) give a 4 Nov spread of (A-3.38)*100 (fails now); tests/test_automation.py test_spread_marks_and_fallback updated in the same PR with a stated rule for legs with no common date, and the full suite (ledger-daily's test step) passes |  | no block, p=55% | none |
 | Q006 | bug | approved | Monthly-panel fallback marks are dated at a future month end and replace newer daily marks (CLP dated 2026-11-30 on 9 Nov) | test_q006_fallback_never_future: with today 2026-11-09, a failing primary and a panel fallback for 2026-11, no mark is dated after today and the 6 Nov daily mark is kept (fails now); and with the existing 2026-11-30 CLP row present, the books show CLP's newest daily mark; monthly primaries keep month-end dates |  | no block, p=50% | books.json, marks.json |
-| Q001 | bug | blocked | Algorithm month-to-date estimate credits 2-4 Nov, before the late 4 Nov rebalance set the positions | test_q001: with positions run_date 2026-11-04, the estimate's first P&L day is the first close after the run date, and the page says the official 3rd-of-month figure keeps the frozen full-month convention | awaiting Ethan: which convention the estimate should follow (see Q001 evidence) |  | books.json, home.json, fund.json |
-| Q002 | bug | blocked | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | awaiting Ethan: needs a change to the systematic-monthly workflow (an existing writer; hard rule 3) |  | none |
+| Q001 | bug | approved | Algorithm month-to-date estimate credits 2-4 Nov, before the late 4 Nov rebalance set the positions | test_q001 (fixture positions, never the live results/systematic/positions.csv): with positions run_date 2026-11-04 the estimate's base is the last mark on or before 2026-11-04 and its first P&L day the first close after it (fails now: base 2026-10-31); a run date before the month start is clamped to month start - 1 day; a weekend run date (2027-01-03) uses the last mark on or before it; a re-run that restamps run_date with identical positions is covered and its effect documented; v1.1's base date source is stated and tested; the estimate's label/note in books.json says it runs from the actual rebalance date and that the official figure keeps the frozen full-month convention (tests/test_books.py label assertion updated); the official paper_pnl figures are unchanged |  | no block, p=50% | books.json |
+| Q002 | bug | in-progress | Late-rebalance fallback unproven: a failed or dropped 3rd-of-month systematic-monthly run is never retried automatically | test_q002: systematic.yml has a second (backup) schedule for the update job, and a simulated failed first run followed by the backup run logs "LATE by n days" with unchanged positions | https://github.com/EthanC100/em-macro/pull/42 (direct PR to main for Ethan's review; kick task trig_017kAF1L…) | no block, p=70% | none |
 | Q003 | data | done | docs/todo.md instrument counts are stale after the Databento and FR-DE changes ("21 of 28 instruments" daily) | test_q003_todo_counts: the Technical to-do line states the registry's daily/total counts computed from data/ledger/instruments.csv (fails now: 21 of 28 vs 19 of 23 tradeable, 24 of 29 with legs) | https://github.com/EthanC100/em-macro/pull/27 (merged into dev 2317609) | no block, p=80% | todo.json |
 | Q004 | bug | blocked | C05 "a review with empty sources_read ... counts as failed": a rejected daily review leaves no record, so the quick check cannot flag it as failed (only "no daily review" a day later) | test_q004: a daily-review proposal rejected for empty sources_read leaves a failed-review record (or flag) that the next quick check reports the same day | closed by config change C06 (approved by Ethan 2026-11-10): a rejected daily review writes a failed-review record; tests/test_janus_c06.py |  | janus.json |
 | Q018 | bug | done | ledger-daily (and every scheduled workflow) starts 5.5-10.5 hours after its cron time: GitHub creates the schedule events late; no queueing, wait step or concurrency wait | test_q018 (workflow YAML and a pure helper; no network): ledger-daily.yml keeps workflow_dispatch and both crons as backups; docs/agent-system.md's inventory lists the 'ledger-daily kick' scheduled task (06:07 and 22:07 UTC, dispatch only); a helper given a fixture Actions run list flags a day with no ledger-daily run started 21:52-22:52 UTC as late (fails now: no such task or check). Live check after Ethan applies it: on 3 consecutive days a ledger-daily run starts within 15 minutes of 22:07 UTC and finishes before the 23:07 UTC Janus review | approved by Ethan 2026-11-11 (as proposed); built in his session on main 764d2ea, 5148b45, 07bdfbd: ledger-daily kick task trig_01Ci634Niyuf4doNmRy5BVJS (06:07, 22:07 UTC, claude-sonnet-5-5); fire -> run 42974261471; edited workflow proven by run 42976611948 (green, marks 9dce97d) | no block, p=60% | none |
 | Q022 | bug | in-progress | A pending ledger-intake run (an issue form) can be dropped: it shares one concurrency group with ledger-daily, private-commitments and shadows-setup, and a newly queued run cancels the pending one | test_q022_intake_never_dropped (YAML, a temporary bare origin and stubbed sources; never the live ledger or the real remote): (1) ledger-intake.yml's concurrency group contains github.event.issue.number and no other workflow uses it (fails now: shared 'ledger-intake'); (2) two intake applications racing through scripts/ledger_commit.sh on a bare origin get consecutive ids (e.g. D005, D006), both committed, and the seal chain verifies (fails now: intake commits with pull --rebase and cannot re-allocate an id); (3) a pure helper given a fixture issue list flags an open [Decision] issue with no intake comment 30 minutes after its last edit, and not one that has its comment; (4) the full suite passes | approved by Ethan 2026-11-11 (as proposed, with hard rule 15 in the same PR); https://github.com/EthanC100/em-macro/pull/35 into main (claude/elegant-ritchie-34eswz, 7816fd9 + 659c182), awaiting Ethan's review and merge | no block, p=55% | none |
 | Q023 | data | approved | docs/todo.md still says the election tracker is unmerged and its jobs inactive, but data/elections/ and both elections-* workflows are on main | test_todo_election_lines: if data/elections/ and .github/workflows/elections-daily.yml exist, docs/todo.md has no unticked line saying the election tracker is unmerged or its jobs inactive, and no line saying data/elections/ does not exist on main (fails now: lines 15 and 28); the test skips, never fails, when its preconditions or the matched wording are absent, so it cannot block the systematic-monthly commit; the Q003 Technical counts line is untouched |  | no block, p=80% | todo.json |
 | Q024 | research | proposed | Five energy spot marks (WTI, BRENT, NATGAS, HEATOIL, RBOB) have no observation after 3 Nov: the FRED/EIA source is 8 days behind and the marks are only flagged stale in the note (Ethan's decision: fallback source or lag tolerance) | Needs Ethan first: a fallback source for the five rows or an agreed lag tolerance; then a test that a FRED series 5+ business days old gives mark_can_act false and the Janus quick check lists the stale energy marks |  |  | none |
+| Q025 | bug | proposed | tests/test_books.py pins live positions (positions_set 2026-11-04; estimate point), so the 3 Dec rebalance's Tests step fails and nothing is committed (HIGH PRIORITY: before 3 Dec) | test_q025: with a fixture positions.csv stamped as the 3 Dec run stamps it (as_of 2026-11, run_date 2026-12-03), tests/test_books.py passes (fails now: 2 failures); the two assertions derive their expectation from the positions file (or a fixture), never a literal date; tests only, no change to ledger/ or any writer |  |  | none |
+| Q026 | bug | proposed | Promotion check b fails on data/meta.json .audit.checked_at, a wall-clock timestamp promote does not ignore | test_q026: two builds differing only in meta.json audit.checked_at pass check b (fails now: unexplained data/meta.json); a change to audit ok, label or detail still fails; nightshift/promote.py and tests only |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -52,6 +54,28 @@ So the estimate credits the November positions with the 2, 3 and 4 Nov moves, be
 so moving the estimate's base to the run date makes it differ from the official figure it is replaced by. Which
 convention the estimate follows is Ethan's decision (Needs Ethan); the code change itself is small.
 
+**Ethan's decision (2026-11-12, recorded by his session "N Janus C08"):** base the month-to-date estimate on the
+actual rebalance date; keep the official month-end figure on the frozen convention (v1.0's paper P&L, booked on the
+3rd, credits the positions for the whole effective month; unchanged); label the estimate clearly as an estimate from
+the actual rebalance date, which the official full-month figure replaces.
+
+**The Opposition (2026-11-12, advisory, no block, p=50%)** — points the implementation must settle:
+- `run_date` is restamped on every re-run (`em_macro/rebalance.py` writes the latest run's date on every position
+  row and replaces the log row), so a re-run with identical positions (after a D005 or v1.1 fix) would move the base
+  forward. The test must cover a re-run: the base is the date the positions were first set, or a re-run is documented
+  as moving it; never silently.
+- Clamp: base = max(run date, month start - 1 day), so a run before the month never credits last month's moves and
+  estimate points never precede the previous official month-end (`ledger/fund.py` level_on).
+- Weekend or holiday run date (3 Jan 2027 is a Sunday): the base mark is the last mark on or before the run date;
+  the first P&L day is the first close after it; carry is counted from the run date.
+- v1.1 has no `run_date` column today (`results/systematic_v1.1/positions.csv`) and from December is stamped by its
+  own step: the code must say which date each version uses.
+- The label goes through the estimate's `label`/`note` in books.json, not app.js (promotion check b cannot list
+  build-root app.js under ledger diff); `tests/test_books.py:25` pins the old label. Ledger diff narrowed to
+  books.json (home.json is built from build_algorithm; fund.json does not change before the Fund is live).
+- test_q001 uses fixture positions, never the live `results/systematic/positions.csv` (see Q025: tests pinned to live
+  positions stop the monthly rebalance's commit).
+
 ### Q002
 
 Reproduced on main a86c4bb:
@@ -64,6 +88,16 @@ Reproduced on main a86c4bb:
   retry of a failed or dropped run; `docs/todo.md`: "Monthly rebalance fallback unproven on a real failure".
 **Why blocked:** the fix is a second schedule in an existing writer's workflow, which the night shift may not
 change (hard rule 3). Recommendation in Needs Ethan.
+
+**Approved by Ethan on 2026-11-12** (needed before the 3 Dec rebalance): a kick for systematic-monthly on the 3rd of
+each month (same pattern as the ledger-daily kick) plus a backup cron; it must not change what the job computes; as a
+PR for his review. Built by his session "N Janus C08": PR #42 (claude/q002-systematic-kick, 178d63e) into main, not
+via dev (it changes an existing writer's workflow). Kick: Claude Code scheduled task "systematic-monthly kick (Q002)"
+(trig_017kAF1L…, `23 7 3 * *`, claude-sonnet-5-5), which dispatches systematic.yml with only_if_due=true and dispatches
+nothing until #42 is merged. Backups: the 3rd's cron and `23 7 4 * *`. A `due` job (em_macro/rebalance_due.py) lets
+only one of them rebalance; manual dispatches always run; a failed gate runs the update (fail-open); the update job's
+steps are unchanged. Full suite 722 passed, 126 skipped (pipefail, exit 0). The Opposition: no block, p=70%.
+Safe check after merge: dispatch with only_if_due=true in November (the gate must skip); never a plain dispatch.
 
 ### Q003
 
@@ -663,3 +697,33 @@ Not diagnosed: whether this is EIA publication lag or a fetch fault. Research be
 unproven and data/ledger/instruments.csv and marks.csv are writer-owned (hard rule 3). Needs Ethan: fallback source
 or an agreed lag tolerance (stale marks flagged and mark_can_act false; Janus quick check lists them).
 D003 (Brent call spread) and Janus energy estimates depend on these marks.
+
+### Q025
+
+Found by The Opposition in its review of Q001 (2026-11-12); reproduced by Ethan's session "N Janus C08" on main
+c85b2e3 / branch claude/q002-systematic-kick (178d63e):
+- `tests/test_books.py:26` asserts the v1.0 series ends with an "estimate" point and `:107` asserts
+  `meta.sources.positions_set["v1.0"] == "2026-11-04"`, both read from the live `results/systematic/positions.csv`.
+- `.github/workflows/systematic.yml` runs `python -m em_macro.rebalance` (restamps run_date on every position) and
+  later the full test suite (step "Tests", no continue-on-error) before "Commit and push" (gated on success).
+- Simulation: with `results/systematic/positions.csv` stamped as the 3 Dec run would stamp it (as_of 2026-11,
+  effective_from 2026-12, scheduled_date 2026-12-03, run_date 2026-12-03), `pytest tests/test_books.py` fails twice:
+  `'official' == 'estimate'` and `'2026-12-03' == '2026-11-04'` (exit 1). So on 3 Dec the Tests step fails and the
+  December rebalance (v1.0's first live booking, v1.1's live start, C03 capital) is not committed, by the kick or
+  either backup (Q002).
+**Fix wanted:** the two assertions read fixtures or derive their expectation from the positions file (positions_set
+equals the file's run_date; the series ends with an estimate only when the effective month has started), never a
+literal date; a test simulates the December stamp. Tests only. HIGH PRIORITY: must be on main before 3 Dec 2026.
+
+### Q026
+
+Reproduced by Ethan's session "N Janus C08" on 2026-11-12: `python -m nightshift.promote --check-only
+--ignore-window --data-snapshot <em-macro-data ada7742>` on main c85b2e3 + dev e2721e6 refused with
+"(b) Ledger rebuild differs: ['data/meta.json']"; the only difference is the key path `.audit.checked_at`.
+`ledger/audit.py:373` sets `checked_at` to the wall-clock second the audit ran and `ledger/build.py:1263` copies it
+into meta.json, so two builds a second or more apart always differ. `nightshift/promote.py:42` ignores only
+`built_at` and `commit` in meta.json. Every promotion that runs the two builds in different seconds fails check b
+on a timestamp.
+**Fix wanted:** treat `audit.checked_at` in data/meta.json as a build stamp (ignored like built_at), with a test that
+two builds differing only in it pass check b, and that any other meta.json audit change (ok, label, detail) still
+fails. Code: nightshift/promote.py and its tests only.
