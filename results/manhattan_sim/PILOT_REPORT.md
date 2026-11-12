@@ -1,6 +1,6 @@
 # Manhattan simulation: PILOT report (nothing here is decided)
 
-Written 2026-11-12 11:45 UTC by `python -m manhattan.sim.report`. **Synthetic data only: nothing in this file is market evidence.**
+Written 2026-11-12 12:21 UTC by `python -m manhattan.sim.report`. **Synthetic data only: nothing in this file is market evidence.**
 
 - Pre-registration: `docs/manhattan/SIM_PREREG.md`, SHA-256 `e4bbcc44bebbc601b8bccc0e609131ad5185982f3047108dfaaf2fe2908c21e6` (never edited).
 - Method under test: `docs/manhattan/PROTOCOL_v3.md` 3.0.0, SHA-256 `4fbb5c72ad7214710aea7417fbf2fe131edb56f4eb83bffccac97478472f3a9f` (the pre-rename hash named in SIM_PREREG.md is the same text before the project was renamed).
@@ -842,5 +842,6 @@ From `results/manhattan_sim/runs.jsonl` (start and end records; a start with no 
 | 2026-11-12T11:42:10Z | a29f7f5b22a9 | end | D01 | LONG | pilot | - | 6/6 | completed | `ce4c5d6` (dirty) |
 | 2026-11-12T11:42:10Z | a31f35cd23e7 | start | D02 | LONG | pilot | - | 0/6 | started | `ce4c5d6` (dirty) |
 | 2026-11-12T11:44:58Z | a31f35cd23e7 | end | D02 | LONG | pilot | - | 6/6 | completed | `ce4c5d6` (dirty) |
+| 2026-11-12T12:20:57Z | bc0cc650c09e | note | D10 | HB | pilot | - | 0/1 | stopped | `7656ad9` |
 
 Held-out runs refused: 0. Held-out runs made: 0.

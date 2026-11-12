@@ -237,14 +237,18 @@ not change. Until then the text stands and the code follows it.
   and an effective sample size near 1. The code now samples the same model in other coordinates (exact changes of
   variable), which fixes that. This is a change of sampling coordinates, not of the model.
 - **Cost.** After that fix and a seven-fold speed-up of the likelihood, one gradient at HB size (240 families)
-  costs about 0.8 ms, every iteration uses the sampler's full 127 steps, and one fit of 4 chains with 1,000
-  warm-up and 1,000 kept draws is about 14 CPU-minutes. A review needs six fits and a replication four reviews:
-  about **4.5 CPU-hours per replication**. SIM_PREREG fixes 400 replications for each of 12 HB scenario runs
-  (5 development, 7 held-out): about **20,000 CPU-hours**, or over three months of an 8-core iMac running day
-  and night. A replication count may not be lowered by amendment (SIM_PREREG §8.4).
+  costs about 0.8 ms and an iteration uses at least the sampler's 127 steps. From that, one fit at the default
+  budget (4 chains, 1,000 warm-up, 1,000 kept draws) should take about 14 CPU-minutes and a replication (four
+  reviews of six fits) about 4.5 CPU-hours. **The measured run was worse:** one pilot replication of D10 with
+  the sampler at a fifth of the default budget (200 and 200) was stopped unfinished after 2 hours 31 minutes of
+  CPU time. At the default budget a replication therefore costs well over 10 CPU-hours. SIM_PREREG fixes 400
+  replications for each of 12 HB scenario runs (5 development, 7 held-out): **of the order of 50,000 CPU-hours
+  or more**, most of a year of an 8-core iMac running day and night. A replication count may not be lowered by
+  amendment (SIM_PREREG §8.4).
 - **The convergence gate.** Protocol §7.2(c) asks `R̂ ≤ 1.01` for **every** parameter (about 1,500 at HB size)
-  and an effective sample size of at least 400. The pilot's diagnostics at a reduced budget are in
-  `results/manhattan_sim/PILOT_REPORT.md`; whether the default budget meets the gate at full size is not known.
+  and an effective sample size of at least 400. On small test problems with short chains the gate fails, as it
+  should; whether the default budget meets it at full size is **not known**, because no full-size fit at the
+  default budget was completed.
 
 **Default in force.** Nothing that rests on the model is switched on: no posterior-based tier ("Promising" by
 route (b), "Statistically supported"), no dormancy, no calibration claim (SIM_PREREG §8.1 rule 2). The screening
@@ -254,7 +258,7 @@ route and the forward test do not depend on it and can go ahead (item 16).
 
 | option | what it means | cost |
 |---|---|---|
-| (a) buy compute | run the HB scenarios as pre-registered on rented machines (about 20,000 CPU-hours) | spending: an unverified order-of-magnitude guess is a few hundred to a thousand US dollars of rented core-hours; price it before deciding; your call (item 8) |
+| (a) buy compute | run the HB scenarios as pre-registered on rented machines (of the order of 50,000 CPU-hours or more) | spending: not priced; at that many core-hours it is likely thousands of US dollars; price it before deciding; your call (item 8) |
 | (b) pre-registration version 2 for the HB part | fewer replications or fewer review dates for V6-V8, written before any HB confirmation run. No HB criterion has been evaluated, so no pass is voided; the STD and LONG part is untouched | none; lower precision than 1.0 promised |
 | (c) protocol 3.1: a cheaper model | for example one fit per review with the sensitivity versions by importance re-weighting, or a gate on the quantities actually used (`θ_f` and the hyperparameters). A new version, then the simulation on it | none; more design work first |
 | (d) wait | run STD and LONG now (item 16); decide after seeing whether the screening and forward routes alone give you what you want | none |

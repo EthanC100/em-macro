@@ -8,8 +8,8 @@ State of the work and what the pilot showed: [MANHATTAN_PROGRESS.md](MANHATTAN_P
 
 | part | ready? | size of the job |
 |---|---|---|
-| Development scenarios at **STD and LONG** (18 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | **yes** | about 60-150 seconds per replication on one core; about **1,000 CPU-hours** in all (about 5 days on 8 cores). The pilot report gives the measured seconds per run |
-| Development scenarios at **HB** (5 runs × 400 replications): the hierarchical model, tiers, dormancy | code runs; **cost is out of reach as specified**, see section 6 | hours per replication |
+| Development scenarios at **STD and LONG** (18 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | **yes** | about 60-150 seconds per replication on one idle core; about **1,000 CPU-hours** in all (about 5 days on 8 cores). The pilot report gives the seconds measured on a busy machine, which are higher |
+| Development scenarios at **HB** (5 runs × 400 replications): the hierarchical model, tiers, dormancy | code runs; **cost is out of reach as specified**, see section 6 | well over 10 CPU-hours per replication |
 | Held-out scenarios (H01-H11) and the confirmation run | **no**: their worlds are not coded, and they may run only from a tagged commit after the development criteria are met | - |
 
 ## 2. Set up once
@@ -68,14 +68,15 @@ fail.
 
 ## 6. The HB runs: read before starting
 
-One fit of the hierarchical model at HB size (240 families) takes tens of minutes of one core, a review needs
-six fits, and a replication has four reviews. At the pre-registered 400 replications per scenario that is tens of
-thousands of CPU-hours for the development scenarios alone. The measured numbers and the options are in
+One fit of the hierarchical model at HB size (240 families) takes many minutes of one core, a review needs
+six fits, and a replication has four reviews. A pilot replication with the sampler at a fifth of the default
+budget was stopped unfinished after 2.5 CPU-hours, so at the pre-registered 400 replications per scenario the HB
+runs cost of the order of 50,000 CPU-hours or more. The measured numbers and the options are in
 [ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 15. Until that is decided, run `SIZES=STD,LONG` only. To see the HB
 pipeline work on a small budget (a pilot that decides nothing):
 
 ```bash
-MANHATTAN_SIM_SAMPLER=150,150 SIZES=HB REPS_HB=1 LABEL=pilot scripts/manhattan_sim_run.sh
+MANHATTAN_SIM_SAMPLER=100,100 SIZES=HB REPS_HB=1 LABEL=pilot scripts/manhattan_sim_run.sh     # still hours
 ```
 
 ## 7. What every run records
