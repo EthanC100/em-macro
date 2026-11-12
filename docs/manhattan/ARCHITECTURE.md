@@ -5,6 +5,13 @@ from a hash check and a config loader, nothing described here is built yet. Stat
 [PROTOCOL_v3.md](PROTOCOL_v3.md); what exists today is in [AUDIT.md](AUDIT.md); decisions that are Ethan's are in
 [ETHAN_ACTIONS.md](ETHAN_ACTIONS.md).
 
+**Built since this was written (session 4M, 2026-11-12; details in MANHATTAN_PROGRESS.md).** Components 1, 5 and 7
+(`manhattan/spec.py`, `roles.py`, `ledger.py`), the request and checking halves of components 2 to 4
+(`manhattan/generate/`, `critic.py`, `freeze.py`), the methods of component 9 (`manhattan/stats/`) and
+component 10 (`manhattan/sim/`). One change to the layout below: the statistical methods live once, in
+`manhattan/stats/`, and the simulation calls them, so there is no second "reference" copy to compare with.
+Nothing is in force: no batch is frozen, no model is called, and `claims.enabled` is false.
+
 ## 1. What Manhattan is
 
 Manhattan is a research lab that starts from stated mechanisms, not from data. It may run up to 250,000 executable

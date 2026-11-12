@@ -1,0 +1,6 @@
+# Extra requirements of the Manhattan simulation lab (docs/manhattan/ETHAN_ACTIONS.md item 13): the sampler for the
+# hierarchical model of PROTOCOL_v3 section 7. Kept out of requirements.txt on purpose, so that no existing
+# workflow installs anything new. Without it the model tests skip and STD/LONG simulations still run.
+#   pip install -r requirements.txt -r requirements-manhattan.txt
+numpyro>=0.19
+jax>=0.4.30

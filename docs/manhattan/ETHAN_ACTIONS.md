@@ -1,11 +1,13 @@
 # Manhattan: what only Ethan can do
 
-Recorded 2026-11-12. Each item is something no agent may decide or do under the CLAUDE.md hard rules, or cannot do
-from a cloud session. For each: the conservative default now in force, what it blocks, and what to do. Nothing in
-this list was created, changed, bought or switched on by this session.
+Recorded 2026-11-12; updated the same day by session "4M Manhattan C: simulation lab" (items 5 and 13 closed,
+items 14 to 18 added). Each item is something no agent may decide or do under the CLAUDE.md hard rules, or
+cannot do from a cloud session. For each: the conservative default now in force, what it blocks, and what to do.
+Nothing in this list was created, changed, bought or switched on by a session.
 
-Order of urgency: items 13 and 3-4 unblock the next phases; item 8 has a date (about 5 May 2027); the rest can wait
-until the phase that needs them.
+**Order of urgency now:** item 16 (start the simulation on the iMac: it is ready and takes about five days),
+item 15 (decide what to do about the model-fitting half of the simulation: it cannot be run as pre-registered),
+then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (about 5 May 2027).
 
 | # | decision or action | default in force | blocks |
 |---|---|---|---|
@@ -13,7 +15,7 @@ until the phase that needs them.
 | 2 | authority for Manhattan batch freezes under rule 4 | Ethan only (`freeze.authority: ethan_only`) | any freeze |
 | 3 | a separate repository and environment for the blind generator | none exists; nothing is called blind | the blind channel |
 | 4 | iMac setup | no runner | licensed-data evaluations, signed freezes |
-| 5 | protect the frozen Manhattan files | not protected | nothing; a risk |
+| 5 | protect the frozen Manhattan files | **done** (the six lines are in CODEOWNERS on main, `892bd8b`) | - |
 | 6 | confirm the rulesets on main | unknown | nothing; a risk |
 | 7 | critic and generator definitions, routines | none added | the critic's "never sees outcomes" rule |
 | 8 | data licences and spending | no spending | futures history after May 2027; a tool-less generator |
@@ -21,7 +23,12 @@ until the phase that needs them.
 | 10 | core factor definitions | none approved | every hedged return |
 | 11 | Manhattan tests inside the writers' workflows | skip there, fail elsewhere | nothing |
 | 12 | Manhattan and the trial ledger | separate | nothing |
-| 13 | merge this PR; go-ahead and compute for the simulation | not merged | Phase C |
+| 13 | merge the first PR; go-ahead for the simulation | **done** (PR #48 merged; session 4M was the go-ahead) | - |
+| 14 | two wording fixes in PROTOCOL_v3.md | text left as it is | nothing; clarity |
+| 15 | the model-fitting half of the simulation cannot be run as pre-registered | posterior tiers and dormancy stay off | "Statistically supported", dormancy, calibration claims |
+| 16 | run the screening and forward half of the simulation on the iMac | pilot only | choosing the screening method; every claim |
+| 17 | the simulation's sampler in requirements | separate file | nothing |
+| 18 | housekeeping: the pre-rename branch | left in place | nothing |
 
 ---
 
@@ -93,6 +100,9 @@ around it.
 Nothing needs doing before Phase C unless you want the simulation to run on the iMac (item 13).
 
 ## 5. Protect the frozen Manhattan files
+
+**Done.** The six lines below are in `.github/CODEOWNERS` on main (commit `892bd8b`), and
+`python -m nightshift.protected docs/manhattan/SIM_PREREG.md` now prints `PROTECTED`. The text is kept for the record.
 
 **Why Ethan.** `.github/CODEOWNERS` is protected (hard rule 2), so no session edits it. Add these lines to
 `.github/CODEOWNERS` on main, **inside** the protected block: paste them on the line just above
@@ -187,9 +197,105 @@ after T27), and no Manhattan result is called a trial result. If you want Manhat
 
 ## 13. Merge, and the go-ahead for Phase C
 
+**Done.** PR #48 is merged and the simulation code exists (milestone C). What follows from it is in items 15 to 17.
+
 - Merging this PR puts the pre-registration on main. From then on the simulation code may be written.
 - Phase C's confirmation run is about 2,000 replications of about 40 scenario runs plus 400 replications of about
   12 model-fitting runs. Decide where it runs: GitHub Actions (public repository, so results and logs are public,
   which is fine for synthetic data) or the iMac. The hierarchical model needs a sampler (for example `numpyro` or
   `pymc`) that is not in `requirements.txt`; adding it there changes what every existing workflow installs, so the
   design default is a separate `requirements-manhattan.txt`.
+
+## 14. Two wording fixes in PROTOCOL_v3.md
+
+**Why Ethan.** The file is protected, and any change is a new version.
+
+Checking the formulas against the papers (MANHATTAN_PROGRESS.md, "Phase C entry criteria") found **no formula
+error**. Two sentences in §5.1 say slightly more than is true, and Appendix C still says the three formulas are
+"written from memory":
+
+1. "This is the 'consistent' p-value of Hansen (2005)." The recentring is Hansen's; the finite-`B` form
+   `(1 + #{T*_b ≥ T})/(B + 1)` is the protocol's own and is never smaller than Hansen's `#{T*_b > T}/B`.
+   Suggested: "The recentring is that of Hansen's 'consistent' test; the p-value counts ties and adds one, which
+   can only make it larger than Hansen's."
+2. "...and `g(x) = x`, the latter being White's reality check". Suggested: "...and `g(x) = x`, the
+   least-favourable null of White's reality check applied to the studentised statistic".
+3. Appendix C, last paragraph: replace "are written from memory ... must be checked" with the sources and pages
+   now recorded in MANHATTAN_PROGRESS.md.
+
+**Do** (optional, any time before the first batch): make the three edits as version 3.0.1 with a change-log entry
+"wording only; no rule changed". The simulation's results carry over: the code follows the formulas, which do
+not change. Until then the text stands and the code follows it.
+
+## 15. The model-fitting half of the simulation cannot be run as pre-registered
+
+**Why Ethan.** The ways out are spending, a new pre-registration version or a new protocol version. Each is yours.
+
+**What was found (session 4M, measured).**
+
+- **The model as written does not mix.** Sampled directly, the spike-and-slab term `δ_h` gives `R̂` about 3.5
+  and an effective sample size near 1. The code now samples the same model in other coordinates (exact changes of
+  variable), which fixes that. This is a change of sampling coordinates, not of the model.
+- **Cost.** After that fix and a seven-fold speed-up of the likelihood, one gradient at HB size (240 families)
+  costs about 0.8 ms and an iteration uses at least the sampler's 127 steps. From that, one fit at the default
+  budget (4 chains, 1,000 warm-up, 1,000 kept draws) should take about 14 CPU-minutes and a replication (four
+  reviews of six fits) about 4.5 CPU-hours. **The measured run was worse:** one pilot replication of D10 with
+  the sampler at a fifth of the default budget (200 and 200) was stopped unfinished after 2 hours 31 minutes of
+  CPU time. At the default budget a replication therefore costs well over 10 CPU-hours. SIM_PREREG fixes 400
+  replications for each of 12 HB scenario runs (5 development, 7 held-out): **of the order of 50,000 CPU-hours
+  or more**, most of a year of an 8-core iMac running day and night. A replication count may not be lowered by
+  amendment (SIM_PREREG §8.4).
+- **The convergence gate.** Protocol §7.2(c) asks `R̂ ≤ 1.01` for **every** parameter (about 1,500 at HB size)
+  and an effective sample size of at least 400. On small test problems with short chains the gate fails, as it
+  should; whether the default budget meets it at full size is **not known**, because no full-size fit at the
+  default budget was completed.
+
+**Default in force.** Nothing that rests on the model is switched on: no posterior-based tier ("Promising" by
+route (b), "Statistically supported"), no dormancy, no calibration claim (SIM_PREREG §8.1 rule 2). The screening
+route and the forward test do not depend on it and can go ahead (item 16).
+
+**Options.**
+
+| option | what it means | cost |
+|---|---|---|
+| (a) buy compute | run the HB scenarios as pre-registered on rented machines (of the order of 50,000 CPU-hours or more) | spending: not priced; at that many core-hours it is likely thousands of US dollars; price it before deciding; your call (item 8) |
+| (b) pre-registration version 2 for the HB part | fewer replications or fewer review dates for V6-V8, written before any HB confirmation run. No HB criterion has been evaluated, so no pass is voided; the STD and LONG part is untouched | none; lower precision than 1.0 promised |
+| (c) protocol 3.1: a cheaper model | for example one fit per review with the sensitivity versions by importance re-weighting, or a gate on the quantities actually used (`θ_f` and the hyperparameters). A new version, then the simulation on it | none; more design work first |
+| (d) wait | run STD and LONG now (item 16); decide after seeing whether the screening and forward routes alone give you what you want | none |
+
+**Recommendation.** (d) now, then (b) with (c)'s gate change if the middle tiers still matter to you. The first
+batches can run on the screening route and the forward test alone.
+
+## 16. Run the screening and forward half of the simulation on the iMac
+
+**Why Ethan.** It is your machine, and the full run is about a thousand CPU-hours: more than a cloud session can do.
+
+**What exists.** The pilot (12 replications per scenario, labelled as such, deciding nothing) is in
+`results/manhattan_sim/PILOT_REPORT.md`. The full run is packaged:
+
+```bash
+MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh      # resumable; about 5 days on 8 cores
+python -m manhattan.sim.run --status                                 # progress and heartbeat
+```
+
+[SIM_RUNBOOK.md](SIM_RUNBOOK.md) has the set-up, the launchd job and what to do when it finishes. It never runs
+a held-out scenario.
+
+**Do.** Run it, then commit `results/manhattan_sim/` on a branch and open a pull request. The next session then
+codes the held-out worlds and prepares confirmation run 1 (you tag the commit `manhattan-sim-confirm-1`).
+
+**If you would rather not use the iMac:** GitHub Actions is possible in principle (synthetic data, public
+results), but at 6 hours per job it needs about 170 jobs; a workflow is yours to add.
+
+## 17. The simulation's sampler in requirements
+
+`numpyro` and `jax` are in a separate `requirements-manhattan.txt`, so no existing workflow installs anything
+new, and the model tests skip where they are absent. If you want those tests to run in CI, add
+`-r requirements-manhattan.txt` to the pull-request test workflow (a workflow change, so yours). The six-model
+end-to-end test is opt-in (`MANHATTAN_SLOW_TESTS=1`) because it compiles twelve models.
+
+## 18. Housekeeping: the pre-rename branch
+
+The branch the project lived on before it was renamed (its name is in MANHATTAN_PROGRESS.md, "Rename"; it was
+superseded by `build/manhattan` and PR #48) is still on the remote. Agents do not delete branches (hard rule 11).
+Delete it on GitHub's Branches page when convenient.
