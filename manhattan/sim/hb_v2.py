@@ -162,6 +162,16 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
                     dormant_days[cand][f.idx] += t - dormant_since[cand].pop(f.idx)
         if ok:
             rec.update(hb.review_metrics(live, pi_min, fits[0], states, year))
+            # for the report only: among families with a true edge, which model is the most cautious, and how
+            # far the most cautious and the most hopeful are from the central one
+            edge = np.array([f.true >= world.THETA_MIN for f in live])
+            pis = np.array([f.pi for f in fits])
+            rec["binding_edge"] = np.bincount(np.argmin(pis[:, edge], axis=0), minlength=len(fits)).tolist()
+            rec["pi_edge_sum"] = [float(pi_min[edge].sum()), float(fits[0].pi[edge].sum()), float(pis.max(axis=0)[edge].sum())]
+            for cand in pipeline.CANDIDATES:
+                st = [states[cand][f.idx] for f in live]
+                rec[f"edge_dormant_{cand}"] = int(sum(s.dormant for s, e in zip(st, edge) if e))
+                rec[f"edge_supported_{cand}"] = int(sum(s.supported for s, e in zip(st, edge) if e))
         out["reviews"][str(year)] = rec
     end = world.T_END
     for cand in pipeline.CANDIDATES:

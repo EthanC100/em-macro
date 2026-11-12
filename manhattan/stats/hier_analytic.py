@@ -81,6 +81,7 @@ class Spec:
 
 SPECS = (Spec("S0"), Spec("S1", mu_rho=0.15), Spec("S2", mu_rho=0.60), Spec("S3", w=0.25),
          Spec("S4", psi_fixed=1.5), Spec("S5", decay=True))
+ALL_W = tuple(sorted({sp.w for sp in SPECS}))
 PRIORS = {"mu_rho_sd": 1.0, "sigma_rho": 1.0, "mu_A": (0.3, 0.3), "tau_A": 0.5, "psi_excess": 0.25}
 
 
@@ -287,8 +288,8 @@ def _reserve_keep(d: Data, psi_grid: np.ndarray, ws: tuple[float, ...]) -> np.nd
 
 
 def fit_many(data: Data, specs=SPECS, *, draws: int = 0, seed: int = 0) -> list[Fit]:
-    """Fit several of the six models to the same data. Models that share their likelihood (S0, S1 and S2) are
-    computed together. ``draws > 0`` adds that many posterior draws of ``θ_f`` per family to each fit (used only
+    """Fit several of the six models to the same data. Models that share their likelihood (S0, S1 and S2) share
+    the first pass; a model's numbers do not depend on which other models are fitted with it. ``draws > 0`` adds that many posterior draws of ``θ_f`` per family to each fit (used only
     by the dormancy forecast; the generator is seeded from ``seed`` and the model's name, and nothing else in a
     fit is random).
 
@@ -308,7 +309,7 @@ def fit_many(data: Data, specs=SPECS, *, draws: int = 0, seed: int = 0) -> list[
         t0 = time.time()
         psi_grid = PSI_GRID if psi_fixed is None else np.array([float(psi_fixed)])
         ws = tuple(sorted({sp.w for sp in members}))
-        kept = _reserve_keep(data, psi_grid, ws)
+        kept = _reserve_keep(data, psi_grid, ALL_W)       # the same nodes whichever models are asked for
         i_mu, i_tau, i_psi = np.unravel_index(kept, (MU_A_GRID.size, TAU_A_GRID.size, psi_grid.size))
         mu, tau, psi = MU_A_GRID[i_mu], TAU_A_GRID[i_tau], psi_grid[i_psi]
         lprior = norm.logpdf(mu, *PRIORS["mu_A"])                              # τ_A and ψ nodes have equal weight
@@ -337,22 +338,21 @@ def fit_many(data: Data, specs=SPECS, *, draws: int = 0, seed: int = 0) -> list[
             W = np.exp(logsumexp((T - logZ)[None, :, :, None, :] - A[:, :, :, None, :] + lq[None, None, :, :, None],
                                  axis=2) + L)                                               # (M, N, G, V)
             weights[sp.name] = (W, np.exp(logsumexp(T, axis=(1, 2)) - logZ), logZ)
-        # pass 2: each family's closed-form posterior on the cells that carry weight
-        acc = {sp.name: np.zeros((4, F)) for sp in members}                                 # Π, mean, 2nd moment, conflict
-        for w in ws:
-            same = [sp for sp in members if sp.w == w]
-            live = np.flatnonzero(np.max([weights[sp.name][0].max(axis=0) for sp in same], axis=0).ravel() >= CELL_MIN)
+        # pass 2: each family's closed-form posterior on the cells that carry weight under that model
+        acc = {}
+        for sp in members:
+            W = weights[sp.name][0]
+            live = np.flatnonzero(W.max(axis=0).ravel() >= CELL_MIN)
             n_i, g_i, v_i = np.unravel_index(live, (N, G, V))
-            Wc = {sp.name: weights[sp.name][0].reshape(classes.size, -1)[:, live] for sp in same}
-            Wc = {k: v / v.sum(axis=1, keepdims=True) for k, v in Wc.items()}               # (M, cells)
+            Wc = W.reshape(classes.size, -1)[:, live]
+            Wc = Wc / Wc.sum(axis=1, keepdims=True)                                         # (M, cells)
+            acc[sp.name] = np.zeros((4, F))                                                 # Π, mean, 2nd moment, conflict
             step = max(1, CHUNK_CELLS // live.size)
             for a in range(0, F, step):
                 sel = np.arange(a, min(F, a + step))
                 ll, m, c = _components(data, sel, mu[n_i][:, None], tau[n_i][:, None], psi[n_i][:, None],
                                        RHO_GRID[g_i][:, None], nu[v_i][:, None], k_f[sel], now_f[sel])    # (cells, f, 2, 2)
-                red = np.stack(_reduce(ll, m, c, w))                                        # (4, cells, f)
-                for sp in same:
-                    acc[sp.name][:, sel] = (red * Wc[sp.name][cls[sel]].T).sum(axis=1)
+                acc[sp.name][:, sel] = (np.stack(_reduce(ll, m, c, sp.w)) * Wc[cls[sel]].T).sum(axis=1)
         shared = time.time() - t0
         for sp in members:
             t1 = time.time()

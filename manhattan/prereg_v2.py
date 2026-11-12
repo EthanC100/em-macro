@@ -8,8 +8,8 @@ everything else, so this check runs the version 1 check first and then the versi
 (``docs/manhattan/sim_prereg_v2.sha256``, a line of ``sha256sum`` output).
 
 ``manhattan/prereg.py`` is a protected file and is not edited by a session; this module sits beside it and
-reuses its functions. docs/manhattan/ETHAN_ACTIONS.md item 19 lists the lines that fold this record into
-``manhattan.prereg`` itself.
+reuses its functions. docs/manhattan/ETHAN_ACTIONS.md item 19 lists the CODEOWNERS lines that protect this
+module, its test and the files it checks once Ethan adopts them.
 """
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ RECORD = ROOT / "docs/manhattan/sim_prereg_v2.sha256"
 
 def verify(root: Path = ROOT) -> list[str]:
     """Problems found in either record (empty when every recorded file exists and matches its hash)."""
-    errs = [e for r in prereg.RECORDS for e in prereg.verify(root / r.relative_to(prereg.ROOT), root)]
-    return errs + prereg.verify(root / RECORD.relative_to(ROOT), root)
+    records = dict.fromkeys(r.relative_to(prereg.ROOT) for r in (*prereg.RECORDS, RECORD))      # each record once
+    return [e for r in records for e in prereg.verify(root / r, root)]
 
 
 def recorded_hash(rel: str, root: Path = ROOT) -> str:

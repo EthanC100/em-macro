@@ -1,13 +1,15 @@
 # Manhattan: what only Ethan can do
 
 Recorded 2026-11-12; updated the same day by session "4M Manhattan C: simulation lab" (items 5 and 13 closed,
-items 14 to 18 added). Each item is something no agent may decide or do under the CLAUDE.md hard rules, or
-cannot do from a cloud session. For each: the conservative default now in force, what it blocks, and what to do.
-Nothing in this list was created, changed, bought or switched on by a session.
+items 14 to 18 added) and by session "5M Manhattan C: protocol 3.1 and prereg v2" (item 19 added; items 14 and 15
+answered by the draft of Protocol v3.1, which item 19 adopts; item 16 re-estimated). Each item is something no
+agent may decide or do under the CLAUDE.md hard rules, or cannot do from a cloud session. For each: the
+conservative default now in force, what it blocks, and what to do. Nothing in this list was created, changed,
+bought or switched on by a session.
 
-**Order of urgency now:** item 16 (start the simulation on the iMac: it is ready and takes about five days),
-item 15 (decide what to do about the model-fitting half of the simulation: it cannot be run as pre-registered),
-then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (about 5 May 2027).
+**Order of urgency now:** item 19 (read and adopt Protocol v3.1 and version 2 of the simulation pre-registration:
+one paste into CODEOWNERS), then item 16 (start the simulation on the iMac: it now includes the model-fitting
+half), then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (about 5 May 2027).
 
 | # | decision or action | default in force | blocks |
 |---|---|---|---|
@@ -24,11 +26,12 @@ then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (ab
 | 11 | Manhattan tests inside the writers' workflows | skip there, fail elsewhere | nothing |
 | 12 | Manhattan and the trial ledger | separate | nothing |
 | 13 | merge the first PR; go-ahead for the simulation | **done** (PR #48 merged; session 4M was the go-ahead) | - |
-| 14 | two wording fixes in PROTOCOL_v3.md | text left as it is | nothing; clarity |
-| 15 | the model-fitting half of the simulation cannot be run as pre-registered | posterior tiers and dormancy stay off | "Statistically supported", dormancy, calibration claims |
-| 16 | run the screening and forward half of the simulation on the iMac | pilot only | choosing the screening method; every claim |
-| 17 | the simulation's sampler in requirements | separate file | nothing |
+| 14 | two wording fixes in PROTOCOL_v3.md | **made in the draft PROTOCOL_v3.1.md** (item 19); 3.0.0 left as it is | nothing; clarity |
+| 15 | the model-fitting half of the simulation cannot be run as pre-registered | **answered by the draft of Protocol v3.1** (an analytic model: item 19); posterior tiers and dormancy stay off until it passes | "Statistically supported", dormancy, calibration claims |
+| 16 | run the simulation on the iMac | pilot only | choosing the screening method; every claim |
+| 17 | the simulation's sampler in requirements | separate file; no longer needed by the simulation | nothing |
 | 18 | housekeeping: the pre-rename branch | left in place | nothing |
+| 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched | the full run of D11 and of the model-fitting half |
 
 ---
 
@@ -227,6 +230,10 @@ error**. Two sentences in §5.1 say slightly more than is true, and Appendix C s
 "wording only; no rule changed". The simulation's results carry over: the code follows the formulas, which do
 not change. Until then the text stands and the code follows it.
 
+**Status (session 5M).** The three edits are made in the draft `PROTOCOL_v3.1.md` (§5.1 and Appendix C), with
+the change-log entry "wording only; no rule changed". PROTOCOL_v3.md itself is not edited. Adopting 3.1 (item 19)
+closes this item; nothing else is needed.
+
 ## 15. The model-fitting half of the simulation cannot be run as pre-registered
 
 **Why Ethan.** The ways out are spending, a new pre-registration version or a new protocol version. Each is yours.
@@ -266,31 +273,51 @@ route and the forward test do not depend on it and can go ahead (item 16).
 **Recommendation.** (d) now, then (b) with (c)'s gate change if the middle tiers still matter to you. The first
 batches can run on the screening route and the forward test alone.
 
-## 16. Run the screening and forward half of the simulation on the iMac
+**Status (session 5M): option (c) is drafted, in a stronger form than a cheaper sampler.** `PROTOCOL_v3.1.md` §7
+replaces the sampled model by an analytic normal-normal hierarchical model: closed-form posteriors summed over a
+fixed grid of hyperparameters, no sampler and so no convergence gate. The cost numbers are in section 16 below.
+No replication count is lowered and no threshold is changed (`SIM_PREREG_v2.md`). The sampled model stays in the
+repository as an optional check beside a real review that decides nothing. Adopting it is item 19. **What the
+model-fitting pilot then showed about the tier and dormancy rules is new and is yours to weigh**: see
+MANHATTAN_PROGRESS.md, "Milestone C: state (session 5M)".
 
-**Why Ethan.** It is your machine, and the full run is about a thousand CPU-hours: more than a cloud session can do.
+## 16. Run the simulation on the iMac
 
-**What exists.** The pilot (12 replications per scenario, labelled as such, deciding nothing) is in
-`results/manhattan_sim/PILOT_REPORT.md`. The full run is packaged:
+**Why Ethan.** It is your machine, and the full run is far more than a cloud session can do.
+
+**What exists.** Two pilots, both labelled as such and deciding nothing: version 1's
+(`results/manhattan_sim/PILOT_REPORT.md`) and the rerun of the parts Protocol v3.1 changed
+(`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`). The full run is packaged, and after item 19 it covers
+**everything**, the model-fitting half included:
 
 ```bash
-MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh      # resumable; about 5 days on 8 cores
-python -m manhattan.sim.run --status                                 # progress and heartbeat
+MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh      # resumable
+python -m manhattan.sim.run --status --prereg v2                     # progress and heartbeat
 ```
+
+By default the script runs version 1 for everything version 1 still governs (15 runs at STD and 2 at LONG, by
+version 1's unchanged code, continuing the pilot replications already on file) and version 2 for what Protocol
+v3.1 changed: D11 with the hedge re-estimated in every bootstrap resample, its nine hedged twins, and the five
+HB scenarios with the analytic model. `SIZES=STD,LONG` leaves the HB scenarios out; `PREREG=v1` runs version 1
+alone.
+
+**How long.** IMAC_ESTIMATE
 
 [SIM_RUNBOOK.md](SIM_RUNBOOK.md) has the set-up, the launchd job and what to do when it finishes. It never runs
 a held-out scenario.
 
-**Do.** Run it, then commit `results/manhattan_sim/` on a branch and open a pull request. The next session then
-codes the held-out worlds and prepares confirmation run 1 (you tag the commit `manhattan-sim-confirm-1`).
+**Do.** Item 19 first. Then run it, commit `results/manhattan_sim/` on a branch and open a pull request. The
+next session then codes the held-out worlds (H01 to H12) and prepares confirmation run 1 (you tag the commit
+`manhattan-sim-confirm-1`).
 
 **If you would rather not use the iMac:** GitHub Actions is possible in principle (synthetic data, public
-results), but at 6 hours per job it needs about 170 jobs; a workflow is yours to add.
+results), but at 6 hours per job it needs a few hundred jobs; a workflow is yours to add.
 
 ## 17. The simulation's sampler in requirements
 
 `numpyro` and `jax` are in a separate `requirements-manhattan.txt`, so no existing workflow installs anything
-new, and the model tests skip where they are absent. If you want those tests to run in CI, add
+new, and the tests of the sampled model skip where they are absent. Under Protocol v3.1 the simulation no longer
+needs them: the analytic model uses numpy and scipy only, and its tests always run. If you want those tests to run in CI, add
 `-r requirements-manhattan.txt` to the pull-request test workflow (a workflow change, so yours). The six-model
 end-to-end test is opt-in (`MANHATTAN_SLOW_TESTS=1`) because it compiles twelve models.
 
@@ -299,3 +326,79 @@ end-to-end test is opt-in (`MANHATTAN_SLOW_TESTS=1`) because it compiles twelve 
 The branch the project lived on before it was renamed (its name is in MANHATTAN_PROGRESS.md, "Rename"; it was
 superseded by `build/manhattan` and PR #48) is still on the remote. Agents do not delete branches (hard rule 11).
 Delete it on GitHub's Branches page when convenient.
+
+## 19. Adopt Protocol v3.1 and version 2 of the simulation pre-registration
+
+**Why Ethan.** Changing the protocol is yours (PROTOCOL §10.5), and the files that would hold the change are
+protected, so a session wrote **new** files beside them and edited none of the protected ones.
+
+**What was written (session 5M, pull request from `build/manhattan`).**
+
+| new file | what it is |
+|---|---|
+| `docs/manhattan/PROTOCOL_v3.1.md` | the whole protocol, version 3.1.0: 3.0.0 with four changes, listed at its top with the pilot result behind each and why none is tuning to held-out results |
+| `docs/manhattan/SIM_PREREG_v2.md` | how the changed methods are tested. Only the changed parts; version 1 stays in force for the rest. No threshold loosened, no replication count lowered |
+| `docs/manhattan/sim_prereg_v2.sha256` | the SHA-256 of the two files above (two lines of `sha256sum` output) |
+| `manhattan/prereg_v2.py`, `tests/test_manhattan_prereg_v2.py` | the check of that record (`python -m manhattan.prereg_v2 verify`, which also runs version 1's check) and its test |
+
+**Protected files: what you must do to each.**
+
+| protected file | action |
+|---|---|
+| `docs/manhattan/PROTOCOL_v3.md` | **none.** It stays 3.0.0, byte for byte (a test checks its hash) |
+| `docs/manhattan/SIM_PREREG.md`, `docs/manhattan/sim_prereg.sha256` | **none.** Version 1 stays frozen and in force for everything version 2 does not name; `python -m manhattan.prereg verify` still passes |
+| `config/manhattan.yaml` | **none.** `claims.enabled` stays `false`; no switch refers to a protocol version |
+| `manhattan/prereg.py`, `tests/test_manhattan_prereg.py` | **none.** The version 2 record is checked by the new module beside them |
+| `.github/CODEOWNERS` | **add five lines** (step 3 below). This is the only edit of a protected file |
+
+Nothing has to be copied or moved: the new files are already at their final paths.
+
+**Steps, in order.**
+
+1. **Read** the table at the top of `PROTOCOL_v3.1.md` ("What changed from 3.0.0, and why"), then
+   `SIM_PREREG_v2.md` (it is short), then `results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`.
+2. **Merge the pull request** if you accept them. To change anything first, edit the draft on the branch and
+   then **re-hash** (the hash record must be rewritten whenever either file changes, even by a comma):
+
+   ```bash
+   sha256sum docs/manhattan/SIM_PREREG_v2.md docs/manhattan/PROTOCOL_v3.1.md > docs/manhattan/sim_prereg_v2.sha256
+   python -m manhattan.prereg_v2 verify          # must print: pre-registrations ok (v1 and v2)
+   ```
+
+   A pilot run made before such an edit names the old hash; the report says so in its header. Pilots decide
+   nothing, so nothing is lost.
+3. **Protect the adopted files.** On main, add these lines to `.github/CODEOWNERS`, **inside** the protected
+   block: paste them on the line just above `# protected:end`, after the `/config/manhattan.yaml @EthanC100`
+   line. Copy them exactly:
+
+```
+# Manhattan, version 2 of the simulation pre-registration and Protocol v3.1 (docs/manhattan/ETHAN_ACTIONS.md
+# item 19): the two frozen files, their recorded hashes, and the code and the test that check them
+/docs/manhattan/PROTOCOL_v3.1.md @EthanC100
+/docs/manhattan/SIM_PREREG_v2.md @EthanC100
+/docs/manhattan/sim_prereg_v2.sha256 @EthanC100
+/manhattan/prereg_v2.py @EthanC100
+/tests/test_manhattan_prereg_v2.py @EthanC100
+```
+
+4. **Check.**
+
+   ```bash
+   python -m manhattan.prereg_v2 verify                                   # pre-registrations ok (v1 and v2)
+   python -m nightshift.protected docs/manhattan/PROTOCOL_v3.1.md docs/manhattan/SIM_PREREG_v2.md \
+       docs/manhattan/sim_prereg_v2.sha256 manhattan/prereg_v2.py tests/test_manhattan_prereg_v2.py
+   # prints PROTECTED: for each of the five and exits 1
+   ```
+
+   The second command was checked on a copy of CODEOWNERS with the lines added
+   (`tests/test_manhattan_prereg_v2.py`): the five paths match, and no other file of this revision does.
+5. **Run** the simulation (item 16).
+
+**What adopting does and does not do.** It makes 3.1.0 the protocol under test and lets the full run include D11
+and the model-fitting half. It enables no claim: `claims.enabled` stays `false` until a confirmation run passes.
+From the first batch frozen afterwards, manifests record the hash of PROTOCOL_v3.1.md (PROTOCOL §10.1-10.2); no
+batch exists yet, so nothing is judged under two versions.
+
+**If you do not adopt.** Version 1 and Protocol 3.0.0 stand as they are. D11 then goes to the full run with a
+test the pilot shows to be oversized, and the model-fitting half stays out of reach (item 15).
+
