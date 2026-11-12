@@ -175,6 +175,24 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
     else:
         L.append("Not all of P1-P4 have been run.")
     L.append("")
+    L.append("## Criterion V10(a): blind statistics with and without the adaptive channel")
+    L.append("")
+    v10 = out / "v10a.json"
+    if v10.exists():
+        res = json.loads(v10.read_text(encoding="utf-8"))
+        summary["v10a"] = res
+        for sid, v in res["scenarios"].items():
+            L.append(f"- {sid}: designated blind p-values and e-values of {v['families_compared']} families "
+                     f"(first {res['batches']} batches of {res['replications']} replications at STD) are "
+                     f"**{'bit-for-bit identical' if v['identical'] else 'NOT identical'}** with and without the "
+                     "adaptive channel.")
+        L.append("")
+        L.append("This is a property of the code (the adaptive channel has its own random stream and never touches "
+                 "the frozen grid), so a few batches show it as well as 2,000 replications would; "
+                 "`tests/test_manhattan_sim_pipeline.py` checks it on every test run.")
+    else:
+        L.append("Not checked yet (`python -m manhattan.sim.run --v10a`).")
+    L.append("")
     L.append("## Deviations from, and readings of, SIM_PREREG.md")
     L.append("")
     L.append("Every place where the code had to fix a detail the pre-registration leaves open, or departs from it.")

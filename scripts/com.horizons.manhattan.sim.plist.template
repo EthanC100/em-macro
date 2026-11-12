@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Manhattan simulation on the iMac: keeps scripts/manhattan_sim_run.sh running until every replication is done.
+     Copy to ~/Library/LaunchAgents/com.horizons.manhattan.sim.plist, replace REPO and VENV, then:
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.horizons.manhattan.sim.plist
+     Stop it with: launchctl bootout gui/$(id -u)/com.horizons.manhattan.sim
+     The script exits 0 when the run is complete, so launchd does not start it again (SuccessfulExit false).
+     No secret is needed or stored: the simulation reads no private data. docs/manhattan/SIM_RUNBOOK.md -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.horizons.manhattan.sim</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>REPO/scripts/manhattan_sim_run.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MANHATTAN_VENV</key><string>VENV</string>
+    <key>SIZES</key><string>STD,LONG</string>
+  </dict>
+  <key>WorkingDirectory</key><string>REPO</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
+  <key>ThrottleInterval</key><integer>300</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>REPO/results/manhattan_sim/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>REPO/results/manhattan_sim/logs/launchd.err.log</string>
+</dict>
+</plist>

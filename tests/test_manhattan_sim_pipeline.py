@@ -248,3 +248,46 @@ def test_thresholds_and_counts_equal_the_preregistration_text():
     assert listed == set(world.SCENARIOS)
     held = set(re.findall(r"^\| (H[0-9]+[a-z]?) \|", PREREG, re.M))
     assert held == set(world.HELD_OUT)
+
+
+# ------------------------------------------------------------------ the run package: heartbeat, status, compaction, lock
+
+def test_heartbeat_status_and_compaction(tiny, tmp_path, monkeypatch):
+    text, ok = run.status(tmp_path)
+    assert "heartbeat: none" in text and not ok
+    run.run_scenario("D01", "STD", 2, label="test", out=tmp_path, quiet=True)
+    hb = json.loads((tmp_path / run.HEARTBEAT).read_text())
+    assert hb["scenario"] == "D01" and hb["on_file"] == 2 and hb["wanted"] == 2 and hb["pid"] > 0
+    text, ok = run.status(tmp_path)
+    assert ok and "fresh" in text and "D01      STD         2  2000" in text
+    stale = dict(hb, time_utc="2020-01-01T00:00:00Z")
+    (tmp_path / run.HEARTBEAT).write_text(json.dumps(stale))
+    text, ok = run.status(tmp_path)
+    assert not ok and "STALE" in text                      # the watchdog's signal
+    assert run.main(["--status", "--out", str(tmp_path)]) == 1
+    assert run.compact(tmp_path) == []                     # 2 of 2,000: not complete, left alone
+    monkeypatch.setitem(criteria.REPLICATIONS, "STD", 2)
+    assert run.compact(tmp_path) == ["D01_STD_b0.jsonl"]
+    assert not (tmp_path / "reps/D01_STD_b0.jsonl").exists() and (tmp_path / "reps/D01_STD_b0.jsonl.gz").exists()
+    assert [r["rep"] for r in run.load_reps("D01", "STD", out=tmp_path)] == [0, 1]       # read back from the gzip
+    again = run.run_scenario("D01", "STD", 2, label="test", out=tmp_path, quiet=True)
+    assert len(again) == 2 and not (tmp_path / "reps/D01_STD_b0.jsonl").read_text()      # nothing was run again
+
+
+def test_run_script_takes_one_instance_at_a_time(tmp_path):
+    import os
+    import subprocess
+    script = ROOT / "scripts/manhattan_sim_run.sh"
+    env = dict(os.environ, OUT=str(tmp_path), PYTHON="true", WORKERS="1", LOGDIR=str(tmp_path / "logs"))
+    lock = tmp_path / ".run.lock"
+    lock.mkdir()
+    (lock / "pid").write_text(str(os.getpid()))            # a live process holds the lock
+    busy = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True)
+    assert busy.returncode == 75 and "another run is in progress" in busy.stderr and lock.exists()
+    (lock / "pid").write_text("999999999")                 # the holder died
+    done = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True)
+    assert done.returncode == 0 and "stale lock" in done.stderr and "done:" in done.stdout
+    assert not lock.exists()                               # released on exit
+    text = script.read_text()
+    assert "--plan development" in text and "--confirm" not in text and "set -euo pipefail" in text
+    assert "manhattan.prereg verify" in text and "OMP_NUM_THREADS=1" in text

@@ -22,6 +22,7 @@ import os
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -118,6 +119,7 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
                 f.flush()
                 done.append(r)
                 completed += 1
+                heartbeat(out, scenario=scenario, size=size, on_file=len(done), wanted=reps, run_id=rec["run_id"])
                 if not quiet:
                     print(f"{scenario} {size} rep {r['rep']} done ({len(done)}/{reps}, {time.time() - t0:.0f}s)", flush=True)
             jobs = [(scenario, size, r, branch, sha) for r in todo]
@@ -140,6 +142,81 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
             runlog.finish(rec, status, completed, path=log,
                           extra={"seconds": round(time.time() - t0, 1), "on_file": len(done)})
     return sorted(done, key=lambda r: r["rep"])
+
+
+HEARTBEAT = "heartbeat.json"
+
+
+def heartbeat(out: Path = OUT, **fields) -> None:
+    """Record that the runner is alive: written after every replication (and read by ``--status``)."""
+    fields.update(time_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), pid=os.getpid())
+    tmp = out / (HEARTBEAT + ".tmp")
+    out.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(json.dumps(fields, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(out / HEARTBEAT)
+
+
+def status(out: Path = OUT, stale_minutes: float = 90.0) -> tuple[str, bool]:
+    """A progress table for every development run, and whether the heartbeat is fresh. Replications are counted
+    for the code now checked out; a replication of a long scenario can take minutes, hence the generous limit."""
+    lines = ["scenario size  on file  pre-registered"]
+    left = 0
+    for scenario, size in development_plan():
+        n = len(load_reps(scenario, size, seeds.DEVELOPMENT, out, code_hash(size)))
+        need = criteria.REPLICATIONS[size]
+        left += max(0, need - n)
+        lines.append(f"{scenario:8s} {size:5s} {n:7d}  {need}")
+    hb_path, fresh = out / HEARTBEAT, False
+    if hb_path.exists():
+        hb = json.loads(hb_path.read_text(encoding="utf-8"))
+        then = datetime.strptime(hb["time_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - then).total_seconds() / 60
+        fresh = age <= stale_minutes
+        lines.append(f"heartbeat: {hb.get('scenario')} {hb.get('size')} {hb.get('on_file')}/{hb.get('wanted')} "
+                     f"{age:.0f} minutes ago ({'fresh' if fresh else 'STALE'})")
+    else:
+        lines.append("heartbeat: none")
+    lines.append(f"replications still to run: {left}")
+    return "\n".join(lines), fresh or left == 0
+
+
+def compact(out: Path = OUT) -> list[str]:
+    """Gzip the replication files of runs that have reached their pre-registered count (they are a few MB each)."""
+    done = []
+    for scenario, size in development_plan():
+        path = reps_path(scenario, size, seeds.DEVELOPMENT, out)
+        reps = load_reps(scenario, size, seeds.DEVELOPMENT, out)
+        if path.exists() and len(reps) >= criteria.REPLICATIONS[size]:
+            with gzip.open(path.with_suffix(".jsonl.gz"), "wt", encoding="utf-8") as f:
+                for r in reps:
+                    f.write(json.dumps(r, sort_keys=True, separators=(",", ":"), default=float) + "\n")
+            path.unlink()
+            done.append(path.name)
+    return done
+
+
+def v10a_check(reps: int = 2, batches: int = 3, out: Path = OUT, log: Path | None = None) -> dict:
+    """Criterion V10(a): in D09a and D09b the designated blind p-values and e-values are bit-for-bit identical
+    with and without the adaptive channel. Checked on the first ``batches`` batches of the first ``reps``
+    replications at STD, logged like any run, and written to ``v10a.json``."""
+    import numpy as np
+
+    from . import pipeline
+    result = {"batches": batches, "replications": reps, "scenarios": {}}
+    for sid in criteria.V10_REQUIRED:
+        rec = runlog.start(scenario=sid, size="STD", is_heldout=False, confirm=None, label="v10a-check",
+                           reps=range(reps), branch=seeds.DEVELOPMENT,
+                           options={"code": code_hash("STD"), "batches": batches}, path=log or out / "runs.jsonl")
+        scn, same, n = world.SCENARIOS[sid], True, 0
+        for r in range(reps):
+            p1, e1 = pipeline.designated_statistics(scn, sid, "STD", r, max_batches=batches)
+            p0, e0 = pipeline.designated_statistics(world.without_adaptive(scn), sid, "STD", r, max_batches=batches)
+            same = same and bool(np.array_equal(p1, p0) and np.array_equal(e1, e0))
+            n += int(p1.size)
+        result["scenarios"][sid] = {"identical": same, "families_compared": n}
+        runlog.finish(rec, "completed", reps, path=log or out / "runs.jsonl", extra={"identical": same, "families": n})
+    (out / "v10a.json").write_text(json.dumps(result, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    return result
 
 
 def development_plan() -> list[tuple[str, str]]:
@@ -166,8 +243,23 @@ def main(argv=None) -> int:
     ap.add_argument("--pooled-rerun", action="store_true", help="the one extension SIM_PREREG section 8.3 allows")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 0))
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--v10a", action="store_true", help="check criterion V10(a) and exit")
+    ap.add_argument("--status", action="store_true", help="print progress; exit 1 if the heartbeat is stale")
+    ap.add_argument("--stale-minutes", type=float, default=90.0)
+    ap.add_argument("--compact", action="store_true", help="gzip the replication files of completed runs")
     a = ap.parse_args(argv)
     try:
+        if a.status:
+            text, ok = status(a.out, a.stale_minutes)
+            print(text)
+            return 0 if ok else 1
+        if a.compact:
+            print("\n".join(compact(a.out)) or "nothing to compact")
+            return 0
+        if a.v10a:
+            res = v10a_check(out=a.out)
+            print(json.dumps(res))
+            return 0 if all(v["identical"] for v in res["scenarios"].values()) else 1
         if a.plan:
             sizes, only = a.sizes.split(","), [s for s in a.only.split(",") if s]
             count = {"STD": a.reps_std, "LONG": a.reps_long or a.reps_std, "HB": a.reps_hb}
