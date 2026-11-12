@@ -33,6 +33,45 @@ def fut(**over):
     return p
 
 
+def _is_digest_key(key: str) -> bool:
+    return key in ("hash", "prev_hash", "digest") or key.endswith(("_digest", "_sha256"))
+
+
+def price_hits(text: str, *prices: float) -> list[str]:
+    """Where a settlement price appears in a JSON-lines records text: a number equal to it, or its digits ("4500" for
+    4500.0) inside any string or key. The values of the hash, prev_hash and digest fields are left out: they are
+    SHA-256 hex over a per-second recorded_at, and 64 hex digits contain a 4-digit run like "4500" by chance (Q009).
+    Returns "line n: json.path" entries only, never a value, so an assertion message cannot print a record."""
+    tokens = [f"{p:g}" for p in prices]
+    hits: list[str] = []
+
+    def walk(o, where):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                at = f"{where}.{k}" if where else str(k)
+                if any(t in str(k) for t in tokens):
+                    hits.append(at)
+                elif not _is_digest_key(k):
+                    walk(v, at)
+        elif isinstance(o, list):
+            for i, v in enumerate(o):
+                walk(v, f"{where}[{i}]")
+        elif isinstance(o, bool) or o is None:
+            return
+        elif isinstance(o, (int, float)):
+            if any(o == p for p in prices):
+                hits.append(where)
+        elif isinstance(o, str) and any(t in o for t in tokens):
+            hits.append(where)
+
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.strip():
+            before = len(hits)
+            walk(json.loads(line), "")
+            hits[before:] = [f"line {n}: {h}" for h in hits[before:]]
+    return hits
+
+
 def _open(tmp_path, store, n, pts=(("2026-11-05", 87.0),), prod="WTI", month="2027-01"):
     settle(store, prod, month, pts)
     path = tmp_path / "r.jsonl"
@@ -146,7 +185,8 @@ def test_option_spread_fill_model_value_and_expiry(tmp_path, store, frozen_repo)
     v0, rpu = JF.option_entry(J.positions(recs)["J001"], ST.read(store), "GOLD")
     assert c["reason"] == "option expiry" and c["basis"] == "intrinsic at expiry"
     assert c["gross_pnl_pct"] == pytest.approx(p["fill"]["risk_pct"] * (300 - v0) / rpu, abs=1e-3)
-    assert "4500" not in path.read_text() and "4110" not in path.read_text()
+    hits = price_hits(path.read_text(), 4500.0, 4110.0)
+    assert hits == [], hits
 
 
 def test_option_worthless_loses_exactly_the_risk(tmp_path, store, frozen_repo):
