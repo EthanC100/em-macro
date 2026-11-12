@@ -143,7 +143,9 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
                 * (sum(r["seconds"] for r in found[(s, size)]["reps"]) / len(found[(s, size)]["reps"]) if (s, size) in found else 0)
                 for s, size in run.development_plan())
     L.append(f"Remaining cost of the development runs that have a timing above: about **{total / 3600:.0f} CPU-hours** "
-             "(one core; divide by the number of cores). Held-out scenarios are extra.")
+             "(one core; divide by the number of cores). Held-out scenarios are extra. Seconds are wall-clock per "
+             "replication inside a worker and are inflated whenever more jobs than cores run at once; on an idle core "
+             "a STD replication of a default scenario took about 60 seconds.")
     L.append("")
     L.append("## Results by scenario")
     for (scenario, size), v in found.items():

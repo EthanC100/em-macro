@@ -1,0 +1,14 @@
+{
+ "batches": 3,
+ "replications": 2,
+ "scenarios": {
+  "D09a": {
+   "families_compared": 80,
+   "identical": true
+  },
+  "D09b": {
+   "families_compared": 74,
+   "identical": true
+  }
+ }
+}

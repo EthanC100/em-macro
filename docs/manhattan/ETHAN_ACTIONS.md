@@ -28,7 +28,7 @@ then items 2, 3 and 7 (they unblock the first real batch). Item 8 has a date (ab
 | 15 | the model-fitting half of the simulation cannot be run as pre-registered | posterior tiers and dormancy stay off | "Statistically supported", dormancy, calibration claims |
 | 16 | run the screening and forward half of the simulation on the iMac | pilot only | choosing the screening method; every claim |
 | 17 | the simulation's sampler in requirements | separate file | nothing |
-| 18 | housekeeping: the old `build/atlas` branch | left in place | nothing |
+| 18 | housekeeping: the pre-rename branch | left in place | nothing |
 
 ---
 
@@ -290,8 +290,8 @@ new, and the model tests skip where they are absent. If you want those tests to 
 `-r requirements-manhattan.txt` to the pull-request test workflow (a workflow change, so yours). The six-model
 end-to-end test is opt-in (`MANHATTAN_SLOW_TESTS=1`) because it compiles twelve models.
 
-## 18. Housekeeping: the old `build/atlas` branch
+## 18. Housekeeping: the pre-rename branch
 
-`build/atlas` (the pre-rename branch, superseded by `build/manhattan` and PR #48) is still on the remote. Agents
-do not delete branches (hard rule 11). Delete it on GitHub's Branches page when convenient.
-
+The branch the project lived on before it was renamed (its name is in MANHATTAN_PROGRESS.md, "Rename"; it was
+superseded by `build/manhattan` and PR #48) is still on the remote. Agents do not delete branches (hard rule 11).
+Delete it on GitHub's Branches page when convenient.
