@@ -17,7 +17,8 @@ def test_monitor_waits_for_the_gate():
     assert "workflow_dispatch" in on
     ran, mon = WF["jobs"]["ran"], WF["jobs"]["monitor"]
     assert ran["permissions"] == {"actions": "read"} and ran["outputs"]["run"] == "${{ steps.gate.outputs.run }}"
-    assert mon["needs"] == "ran" and mon["if"] == "needs.ran.outputs.run == 'true'"
+    assert mon["needs"] == "ran" and mon["if"].endswith("&& needs.ran.outputs.run == 'true'")
+    assert "github.ref == 'refs/heads/main'" in mon["if"]                   # main only (test_systematic_main_only)
     assert "workflow_run.conclusion" not in str(mon)                  # the job's own result decides, not the run's
     step = ran["steps"][0]
     assert step["env"]["RUN_ID"] == "${{ github.event.workflow_run.id }}" and "git push" not in step["run"]

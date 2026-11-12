@@ -1,6 +1,8 @@
-"""systematic-monthly's jobs run only on a schedule event or a workflow_dispatch from refs/heads/main (Ethan,
-2026-11-12; run #9 was dispatched from test/kick-gate). Each job's `if:` is evaluated here as GitHub would, for every
-event and ref, and the writer workflows are checked for pull_request/push triggers. No network."""
+"""Writer workflows run only from refs/heads/main on their intended events (Ethan, 2026-11-12; systematic-monthly's run
+#9 was dispatched from test/kick-gate): systematic-monthly and ledger-daily on a schedule or a workflow_dispatch,
+private-commitments and shadows-setup on a workflow_dispatch, v1-rules-monitor on a workflow_dispatch or after a
+systematic-monthly run of main. Each job's `if:` is evaluated here as GitHub would, for every event and ref, and no
+writer has a pull_request or push trigger. CLAUDE.md rule 16 says who may dispatch them. No network."""
 import re
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -20,16 +22,19 @@ def wf(name):
     return doc, doc.get("on") or doc.get(True)          # PyYAML reads the bare key `on` as True
 
 
-def ev(expr, event, ref, schedule="", due_result="success", due_run="true", cancelled=False):
-    """Evaluate a GitHub Actions `if:` expression of the kind used in systematic.yml (==, !=, &&, ||, !, ())."""
+def ev(expr, event, ref, schedule="", due_result="success", due_run="true", cancelled=False, wr_branch="main",
+       wr_event="workflow_dispatch", ran_run="true"):
+    """Evaluate a GitHub Actions `if:` expression of the kind the writer workflows use (==, !=, &&, ||, !, ())."""
     e = expr.strip()
     if e.startswith("${{"):
         e = e[3:-2]
     assert re.fullmatch(r"[\w.\s'=!&|()*,\-/]+", e), e          # nothing but the operators this evaluator handles
     py = e.replace("&&", " and ").replace("||", " or ").replace("!cancelled()", " not cancelled() ")
     assert "!" not in py.replace("!=", ""), py
-    ctx = {"github": NS(ref=ref, event_name=event, event=NS(schedule=schedule)),
-           "needs": NS(due=NS(result=due_result, outputs=NS(run=due_run))), "cancelled": lambda: cancelled}
+    ctx = {"github": NS(ref=ref, event_name=event,
+                        event=NS(schedule=schedule, workflow_run=NS(head_branch=wr_branch, event=wr_event))),
+           "needs": NS(due=NS(result=due_result, outputs=NS(run=due_run)), ran=NS(outputs=NS(run=ran_run))),
+           "cancelled": lambda: cancelled}
     return bool(eval(py, {"__builtins__": {}}, ctx))
 
 
@@ -38,12 +43,46 @@ def test_no_writer_runs_on_pull_request_or_push():
         _, on = wf(name)
         bad = {"pull_request", "pull_request_target", "push"} & set(on)
         assert not bad, f"{name} runs on {bad}"
-    _, on = wf("systematic.yml")
-    assert set(on) == {"schedule", "workflow_dispatch"}
+    assert {k: set(wf(k)[1]) for k in WRITERS} == {
+        "systematic.yml": {"schedule", "workflow_dispatch"}, "ledger-daily.yml": {"schedule", "workflow_dispatch"},
+        "v1-rules-monitor.yml": {"workflow_run", "workflow_dispatch"},
+        "private-commitments.yml": {"workflow_dispatch"}, "shadows-setup.yml": {"workflow_dispatch"}}
+
+
+def test_every_writer_job_is_guarded():
+    for name in WRITERS:
+        for job, spec in wf(name)[0]["jobs"].items():
+            assert "github.ref == 'refs/heads/main'" in str(spec.get("if", "")), f"{name}:{job} has no main-only guard"
+
+
+REFS = [MAIN, BRANCH, "refs/pull/42/merge", "refs/tags/v1.0-frozen"]
 
 
 @pytest.mark.parametrize("event", EVENTS)
-@pytest.mark.parametrize("ref", [MAIN, BRANCH, "refs/pull/42/merge", "refs/tags/v1.0-frozen"])
+@pytest.mark.parametrize("ref", REFS)
+def test_ledger_daily_private_commitments_and_shadows_setup_run_only_from_main(event, ref):
+    assert ev(wf("ledger-daily.yml")[0]["jobs"]["daily"]["if"], event, ref) == \
+        (ref == MAIN and event in ("schedule", "workflow_dispatch"))
+    for name, job in (("private-commitments.yml", "recommit"), ("shadows-setup.yml", "setup")):
+        assert ev(wf(name)[0]["jobs"][job]["if"], event, ref) == (ref == MAIN and event == "workflow_dispatch"), name
+
+
+@pytest.mark.parametrize("event", EVENTS)
+@pytest.mark.parametrize("ref", REFS)
+def test_v1_rules_monitor_runs_only_from_main_after_a_main_run(event, ref):
+    jobs = wf("v1-rules-monitor.yml")[0]["jobs"]
+    for wr_branch in ("main", "test/kick-gate"):
+        for wr_event in ("schedule", "workflow_dispatch", "pull_request"):
+            ok = ref == MAIN and (event == "workflow_dispatch" or (event == "workflow_run" and wr_branch == "main"
+                                                                   and wr_event != "pull_request"))
+            assert ev(jobs["ran"]["if"], event, ref, wr_branch=wr_branch, wr_event=wr_event) == ok
+            for ran_run in ("true", "false"):
+                assert ev(jobs["monitor"]["if"], event, ref, wr_branch=wr_branch, wr_event=wr_event,
+                          ran_run=ran_run) == (ok and ran_run == "true")
+
+
+@pytest.mark.parametrize("event", EVENTS)
+@pytest.mark.parametrize("ref", REFS)
 def test_update_and_keep_cache_run_only_on_schedule_or_dispatch_from_main(event, ref):
     jobs = wf("systematic.yml")[0]["jobs"]
     allowed = ref == MAIN and event in ("schedule", "workflow_dispatch")
