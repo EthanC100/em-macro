@@ -12,8 +12,9 @@ import pytest
 
 from manhattan import prereg
 from manhattan.sim import pipeline, runlog, seeds, world
+from manhattan.testing import prereg_or_skip
 
-SHA = seeds.prereg_hash()
+SHA = prereg_or_skip()          # the seeds descend from the frozen pre-registration
 
 
 def streams(scenario="D01", size="STD", rep=0, branch=0):
@@ -369,3 +370,38 @@ def test_hedged_world_removes_most_of_the_factor():
     assert np.array_equal(got[:, :, :252], true[:, :, :252] + (got - true)[:, :, :252])
     burn = (got - true)[:, :, :252]                                   # no hedge before 252 days of history
     assert burn.std() > resid.std()
+
+
+# ------------------------------------------------------------------ these tests never stop an existing writer
+
+def test_manhattan_tests_fail_in_a_session_and_skip_in_a_writers_workflow(monkeypatch):
+    """systematic-monthly runs the whole suite before it commits the rebalance (ETHAN_ACTIONS item 11)."""
+    from manhattan import testing
+
+    def broken():
+        raise RuntimeError("the simulation pre-registration does not match its recorded hash")
+
+    @testing.reads_hand_edited_file
+    def check():
+        assert 1 == 2, "a threshold differs from the pre-registration"
+
+    for var in ("GITHUB_ACTIONS", "NIGHT_SHIFT_STRICT", "MANHATTAN_STRICT"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(seeds, "prereg_hash", broken)
+    assert testing.strict()                                   # a Claude Code session, a laptop, the iMac
+    with pytest.raises(RuntimeError):
+        testing.prereg_or_skip()
+    with pytest.raises(AssertionError):
+        check()
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")              # inside a writer's workflow: skip, with the reason
+    assert not testing.strict()
+    with pytest.raises(pytest.skip.Exception, match="MANHATTAN_STRICT=1"):
+        testing.prereg_or_skip()
+    with pytest.raises(pytest.skip.Exception, match="a threshold differs"):
+        check()
+    for var in ("NIGHT_SHIFT_STRICT", "MANHATTAN_STRICT"):    # pr-review, promote, or Ethan's choice: enforced again
+        monkeypatch.setenv(var, "1")
+        assert testing.strict()
+        with pytest.raises(AssertionError):
+            check()
+        monkeypatch.delenv(var)

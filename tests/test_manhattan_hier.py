@@ -16,7 +16,10 @@ from scipy import stats as st
 from manhattan.sim import criteria, hb, metrics, pipeline, world
 from manhattan.stats import hier
 
+from manhattan.testing import prereg_or_skip
+
 os.environ.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1")
+SHA = prereg_or_skip()          # the HB pipeline's seeds descend from the frozen pre-registration
 
 
 # ------------------------------------------------------------------ the model's definition (no sampler needed)

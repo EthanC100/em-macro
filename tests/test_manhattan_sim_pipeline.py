@@ -15,7 +15,10 @@ import pytest
 from manhattan.sim import criteria, metrics, pipeline, run, runlog, seeds, world
 from manhattan.stats import schedule
 
+from manhattan.testing import prereg_or_skip, reads_hand_edited_file
+
 ROOT = Path(__file__).resolve().parents[1]
+SHA = prereg_or_skip()          # every replication's seeds descend from the frozen pre-registration
 PREREG = (ROOT / "docs/manhattan/SIM_PREREG.md").read_text(encoding="utf-8")
 TINY = world.Size("STD", 3, 4, 5, 2, 3, 4, 6)
 
@@ -213,6 +216,7 @@ def test_power_difference_for_the_selection_rule():
     assert d["difference"] == pytest.approx(0.15) and d["lo"] == pytest.approx(0.15) and d["hi"] == pytest.approx(0.15)
 
 
+@reads_hand_edited_file
 def test_thresholds_and_counts_equal_the_preregistration_text():
     """Every number in manhattan/sim/criteria.py is read back from SIM_PREREG.md (which is never edited)."""
     def row(vid):

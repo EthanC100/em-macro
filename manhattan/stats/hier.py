@@ -240,12 +240,15 @@ class Fit:
     draws: np.ndarray | None = None      # (draws, n_f) a thinned sample of θ_f, when asked for
 
 
-_CACHE: dict = {}
-
-
 def fit(data: Data, spec: Spec, seed: int, *, warmup: int = 1000, samples: int = 1000, chains: int = 4,
         target_accept: float = 0.9, keep_draws: int = 0, max_tree_depth: int = 10) -> Fit:
-    """Fit one model. The compiled sampler is reused for later fits of the same shape."""
+    """Fit one model.
+
+    Every fit builds and compiles its own sampler and releases the compiled code afterwards. Reusing a sampler
+    across fits was tried and dropped: with vectorised chains numpyro wraps the kernel's step function again at
+    every initialisation, which fails as soon as the first compiled trace is no longer cached, and compiled code
+    that is kept grows without bound over the hundreds of fits of a long run. Compiling costs seconds; a fit at
+    HB size costs minutes."""
     import time
 
     import jax
@@ -257,16 +260,10 @@ def fit(data: Data, spec: Spec, seed: int, *, warmup: int = 1000, samples: int =
     t0 = time.time()
     d = _prepare(data, spec)
     n = {"n_f": data.n_f, "n_h": int(data.a_hat.size), "n_m": int(data.mech.max()) + 1, "n_fwd": int(data.fwd.size)}
-    key = (spec, tuple(n.values()), warmup, samples, chains, target_accept, max_tree_depth)
-    mcmc = _CACHE.get(key)
-    if mcmc is None:
-        kernel = NUTS(partial(_model, spec=spec, n=n), target_accept_prob=target_accept,
-                      init_strategy=init_to_median(num_samples=10), max_tree_depth=max_tree_depth)
-        mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains, chain_method="vectorized",
-                    progress_bar=False, jit_model_args=True)
-        _CACHE[key] = mcmc
-    if hasattr(mcmc, "_init_state_cache"):
-        mcmc._init_state_cache = {}       # a second run with the same key and data must start afresh, not from a cache
+    kernel = NUTS(partial(_model, spec=spec, n=n), target_accept_prob=target_accept,
+                  init_strategy=init_to_median(num_samples=10), max_tree_depth=max_tree_depth)
+    mcmc = MCMC(kernel, num_warmup=warmup, num_samples=samples, num_chains=chains, chain_method="vectorized",
+                progress_bar=False)
     mcmc.run(jax.random.PRNGKey(int(seed) % (2**31)), d, extra_fields=("diverging",))
     post = mcmc.get_samples(group_by_chain=True)
     rhat_max, ess_min = 0.0, math.inf
@@ -285,4 +282,6 @@ def fit(data: Data, spec: Spec, seed: int, *, warmup: int = 1000, samples: int =
     if keep_draws:
         step = max(1, th.shape[0] // keep_draws)
         out.draws = th[::step][:keep_draws]
+    del mcmc, kernel, post
+    jax.clear_caches()                     # the compiled sampler is not needed again
     return out
