@@ -948,7 +948,7 @@
         ${card('me', 'Me', 'my decisions', b.me.mtd_pct, false, b.me.open_count, gauge(b.me.risk_used_pct, b.me.risk_limit_pct, '% at risk'))}
         ${card('algorithm', 'Algorithm', 'mechanical rules, not AI', v10.mtd_pct, true, `${v10.n_positions} (v1.0) · ${v11.n_positions} (v1.1)`, gauge(v10.gross_leverage, v10.leverage_cap, 'gross leverage, x'),
           `<div class="bc-foot">v1.0 live since ${fmtDate(v10.live_start)}; v1.1 live from the ${fmtDate('2026-12-03')} rebalance${isNum(v11.pre_live_estimate_pct) ? ` (pre-live estimate ${fmtPct(v11.pre_live_estimate_pct, 2, true)}, not counted)` : ''}</div>`)}
-        ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, `${b.janus.open_count} of ${jn.max_open}`, gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
+        ${card('janus', 'Janus', 'AI book (experiment)', b.janus.mtd_pct, false, (jn.max_open ? `${b.janus.open_count} of ${jn.max_open}` : `${b.janus.open_count} open`), gauge(b.janus.risk_used_pct, b.janus.risk_limit_pct, '% at risk'),
           `<div class="bc-foot">${jn.last_check ? `Last checked ${fmtDateTime(jn.last_check.time)} · ${esc(jn.last_check.result || '')}` : 'Not checked yet'} · fills at the next official daily mark</div>`)}
         ${card('fund', 'Fund', 'Horizons: v1.1 + Janus, by risk', fd.live ? fd.mtd_pct : null, false, fundMix(fd), '',
           `<div class="bc-foot">${fd.live ? `Live since ${fmtDate(fd.live_start)} · ${esc(fd.allocation.basis.split(' (')[0])}` : `Starts ${fd.live_start ? fmtDate(fd.live_start) : 'when every member is live'}`} · my decisions are outside the fund</div>`, 'Weights')}
@@ -1189,7 +1189,7 @@
           <div class="vs-cash"><span>Janus ${isNum(jn.benchmark.janus_pnl_pct) ? fmtPct(jn.benchmark.janus_pnl_pct, 2, true) : '—'}</span><span>Equal-weight benchmark of the same instruments ${isNum(jn.benchmark.pnl_pct) ? fmtPct(jn.benchmark.pnl_pct, 2, true) : '—'}</span>${b.comparison.vs_cash.janus ? `<span>Cash ${fmtPct(b.comparison.vs_cash.janus.cash_pct, 2, true)}</span>` : ''}</div>
           ${eq.length ? legendRow([['Janus, excess of cash', '--book-janus'], ['Janus, total return (incl. T-bill)', '--book-janus', true]]) : ''}${totalLine(b.janus)}${tbillTable(b.janus)}</div>
       </section>
-      <section class="section"><div class="section-head"><h2>Open positions</h2><span class="muted small">${jn.n_open} of ${jn.max_open}</span></div>
+      <section class="section"><div class="section-head"><h2>Open positions</h2><span class="muted small">${jn.max_open ? `${jn.n_open} of ${jn.max_open}` : `${jn.n_open} open`}</span></div>
         ${jn.open.map(posCard).join('') || '<p class="empty">No open positions.</p>'}</section>
       <section class="section"><div class="section-head"><h2>Closed positions</h2><span class="muted small">${jn.n_closed}</span></div>
         ${jn.closed.map(posCard).join('') || '<p class="empty">None closed yet.</p>'}</section>
@@ -1345,6 +1345,10 @@
     forecasts: pageForecasts, trials: pageTrials, elections: pageElections, reports: pageReports, more: pageMore,
     evidence: pageEvidence, marks: pageMarks, screener: pageScreener, todo: pageTodo, lab: pageLab,
   };
+  // pages kept in their own files (commodities.js) register on window.LedgerPages and use these shared helpers
+  window.LedgerUI = { esc, fmtDate, fmtMonth, fmtNum, fmtPct, isNum, pill, info, load, setHead, dateChart, legendRow,
+    totalLine, tbillTable, totalDataset, signClass, mtdHtml, monthlyBarChart, view, getMeta: () => meta };
+  Object.assign(routes, window.LedgerPages || {});
   const TAB_OF = { decisions: 'me', position: '', trials: 'more', elections: 'more', reports: 'more', evidence: 'more',
                    marks: 'more', screener: 'algorithm', todo: 'more', lab: 'more', forecasts: 'more', calendar: 'more', risk: 'more',
                    postmortems: 'more' };

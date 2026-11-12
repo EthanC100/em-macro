@@ -1,5 +1,7 @@
-"""Promotion checks for the dev -> main pull request (section 5 of the brief). The promote routine opens the PR,
-with auto-merge, only when every check passes; otherwise it opens nothing and the morning report says why.
+"""Promotion checks for the dev -> main pull request (section 5 of the brief). The promote routine opens (or reuses)
+the PR and records these checks on dev, naming it; the promote-merge workflow (nightshift/promote_merge.py, main's
+code) merges it only when every check passed and the tests workflow is green, otherwise it stays open and the
+morning report flags it.
 
 Checks, all on the exact tree the PR would produce (current origin/main merged with origin/dev):
   (d) the merge is conflict-free (a trial merge in a scratch worktree; conflicts are never resolved here);
@@ -9,7 +11,7 @@ Checks, all on the exact tree the PR would produce (current origin/main merged w
       em-macro-data snapshot (one path, its commit recorded before and after both builds, so the 7-day settlement
       re-request cannot show as a difference), matches exactly, except for app data files that a queue item merged
       tonight lists under "ledger diff". Both audit chains must verify on the merged tree.
-Build stamps (built_at, commit, build id, the service worker's id) are ignored. Differences are reported as file
+Build stamps (built_at, commit, the audit's checked_at, build id, the service worker's id) are ignored. Differences are reported as file
 names and JSON key paths only, never values: the builds may read licensed settlements, and nothing derived from
 them is printed or written by this module.
 
@@ -17,7 +19,7 @@ Also refused: a busy existing writer or the wrong time (nightshift.guard), unles
 
 python -m nightshift.promote [--check-only] [--ignore-window] [--skip-tests] [--today YYYY-MM-DD]
        [--data-snapshot PATH] [--base origin/main] [--head origin/dev] [--out results/night/promote/<date>.json]
-Exit 0: all checks pass (the routine may open the PR, unless --check-only). Exit 5: a check failed.
+Exit 0: all checks pass (promote-merge may then merge the PR; never in --check-only mode). Exit 5: a check failed.
 """
 from __future__ import annotations
 
@@ -39,7 +41,10 @@ from . import queue as Q
 from . import state as S
 
 IGNORED_FILES = {"data/manifest.json", "sw.js"}
-IGNORED_KEYS = {("data/meta.json", "built_at"), ("data/meta.json", "commit")}
+# audit.checked_at (Q026): the wall-clock second ledger/audit.py ran, copied into meta.json by ledger/build.py; a
+# build stamp like built_at, so two builds a second apart never differ on it. The audit's ok, label and detail
+# are still compared.
+IGNORED_KEYS = {("data/meta.json", "built_at"), ("data/meta.json", "commit"), ("data/meta.json", "checked_at")}
 
 
 def sh(args: list[str], cwd: Path, env=None, timeout=3600) -> subprocess.CompletedProcess:

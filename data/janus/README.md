@@ -101,5 +101,6 @@ soybean products, livestock and softs (not added); Norgate (licence).
 **Costs:** the algorithm's model (10bp one way for major FX and developed bonds, 20bp for the FR-DE spread). Futures
 and options use the T20-T22 model, 2 × (US$3 + 1 tick) per contract per side and leg. The square-root impact
 estimate is added on every futures trade.
-**Limits (enforced in code):** at most 2% at risk per position, 10% in total, 8 open. Notional at most 10% of ADV and
+**Limits (enforced in code):** at most 2% at risk per position, 10% in total, 8 open (positions decided before C08;
+a C08 book has no position-count cap and is kept in 3-10% in total, config change C13). Notional at most 10% of ADV and
 below 80% of any exchange position limit (`ledger/capacity.py`), otherwise the size is cut.

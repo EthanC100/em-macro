@@ -4,6 +4,10 @@
   data window must end on or before explorer.data_end (2019-12-31) in MAIN's config/night.yaml (read fresh through
   config.load_main, never the dev checkout's copy): a row reaching later is refused (exit 1); if main's cutoff
   cannot be read, nothing is logged (exit 2, "refused: cutoff unreadable").
+* Inside the explorer's sandbox (Q019: ``.explore/sandbox.json`` and no ``.git``; see nightshift/explore_sandbox.py)
+  a variant goes to ``.explore/out/variants.csv``, checked against the cutoff the sandbox was made with (main's at
+  that time; there is no git there to fetch it). Those rows are provisional: ``explore_sandbox collect`` logs each
+  one again through this module from the routine's own checkout, against main's cutoff fetched fresh.
 * results/opposition/calibration.csv: The Opposition's probability (0-100) that a PR, queue item, idea or sleeve
   works, for later scoring (``outcome`` and ``resolved_on`` are filled when it resolves).
 
@@ -52,11 +56,32 @@ class CutoffUnreadable(RuntimeError):
     """main's explorer.data_end could not be read. Nothing is logged; the CLI exits 2 (not 1, over the cutoff)."""
 
 
+SANDBOX_META = ".explore/sandbox.json"
+
+
+def sandbox_meta() -> dict | None:
+    """The sandbox's metadata when this module runs inside an explorer sandbox (bundle present, no .git), else None."""
+    p = C.ROOT / SANDBOX_META
+    if not p.is_file() or (C.ROOT / ".git").exists():
+        return None
+    import json
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise CutoffUnreadable(f"{SANDBOX_META} unreadable: {e}") from e
+
+
+def _default_log() -> Path:
+    return C.ROOT / ".explore/out/variants.csv" if sandbox_meta() is not None else EXPLORATION
+
+
 def main_cutoff() -> date:
     """explorer.data_end from main's protected config/night.yaml (C.load_main, fetched fresh), never from the
-    checkout the explorer runs in (dev). Any failure raises CutoffUnreadable: there is no fallback."""
+    checkout the explorer runs in (dev). Any failure raises CutoffUnreadable: there is no fallback. Inside a sandbox,
+    the cutoff it was made with (provisional: collect checks every row again against main's)."""
     try:
-        v = C.load_main()["explorer"]["data_end"]
+        meta = sandbox_meta()
+        v = meta["cutoff"] if meta is not None else C.load_main()["explorer"]["data_end"]
         if isinstance(v, datetime):
             return v.date()
         if isinstance(v, date):
@@ -68,8 +93,9 @@ def main_cutoff() -> date:
         raise CutoffUnreadable(f"{type(e).__name__}: {e}") from e
 
 
-def log_variant(row: dict, path: Path = EXPLORATION, data_end_max: str | None = None) -> dict:
+def log_variant(row: dict, path: Path | None = None, data_end_max: str | None = None) -> dict:
     cap = main_cutoff()
+    path = Path(path) if path is not None else _default_log()
     if data_end_max is not None:
         cap = min(cap, date.fromisoformat(data_end_max))   # can only tighten main's cutoff, never loosen it
     end, start = date.fromisoformat(row["data_end"]), date.fromisoformat(row["data_start"])
@@ -77,7 +103,10 @@ def log_variant(row: dict, path: Path = EXPLORATION, data_end_max: str | None = 
         raise ValueError(f"data_end {end} is after {cap}: exploration never uses 2020+ returns")
     if start > end:
         raise ValueError("data_start is after data_end")
-    if any(r["variant_id"] == row["variant_id"] for r in _rows(path)):
+    seen = _rows(path)
+    if path != EXPLORATION and sandbox_meta() is not None:       # the sandbox's copy of dev's log counts too
+        seen += _rows(C.ROOT / ".explore/exploration_log.csv")
+    if any(r["variant_id"] == row["variant_id"] for r in seen):
         raise ValueError(f"variant {row['variant_id']} is already logged (variants are never overwritten)")
     row = {"logged_on": date.today().isoformat(), **row}
     _append(path, EXP_COLS, row)

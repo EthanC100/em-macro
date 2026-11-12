@@ -1,0 +1,110 @@
+{
+ "recorded_at": "2026-11-09T03:35:43+00:00",
+ "M1": "2026-12",
+ "first_evaluation": {
+  "months": "2026-12..2031-11",
+  "date": "2031-12-15"
+ },
+ "second_evaluation": {
+  "months": "2026-12..2034-11",
+  "date": "2034-12-15",
+  "applies_to": "sleeves inconclusive at the first evaluation"
+ },
+ "confirmed": false,
+ "universe": {
+  "T25": [
+   "CL",
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL"
+  ],
+  "T26": [
+   "CL",
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL",
+   "GC",
+   "SI",
+   "PL",
+   "6E",
+   "6B",
+   "6M"
+  ]
+ },
+ "N": {
+  "T25": 11,
+  "T26": 17
+ },
+ "sr_pred": {
+  "T25": 0.3223,
+  "T26": 0.3762
+ },
+ "P0": {
+  "ok": true,
+  "mismatch": []
+ },
+ "P1_P2": {
+  "prelive_checked_at": "2026-11-09T03:35:42+00:00",
+  "file": "results/shadows/prelive.json"
+ },
+ "commit": "f335afcdd653ea12ad7e906c04e376ffbf2a8929",
+ "rules": "docs/prereg/T25-T26_live_shadows.md with Amendments 1 and 2",
+ "amendment_2": {
+  "amended_at": "2026-11-09T03:59:44+00:00",
+  "prelive": "results/shadows/prelive_amendment2.json",
+  "before": {
+   "universe": {
+    "T25": [
+     "RB",
+     "HO",
+     "NG",
+     "HG",
+     "ZC",
+     "ZS",
+     "ZW",
+     "KE",
+     "ZM",
+     "ZL"
+    ],
+    "T26": [
+     "RB",
+     "HO",
+     "NG",
+     "HG",
+     "ZC",
+     "ZS",
+     "ZW",
+     "KE",
+     "ZM",
+     "ZL",
+     "GC",
+     "SI",
+     "PL"
+    ]
+   },
+   "N": {
+    "T25": 10,
+    "T26": 13
+   },
+   "sr_pred": {
+    "T25": 0.3073,
+    "T26": 0.329
+   }
+  },
+  "commit": "67d33bfb06d83634c8ad3e136db9677deef95269"
+ }
+}

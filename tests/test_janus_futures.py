@@ -127,7 +127,7 @@ GOLD_SPREAD = {"legs": "long 4200 call, short 4600 call", "expiry": "2027-01-26"
                "iv_source": "estimate"}
 
 
-def test_option_spread_fill_model_value_and_expiry(tmp_path, store):
+def test_option_spread_fill_model_value_and_expiry(tmp_path, store, frozen_repo):
     n = fut(instrument="GOLD", stop=3800.0, horizon="2027-01-26", option=GOLD_SPREAD, contract="2027-02")
     n.pop("direction")
     path, recs = _open(tmp_path, store, n, pts=(("2026-11-05", 4100.0),), prod="GOLD", month="2027-02")
@@ -149,7 +149,7 @@ def test_option_spread_fill_model_value_and_expiry(tmp_path, store):
     assert "4500" not in path.read_text() and "4110" not in path.read_text()
 
 
-def test_option_worthless_loses_exactly_the_risk(tmp_path, store):
+def test_option_worthless_loses_exactly_the_risk(tmp_path, store, frozen_repo):
     n = fut(instrument="GOLD", stop=3000.0, horizon="2027-01-26", option=GOLD_SPREAD, contract="2027-02")
     path, recs = _open(tmp_path, store, n, pts=(("2026-11-05", 4100.0),), prod="GOLD", month="2027-02")
     settle(store, "GOLD", "2027-02", [("2026-11-09", 4100.0), ("2027-01-26", 4000.0)])
@@ -165,14 +165,14 @@ def test_option_worthless_loses_exactly_the_risk(tmp_path, store):
     ({**GOLD_SPREAD, "expiry": "2027-03-26"}, "notice date"),
     ({**GOLD_SPREAD, "legs": "long 4200 call, long 4600 put, short 4800 call"}, "vertical"),
 ])
-def test_option_rule_checks(tmp_path, store, opt, expect):
+def test_option_rule_checks(tmp_path, store, opt, expect, frozen_repo):
     settle(store, "GOLD", "2027-02", [("2026-11-05", 4100.0)])
     n = fut(instrument="GOLD", stop=3800.0, horizon="2027-01-20", option=opt, contract="2027-02")
     res = J.apply_proposal(review(new_positions=[n]), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)
     assert not res["ok"] and any(expect in e for e in res["errors"]), res["errors"]
 
 
-def test_horizon_after_expiry_and_credit_spread(tmp_path, store):
+def test_horizon_after_expiry_and_credit_spread(tmp_path, store, frozen_repo):
     settle(store, "GOLD", "2027-02", [("2026-11-05", 4100.0)])
     n = fut(instrument="GOLD", stop=3800.0, horizon="2027-02-10", option=GOLD_SPREAD, contract="2027-02")
     res = J.apply_proposal(review(new_positions=[n]), now=NOW, path=tmp_path / "r.jsonl", marks_rows=MARKS)

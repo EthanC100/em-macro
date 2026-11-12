@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import seed_ledger
+from conftest import frozen_copy, seed_ledger
 from ledger import clerk, intake
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,7 +111,7 @@ def test_log_writes_through_ledger_commit_and_seals(tmp_path):
     for d in ("ledger", "scripts"):
         shutil.copytree(ROOT / d, work / d, ignore=shutil.ignore_patterns("__pycache__", "site"))
     seed_ledger(work)
-    shutil.copytree(ROOT / "data/janus", work / "data/janus")
+    shutil.copytree(frozen_copy("data/janus"), work / "data/janus")
     (work / ".gitignore").write_text("__pycache__/\n")
     _git("init", "-q", "-b", "test", cwd=work)
     _git("-c", "user.name=t", "-c", "user.email=t@t", "add", "-A", cwd=work)

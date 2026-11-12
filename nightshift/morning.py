@@ -53,15 +53,23 @@ def _short(reason: str, n: int = 110) -> str:
     return f"{head}: {', '.join(items[:2])} (+{len(items) - 2} more)" if len(items) > 2 else reason[:n] + "..."
 
 
-def promoted(day: date) -> str:
+def promoted(day: date, main: str = "origin/main") -> str:
+    """Whether the night's promotion reached main. The promote-merge workflow merges the PR (merge commit) only when
+    every check passed and the tests went green; a promotion whose checked dev commit is not on main is flagged."""
     p = ROOT / f"results/night/promote/{day.isoformat()}.json"
     if not p.exists():
         return "no - promote did not run (no record)"
     r = json.loads(p.read_text(encoding="utf-8"))
-    if r.get("ok") and r.get("mode") == "promote":
-        return f"yes - PR opened with auto-merge ({r.get('pr', 'see PR list')})"
     why = "; ".join(_short(x) for x in r.get("reasons") or []) or "checks passed"
-    return f"no - {'check only: ' if r.get('mode') == 'check only' else ''}{why}"
+    if r.get("mode") != "promote":
+        return f"no - {'check only: ' if r.get('mode') == 'check only' else ''}{why}"
+    pr = r.get("pr") if r.get("pr") not in (None, "", "none") else None
+    if r.get("ok") and r.get("head") and on_branch(r["head"], main):
+        return f"yes - merged into main ({pr or 'see the PR list'})"
+    if r.get("ok"):
+        return (f"NOT MERGED - {pr or 'no PR recorded'} is open: checks passed but promote-merge has not merged it "
+                "(see its comment on the PR)")
+    return f"NOT MERGED - {pr + ' left open; ' if pr else ''}{why}"
 
 
 MERGE_SUBJECT = re.compile(r"^(Merge Q\d{3,}|Q\d{3,}:|night-start: merge main)")

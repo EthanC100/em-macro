@@ -5,6 +5,16 @@
 # peak, live Sharpe after costs and the carry spread against the frozen 2005-2019 threshold, with a flag for every
 # triggered rule (shown in the Ledger app and in the night shift's morning report).
 # It NEVER changes exposure, never edits frozen v1.0 code, configs or tags, and leaves systematic-monthly unchanged.
+#
+# 2026-11-12 (Ethan): it acts only when the monthly run's `update` job actually ran and succeeded (the `ran` job asks
+# the Actions API). Since Q002 a systematic-monthly run can end "success" with `update` skipped (the due gate found
+# the month already rebalanced: the kick's or a backup's second attempt, or a safe-check dispatch), and the
+# Monday/Thursday keep-cache runs end "success" with no update at all; none of them books a month-end. If the API
+# cannot be read, it runs (re-evaluating is idempotent; a missed month-end is worse).
+# 2026-11-12 (Ethan): main only. Both jobs run only from refs/heads/main: on a workflow_dispatch, or after a
+# systematic-monthly run of main (never a run of another branch or of a pull request). A run from any other branch or
+# tag, or on any other event, runs nothing (tests/test_systematic_main_only.py). Writer workflows are dispatched only
+# by the dispatch-only kick session or by Ethan (CLAUDE.md rule 16).
 name: v1-rules-monitor
 
 on:
@@ -22,9 +32,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Did the triggering systematic-monthly run's `update` job run and succeed? Reads the run's jobs; writes nothing.
+  ran:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - name: Did the monthly update job run and succeed?
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "manual run: evaluating"; echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          update=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" \
+                     --jq '[.jobs[] | select(.name == "update") | .conclusion][0] // "absent"') || update="unreadable"
+          echo "systematic-monthly run $RUN_ID: update job ${update:-absent}"
+          case "$update" in
+            success)    echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            unreadable) echo "jobs API unreadable: evaluating anyway"; echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *)          echo "no month-end booked by this run: nothing to evaluate"; echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
   monitor:
-    # the monthly run's keep-cache job also completes the workflow: only act when main may have a new month-end
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: ran
+    # only when the monthly update ran and succeeded (or by hand); never after a gate skip or a keep-cache run
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')) && needs.ran.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

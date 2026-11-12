@@ -13,6 +13,7 @@ import pytest
 from ledger import janus as J
 from test_janus import SOURCES_READ, pos, review
 from test_janus_c06 import EVENT, SR, marks
+from conftest import frozen_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
@@ -197,7 +198,7 @@ def test_a_future_event_may_be_described_as_due(tmp_path, reasoning):
 
 # ----------------------------------------------------------------------------- the 10 Nov 10:30 UTC review (J001, J002)
 def _records_until(seq):
-    return [json.loads(x) for x in (ROOT / "data/janus/records.jsonl").read_text(encoding="utf-8").splitlines()
+    return [json.loads(x) for x in frozen_copy("data/janus/records.jsonl").read_text(encoding="utf-8").splitlines()
             if x.strip() and json.loads(x)["seq"] <= seq]
 
 

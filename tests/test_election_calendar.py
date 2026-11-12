@@ -7,7 +7,7 @@ from em_macro.election_tracker.calendar import apply_infobox, infobox_date
 from em_macro.election_tracker.common import CAL_COLS, load_calendar
 
 
-def test_calendar_file_shape():
+def test_calendar_file_shape(frozen_repo):
     cal = load_calendar()
     assert list(cal.columns) == CAL_COLS
     assert cal["id"].is_unique

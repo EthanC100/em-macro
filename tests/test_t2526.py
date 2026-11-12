@@ -701,7 +701,7 @@ def test_apply_result_writes_private_files_without_checking(store, tmp_path, mon
         D.apply_result(res, base, log=lambda *_: None)
 
 
-def test_recorded_amendment2_result_and_go_live():
+def test_recorded_amendment2_result_and_go_live(frozen_repo):
     """The committed record of run #3: 18 markets, LE the only exclusion, and the amended provisional go-live."""
     pre = json.loads(D.PRELIVE_A2.read_text())
     assert len(pre["markets"]) == 18 and [c for c, m in pre["markets"].items() if not m["passed"]] == ["LE"]

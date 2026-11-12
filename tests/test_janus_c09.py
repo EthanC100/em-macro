@@ -17,6 +17,7 @@ import pytest
 
 from ledger import janus as J
 from ledger import marks as M
+from conftest import frozen_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 UST = ('Date,"1 Mo","1.5 Month","2 Mo","3 Mo","4 Mo","6 Mo","1 Yr","2 Yr","3 Yr","5 Yr","7 Yr","10 Yr","20 Yr",'
@@ -87,7 +88,7 @@ def test_on_review_day_us10y_is_marked_from_the_previous_business_day_not_two_da
 
 def test_the_treasury_curve_and_fred_dgs10_are_the_same_numbers():
     """The stored FRED marks for 5-6 Nov equal Treasury's 10-year CMT on those dates (the series is the same)."""
-    rows = {r["date"]: r["value"] for r in csv.DictReader((ROOT / "data/ledger/marks.csv").open())
+    rows = {r["date"]: r["value"] for r in csv.DictReader(frozen_copy("data/ledger/marks.csv").open())
             if r["instrument"] == "US10Y" and r["source"] == "fred DGS10"}
     pts = dict(M.ustreasury_history("10 Yr", None, fake({"2026": UST}), today=date(2026, 11, 11))[0])
     assert float(rows["2026-11-06"]) == pts[date(2026, 11, 6)]

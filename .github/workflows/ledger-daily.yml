@@ -8,6 +8,10 @@
 #
 # Repository settings needed once: Settings > Actions > General > Workflow permissions = "Read and
 # write permissions".
+# 2026-11-12 (Ethan): main only. The daily job runs only on a schedule event or a workflow_dispatch from
+# refs/heads/main. A run from any other branch or tag, or on any other event, runs nothing
+# (tests/test_systematic_main_only.py). Writer workflows are dispatched only by the dispatch-only kick session or by
+# Ethan (CLAUDE.md rule 16).
 name: ledger-daily
 
 # 2026-11-06: runs on 4 and 5 Nov were green but committed nothing: `git add` listed automation_log.csv and
@@ -36,6 +40,7 @@ concurrency:
 
 jobs:
   daily:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -132,6 +137,19 @@ jobs:
           git add -A -- databento/shadows shadows ledger
           git diff --cached --quiet || { git commit -q -m "Shadows T25-T26 $(date -u +%Y-%m-%d)"; git pull -q --rebase; git push -q; }
 
+      # Commodities book (config change C12, ledger/commodities.py): the T26 shadow x k at US$100m paper size. It
+      # reads the shadow's output above (never writes to it) and the private contract files, and writes contract
+      # counts and risk shares only (data/commodities/positions.csv): no price. Nothing to do before go-live.
+      # It can never stop the marks: continue-on-error, and a step timeout so a hang fails this step instead of the
+      # job. A failure opens its own alert issue (step "Commodities book alert" below).
+      - name: Commodities book (contract counts; no price published)
+        id: commodities
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          EM_MACRO_DATA: ${{ github.workspace }}/.em-macro-data
+        run: python -m ledger.commodities update 2>&1 | tee "$RUNNER_TEMP/commodities.log"
+
       # Post-mortems are written in the Janus daily review session (docs/janus/daily_review.md), not here.
       - name: Stress tests and what changed
         id: analytics
@@ -153,7 +171,7 @@ jobs:
                  data/ledger/automation_log.csv data/ledger/api_log.csv data/ledger/postmortems
                  data/ledger/reports data/ledger/changes.json data/ledger/state.json
                  data/ledger/stress.json data/ledger/stress_history.json data/raw/bist data/raw/bondspot
-                 results/shadows)
+                 results/shadows data/commodities)
           existing=()
           for p in "${paths[@]}"; do [ -e "$p" ] && existing+=("$p"); done
           git add -- "${existing[@]}"
@@ -286,6 +304,44 @@ jobs:
             echo
             cat "$RUNNER_TEMP/resolve.log" 2>/dev/null | tail -n 60
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The Commodities book step continues on error, so the job stays green and the alert above never fires for it.
+      # Its own issue: "[ALERT] Commodities book" (not "[ALERT] ledger-daily...", which a green run closes at once),
+      # opened or updated on a failure and closed by the next run in which the step succeeds.
+      - name: Commodities book alert
+        if: always() && (steps.commodities.outcome == 'failure' || steps.commodities.outcome == 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.commodities.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="[ALERT] Commodities book step failed"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert \
+                       --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "::warning::Commodities book step failed (marks were still committed): $RUN_URL"
+            body="$RUNNER_TEMP/commodities_alert.md"
+            {
+              echo "The Commodities book step of ledger-daily failed on $(date -u +%Y-%m-%d): $RUN_URL."
+              echo
+              echo "Marks, closes and resolutions were committed as usual: the step continues on error. The book's"
+              echo "contract counts (data/commodities/positions.csv) were not updated; its returns, read from the"
+              echo "shadow's output, are unaffected."
+              echo
+              echo '```'
+              sed -e 's/\x1b\[[0-9;]*[mK]//g' "$RUNNER_TEMP/commodities.log" 2>/dev/null | tail -n 40
+              echo '```'
+            } > "$body"
+            gh label create alert --repo "$GITHUB_REPOSITORY" --color d73a4a --force >/dev/null 2>&1 || true
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body-file "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "Resolved: the Commodities book step succeeded on $(date -u +%Y-%m-%d) ($RUN_URL)."
+          fi
 
       - name: Open or update the alert issue
         if: failure()

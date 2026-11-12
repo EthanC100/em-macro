@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import seed_ledger
+from conftest import frozen_copy, seed_ledger
 from ledger import independence, intake, marks, resolve, schema, scoring
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +54,7 @@ def _mark(instrument, day, value, unit="BRL per USD", freq="daily"):
 def root(tmp_path):
     seed_ledger(tmp_path, marks=False)
     (tmp_path / "results/systematic").mkdir(parents=True)
-    shutil.copy(ROOT / "results/systematic/positions.csv", tmp_path / "results/systematic/positions.csv")
+    shutil.copy(frozen_copy("results/systematic/positions.csv"), tmp_path / "results/systematic/positions.csv")
     return tmp_path
 
 
@@ -153,7 +153,7 @@ def test_stop_rule_from_entry_or_wording():
     assert resolve.stop_hit(_decision(), 5.71) is True and resolve.stop_hit(_decision(), 5.69) is False
 
 
-def test_stop_close_uses_first_crossing_mark():
+def test_stop_close_uses_first_crossing_mark(frozen_repo):
     d = _decision()
     mk = [_mark("BRL", "2026-11-02", 5.50), _mark("BRL", "2026-11-05", 5.75), _mark("BRL", "2026-11-06", 5.60)]
     changed, issues, log = resolve.process_decisions([d], mk, REGISTRY, date(2026, 11, 7))
@@ -165,19 +165,19 @@ def test_stop_close_uses_first_crossing_mark():
     assert scoring.score_decision(d)["brier"] == 0.36      # p 60% and wrong
 
 
-def test_stop_close_without_entry_level_books_the_size_at_risk():
+def test_stop_close_without_entry_level_books_the_size_at_risk(frozen_repo):
     d = _decision(entry_level="")
     changed, _, _ = resolve.process_decisions([d], [_mark("BRL", "2026-11-05", 5.80)], REGISTRY, date(2026, 11, 6))
     assert changed and d["outcome"] == "wrong" and d["pnl_pct"] == "-1" and "size at risk" in d["resolution_note"]
 
 
-def test_marks_before_the_decision_never_close_it():
+def test_marks_before_the_decision_never_close_it(frozen_repo):
     d = _decision()
     changed, issues, _ = resolve.process_decisions([d], [_mark("BRL", "2026-10-20", 5.90)], REGISTRY, date(2026, 11, 5))
     assert not changed and not issues and d["status"] == "open"
 
 
-def test_monthly_or_carried_marks_never_stop_or_close_a_position():
+def test_monthly_or_carried_marks_never_stop_or_close_a_position(frozen_repo):
     # D001's failure mode: a monthly average below the stop must not close the position
     d = _decision(instrument="FR-DE 10y OAT-Bund spread", action="Sell", entry_level="159", stop="115",
                   date="2026-10-30", horizon="2027-04-18")
@@ -207,7 +207,7 @@ def test_riksbank_and_jgb_parsers():
     assert not reg["FR-DE"]["fallback_source"]       # never falls back to a monthly average
 
 
-def test_horizon_close_scores_by_pnl_sign():
+def test_horizon_close_scores_by_pnl_sign(frozen_repo):
     d = _decision()
     mk = [_mark("BRL", "2026-11-20", 5.30), _mark("BRL", "2026-12-01", 5.20)]
     changed, issues, _ = resolve.process_decisions([d], mk, REGISTRY, date(2026, 11, 30))
@@ -223,7 +223,7 @@ def test_horizon_close_scores_by_pnl_sign():
     assert d["outcome"] == "scratched"
 
 
-def test_horizon_close_of_a_no_trade_and_unresolvable_cases():
+def test_horizon_close_of_a_no_trade_and_unresolvable_cases(frozen_repo):
     nt = _decision(id="D011", action="No trade", size_pct="0", entry_level="", stop="View is wrong if USD/BRL closes above 5.70")
     changed, issues, _ = resolve.process_decisions([nt], [_mark("BRL", "2026-11-20", 5.50)], REGISTRY, date(2026, 12, 1))
     assert changed and nt["outcome"] == "right" and nt["pnl_pct"] == "" and "no-trade view held" in nt["resolution_note"]
@@ -540,7 +540,7 @@ def test_screener_outputs_are_filed_as_a_report(tmp_path):
 from ledger import build  # noqa: E402
 
 
-def test_todo_parsing_and_build(tmp_path):
+def test_todo_parsing_and_build(tmp_path, frozen_repo):
     td = build.parse_todo("# To do\n\nIntro line.\n\n## A\n\n- [x] done thing (with a longer note here)\n- [ ] open thing\n\n## B\n\n- [ ] other\n")
     assert td["n"] == 3 and td["done"] == 1 and td["intro"] == "Intro line."
     assert td["sections"][0]["items"][0] == {"done": True, "text": "done thing", "note": "with a longer note here"}

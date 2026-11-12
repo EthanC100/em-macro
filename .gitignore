@@ -232,3 +232,9 @@ app/
 
 # private data checkout used by ledger-daily (licensed settlements)
 .em-macro-data/
+
+# Manhattan simulation: runtime state of a run in progress (results and the run log are kept)
+results/manhattan_sim/heartbeat.json
+results/manhattan_sim/heartbeat.json.tmp
+results/manhattan_sim/.run.lock/
+results/manhattan_sim/logs/

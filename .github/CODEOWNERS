@@ -67,4 +67,22 @@
 /.github/CODEOWNERS @EthanC100
 /docs/rulesets/ @EthanC100
 
+# Manhattan: the frozen simulation pre-registration, its recorded hash, the protocol it tests, the code and the
+# test that check the hash, and Manhattan's switches (docs/manhattan/ETHAN_ACTIONS.md item 5)
+/docs/manhattan/SIM_PREREG.md @EthanC100
+/docs/manhattan/sim_prereg.sha256 @EthanC100
+/docs/manhattan/PROTOCOL_v3.md @EthanC100
+/manhattan/prereg.py @EthanC100
+/tests/test_manhattan_prereg.py @EthanC100
+/config/manhattan.yaml @EthanC100
+
+# Q019: exploration data: the only loader and the explorer's sandbox, the extract's public manifest (hashes; the
+# extract itself lives in the private em-macro-data), and the variant log's cutoff check (also always protected in
+# nightshift/protected.py)
+/nightshift/explore_data.py @EthanC100
+/nightshift/explore_sandbox.py @EthanC100
+/config/exploration_manifest.json @EthanC100
+/nightshift/logs.py @EthanC100
+
+
 # protected:end

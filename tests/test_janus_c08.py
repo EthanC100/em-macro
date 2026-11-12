@@ -19,6 +19,7 @@ from ledger import janus as J
 from ledger import pricing as PX
 from test_janus import _m, pos
 from test_janus_c06 import LEVELS as LEVELS6, PUBLIC as PUBLIC6, SR, UNITS as UNITS6
+from conftest import frozen_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
@@ -321,7 +322,7 @@ def test_the_opposition_never_vetoes_a_forecast(tmp_path):
 
 # ----------------------------------------------------------------------------- 5. J001 and J002
 def _chain_until(seq):
-    return [json.loads(x) for x in (ROOT / "data/janus/records.jsonl").read_text(encoding="utf-8").splitlines()
+    return [json.loads(x) for x in frozen_copy("data/janus/records.jsonl").read_text(encoding="utf-8").splitlines()
             if x.strip() and json.loads(x)["seq"] <= seq]
 
 

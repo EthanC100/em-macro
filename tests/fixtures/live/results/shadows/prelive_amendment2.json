@@ -1,0 +1,342 @@
+{
+ "reconstructed_from": "shadows-setup run #3 (Actions run 42559206297, mode amendment-2-rerun, commit 67d33bf), job log of the step 'Amendment 2 rerun of the check (once, all 18 markets, final)'. The run completed the check and printed one line per market and the universe, then failed to commit (git exit 128: no committer identity in the em-macro-data checkout). This file records exactly what the log shows; nothing was recomputed and the check was not rerun.",
+ "not_in_the_log": [
+  "contracts per market",
+  "chain months and differing months",
+  "P1 window, market days and minimum shares",
+  "checked_at (the per-market lines are timestamped 2026-11-09T03:59:06.9297537Z to 2026-11-09T03:59:44.1427174Z)"
+ ],
+ "amendment": "Amendment 2: single rerun with exchange-rule last trade dates on the Databento side (final)",
+ "rule": "docs/prereg/T25-T26_live_shadows.md Amendment 1 A1.2 (prices, chain) and \u00a78 P1, with Amendment 2",
+ "tolerance": "one tick",
+ "min_share": 0.99,
+ "history_start": "2023-01-01",
+ "markets": {
+  "CL": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 39344,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "RB": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 34987,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "HO": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 34991,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "NG": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 39559,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "HG": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 17047,
+    "factor": 100.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "GC": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 13962,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "SI": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 12173,
+    "factor": 100.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "PL": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 9606,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZC": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 12768,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZS": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 17336,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZW": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 11815,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "KE": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 11824,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZM": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 20092,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "ZL": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 20092,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": true,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "LE": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 8979,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": false
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": false,
+   "reason": "F1/F2 chain differs"
+  },
+  "6E": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 13017,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "6B": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 13019,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  },
+  "6M": {
+   "prices": {
+    "share": 1.0,
+    "common_days": 6065,
+    "factor": 1.0
+   },
+   "chain": {
+    "equal": true
+   },
+   "P1": {
+    "qualifies_T25": false,
+    "qualifies_T26": true
+   },
+   "passed": true
+  }
+ },
+ "universe_after_check": {
+  "T25": [
+   "CL",
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL"
+  ],
+  "T26": [
+   "CL",
+   "RB",
+   "HO",
+   "NG",
+   "HG",
+   "ZC",
+   "ZS",
+   "ZW",
+   "KE",
+   "ZM",
+   "ZL",
+   "GC",
+   "SI",
+   "PL",
+   "6E",
+   "6B",
+   "6M"
+  ]
+ },
+ "log_lines": [
+  "CL: share 1.0000 over 39344 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "RB: share 1.0000 over 34987 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "HO: share 1.0000 over 34991 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "NG: share 1.0000 over 39559 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "HG: share 1.0000 over 17047 days, factor 100, chain equal, P1 T25 True T26 True: PASS",
+  "GC: share 1.0000 over 13962 days, factor 1, chain equal, P1 T25 False T26 True: PASS",
+  "SI: share 1.0000 over 12173 days, factor 100, chain equal, P1 T25 False T26 True: PASS",
+  "PL: share 1.0000 over 9606 days, factor 1, chain equal, P1 T25 False T26 True: PASS",
+  "ZC: share 1.0000 over 12768 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "ZS: share 1.0000 over 17336 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "ZW: share 1.0000 over 11815 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "KE: share 1.0000 over 11824 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "ZM: share 1.0000 over 20092 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "ZL: share 1.0000 over 20092 days, factor 1, chain equal, P1 T25 True T26 True: PASS",
+  "LE: share 1.0000 over 8979 days, factor 1, chain differs, P1 T25 False T26 True: FAIL",
+  "6E: share 1.0000 over 13017 days, factor 1, chain equal, P1 T25 False T26 True: PASS",
+  "6B: share 1.0000 over 13019 days, factor 1, chain equal, P1 T25 False T26 True: PASS",
+  "6M: share 1.0000 over 6065 days, factor 1, chain equal, P1 T25 False T26 True: PASS",
+  "{\"T25\": [\"CL\", \"RB\", \"HO\", \"NG\", \"HG\", \"ZC\", \"ZS\", \"ZW\", \"KE\", \"ZM\", \"ZL\"], \"T26\": [\"CL\", \"RB\", \"HO\", \"NG\", \"HG\", \"ZC\", \"ZS\", \"ZW\", \"KE\", \"ZM\", \"ZL\", \"GC\", \"SI\", \"PL\", \"6E\", \"6B\", \"6M\"]}"
+ ]
+}

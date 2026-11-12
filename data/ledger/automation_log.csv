@@ -4,3 +4,6 @@ date,kind,id,action,detail
 2026-11-11,forecast,F003,resolved no,"session (claude-opus-5-5); Brier me 0.2025, market 0.09, Claude 0.16"
 2026-11-11,event check,F004,unresolved,"AP has not called Alaska as of 11 Nov 2026: Peltola led Sullivan by about 2,500 votes with about 76% counted (Alaska's News Source, 10 Nov); ranked-choice tabulation is due 18 Nov. (claude-opus-5-5)"
 2026-11-11,forecast,F005,resolved no,"session (claude-opus-5-5); Brier me 0.25, market 0.1369, Claude 0.1764"
+2026-11-12,issue,F004,[RESOLVE?],event question; not settled by the forecast resolver session 2 or more days after the resolution date; its last finding: 2026-11-11: AP has not called Alaska as of 11 Nov 2026: Peltola led Sullivan by
+2026-11-12,issue,F004,[RESOLVE?],event question; not settled by the forecast resolver session 2 or more days after the resolution date; its last finding: 2026-11-11: AP has not called Alaska as of 11 Nov 2026: Peltola led Sullivan by
+2026-11-12,issue,F004,[RESOLVE?],event question; not settled by the forecast resolver session 2 or more days after the resolution date; its last finding: 2026-11-11: AP has not called Alaska as of 11 Nov 2026: Peltola led Sullivan by

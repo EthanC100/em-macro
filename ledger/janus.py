@@ -70,6 +70,8 @@ Rules (enforced in code; a proposal that breaks any of them is rejected whole an
     below_budget and deferrals, C06 rules 1-2, C07 rules 1, 2 and 4;
   * config change C11 (approved 2026-11-11): a C08 review's forecast base marks and the fills of its orders,
     resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date;
+  * config change C13 (approved 2026-11-12): a C08 book has no position-count cap (it holds every watchlist
+    instrument); the 2% per-position cap and the 3-10% total band still apply;
   * stops can only be tightened; positions close automatically at the first daily mark through the stop, at the
     first mark dated on or after the horizon, or at the first mark dated on or after a close decision;
   * entry at the next official daily mark: the first first-hand daily mark dated on or after the decision's UTC date.
@@ -174,6 +176,16 @@ C08_DISCRETIONARY = ("new_positions", "reviews", "below_budget", "candidates", "
 # and the fills of its orders and closes, use the first first-hand daily mark dated strictly after the review's UTC
 # date (rolling forward over weekends and holidays), never a mark the review could already see
 C11_FROM = date(2026, 11, 11)
+# Config change C13 (approved by Ethan 2026-11-12): a C08 book holds a position on every watchlist instrument, so it has
+# no position-count cap (MAX_OPEN applies only to positions decided before C08). The 2% per-position cap and the
+# 3-10% total band still apply (c08_targets).
+C13_FROM = date(2026, 11, 12)
+
+
+def max_open_for(records: list[dict]) -> int | None:
+    """The position-count cap in force: none once an accepted C08 daily review exists (C13), else MAX_OPEN."""
+    c08 = any(r.get("type") == "run" and r.get("c08") and r.get("status") != "failed" for r in records)
+    return None if c08 else MAX_OPEN
 ROLL_BUFFER_DAYS, ROLL_BEFORE_NOTICE_DAYS = 35, 10
 MONTH_CODES = "FGHJKMNQUVXZ"
 GENESIS = "0" * 64
@@ -608,7 +620,7 @@ def summarize(records: list[dict], marks_rows: list[dict], today: date | None = 
         "fill_rule": "Trades fill at the next official daily mark (the first first-hand daily mark dated on or after the "
                      "decision date), not at the price when Janus decides.",
         "risk_used_pct": round(open_risk(positions(records)), 3), "risk_limit_pct": MAX_RISK_TOTAL,
-        "max_risk_pos_pct": MAX_RISK_POS, "max_open": MAX_OPEN, "n_open": len(open_rows),
+        "max_risk_pos_pct": MAX_RISK_POS, "max_open": max_open_for(records), "n_open": len(open_rows),
         "hit_rate": round(100 * right / n_closed, 1) if n_closed else None, "n_closed": n_closed, "n_right": right,
         "brier": round(sum(briers) / len(briers), 4) if briers else None,
         "calls_needed": need, "mean_probability": round(100 * pbar, 1),
@@ -2458,7 +2470,8 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
             "unit", "estimate", "decided_at")
     from . import postmortem as PMm
     return {"today": today.isoformat(), "chain": s["chain"],
-            "rules": {"max_risk_position_pct": MAX_RISK_POS, "max_risk_total_pct": MAX_RISK_TOTAL, "max_open": MAX_OPEN,
+            "rules": {"max_risk_position_pct": MAX_RISK_POS, "max_risk_total_pct": MAX_RISK_TOTAL,
+                      "max_open": max_open_for(records),          # None for a C08 book (C13)
                       "capacity": "notional at most 10% of ADV and below 80% of any position limit",
                       "stops": "tighten only", "entry": "next available official daily mark, not the price now",
                       "thesis": "2-3 sentences",
