@@ -1,0 +1,110 @@
+{
+ "decision": "D004",
+ "as_of": "2026-10",
+ "month_end": "2026-10-31",
+ "evaluated_at": "2026-11-11T06:36:16Z",
+ "next_rebalance": "2026-11-03",
+ "live_start": "2026-10-31",
+ "live_months": 0,
+ "last_booked_month": null,
+ "index": 100.0,
+ "peak": 100.0,
+ "drawdown_pct": 0.0,
+ "halved": false,
+ "sharpe": null,
+ "carry_spread_pp": 40.0965,
+ "carry_threshold_pp": 2.7299,
+ "carry_below": false,
+ "carry_streak": 0,
+ "carry_holdings": [
+  {
+   "instrument": "MX10Y",
+   "weight_pct": 125.85,
+   "carry_pp": 2.825,
+   "contribution_pp": 3.5553
+  },
+  {
+   "instrument": "TR10Y",
+   "weight_pct": -45.32,
+   "carry_pp": -1.314,
+   "contribution_pp": 0.5955
+  },
+  {
+   "instrument": "TRY",
+   "weight_pct": 95.78,
+   "carry_pp": 33.061,
+   "contribution_pp": 31.6658
+  },
+  {
+   "instrument": "IDR",
+   "weight_pct": 56.31,
+   "carry_pp": 1.87,
+   "contribution_pp": 1.053
+  },
+  {
+   "instrument": "BRL",
+   "weight_pct": 34.81,
+   "carry_pp": 9.87,
+   "contribution_pp": 3.4357
+  },
+  {
+   "instrument": "MXN",
+   "weight_pct": -37.78,
+   "carry_pp": 2.62,
+   "contribution_pp": -0.9898
+  },
+  {
+   "instrument": "PLN",
+   "weight_pct": -44.38,
+   "carry_pp": -0.13,
+   "contribution_pp": 0.0577
+  },
+  {
+   "instrument": "EUR",
+   "weight_pct": -52.41,
+   "carry_pp": -1.38,
+   "contribution_pp": 0.7233
+  }
+ ],
+ "rule4_hits": [],
+ "rules": [
+  {
+   "rule": 1,
+   "name": "halve",
+   "status": "ok",
+   "detail": "no live month booked yet (first official month-end: Nov 2026, booked at the 3 Dec 2026 run)",
+   "action": ""
+  },
+  {
+   "rule": 2,
+   "name": "stop",
+   "status": "ok",
+   "detail": "no live month booked yet (first official month-end: Nov 2026, booked at the 3 Dec 2026 run)",
+   "action": ""
+  },
+  {
+   "rule": 3,
+   "name": "time",
+   "status": "ok",
+   "detail": "0 of 24 live months; live Sharpe after costs n/a (needs 2 months); evaluated at 24 months",
+   "action": ""
+  },
+  {
+   "rule": 4,
+   "name": "instrument",
+   "status": "ok",
+   "detail": "no held instrument on the rule-4 list (config/v1_rules_rule4.csv)",
+   "action": ""
+  },
+  {
+   "rule": 5,
+   "name": "carry-spread review",
+   "status": "ok",
+   "detail": "book carry at constant risk 40.10pp vs threshold 2.73pp (2005-2019 10th percentile) at 2026-10",
+   "action": ""
+  }
+ ],
+ "flags": [],
+ "flagged": false,
+ "note": "Flags only: this monitor never changes exposure and never touches frozen v1.0 code, configs or tags. Ethan acts on the flags. Rules and definitions: docs/ledger/v1_rules.md."
+}

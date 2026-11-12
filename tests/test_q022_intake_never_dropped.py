@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from conftest import seed_ledger
+from conftest import frozen_copy, seed_ledger
 from ledger import intake_runs as R
 from test_ledger import PASTE_DECISION, TODAY
 
@@ -72,7 +72,7 @@ def _repo(tmp_path):
     for d in ("ledger", "scripts"):
         shutil.copytree(ROOT / d, work / d, ignore=shutil.ignore_patterns("__pycache__", "site"))
     seed_ledger(work)
-    shutil.copytree(ROOT / "data/janus", work / "data/janus")
+    shutil.copytree(frozen_copy("data/janus"), work / "data/janus")
     (work / ".gitignore").write_text("__pycache__/\n")
     _git("init", "-q", "-b", "test", cwd=work)
     for k, v in (("user.name", "t"), ("user.email", "t@t")):
