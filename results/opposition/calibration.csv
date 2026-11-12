@@ -28,3 +28,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-12,queue,Q002,70,advisory,claude-opus-5-5,,,"kick + backup cron + due gate: gate failure must fail open (done), gate on as_of not run_date alone (done), fail-open re-run trade-off, expressions unproven until a live only_if_due dispatch; PR #42"
 2026-11-12,pr,55,80,advisory,claude-opus-5-5,,,
 2026-11-12,pr,57,85,advisory,claude-opus-5-5,,,
+2026-11-12,pr,58,82,advisory,claude-opus-5-5,,,
