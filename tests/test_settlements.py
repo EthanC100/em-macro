@@ -103,7 +103,8 @@ def test_daily_cap_refuses_and_is_shared(tmp_path):
     assert r["refused"] and not any(k == "get_range" for k, _ in big.calls)
 
 
-def test_no_store_fetches_nothing():
+def test_no_store_fetches_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("EM_MACRO_DATA", str(tmp_path / "no-store"))   # Q008: never the machine's ../em-macro-data
     c = FakeClient(ROWS)
     res = ST.fetch({("BRENT", "2027-03"): date(2026, 11, 6)}, date(2026, 11, 10), store=None, c=c)
     assert res["stored"] == 0 and "no private store" in res["log"][0] and c.calls == []
