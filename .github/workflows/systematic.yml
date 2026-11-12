@@ -15,6 +15,12 @@ on:
     - cron: "23 7 3 * *"     # 07:23 UTC on the 3rd of every month, after month-end data are published
     - cron: "37 6 * * 1,4"   # Monday and Thursday: keep the raw-download cache alive (see keep-cache)
   workflow_dispatch:
+    inputs:
+      only_if_due:
+        description: "Monthly kick: run only if this month's rebalance is not yet in results/systematic/rebalance_log.csv"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -25,8 +31,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
+  # Decides only for a dispatch with only_if_due=true (the monthly kick, which GitHub's late schedule needs):
+  # if this month's rebalance is already in rebalance_log.csv the update job is skipped as a whole.  Schedule
+  # events and dispatches without the input always run it (em_macro/rebalance_due.py).  Reads, never writes.
+  due:
     if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is this month's rebalance still to run?
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ONLY_IF_DUE: ${{ github.event.inputs.only_if_due }}
+        run: python3 -m em_macro.rebalance_due
+
+  update:
+    needs: due
+    if: needs.due.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
