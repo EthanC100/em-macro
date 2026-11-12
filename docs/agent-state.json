@@ -4,7 +4,10 @@
  "night": "2026-11-12",
  "runs_used": 4,
  "last_kind": "worker",
- "chain_stopped": null,
+ "chain_stopped": {
+  "reason": "run cap reached (4 of 4)",
+  "at": "2026-11-13T00:42:49+08:00"
+ },
  "log": [
   {
    "routine": "night-start",
