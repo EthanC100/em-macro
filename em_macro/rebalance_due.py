@@ -2,12 +2,15 @@
 
     python3 -m em_macro.rebalance_due            # prints run=true|false (and writes it to $GITHUB_OUTPUT)
 
-Only a dispatch started with the input ``only_if_due=true`` (the monthly kick) is ever skipped.  A
-schedule event and a dispatch without the input always get run=true, exactly as before.  With the
-input, run=false when results/systematic/rebalance_log.csv already has a row whose ``scheduled_date``
-falls in the current UTC month (em_macro/rebalance.py writes one row per rebalance, scheduled for the
-3rd of the month); otherwise run=true.  A missing or unreadable log means run=true: when in doubt the
-rebalance runs.  Standard library only: the job needs no pip install.
+The check applies to the monthly schedule event ('23 7 3 * *') and to a dispatch started with the input
+``only_if_due=true`` (the monthly kick).  A dispatch WITHOUT that input is the manual override and always runs,
+as before.  When the check applies:
+  * before the 3rd of the month (UTC): run=false, whatever the log says;
+  * from the 3rd: run=false when results/systematic/rebalance_log.csv already has a row whose ``scheduled_date``
+    falls in the current UTC month (em_macro/rebalance.py writes one row per rebalance, scheduled for the 3rd),
+    otherwise run=true.
+A missing or unreadable log means run=true: when in doubt the rebalance runs.  The workflow's update job also
+runs if this job itself fails (it never skips silently).  Standard library only: the job needs no pip install.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+SCHEDULED_DAY = 3          # the rebalance is due on the 3rd of the month (em_macro/rebalance.py)
 LOG = Path(__file__).resolve().parents[1] / "results" / "systematic" / "rebalance_log.csv"
 
 
@@ -29,9 +33,12 @@ def recorded(today: date, log: Path = LOG) -> bool:
 
 
 def decide(event: str, only_if_due: str, today: date, log: Path = LOG) -> tuple[bool, str]:
-    """(run, reason).  Only workflow_dispatch with only_if_due == 'true' can be skipped."""
-    if event != "workflow_dispatch" or str(only_if_due).strip().lower() != "true":
-        return True, "no only_if_due request: run as usual"
+    """(run, reason).  The check applies to the monthly schedule and to a dispatch with only_if_due == 'true'."""
+    kick = event == "workflow_dispatch" and str(only_if_due).strip().lower() == "true"
+    if event != "schedule" and not kick:
+        return True, "manual dispatch without only_if_due: run (override)"
+    if today.day < SCHEDULED_DAY:
+        return False, f"{today:%Y-%m-%d} is before the {SCHEDULED_DAY}rd of the month: nothing is due yet"
     if recorded(today, log):
         return False, f"{today:%Y-%m} rebalance already recorded in rebalance_log.csv: nothing to do"
     return True, f"{today:%Y-%m} rebalance not recorded yet: run"

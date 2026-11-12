@@ -31,9 +31,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Decides only for a dispatch with only_if_due=true (the monthly kick, which GitHub's late schedule needs):
-  # if this month's rebalance is already in rebalance_log.csv the update job is skipped as a whole.  Schedule
-  # events and dispatches without the input always run it (em_macro/rebalance_due.py).  Reads, never writes.
+  # Decides whether the rebalance is still to run, for the monthly schedule and for a dispatch with
+  # only_if_due=true (the monthly kick, which GitHub's late schedule needs): skipped before the 3rd of the
+  # month (UTC), and when this month's rebalance is already in rebalance_log.csv.  A dispatch without the
+  # input is the manual override and always runs.  Checks out main's head, so a kick queued behind a running
+  # rebalance reads the log that run committed.  Reads, never writes (em_macro/rebalance_due.py).
   due:
     if: github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *'
     runs-on: ubuntu-latest
@@ -44,6 +46,8 @@ jobs:
       run: ${{ steps.check.outputs.run }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main            # current head, not the triggering commit
       - name: Is this month's rebalance still to run?
         id: check
         env:
@@ -53,7 +57,9 @@ jobs:
 
   update:
     needs: due
-    if: needs.due.outputs.run == 'true'
+    # Fail-safe: if the due job itself fails, update still runs (and alerts); it is skipped only when the due
+    # check says run=false.  The keep-cache schedule never runs update (first clause), as before.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || github.event.schedule == '23 7 3 * *') && (needs.due.result != 'success' || needs.due.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
