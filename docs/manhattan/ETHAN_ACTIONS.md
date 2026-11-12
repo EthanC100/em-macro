@@ -301,7 +301,22 @@ v3.1 changed: D11 with the hedge re-estimated in every bootstrap resample, its n
 HB scenarios with the analytic model. `SIZES=STD,LONG` leaves the HB scenarios out; `PREREG=v1` runs version 1
 alone.
 
-**How long.** IMAC_ESTIMATE
+**How long.** About **1,500 to 1,750 CPU-hours: roughly 9 to 10.5 days on 8 cores** (seven workers), from the
+seconds per replication the pilots measured:
+
+| part | runs × replications | seconds per replication | CPU-hours |
+|---|---|---|---|
+| version 1's code: STD and LONG except D11 | 17 × 2,000 | 60 to 150 on an idle core (pilot: 67 to 355 on a busy one) | 950 to 1,190 |
+| D11 with the hedge-aware test | 1 × 2,000 | about 370 | about 200 |
+| nine hedged twins, SPA only | 9 × 400 | 210 to 600 | about 300 |
+| five HB scenarios, analytic model | 5 × 400 | 70 to 150 | about 50 |
+
+Before Protocol v3.1 the estimate was about 5 days for the STD and LONG half and of the order of 50,000
+CPU-hours for the HB half, which could not be run. The new work adds about 450 CPU-hours (D11's re-estimation
+and the twins) and the HB half now costs about 50. If the twins' cost matters: they are 400 replications each
+by SIM_PREREG_v2 §6, a number that is yours to change before adopting (200 would still meet the precision
+target many times over, and a twin could run the hedge-aware test alone, which is about two thirds of its
+cost).
 
 [SIM_RUNBOOK.md](SIM_RUNBOOK.md) has the set-up, the launchd job and what to do when it finishes. It never runs
 a held-out scenario.

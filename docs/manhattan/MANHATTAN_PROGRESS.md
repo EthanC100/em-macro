@@ -110,7 +110,7 @@ not a copy of it.
 | C-15 | **Metrics and intervals.** M1-M11 on hand-made replications; `mean ± 1.96 sd/√R`; the 2,000-resample bootstrap over whole replications for ratios; the fewer-than-200-observations rule; every threshold of §5 read from one table that a test compares with SIM_PREREG.md's text | **met** for M1-M9 and M11: `tests/test_manhattan_sim_pipeline.py`, `tests/test_manhattan_hier.py`. M10 belongs to held-out scenario H08 and is not coded |
 | C-16 | **V10(a).** In D09a and D09b the designated blind p-values and e-values are bit-for-bit identical with and without the adaptive channel | **met**: bit-for-bit identical in the tests and on 154 families at STD (`results/manhattan_sim/v10a.json`) |
 | C-17 | **Experiments.** Every development scenario is run at every size §3.1 lists, with both screening candidates, at the pre-registered replication count; **or** as a pilot labelled as such, with the shortfall recorded and the full run packaged for the iMac. The report gives every metric with its interval, the threshold and pass, fail or "pilot: not decided", every deviation from SIM_PREREG.md and the list of earlier runs. No held-out scenario is run before a tagged confirmation run | **pilot only**: every STD and LONG development run was made as a labelled pilot (12 and 6 replications against 2,000); session 5M reran D11 and piloted the nine hedged twins and the five HB scenarios under the 3.1 draft (`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`). The full run, HB included, is packaged for the iMac. **Not met** until that run is made |
-| C-18 | **Hygiene.** SIM_PREREG.md, its hash record, PROTOCOL_v3.md, `manhattan/prereg.py`, `tests/test_manhattan_prereg.py` and `config/manhattan.yaml` are unchanged (`python -m nightshift.protected` on the changed paths, and `python -m manhattan.prereg verify`); `claims.enabled` stays false; the full suite passes with the runner's own exit code read | **met**: `python -m nightshift.protected` on every path changed against main printed nothing and exited 0; no file of `em_macro`, `ledger`, `lab`, `nightshift`, `janus`, `.claude`, `.github` or `config` is changed; `python -m manhattan.prereg verify` prints `pre-registrations ok`; `claims.enabled` is false; full suite 953 passed, 128 skipped, exit 0 |
+| C-18 | **Hygiene** (session 4M; rechecked by session 5M: the same six files are unchanged, `python -m nightshift.protected` on every path changed against main prints nothing, `python -m manhattan.prereg verify` and `python -m manhattan.prereg_v2 verify` pass, `claims.enabled` is false). SIM_PREREG.md, its hash record, PROTOCOL_v3.md, `manhattan/prereg.py`, `tests/test_manhattan_prereg.py` and `config/manhattan.yaml` are unchanged (`python -m nightshift.protected` on the changed paths, and `python -m manhattan.prereg verify`); `claims.enabled` stays false; the full suite passes with the runner's own exit code read | **met**: `python -m nightshift.protected` on every path changed against main printed nothing and exited 0; no file of `em_macro`, `ledger`, `lab`, `nightshift`, `janus`, `.claude`, `.github` or `config` is changed; `python -m manhattan.prereg verify` prints `pre-registrations ok`; `claims.enabled` is false; full suite 953 passed, 128 skipped, exit 0 |
 
 | C-19 | **Hedge-aware SPA (Protocol 3.1 §5.1).** The resampled hedged means equal those obtained by building each pseudo-series and hedging it with `manhattan.stats.hedge` (one and several factors; long, short and no history; with a hedge cost); the identity sequence gives the live hedged mean; the centre is the window's least-squares intercept; the statistic and `ω̂` are the live ones; the random stream is consumed as by the 3.0 test; **with nothing to hedge the result is the 3.0 test's, bit for bit** (V13); on a hedge that leaks a factor's mean the 3.0 test over-rejects and this one does not | **met**: `tests/test_manhattan_spa_hedged.py` (16) |
 | C-20 | **Analytic hierarchical model (Protocol 3.1 §7).** The six models and the grid are those of §7.2(e) and Appendix B (code against the protocol's text); one family's closed form equals brute-force integration (likelihood, mean, `Π`); a whole fit equals an independent sum over the grid written from the formulas; nothing in a fit is random and a model's numbers do not depend on which others are fitted with it; `Π_f` follows forward evidence; shrinkage is the only adjustment for selection; the wide component lets a conflicting family keep its data; a level shared by all forward estimates is not read as an edge when luck is shared; the grid gate refuses data outside the grid; three class retentions and `μ_A` are recovered on 600 families not drawn from the priors, with intervals that cover | **met**: `tests/test_manhattan_hier_analytic.py` (21) |
@@ -279,6 +279,149 @@ CPU-hours or more. **That half cannot be run as pre-registered on the iMac** (ET
 5. Smaller gaps: monthly test periods (`c = 4`) are not coded; sensitivity p-values at `L/2` and `2L` are not
    computed; a coverage test of the model's hyperparameters on a large synthetic set.
 
+## Milestone C: state (session 5M, 2026-11-12)
+
+**What this session was for.** The pilot of session 4M showed two things that had to be repaired before a full
+run: the SPA test rejects too often when the core hedge is estimated (D11), and the hierarchical model cannot
+be afforded. Both are repaired in **drafts** that Ethan adopts or not (ETHAN_ACTIONS item 19):
+[PROTOCOL_v3.1.md](PROTOCOL_v3.1.md) and [SIM_PREREG_v2.md](SIM_PREREG_v2.md). No protected file was edited.
+
+**Implemented** (new files beside the old; version 1's code files are byte for byte unchanged):
+
+| where | what |
+|---|---|
+| `manhattan/stats/spa_hedged.py` | the SPA test with the core hedge re-estimated in every bootstrap resample by the live rule, centred at the window's least-squares intercept on the core factors (Protocol 3.1 §5.1). With nothing to hedge it returns the 3.0 test's result itself |
+| `manhattan/stats/hier_analytic.py` | the analytic normal-normal hierarchical model (Protocol 3.1 §7): closed-form posteriors summed over a fixed grid, one retention parameter per mechanism class, wide normal components, one common forward shock, six sensitivity models, a grid gate in place of the convergence gate, the reserve weight computed from the channel |
+| `manhattan/sim/pipeline_v2.py`, `hb_v2.py`, `criteria_v2.py`, `metrics_v2.py`, `report_v2.py` | D11 and nine hedged twins with three SPA tests side by side on the same resamples; the HB pipeline with the analytic model; version 2's additions as data; their metrics and report |
+| `manhattan/sim/run.py` (edited: not a code file of any run) | `--prereg v2` sends D11, the twins and the HB scenarios to the new code and writes their records to `results/manhattan_sim/v2/`; everything else is version 1's as before |
+| `manhattan/prereg_v2.py`, `docs/manhattan/sim_prereg_v2.sha256` | the hash record of the two drafts and its check |
+| `scripts/manhattan_sim_run.sh`, the launchd template, [SIM_RUNBOOK.md](SIM_RUNBOOK.md) | the iMac run uses version 2 for the changed parts and now includes the HB half |
+
+**Tested.** 62 new tests, all passing: `tests/test_manhattan_spa_hedged.py` (16), `test_manhattan_hier_analytic.py`
+(21), `test_manhattan_adaptive_weight.py` (7), `test_manhattan_prereg_v2.py` (3), `test_manhattan_v2.py` (15).
+The sampled model's tests are untouched and still skip where the sampler is not installed.
+
+**The pilot rerun** (`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`, every metric with its interval; run
+through the runner from clean checkouts of commits `d046e2a` (D11, twins) and `8ba5b3a` (HB)). It is a pilot:
+**no criterion is decided, no method is selected, `claims.enabled` stays false.**
+
+*The SPA test where the hedge is estimated.* Share of families with no edge rejected at the 0.05 level (the bound
+on the interval's upper end is 0.06). The three tests of a row see the same resamples. A twin is a version 1
+scenario with D11's hedge layer on top, drawn from that scenario's seeds.
+
+| scenario (replications) | 3.0 test on the estimated hedge, size at 0.05 | **3.1 test (hedge re-estimated)** | oracle (true hedged returns) | 3.1 minus oracle, paired | 3.1 at 0.20 (bound 0.22) | 3.1 Romano-Wolf FWER (bound 0.06) |
+|---|---|---|---|---|---|---|
+| D11 (36) | 0.073 (0.063 to 0.083) | **0.047 (0.040 to 0.054)** | 0.054 (0.046 to 0.062) | -0.0071 (-0.0100 to -0.0041) | 0.196 (0.177 to 0.216) | 0.047 (0.040 to 0.054) |
+| D01h (6) | 0.113 (0.070 to 0.156) | **0.062 (0.042 to 0.082)** | 0.067 (0.046 to 0.088) | -0.0049 (-0.0119 to 0.0021) | 0.242 (0.191 to 0.293) | 0.062 (0.042 to 0.081) |
+| D02h (6) | 0.061 (0.046 to 0.075) | **0.040 (0.025 to 0.055)** | 0.045 (0.024 to 0.067) | -0.0050 (-0.0127 to 0.0026) | 0.168 (0.133 to 0.204) | 0.040 (0.025 to 0.054) |
+| D03h (6) | 0.073 (0.057 to 0.089) | **0.047 (0.037 to 0.058)** | 0.052 (0.038 to 0.066) | -0.0047 (-0.0131 to 0.0038) | 0.202 (0.171 to 0.234) | 0.046 (0.036 to 0.056) |
+| D04h (6) | 0.037 (0.002 to 0.071) | **0.025 (-0.004 to 0.054)** | 0.034 (-0.002 to 0.070) | -0.0090 (-0.0163 to -0.0017) | 0.104 (0.031 to 0.177) | 0.026 (-0.004 to 0.055) |
+| D05h (6) | 0.065 (0.033 to 0.096) | **0.042 (0.026 to 0.057)** | 0.050 (0.029 to 0.071) | -0.0083 (-0.0175 to 0.0009) | 0.196 (0.147 to 0.245) | 0.042 (0.026 to 0.058) |
+| D06h (6) | 0.055 (0.041 to 0.069) | **0.027 (0.022 to 0.032)** | 0.034 (0.026 to 0.041) | -0.0066 (-0.0143 to 0.0010) | 0.159 (0.139 to 0.179) | 0.027 (0.022 to 0.032) |
+| D07ah (6) | 0.089 (0.048 to 0.130) | **0.054 (0.028 to 0.080)** | 0.057 (0.035 to 0.079) | -0.0034 (-0.0133 to 0.0066) | 0.216 (0.167 to 0.265) | 0.053 (0.027 to 0.079) |
+| D07bh (6) | 0.063 (0.043 to 0.084) | **0.033 (0.026 to 0.041)** | 0.042 (0.032 to 0.051) | -0.0082 (-0.0125 to -0.0039) | 0.173 (0.144 to 0.202) | 0.032 (0.024 to 0.040) |
+| D08h (6) | 0.091 (0.063 to 0.119) | **0.050 (0.034 to 0.065)** | 0.060 (0.041 to 0.079) | -0.0104 (-0.0183 to -0.0025) | 0.212 (0.170 to 0.253) | 0.050 (0.036 to 0.065) |
+
+- **D11: 0.073 before, 0.047 after**, on 36 replications that include version 1's 12 (where the 3.0 test gave
+  0.077, as recorded). The hedge-aware interval's upper end, 0.054, is inside the bound of 0.06; the 3.0 test's
+  lower end, 0.063, is outside it.
+- **In every one of the nine twins the 3.0 test is above the oracle and the 3.1 test is at or below it** (paired
+  differences −0.003 to −0.010). The 3.1 test is a little conservative: it gives up some power, not validity.
+- Twins have 6 replications each: their intervals are wide and several upper ends are above 0.06 for the oracle
+  itself (D01h: 0.067 with the true hedged returns). That is the pilot's size, as in version 1's pilot of D01.
+- The size at 0.001 (pooled) is 0.0010 (0.0004 to 0.0016) in D11 against a bound of 0.0015 on the upper end:
+  not distinguishable from nominal or from the bound at this count.
+- Cost: about 370 seconds a replication for D11 (the whole pipeline with three tests) and 210 to 600 for a twin.
+
+*The analytic model.* 12 replications of each HB scenario (400 are pre-registered).
+
+| scenario (replications) | reviews not computed | central model's calibration error, year 4 / year 10 (bound 0.10) | families with Π^min ≥ 0.80, year 10: true / all | with Π^min ≥ 0.40, year 10: true / all | premature elimination, candidate (i) (bound 0.10) | bias of the model's Sharpe ratio, Promising or higher, year 10 | of the naive estimate | seconds per replication (model part) |
+|---|---|---|---|---|---|---|---|---|
+| D01 (12) | 0 of 48 | 0.029 (0.026 to 0.033) / 0.019 (0.018 to 0.020) | 0 / 0 | 0 / 2 | - (0 families) | 1.35 (0.09 to 2.00) (3 obs.) | 0.53 (0.36 to 0.80) | 68 (46) |
+| D02 (12) | 0 of 48 | 0.022 (0.013 to 0.029) / 0.014 (0.010 to 0.018) | 0 / 0 | 5 / 5 | 0.167 (0.045 to 0.261) (42 families) | -0.26 (-0.58 to 0.00) (11 obs.) | 0.39 (0.14 to 0.59) | 75 (51) |
+| D05 (12) | 0 of 48 | 0.013 (0.005 to 0.022) / 0.005 (0.000 to 0.023) | 8 / 8 | 20 / 20 | 0.179 (0.138 to 0.216) (140 families) | -0.12 (-0.36 to 0.04) (38 obs.) | 0.41 (0.28 to 0.52) | 85 (60) |
+| D08 (12) | 0 of 48 | 0.034 (0.004 to 0.067) / 0.101 (0.034 to 0.136) | 112 / 113 | 392 / 435 | 0.108 (0.081 to 0.138) (944 families) | -0.15 (-0.23 to -0.08) (659 obs.) | 0.39 (0.34 to 0.43) | 149 (105) |
+| D10 (12) | 0 of 48 | 0.009 (0.001 to 0.016) / 0.004 (0.000 to 0.008) | 17 / 24 | 43 / 57 | 0.146 (0.092 to 0.197) (123 families) | 0.08 (-0.01 to 0.17) (115 obs.) | 0.97 (0.92 to 1.03) | 85 (67) |
+
+- **It runs.** 240 reviews, 1,440 fits, none refused by the grid gate. A replication takes 68 to 149 seconds, of
+  which the model (estimates, six fits at four dates, forecasts) 46 to 105; the six fits of a review take 16
+  seconds on average. The sampled model did not finish one replication in 2 hours 31 minutes of CPU time.
+- **Calibration of the central model: inside the bound of 0.10 everywhere except D08 at year 10**, 0.101 (0.034
+  to 0.136). In D08 (each family the best of 20) about a third of families have an edge, the model's narrow
+  component has to stretch to hold them, and in the middle of the scale it says too much: families given about
+  0.45 have an edge 0.18 of the time, those given about 0.55, 0.29 (its top bin, 0.97, is right 0.99 of the
+  time). The cause is the shape of the prior fixed in 3.0 (a tenth of the mass in a component that is too
+  wide), not the closed form. If the full run confirms it, V6 fails in D08 and the posterior-based tiers stay
+  off. In D10, where a family keeps all of its edge or none, the central model's top bin (0.98) is right 0.79
+  of the time: one retention per class cannot say "all or nothing".
+- **The cautious tier rule holds up where it can be counted.** Families with `Π^min ≥ 0.80` at year 10: 112 of
+  113 have an edge in D08, 8 of 8 in D05, 17 of 24 in D10 (retention 0 or 1). Groups are below the 200
+  observations a verdict needs in every scenario but D08's `Π^min ≥ 0.40` group (392 of 435).
+- **In D01 (no edges) no family evaluation reached `Π^min ≥ 0.80`.**
+- **The model's Sharpe ratio is not inflated by selection; the naive one is.** Bias for families Promising or
+  higher at year 10: −0.15 (−0.23 to −0.08) in D08 against +0.39 for the best variant's sample Sharpe ratio;
+  +0.08 (−0.01 to +0.17) in D10 against +0.97. D10's upper end is above the +0.10 bound, on 115 observations.
+
+**Three findings to weigh before the full run.**
+
+1. **The dormancy rule retires too many families that have an edge** (V7, bound 0.10 on the upper end): 0.167
+   (0.045 to 0.261) in D02, 0.179 (0.138 to 0.216) in D05, 0.108 (0.081 to 0.138) in D08, 0.146 (0.092 to
+   0.197) in D10. This is the first time the rule could be measured at all. It is not the closed form: a family
+   becomes dormant when even the most hopeful of six models gives it less than a 5% chance of ever being
+   Statistically supported, and that tier is nearly out of reach by construction (next point). If the full run
+   confirms it, dormancy is not switched on (SIM_PREREG §8.1 rule 2); nothing else depends on it.
+2. **"Statistically supported" is rare for families with a real edge**: by year 10, none in D02, 7% in D05, 13%
+   in D08, 17% in D10. Entry needs `Π^min ≥ 0.80`, the smallest of six. For families with an edge the smallest
+   is the decay model S5 in 43 to 67% of cases at year 10 and the inflated-standard-error model S4 in 33 to
+   44%; their mean `Π^min` is 0.14 to 0.36 while the central model gives them 0.38 to 0.81. S5 says the edge
+   halves every three years and asks about the edge **now**, so a family nine years old needs an edge eight
+   times `θ_min` at freeze to pass. That reading of §7.2(e) is session 4M's (in `hier.py`) and is kept. Whether
+   the top posterior tier should be this hard to reach is Ethan's question, and a different answer is a new
+   protocol version.
+3. **Shared luck needed a term of its own.** The first analytic model treated families as independent. On one
+   fat-tailed development replication a market-wide shock was read as an edge shared by all 240 families
+   (`results/manhattan_sim/v2/DEVELOPMENT_NOTES.md` §3). Protocol 3.1 §7.1 therefore has one common forward
+   shock, sized by the measured average correlation between families' forward estimates. It is less than the
+   full covariance matrix 3.0 gave its model, and §7.2(g) says what it does not cover; held-out H11 measures it.
+
+**Development experiments** (outside the runner, each noted in the run log; numbers in `DEVELOPMENT_NOTES.md`):
+where to centre the resamples (40 replications of D11: re-estimating the hedge without changing the centre
+leaves the size at 0.066 to 0.070; the adopted centre gives 0.047; testing the in-window intercept itself gives
+0.053); a harder hedge (factor Sharpe 0.8, exposure drift 0.4 a year: 0.097 for the 3.0 test, 0.049 for 3.1);
+the model without a common shock.
+
+**Failed or not met.**
+
+1. **C is still not passed.** Every number above is a pilot number. D11's twins, H12 and the analytic model have
+   been seen at 6 to 36 replications against 400 to 2,000.
+2. **V7 and one V6 check are outside their bounds so far** (findings 1 and above). No threshold was changed.
+3. **The hedge-aware test was only run with one core factor.** Several factors are covered by unit tests of the
+   arithmetic (against hedging every pseudo-series directly), not by a scenario; H12 has up to four.
+4. **Test failures on the way, none hidden.** First runs: 6 of 21 model tests failed (5 were wrong expected
+   numbers; 1 showed that a model's result moved in the seventh decimal with the models fitted beside it, which
+   was fixed: each model is now computed independently); 6 of 7 adaptive-weight tests (two mistakes in the
+   tests); 1 of 16 v2 tests (the test); and one existing test (`test_heartbeat_status_and_compaction`) failed
+   because version 2's replication table was a copy of version 1's instead of the same object, which was a real
+   fault and was fixed. The first full-suite run of the session before a push: 1,148 passed, 131 skipped.
+5. **One logged run was stopped** (HB, D05, after 8 of 12 replications) because the model's code was about to
+   change; its start record has no end record and a note says why. Thirty-two HB replications of that earlier
+   code stay on file and are counted in no report.
+6. **A scratch script shadowed a standard-library module** and stopped one step of the session; nothing was
+   written wrongly.
+
+**Remaining for C, in order.**
+
+1. Ethan: read and adopt the two drafts (ETHAN_ACTIONS item 19), then run `scripts/manhattan_sim_run.sh` on the
+   iMac (item 16).
+2. Code the held-out worlds H01 to H12 (H12 is defined in SIM_PREREG_v2 §3.2), the gap and revision rules of
+   Protocol §6.6 that H10 needs, and metric M10. Unit-test each world. **Do not run them through the pipeline.**
+3. When every required criterion passes on the development scenarios at full count: tag
+   `manhattan-sim-confirm-1` (Ethan), run the held-out set, write the confirmation and selection reports.
+4. If V7 or V6 fails at full count: the component stays off, and whether to revise the tier rules is Ethan's.
+5. Smaller gaps left from session 4M: monthly test periods; sensitivity p-values at `L/2` and `2L`. The
+   quarterly review cadence, which version 1 reduced to four dates for the sampler's cost, is now affordable
+   and could be restored by amendment.
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -326,11 +469,15 @@ requests, reply parsing), `manhattan/critic.py` (specs-only input, validated rev
 | session 4M, opt-in six-model test (`MANHATTAN_SLOW_TESTS=1`) | failed twice (sampler reuse; then an abort inside the compiler under load), then **1 passed** after the sampler cache was removed (`ce4c5d6`) |
 | session 4M, full suite at `ce08acf`, before the first push | **953 passed, 128 skipped, exit code 0** (12 minutes) |
 | session 4M, the commits after `ce08acf` (documents, the stopped HB run's note, a docstring) | a second full run before the last push; its numbers are in the pull request's description |
+| session 5M, `build/manhattan` at `b0ec9c3` (main fast-forwarded in), before any change | **1086 passed, 131 skipped, exit code 0** (this container has no sampler: the sampled model's fits skip) |
+| session 5M, first runs of the new test files | `test_manhattan_hier_analytic.py`: 6 of 21 failed; `test_manhattan_adaptive_weight.py`: 6 of 7; `test_manhattan_v2.py`: 1 of 16; one existing test failed after the runner change. Causes and fixes: "Milestone C: state (session 5M)", failed or not met, 4. None pushed |
+| session 5M, full suite at `121a34c`, before the first push | **1148 passed, 131 skipped, exit code 0** (16 minutes, while pilots ran) |
+| session 5M, full suite before the push of the pilot rerun and the final documents | **1148 passed, 131 skipped, exit code 0** (13 minutes) |
 
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.
 
-## Decisions taken (sessions 2M to 4M)
+## Decisions taken (sessions 2M to 5M)
 
 Each is written where it applies, with its reason. Those that are Ethan's were made configurable with the
 conservative default and are in ETHAN_ACTIONS.md.
@@ -384,6 +531,16 @@ conservative default and are in ETHAN_ACTIONS.md.
   per simulated programme (ETHAN_ACTIONS item 15). The screening route and the forward test are cheap.
 - **Candidate (ii) has a proof and, on the pilot, almost no power; candidate (i) has power and no proof here.**
   The full run decides; the pilot only shows the size of the gap.
+- **An estimated hedge leaks, and a test must know it.** The ridge keeps about 9% of any exposure to a core
+  factor; with a factor that pays, a variant with no edge shows a mean. Re-estimating the hedge inside the
+  bootstrap repairs the test only if the resamples are centred at the truth of the world they are drawn from
+  (the window's least-squares intercept). A hedge that runs behind a fast-moving exposure still leaves a real
+  mean that no resampling of days removes.
+- **The middle tiers are now cheap to compute and, on the pilot, hard to reach.** With the six-model minimum,
+  7 to 17% of families with an edge are Statistically supported after ten years, and the dormancy rule retires
+  11 to 18% of them. The pilot could not have shown this before the model could be run.
+- **A model that treats families as independent reads shared luck as shared edge.** One common forward shock
+  repairs the case found; it is not the full covariance.
 
 ## Unverified
 
@@ -394,37 +551,32 @@ conservative default and are in ETHAN_ACTIONS.md.
 - The proofs in PROTOCOL Appendix A are short and were checked by hand only. A.1 and A.2 extend published results;
   neither extension has been reviewed by anyone else. The pilot has seen no violation, which proves nothing at 12
   replications.
-- Whether the hierarchical model passes its own convergence gate at full size with the default budget; whether
-  its posterior probabilities are calibrated (V6); whether dormancy abandons good families (V7). None could be
-  measured.
+- Whether the **sampled** model of 3.0 passes its own convergence gate at full size. It is no longer in the main
+  loop, and it has never been compared with the analytic model on the same data.
+- Whether the analytic model's posterior probabilities are calibrated (V6), whether dormancy abandons good
+  families (V7) and whether its Sharpe ratios are unbiased (V8): seen at 12 replications of 400, where V7 and
+  one V6 check sit outside their bounds.
+- The hedge-aware test with several core factors, with a hedge cost, and under held-out dependence: unit tests
+  of the arithmetic only.
+- The closed form of Protocol 3.1 §7.1 and the centre of §5.1 are derived in this repository, not taken from a
+  paper, and have been reviewed by nobody else. The closed form is checked against brute-force integration; the
+  centre is checked only by simulation.
+- The grid of Appendix B: fine enough for the numbers seen (the fit equals a brute-force sum to 2e-6 on a small
+  case), not studied for thousands of families.
 - The dormancy forecast is an approximation (no refit); its error against a full refit was not measured.
-- The cloud-cost guess in ETHAN_ACTIONS item 15 is not priced.
 - Whether the rulesets on main are applied; whether a cloud session's git proxy serves public repositories when
   the network is closed; what the private Norgate snapshot contains beyond the 34 exported markets.
 - The blind template's wording has not been tried on a model.
 
 ## Exact next step
 
-**For Ethan** (ETHAN_ACTIONS.md): start the simulation on the iMac (item 16), decide the model-fitting half
-(item 15), then items 2, 3 and 7 for the first batch.
+**For Ethan** (ETHAN_ACTIONS.md): item 19 (read and adopt Protocol v3.1 and SIM_PREREG_v2: one paste into
+CODEOWNERS), then item 16 (start the simulation on the iMac; it now includes the model-fitting half), then
+items 2, 3 and 7 for the first batch. The two findings about the tier and dormancy rules ("Milestone C: state
+(session 5M)") are his to weigh; nothing needs deciding before the full run.
 
-**For the next session** (its name starts with the next free number, then "M Manhattan E: point-in-time data
-layer and backtester", unless Ethan redirects):
-
-1. Read this file, ARCHITECTURE.md sections 2 and 6, PROTOCOL_v3.md section 2 and AUDIT.md section 1.2. Merge
-   main into `build/manhattan` first if it is behind. Run `python -m manhattan.prereg verify`.
-2. Write milestone E's acceptance criteria here before any test: a point-in-time store in which every value has
-   an availability time and a read "as of" a time never returns a later one; publication lags from the spec; a
-   daily and an event backtester that turn an executable into a net return series with positions fixed from
-   earlier information only; a look-ahead test that fails when any input is shifted forward; every read of
-   dated data goes through `manhattan.roles.check_read`; every evaluation is a ledger record
-   (`manhattan.ledger`) and, for exploration, also a `nightshift.logs.log_variant` row.
-3. **Reproduce time-series momentum and cross-asset carry on exploration dates only** (to 2019-12-31, the cap
-   `config/manhattan.yaml` and the night shift already enforce) from data already in the repository, and compare
-   with the published numbers and with the repository's own frozen results (AUDIT §1.2 lists what exists).
-   No date after 2019-12-31 is read: the reserve is disabled and `check_read` refuses it. Nothing new is
-   evaluated until both reproduce.
-4. Propose the daily core-factor definitions for Ethan (ETHAN_ACTIONS item 10); do not adopt them.
-5. If the iMac run has finished and its results are on a branch: build the report
-   (`python -m manhattan.sim.report`), then code the held-out worlds ("Milestone C: state", remaining, step 3)
-   **before** milestone E.
+**For the next session:** see "Milestone E: state" for where milestone E stands. If the iMac run has finished
+and its results are on a branch: build both reports (`python -m manhattan.sim.report --prereg v2` and
+`python -m manhattan.sim.report_v2`), then code the held-out worlds H01 to H12 ("Milestone C: state (session
+5M)", remaining, step 2) before anything else. Merge main into `build/manhattan` first if it is behind, and run
+`python -m manhattan.prereg_v2 verify`.
