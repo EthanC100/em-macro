@@ -18,7 +18,7 @@
      "source": "FRED DEXBZUS (Federal Reserve H.10 noon buying rate), BRL per USD",
      "licence": "FRED (Federal Reserve Bank of St. Louis); the series is public domain, citation requested",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FXCHK_BR",
@@ -26,7 +26,7 @@
      "source": "Banco Central do Brasil SGS series 1, BRL per USD",
      "licence": "Banco Central do Brasil open data (SGS), free public data, attribution",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FX_MX",
@@ -34,7 +34,7 @@
      "source": "FRED DEXMXUS (Federal Reserve H.10), MXN per USD",
      "licence": "FRED (Federal Reserve Bank of St. Louis); the series is public domain, citation requested",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FXCHK_MX",
@@ -42,7 +42,7 @@
      "source": "Banco de Mexico SIE SF43718 (FIX), MXN per USD",
      "licence": "Banco de Mexico SIE, free public data, reuse with attribution",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched with versionSerie=LA-MAS-RECIENTE, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FX_ZA",
@@ -50,7 +50,7 @@
      "source": "FRED DEXSFUS (Federal Reserve H.10), ZAR per USD",
      "licence": "FRED (Federal Reserve Bank of St. Louis); the series is public domain, citation requested",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FXCHK_ZA",
@@ -58,7 +58,7 @@
      "source": "South African Reserve Bank EXCX135D, ZAR per USD",
      "licence": "South African Reserve Bank online statistics, free public data, attribution",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "FXCHK_PL",
@@ -66,7 +66,7 @@
      "source": "Narodowy Bank Polski table A, PLN per USD",
      "licence": "Narodowy Bank Polski exchange-rate tables (NBP Web API), free public data",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10_BR",
@@ -74,7 +74,7 @@
      "source": "Tesouro Nacional (Tesouro Transparente) NTN-F prices and rates, ~10y yield interpolated from that day's bonds",
      "licence": "Brazilian Treasury open data portal (Tesouro Transparente), free public data, attribution",
      "point_in_time": true,
-     "note": "built from the same day's bond rates only (em_macro/yields.py)"
+     "note": "built from the same day's bond rates only (em_macro/yields.py); as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10MAT_BR",
@@ -82,7 +82,7 @@
      "source": "derived from the same day's Tesouro Transparente NTN-F list: maturity in years underlying Y10_BR",
      "licence": "derived from Brazilian Treasury open data (as Y10_BR)",
      "point_in_time": true,
-     "note": "same day only"
+     "note": "same day only; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10_MX",
@@ -90,7 +90,7 @@
      "source": "Banco de Mexico SIE CF300 (SF45455/SF45478/SF45430), yield of the on-the-run Bono M in the 7-10y bucket",
      "licence": "Banco de Mexico SIE, free public data, reuse with attribution",
      "point_in_time": true,
-     "note": "built from the same day's prices only (em_macro/yields.py)"
+     "note": "built from the same day's prices only (em_macro/yields.py); fetched with versionSerie=LA-MAS-RECIENTE, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10MAT_MX",
@@ -98,7 +98,7 @@
      "source": "derived from the same day's Banco de Mexico SIE CF300 bond: maturity in years underlying Y10_MX",
      "licence": "derived from Banco de Mexico SIE (as Y10_MX)",
      "point_in_time": true,
-     "note": "same day only"
+     "note": "same day only; fetched with versionSerie=LA-MAS-RECIENTE, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10_ZA",
@@ -106,7 +106,7 @@
      "source": "South African Reserve Bank CMJD004A, average yield of government bonds of 10 years and longer",
      "licence": "South African Reserve Bank online statistics, free public data, attribution",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "Y10_PL",
@@ -114,7 +114,7 @@
      "source": "Treasury BondSpot Poland fixing yields, interpolated to 10y from that day's fixings",
      "licence": "Treasury BondSpot Poland fixing results, published free of charge on bondspot.pl, attribution",
      "point_in_time": true,
-     "note": "built from the same day's fixings only (em_macro/extra_yields.py poland_10y)"
+     "note": "built from the same day's fixings only (em_macro/extra_yields.py poland_10y); as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_BR",
@@ -122,7 +122,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.BR",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_MX",
@@ -130,7 +130,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.MX",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_ZA",
@@ -138,7 +138,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.ZA",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_TR",
@@ -146,7 +146,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.TR",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_ID",
@@ -154,7 +154,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.ID",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_PL",
@@ -162,7 +162,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.PL",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "POL_US",
@@ -170,7 +170,7 @@
      "source": "BIS central bank policy rates WS_CBPOL D.US",
      "licence": "BIS statistics, free reuse with attribution under the BIS terms of use",
      "point_in_time": true,
-     "note": "the policy rate in force on that date"
+     "note": "the policy rate in force on that date; BIS compiles the series itself, as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "STR_BR",
@@ -178,7 +178,7 @@
      "source": "Banco Central do Brasil SGS series 12 (CDI overnight), annualised on 252 days",
      "licence": "Banco Central do Brasil open data (SGS), free public data, attribution",
      "point_in_time": true,
-     "note": "that day's fixing"
+     "note": "that day's fixing; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "STR_MX",
@@ -186,7 +186,7 @@
      "source": "Banco de Mexico SIE SF43783 (TIIE 28-day)",
      "licence": "Banco de Mexico SIE, free public data, reuse with attribution",
      "point_in_time": true,
-     "note": "that day's fixing"
+     "note": "that day's fixing; fetched with versionSerie=LA-MAS-RECIENTE, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "STR_ZA",
@@ -194,7 +194,7 @@
      "source": "South African Reserve Bank MMRD403A (JIBAR 3-month)",
      "licence": "South African Reserve Bank online statistics, free public data, attribution",
      "point_in_time": true,
-     "note": "that day's fixing; one implausible source print is kept as published (2010-06-22: 0.63): the extract copies the source, it does not clean it"
+     "note": "that day's fixing; one implausible source print is kept as published (2010-06-22: 0.63): the extract copies the source, it does not clean it; as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "US10Y",
@@ -202,7 +202,7 @@
      "source": "FRED DGS10 (Federal Reserve H.15, 10-year Treasury constant maturity)",
      "licence": "FRED (Federal Reserve Bank of St. Louis); the series is public domain, citation requested",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "VIX",
@@ -210,7 +210,7 @@
      "source": "FRED VIXCLS (Cboe Volatility Index close)",
      "licence": "Cboe Exchange copyright; FRED reprints it with permission and asks for no further reproduction: held only in the private store, never published",
      "point_in_time": true,
-     "note": "a market price on that date; never revised"
+     "note": "a market observation for that date; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     },
     {
      "column": "US_FF",
@@ -218,7 +218,7 @@
      "source": "FRED DFF (Federal Reserve H.15 effective federal funds rate)",
      "licence": "FRED (Federal Reserve Bank of St. Louis); the series is public domain, citation requested",
      "point_in_time": true,
-     "note": "that day's rate"
+     "note": "that day's rate; fetched from fredgraph, i.e. as the source serves it today (its latest vintage, not an archived as-of copy)"
     }
    ],
    "excluded": [
@@ -530,5 +530,6 @@
     "last": "2019-12-31"
    }
   ]
- }
+ },
+ "point_in_time_basis": "Every kept column is a market observation, a fixing or a policy rate for its own date, built from that date's data only (no centred window, no next-day screen, no whole-sample statistic). None is checked against archived vintages: each is the source's current series, so a later data correction by the source would be in it. Market prices and fixings are rarely revised; that is the basis, not a proof."
 }

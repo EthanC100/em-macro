@@ -54,46 +54,78 @@ manifest's `excluded`:
 ## 3. The gate
 
 `explore_data.explorer_gate()` must return no reasons before night-explorer may run. `guard check night-explorer`,
-`guard next` and `state acquire night-explorer` apply it, and so does `explore_sandbox create`, which is protected
-code, in case `guard.py` (unprotected) is edited on dev. The gate is evaluated whenever a caller does not pass it,
+`guard next` and `state acquire night-explorer` apply it. The gate is evaluated whenever a caller does not pass it,
 and it is closed if it cannot be evaluated. All of these must hold on **origin/main**:
 1. main's `explorer.data_end` is readable, and the manifest is built and ends on or before it.
 2. The four files in the table exist.
 3. main's CODEOWNERS protected block covers all four. Lines outside the block do not count.
-4. main's `.claude/routines/night-explorer.md` runs `python -m nightshift.explore_sandbox create`, i.e. you have
-   applied section 5.
+4. main's `.claude/routines/night-explorer.md` makes the sandbox with main's extracted code
+   (`python -I "$MAINCODE/run.py" --repo "$PWD" create`), i.e. you have applied section 5.
+
+`guard.py`, `state.py`, `config.py`, `protected.py` and `nightshift/__init__.py` are **not** protected, and Python runs
+them, from whatever checkout it imports, before any protected module. A dev edit to `config.py` can loosen the
+cutoff that dev's copy of `logs.py` or `explore_sandbox.py` sees (The Opposition's F1, proven by
+`test_q019_F1_...`). So protecting the four files does not make dev's running copy trustworthy. What does is the
+routine in section 5: it runs `create` and `collect` from **main's** `nightshift/`, extracted with `git archive` outside
+every checkout and run with `python -I`, and `create` applies the gate again there. The sandbox's own `nightshift/`
+also comes from main.
 
 ## 4. The sandbox
 
-`python -m nightshift.explore_sandbox create --dest /tmp/explore-<stamp>` makes a **plain directory with no `.git`**.
-It holds only an allowlist of dev's files: `CLAUDE.md`, `requirements.txt`, `.claude/agents/explorer.md`,
-`nightshift/`, `lab/` and `docs/prereg_drafts/`. No path anywhere in it has a `data`, `results` or `fixtures`
-component, and links and submodules are skipped. It also holds the bundle `.explore/`:
-- `sandbox.json`: cutoff, hashes, commits and a file inventory;
-- `manifest.json` and `extract.csv`, both verified against main;
-- `tested_trials.csv`: trial id, name, hypothesis and design sample only, never results or decisions;
-- `exploration_log.csv`: dev's variant log. Every row must end by the cutoff, or the sandbox is refused.
+`create` makes a **plain directory with no `.git`**. Only an allowlist of files goes in:
+- From **main** (code and rules): `CLAUDE.md`, `requirements.txt`, `.claude/agents/explorer.md`, `nightshift/`,
+  `lab/__init__.py`, `lab/book.py`, and the two folders' READMEs.
+- From **dev** (the night's outputs so far): only `lab/sleeves/*.yaml` and `docs/prereg_drafts/*.md`, with no
+  subfolders. Each passes the same screen as a collected file (below), and any that fails is skipped and listed.
+- No path anywhere in it has a `data`, `results`, `fixtures` or `.explore` component. Links and submodules are
+  skipped.
+
+It also holds the bundle `.explore/`:
+- `sandbox.json`: cutoff, hashes, commits and a file inventory.
+- `manifest.json` and `extract.csv`, both verified against main.
+- `tested_trials.csv`: trial id and name only. The hypothesis text can carry outcomes (e.g. "the failed T01").
+- `exploration_log.csv`: dev's variant log without `params`, `code_ref` or `notes`. Every row must end by the cutoff,
+  or the sandbox is refused, and a description with a post-cutoff date stamp is withheld.
 - `out/` for the explorer's outputs.
 
-`create` refuses a destination inside any git work tree, and then audits its own tree. A worktree or sparse checkout
+`create` refuses a destination inside any git work tree, then audits its own tree. A worktree or sparse checkout
 would not do this job: it keeps the object database, so `git show origin/main:data/...` would still print 2020+ rows.
+Inside the sandbox the loader never reads the private store, and `build` and `pin` refuse.
 
-`python -m nightshift.explore_sandbox collect --sandbox DIR` runs from the routine's checkout after the explorer
-returns. It logs every variant from `.explore/out/variants.csv` again through `nightshift.logs`, against main's
-cutoff fetched fresh. In the sandbox, `logs.py` checks against the sandbox's own copy of the cutoff, so those rows are
-provisional. A refused row makes the exit 1. It copies back only new or changed files under `lab/sleeves/`,
-`docs/prereg_drafts/` and `.explore/out/exploration/` (to `results/exploration/`), each at most 2 MB. Nothing else
-leaves the sandbox.
+`collect --sandbox DIR --into CHECKOUT` runs after the explorer returns. It logs every variant from
+`.explore/out/variants.csv` again through `nightshift.logs`, against main's cutoff fetched fresh. Inside the sandbox
+`logs.py` checks against the sandbox's own copy of the cutoff, so those rows are only provisional. A refused row makes
+the exit 1.
+
+It copies back only new or changed files, and each must pass a screen:
+- `lab/sleeves/*.yaml`, at most 20 kB, with no date stamp after the cutoff outside its `launched` and `retire_on`
+  lines.
+- `docs/prereg_drafts/*.md`, at most 200 kB, with no day stamp after the cutoff. A month window such as
+  2020-01..2026-09 is planning text and is allowed.
+- Tables under `.explore/out/exploration/<hypothesis>/`, copied to `results/exploration/`: at most 2 MB, with no day
+  or month stamp after the cutoff. They must sit in a hypothesis folder, so a table can never replace
+  `results/exploration/log.csv`.
+- Every file must be UTF-8 text, inside the sandbox with no symbolic link on the way (a linked folder could reach the
+  private store), and free of the value of any credential-like environment variable.
+
+Nothing else leaves the sandbox. These screens are tripwires, not proofs: they catch rows of dated data and pasted
+secrets, not prose such as "Sharpe 0.9 over 2020-26".
 
 ## 5. Drafts for Ethan (protected files: not applied by this change)
 
 **`.claude/routines/night-explorer.md`, section 2** (replaces "## 2. Explore"):
 
 ````markdown
-## 2. Explore (in the sandbox only)
+## 2. Explore (in the sandbox only, with main's code)
 ```bash
+MAINCODE=$(mktemp -d /tmp/main-code-XXXXXX)
+git fetch -q origin main && git archive origin/main nightshift | tar -x -C "$MAINCODE"
+cat > "$MAINCODE/run.py" <<'PY'
+import pathlib, sys; sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from nightshift.explore_sandbox import main; sys.exit(main(sys.argv[1:]))
+PY
 SBX=/tmp/explore-$(date -u +%Y%m%dT%H%M%S)
-python -m nightshift.explore_sandbox create --dest "$SBX"   # exit 4: gate closed, 1: refused -> release blocked
+python -I "$MAINCODE/run.py" --repo "$PWD" create --dest "$SBX"   # exit 4: gate closed, 1: refused -> blocked
 ```
 If create does not exit 0, release with `--outcome blocked` and its message, and end. Otherwise call the Agent tool
 with `subagent_type: explorer` (`model: sonnet` in safe mode). Its prompt says: "Your working directory is $SBX: `cd
@@ -101,11 +133,12 @@ $SBX` first and stay there. Read only files under $SBX. Data comes only from `fr
 load` (Python run from $SBX). Log every variant with `python -m nightshift.logs variant ...` run from $SBX. Write
 tables under `$SBX/.explore/out/exploration/<hypothesis>/`, sleeves under `$SBX/lab/sleeves/` and drafts under
 `$SBX/docs/prereg_drafts/`. Never use an absolute path outside $SBX or `..`. Never use git, curl, wget, pip, or any
-other network command or library."
+other network command or library. Never start background processes."
 After it returns:
 ```bash
-scripts/night_commit.sh "night-explorer: <hypothesis>" -- python -m nightshift.explore_sandbox collect --sandbox "$SBX"
-rm -rf "$SBX"
+scripts/night_commit.sh "night-explorer: <hypothesis>" -- \
+  python -I "$MAINCODE/run.py" --repo "$PWD" collect --sandbox "$SBX" --into "$PWD"
+rm -rf "$SBX" "$MAINCODE"
 ```
 If collect exits 1 (a refused variant or file), the run is `failed` and its refused lines go in the release note.
 A run with no collected variant is `empty`.
@@ -120,7 +153,7 @@ A run with no collected variant is `empty`.
   fetch data from the web, never compute on anything `load` did not return. If it refuses, stop and report the
   refusal."
 - Step 4 becomes: scratch code in the sandbox, and kept tables under `.explore/out/exploration/<hypothesis>/`.
-- Consider dropping `WebSearch` from `tools:` (see residual 3).
+- Consider dropping `WebSearch` from `tools:` (see residual 4).
 
 ## 6. What this does not close (residuals; why the explorer stays off until you decide)
 
@@ -132,14 +165,43 @@ A run with no collected variant is `empty`.
      `sandbox.filesystem.denyRead` on the routine's checkout and the store. Its documentation covers local machines;
      whether these keys apply in cloud sessions is **not confirmed** and must be tested before relying on them.
    Note that `Read(...)` deny rules do not stop `cat` through Bash.
-2. **The routine's own checkout by absolute path.** The explorer is a subagent in the same container, so
-   `cat /home/user/em-macro/data/...` works unless Bash is sandboxed (as in 1) or the explorer runs in another session
-   whose checkout is only the sandbox.
-3. **WebSearch snippets** can quote 2020+ moves.
-4. **The model's own training data** covers 2020-2025 markets. Hypotheses can be shaped by hindsight however the data
+2. **The routine's own checkout, and the private store, by absolute path or with the environment's credentials.**
+   The explorer is a subagent in the same container. It inherits the routine's environment: the git proxy's
+   credentials for every repository attached to the routine, and `DATA_REPO_READ_TOKEN` if that is set. So `cat
+   /home/user/em-macro/data/...`, `git -C /home/user/em-macro show origin/main:results/...` and a clone of em-macro-data
+   (licensed settlements) all work unless Bash is sandboxed (as in 1) or the explorer runs in another session that has
+   only the sandbox. In code, the sandbox's own loader refuses to touch the store, but that only removes the
+   convenient route. The night-explorer environment should not carry `DATA_REPO_READ_TOKEN`.
+3. **Background processes.** A process the explorer starts with `nohup ... &` can outlive it and write into the
+   checkout between `collect` and the commit. `night_commit.sh` commits only its listed paths, but
+   `results/exploration` and `lab/sleeves` are among them.
+4. **WebSearch snippets** can quote 2020+ moves.
+5. **Self-declared windows.** A variant's `data_start`/`data_end` are what the explorer says. Inside an airtight
+   sandbox that is enough, because only the extract exists; with residuals 1-3 open, a variant computed on 2020+ data
+   can declare 2019. Free text (descriptions, drafts) is screened for date stamps only.
+6. **Vintages.** The kept columns are the sources' current series (Banxico `LA-MAS-RECIENTE`, FRED's current
+   vintage, BIS's own compilation), not archived as-of copies. Market prices and fixings are rarely revised; the
+   manifest says so, and no column was checked against archived vintages.
+7. **The model's own training data** covers 2020-2025 markets. Hypotheses can be shaped by hindsight however the data
    is fenced. Only a confirmatory pre-registered test on 2020-2026 data (yours, never the night shift's) settles an
    idea.
 
 Detection after the fact: `collect` re-checks every variant against main's cutoff, The Opposition reviews every
 nominated idea, and the explorer's transcript can be searched for network or out-of-sandbox commands. A morning-report
 check for that would be a queue item.
+
+## 7. The Opposition's review (2026-11-12) and what changed
+
+Asked to read 2020+ data as the explorer would. Verdict: advisory, no block, p_works 20.
+
+| | finding | now |
+|---|---|---|
+| F1 | protected modules import dev's unprotected `config.py`, `protected.py`, `__init__.py`; a dev `config.py` can loosen the cutoff | closed by running `create`/`collect` from main's extracted code (section 5; `--repo`, `--into`); the sandbox's code is main's. Proven by a test in which dev's code accepts a 2024 variant and main's refuses it. Open until the routine change is applied |
+| F2 | whole folders from dev (`nightshift/`, `lab/`, `docs/prereg_drafts/`) can carry planted copies of 2020+ data or results | closed: code from main; from dev only `lab/sleeves/*.yaml` and `docs/prereg_drafts/*.md`, screened |
+| F3 | `collect` follows a linked folder (store files to the public repo), can replace `results/exploration/log.csv`, can publish `env` output | closed: no link on the way, tables only in hypothesis folders, credential values refused, size and UTF-8 caps |
+| F4 | the store and its credentials are reachable from the sandbox (`_blob_from_temp_clone`), and git tracing could log the token | partly: the sandbox loader refuses store access, git trace variables are dropped; the environment's credentials remain (residual 2) |
+| F5 | `tested_trials.csv` hypothesis text carries outcomes | closed: id and name only |
+| F6 | the copied log's free text and the self-declared `data_end` | log trimmed and screened; self-declaration remains (residual 5) |
+| F7 | network, absolute paths, background writes | documented (residuals 1-3) |
+| F8 | kept columns are current vintages, not as-of | documented in the manifest (`point_in_time_basis`) and residual 6 |
+| builder | `build` run inside the sandbox against the checkout could launder a 2026 extract into the bundle | closed: `build` and `pin` refuse inside a sandbox (the absolute-path route remains, residual 2) |

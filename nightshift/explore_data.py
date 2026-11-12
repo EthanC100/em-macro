@@ -30,7 +30,7 @@ and verified the same way, and never touches git or the network.
 
 Gate (``explorer_gate``): the reasons night-explorer may not run (empty list = may run): main's cutoff and manifest
 must load as above, the four protected files must exist on origin/main, main's CODEOWNERS protected block must cover
-them, and main's night-explorer routine must run the explorer in the sandbox. ``nightshift.guard`` applies it to
+them, and main's night-explorer routine must make the sandbox with main's own code (``SANDBOX_MARK``). ``nightshift.guard`` applies it to
 ``check night-explorer``, ``next`` and ``state acquire``; ``explore_sandbox create`` applies it again.
 
   python -m nightshift.explore_data status                     # the gate, as JSON (exit 0 open, 4 closed)
@@ -63,7 +63,8 @@ MANIFEST_REL = "config/exploration_manifest.json"
 SANDBOX_REL = "nightshift/explore_sandbox.py"
 MUST_PROTECT = ("nightshift/explore_data.py", SANDBOX_REL, MANIFEST_REL, "nightshift/logs.py")
 ROUTINE_REL = ".claude/routines/night-explorer.md"
-SANDBOX_MARK = "python -m nightshift.explore_sandbox create"    # main's routine must run the explorer in a sandbox
+# main's routine must make the sandbox with main's own code (docs/exploration_data.md, section 5)
+SANDBOX_MARK = 'python -I "$MAINCODE/run.py" --repo "$PWD" create'
 REMOTE, BRANCH = C.MAIN_REMOTE, C.MAIN_BRANCH
 HEADER = ["date", "series", "value"]
 DATA_REPO = "EthanC100/em-macro-data"
@@ -188,7 +189,8 @@ def _redact(text: str, secrets: list[str]) -> str:
 def _clone_routes() -> tuple[list[tuple[str, dict]], list[str]]:
     """Ways to reach the private store: the environment's own credentials (the Claude Code git proxy), then the
     read-only token as an HTTP header in GIT_CONFIG_* variables (never a URL, a config file or any output)."""
-    base = {k: v for k, v in os.environ.items() if k != TOKEN_ENV}
+    base = {k: v for k, v in os.environ.items()
+            if k != TOKEN_ENV and not k.startswith(("GIT_TRACE", "GIT_CURL")) and k != "GIT_REDACT_COOKIES"}
     routes, secrets = [("environment credentials", dict(base))], []
     token = os.environ.get(TOKEN_ENV, "").strip()
     if token:
@@ -204,6 +206,8 @@ def _clone_routes() -> tuple[list[tuple[str, dict]], list[str]]:
 def _blob_from_temp_clone(rev: str | None, path: str, notes: list[str]) -> bytes | None:
     """A temporary blobless clone without a checkout: only ``path``'s blob is downloaded, then the clone is deleted, so
     no other file of the private store (settlements, ledger) ever lands on disk."""
+    if in_sandbox(C.ROOT):
+        return None
     url = os.environ.get("DATA_REPO_URL") or f"https://github.com/{DATA_REPO}.git"
     routes, secrets = _clone_routes()
     for name, env in routes:
@@ -235,6 +239,8 @@ def _blob_from_temp_clone(rev: str | None, path: str, notes: list[str]) -> bytes
 def store_extract(ext: dict) -> bytes:
     """The extract's bytes from the private store, accepted only if their sha256 is the manifest's. Tries the store
     clone's objects (the pinned commit, then HEAD), its working file, then a temporary one-file clone."""
+    if in_sandbox(C.ROOT):
+        raise Refused("the private store is never read from inside the sandbox: the bundle is all there is")
     path, rev, want = str(ext["store_path"]), ext.get("store_commit"), str(ext["sha256"])
     notes: list[str] = []
     cands: list[tuple[str, bytes | None]] = []
@@ -502,6 +508,8 @@ def build(manifest_path: Path, src_root: Path | None = None, store_root: Path | 
     """Write the extract under store_root at the manifest's ``store.path`` from the allowlisted sources, cut at main's
     cutoff, and return the manifest with its ``extract`` section (the caller writes it). Refused (nothing written)
     on any doubt."""
+    if in_sandbox(C.ROOT):
+        raise Refused("no extract is ever built from inside the sandbox")
     manifest_path = Path(manifest_path)
     src_root = Path(src_root) if src_root is not None else C.ROOT
     if store_root is None:
@@ -549,6 +557,8 @@ def build(manifest_path: Path, src_root: Path | None = None, store_root: Path | 
 
 def pin(manifest_path: Path, store_root: Path) -> dict:
     """Record in the manifest the store commit that holds the extract with the manifest's sha256."""
+    if in_sandbox(C.ROOT):
+        raise Refused("never from inside the sandbox")
     man = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     ext = man["extract"]
     head = _git(store_root, "rev-parse", "HEAD")
@@ -570,6 +580,7 @@ def write_manifest(man: dict, path: Path) -> None:
 # --------------------------------------------------------------------------------------------------- CLI
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--repo", default=None, help="the checkout whose git and remotes to use (default: this code's own)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
     b = sub.add_parser("build")
@@ -581,6 +592,8 @@ def main(argv=None) -> int:
     p.add_argument("--store-root", required=True)
     p.add_argument("--manifest", default=str(C.ROOT / MANIFEST_REL))
     a = ap.parse_args(argv)
+    if a.repo:
+        C.ROOT = Path(a.repo).resolve()
     if a.cmd == "status":
         r = explorer_gate()
         print(json.dumps({"explorer_may_run": not r, "reasons": r}, indent=1))

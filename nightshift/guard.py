@@ -18,9 +18,9 @@ stopped, busy writers, Actions API readable), else ``stop`` (exit 4). It never a
 Q019: night-explorer is gated. ``check night-explorer``, ``next`` and ``state acquire night-explorer`` never let it
 run until origin/main (fetched fresh) has the built exploration manifest (config/exploration_manifest.json), its
 CODEOWNERS protected block covers the loader, the sandbox, the manifest and nightshift/logs.py, and its night-explorer
-routine runs the explorer in the sandbox (``explore_data.explorer_gate``). The gate is evaluated whenever a caller
-does not pass it, and if it cannot be evaluated it is closed (fail safe). ``explore_sandbox create`` applies the same
-gate again, in protected code.
+routine makes the sandbox with main's own code (``explore_data.explorer_gate``). The gate is evaluated whenever a caller
+does not pass it, and if it cannot be evaluated it is closed (fail safe). ``explore_sandbox create``, run from main's
+extracted code, applies the same gate again.
 """
 from __future__ import annotations
 

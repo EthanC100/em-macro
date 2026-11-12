@@ -44,7 +44,7 @@ STORE_PATH = "exploration/v1/extract.csv"
 MUST_PROTECT = ("nightshift/explore_data.py", "nightshift/explore_sandbox.py", MANIFEST, "nightshift/logs.py")
 FULL_BLOCK = ("/nightshift/explore_data.py @E\n/nightshift/explore_sandbox.py @E\n/config/exploration_manifest.json @E\n"
               "/nightshift/logs.py @E\n")
-MARK = "python -m nightshift.explore_sandbox create"
+MARK = 'python -I "$MAINCODE/run.py" --repo "$PWD" create'
 
 
 def _ed():
@@ -673,8 +673,7 @@ def sandbox(guard_env, tmp_path):
 def test_q019_sandbox_has_no_data_results_git_or_live_files(sandbox):
     dest, out = sandbox
     SB = _sb()
-    assert out["cutoff"] == "2019-12-31" and out["skipped"] == ["lab/link (mode 120000: links and submodules never "
-                                                                "enter the sandbox)"]
+    assert out["cutoff"] == "2019-12-31" and out["skipped"] == [], out    # lab/link, lab/results: never considered
     assert not (dest / ".git").exists()
     names = {p.relative_to(dest).as_posix() for p in dest.rglob("*")}
     assert not [n for n in names if set(Path(n).parts) & {"data", "results", "fixtures", ".git"}], names
@@ -686,7 +685,7 @@ def test_q019_sandbox_has_no_data_results_git_or_live_files(sandbox):
             assert b"LEAK2020" not in p.read_bytes(), p
     assert SB.audit(dest) == []
     trials = list(csv.DictReader((dest / ".explore/tested_trials.csv").open()))
-    assert trials == [{"trial_id": "T01", "name": "carry", "hypothesis": "carry pays", "design_sample": "2005-01..2019-12"}]
+    assert trials == [{"trial_id": "T01", "name": "carry"}]                 # hypothesis text can carry outcomes
 
 
 def test_q019_sandbox_loader_works_with_no_git_and_no_network(sandbox, monkeypatch):
@@ -816,3 +815,199 @@ def test_q019_new_files_are_protected():
         assert P.protected([rel], pats) == [rel], rel
         assert any(P.matches(q, rel) for q in P.block_patterns((ROOT / ".github/CODEOWNERS").read_text())), rel
         assert any(P.matches(q, rel) for q in P.ALWAYS), rel
+
+
+def test_q019_sandbox_code_comes_from_main_not_dev(guard_env, tmp_path):
+    """A dev copy of the loader (or of logs.py) never enters the sandbox: code and rules are main's."""
+    ED, SB = _ed(), _sb()
+    _ready_main(ED, guard_env)
+    (guard_env.dev / "nightshift/explore_data.py").write_text("SERVE_EVERYTHING = True\n")
+    (guard_env.dev / "nightshift/extra_dev_module.py").write_text("x = 1\n")
+    (guard_env.dev / "lab/sleeves").mkdir(parents=True, exist_ok=True)
+    (guard_env.dev / "lab/sleeves/L009.yaml").write_text("id: L009\n")
+    guard_env.push_dev("dev edits")
+    dest = tmp_path / "sbx"
+    SB.create(dest, repo=guard_env.dev)
+    assert (dest / "nightshift/explore_data.py").read_bytes() == (ROOT / "nightshift/explore_data.py").read_bytes()
+    assert not (dest / "nightshift/extra_dev_module.py").exists()
+    assert (dest / "lab/sleeves/L009.yaml").exists()                    # the night's own outputs come from dev
+
+
+def test_q019_collect_never_follows_links_out_of_the_sandbox(sandbox, guard_env, tmp_path):
+    """A write folder replaced by a link into the private store would copy settlements into the public repo."""
+    dest, _ = sandbox
+    SB = _sb()
+    shutil.rmtree(dest / "lab/sleeves")
+    (dest / "lab/sleeves").symlink_to(guard_env.store / "ledger")
+    (dest / ".explore/out/exploration/H1").mkdir(parents=True)
+    (dest / ".explore/out/exploration/H1/fx.csv").symlink_to(guard_env.store / "ledger/futures_settlements.csv")
+    r = SB.collect(dest, repo=guard_env.dev, log_path=tmp_path / "log.csv")
+    assert r["copied"] == [], r
+    assert any("lab/sleeves" in x for x in r["refused"]) and any("fx.csv" in x for x in r["refused"]), r
+    assert not (guard_env.dev / "lab/sleeves/futures_settlements.csv").exists()
+
+
+@pytest.mark.parametrize("name, body, why", [
+    ("rows.csv", "date,fx\n2019-12-31,1.0\n2020-01-02,1.1\n", "dated after the cutoff"),
+    ("monthly.csv", "month,ret\n2019-12,0.1\n2020-03,-0.2\n", "dated after the cutoff"),
+    ("big.csv", "x\n" + "1\n" * 1_100_000, "over"),
+    ("bin.csv", b"\xff\xfe\x00", "UTF-8"),
+])
+def test_q019_collect_refuses_late_dated_oversized_or_binary_tables(sandbox, guard_env, tmp_path, name, body, why):
+    dest, _ = sandbox
+    SB = _sb()
+    d = dest / ".explore/out/exploration/H1"
+    d.mkdir(parents=True)
+    (d / name).write_bytes(body if isinstance(body, bytes) else body.encode())
+    (d / "ok.csv").write_text("variant,sharpe,data_end\nV1,0.3,2019-06-28\n")
+    r = SB.collect(dest, repo=guard_env.dev, log_path=tmp_path / "log.csv")
+    assert r["copied"] == ["results/exploration/H1/ok.csv"], r
+    assert len(r["refused"]) == 1 and why in r["refused"][0], r
+
+
+def test_q019_collect_cli_writes_into_the_named_checkout(sandbox, guard_env, capsys):
+    dest, _ = sandbox
+    SB = _sb()
+    (dest / "docs/prereg_drafts/H2.md").write_text("# H2\n")
+    assert SB.main(["collect", "--sandbox", str(dest), "--into", str(guard_env.dev)]) == 0
+    assert (guard_env.dev / "docs/prereg_drafts/H2.md").read_text() == "# H2\n"
+    assert json.loads(capsys.readouterr().out)["copied"] == ["docs/prereg_drafts/H2.md"]
+
+
+# ================================================== (7) The Opposition's attacks (review of 2026-11-12), now refused
+def _main_code(repos: Repos, dest: Path) -> Path:
+    """main's nightshift/ extracted outside every checkout (git archive), as the drafted routine runs it."""
+    dest.mkdir(parents=True)
+    arc = subprocess.run(["git", "archive", "origin/main", "nightshift"], cwd=repos.dev, capture_output=True, check=True)
+    subprocess.run(["tar", "-x", "-C", str(dest)], input=arc.stdout, check=True)
+    return dest
+
+
+RUN_PY = ("import pathlib, sys; sys.path.insert(0, str(pathlib.Path(__file__).parent))\n"
+          "from nightshift.explore_sandbox import main; sys.exit(main(sys.argv[1:]))\n")   # docs/exploration_data.md s5
+
+
+def _run_main_code(code: Path, *argv: str) -> subprocess.CompletedProcess:
+    (code / "run.py").write_text(RUN_PY)
+    return subprocess.run([sys.executable, "-I", str(code / "run.py"), *argv], capture_output=True, text=True,
+                          timeout=300)
+
+
+def test_q019_routine_draft_runs_the_tested_runner():
+    """The runner in the drafted routine is the one the F1 test runs."""
+    doc = (ROOT / "docs/exploration_data.md").read_text(encoding="utf-8")
+    for line in RUN_PY.splitlines():
+        assert line in doc, line
+    assert _ed().SANDBOX_MARK in doc                     # applying the draft is what opens gate check 4
+    assert 'python -I "$MAINCODE/run.py" --repo "$PWD" create --dest "$SBX"' in doc
+    assert 'python -I "$MAINCODE/run.py" --repo "$PWD" collect --sandbox "$SBX" --into "$PWD"' in doc
+
+
+def test_q019_F1_main_code_ignores_a_dev_config_that_loosens_the_cutoff(repos, tmp_path):
+    """F1: dev's unprotected config.py wraps load_main to 2026. collect run from dev's code accepts a 2024 variant
+    (the attack is real); main's code, extracted with git archive and run with python -I, refuses it."""
+    ED = _ed()
+    import nightshift.explore_data as EDm
+    cfg_main = _cfg()
+    real = C.load_main
+    C.load_main = lambda *a, **k: cfg_main
+    try:
+        _ready_main(EDm, repos)
+    finally:
+        C.load_main = real
+    (repos.main / "config/night.yaml").write_text(yaml.safe_dump(cfg_main))
+    repos.push_main("main config")
+    repos.sync_dev()
+    with (repos.dev / "nightshift/config.py").open("a") as f:
+        f.write("\n_real_load_main = load_main\n\n\ndef load_main(*a, **k):\n    c = _real_load_main(*a, **k)\n"
+                "    c['explorer']['data_end'] = '2026-12-31'\n    return c\n")
+    repos.push_dev("dev loosens the cutoff")
+    code = _main_code(repos, tmp_path / "maincode")
+    sbx = tmp_path / "sbx"
+    r = _run_main_code(code, "--repo", str(repos.dev), "create", "--dest", str(sbx))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads((sbx / ".explore/sandbox.json").read_text())["cutoff"] == "2019-12-31"
+    assert b"_real_load_main" not in (sbx / "nightshift/config.py").read_bytes()      # the sandbox runs main's code
+    head = ",".join(LG.EXP_COLS) + "\n"
+    (sbx / ".explore/out/variants.csv").write_text(head + "2026-11-12,H1,V1,ok,2005-01-03,2019-06-28,1,m,1,,,,\n"
+                                                   "2026-11-12,H1,V2,late,2005-01-03,2024-06-28,1,m,1,,,,\n")
+    r = _run_main_code(code, "--repo", str(repos.dev), "collect", "--sandbox", str(sbx), "--into", str(repos.dev))
+    out = json.loads(r.stdout)
+    assert r.returncode == 1 and out["variants_logged"] == ["V1"] and out["refused"][0].startswith("V2"), out
+    dev = subprocess.run([sys.executable, "-m", "nightshift.explore_sandbox", "collect", "--sandbox", str(sbx)],
+                         cwd=repos.dev, capture_output=True, text=True, timeout=300)
+    assert json.loads(dev.stdout)["variants_logged"] == ["V2"], dev.stdout + dev.stderr   # dev's code: the attack works
+
+
+def test_q019_F2_dev_cannot_plant_data_or_results_in_the_allowlisted_folders(guard_env, tmp_path):
+    ED, SB = _ed(), _sb()
+    _ready_main(ED, guard_env)
+    plant = {"lab/sleeves/p.csv": "date,fx\n2020-03-02,1\n",
+             "lab/sleeves/L010.yaml": "id: L010\nlaunched: 2026-11-20\nretire_on: 2027-05-20\nnote: 2020-03-02 BRL -5%\n",
+             "lab/sleeves/L011.yaml": "id: L011\nlaunched: 2026-11-20\nretire_on: 2027-05-20\n",
+             "docs/prereg_drafts/x.md": "T18 2020-03-02: Sharpe 0.9\n",
+             "docs/prereg_drafts/ok.md": "Test window 2020-01..2026-09, never run by the night shift.\n",
+             "docs/prereg_drafts/sub/y.md": "nested\n",
+             "lab/registry.csv": "id,launched\nL999,2020-01-02\n",
+             "lab/notes.py": "LEAK = '2021-01-04'\n"}
+    for rel, text in plant.items():
+        (guard_env.dev / rel).parent.mkdir(parents=True, exist_ok=True)
+        (guard_env.dev / rel).write_text(text)
+    guard_env.push_dev("planted")
+    dest = tmp_path / "sbx"
+    out = SB.create(dest, repo=guard_env.dev)
+    have = {p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file()}
+    assert {"lab/sleeves/L011.yaml", "docs/prereg_drafts/ok.md"} <= have
+    assert not {"lab/sleeves/p.csv", "lab/sleeves/L010.yaml", "docs/prereg_drafts/x.md", "docs/prereg_drafts/sub/y.md",
+                "lab/registry.csv", "lab/notes.py"} & have
+    assert len(out["skipped"]) == 4, out["skipped"]
+
+
+def test_q019_F3_collect_never_overwrites_the_log_or_publishes_a_secret(sandbox, guard_env, tmp_path, monkeypatch):
+    dest, _ = sandbox
+    SB = _sb()
+    monkeypatch.setenv("NIGHT_EXPLORER_FIRE_TOKEN", "fixture-secret-value-123")
+    (dest / ".explore/out/exploration/log.csv").write_text("logged_on,variant_id\n")
+    (dest / "docs/prereg_drafts/env.md").write_text("NIGHT_EXPLORER_FIRE_TOKEN=fixture-secret-value-123\n")
+    r = SB.collect(dest, repo=guard_env.dev, log_path=tmp_path / "log.csv")
+    assert r["copied"] == [], r
+    assert any("hypothesis folder" in x for x in r["refused"]) and any("NIGHT_EXPLORER_FIRE_TOKEN" in x
+                                                                       for x in r["refused"]), r
+    assert not any("fixture-secret-value-123" in x for x in r["refused"])
+
+
+def test_q019_F4_no_store_access_and_no_build_from_inside_the_sandbox(sandbox, monkeypatch):
+    dest, _ = sandbox
+    ED = _ed()
+    monkeypatch.setattr(C, "ROOT", dest)
+    man = json.loads((dest / ".explore/manifest.json").read_text())
+    with pytest.raises(ED.Refused, match="sandbox"):
+        ED.store_extract(man["extract"])
+    assert ED._blob_from_temp_clone(None, "ledger/futures_settlements.csv", []) is None
+    with pytest.raises(ED.Refused, match="sandbox"):
+        ED.build(dest / ".explore/manifest.json", src_root=dest, store_root=dest / "x")
+
+
+def test_q019_F4_clone_routes_drop_git_tracing(monkeypatch):
+    ED = _ed()
+    monkeypatch.setenv("GIT_TRACE_CURL", "/tmp/trace.log")
+    monkeypatch.setenv("GIT_TRACE", "1")
+    monkeypatch.setenv("DATA_REPO_READ_TOKEN", "tok-fixture-123")
+    routes, secrets = ED._clone_routes()
+    for _, env in routes:
+        assert "GIT_TRACE_CURL" not in env and "GIT_TRACE" not in env and "DATA_REPO_READ_TOKEN" not in env
+
+
+def test_q019_F6_sandbox_log_copy_has_no_free_text_notes(guard_env, tmp_path):
+    ED, SB = _ed(), _sb()
+    _ready_main(ED, guard_env)
+    (guard_env.dev / "results/exploration").mkdir(parents=True)
+    (guard_env.dev / "results/exploration/log.csv").write_text(
+        ",".join(LG.EXP_COLS) + "\n"
+        "2026-11-01,H0,V0,carry on 2020-05-01 data,2005-01-03,2019-06-28,1,m,1,{\"p\": 1},x@y,,2020-26 Sharpe 0.9\n")
+    guard_env.push_dev("log with notes")
+    dest = tmp_path / "sbx"
+    SB.create(dest, repo=guard_env.dev)
+    rows = list(csv.DictReader((dest / ".explore/exploration_log.csv").open()))
+    assert set(rows[0]) == set(SB.LOG_COLS) and rows[0]["description"].startswith("[withheld")
+    assert "Sharpe" not in (dest / ".explore/exploration_log.csv").read_text()
