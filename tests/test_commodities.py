@@ -158,3 +158,22 @@ def test_outside_the_fund_and_wired_into_the_app():
     assert "pages.commodities" in (ROOT / "ledger/site/commodities.js").read_text()
     b = COM.build_safe(date(2026, 11, 11))
     assert b["name"] == "Commodities" and b["k"] == COM.K
+
+
+def test_ledger_daily_commodities_step_can_never_stop_the_marks():
+    import yaml
+    wf = yaml.safe_load((ROOT / ".github/workflows/ledger-daily.yml").read_text())
+    job = wf["jobs"]["daily"]
+    steps = job["steps"]
+    names = [s.get("name") for s in steps]
+    com = next(s for s in steps if s.get("id") == "commodities")
+    commit = next(s for s in steps if s.get("id") == "commit")
+    assert com["continue-on-error"] is True and 0 < com["timeout-minutes"] < job["timeout-minutes"]
+    assert names.index(com["name"]) < names.index(commit["name"]) and "if" not in commit   # commit runs regardless
+    assert job["defaults"]["run"]["shell"] == "bash"                     # -eo pipefail: a failure fails the step
+    assert "data/commodities" in commit["run"]
+    alert = next(s for s in steps if s.get("name") == "Commodities book alert")
+    assert "steps.commodities.outcome == 'failure'" in alert["if"] and alert["if"].startswith("always()")
+    assert '"[ALERT] Commodities book step failed"' in alert["run"]
+    close = next(s for s in steps if s.get("name") == "Close alert issues after a successful run")
+    assert 'startswith("[ALERT] ledger-daily")' in close["run"]          # a green run does not close the book's alert
