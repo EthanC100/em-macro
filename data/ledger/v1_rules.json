@@ -2,7 +2,7 @@
  "decision": "D004",
  "as_of": "2026-10",
  "month_end": "2026-10-31",
- "evaluated_at": "2026-11-11T06:36:16Z",
+ "evaluated_at": "2026-11-12T07:32:20Z",
  "next_rebalance": "2026-11-03",
  "live_start": "2026-10-31",
  "live_months": 0,
@@ -67,6 +67,16 @@
   }
  ],
  "rule4_hits": [],
+ "rule4_superseded_by": "D005",
+ "managed_fx": [
+  {
+   "currency": "TRY",
+   "imf_classification": "crawl-like arrangement",
+   "date": "2026-11-11",
+   "source": "IMF Annual Report 2026, Appendix II.9, De Facto Classification of Exchange Rate Arrangements, as of April 30, 2026 (IMF AREAER database): Türkiye under crawl-like arrangement, de facto anchor to the US dollar (footnote 5); unchanged from the April 30, 2025 table (IMF Annual Report 2025, Appendix II.9)",
+   "held": true
+  }
+ ],
  "rules": [
   {
    "rule": 1,
@@ -92,8 +102,8 @@
   {
    "rule": 4,
    "name": "instrument",
-   "status": "ok",
-   "detail": "no held instrument on the rule-4 list (config/v1_rules_rule4.csv)",
+   "status": "superseded",
+   "detail": "superseded by D005: a managed currency's volatility is floored at the month's median EM-currency volatility and the book rescaled to 10% (em_macro/d005.py); managed list: TRY (crawl-like arrangement, listed 2026-11-11, held)",
    "action": ""
   },
   {
