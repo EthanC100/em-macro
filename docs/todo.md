@@ -9,7 +9,7 @@ Edit it by hand; the next build picks it up.
 - [ ] Frozen-code guard blocks `stage_test` (`frozen_design.json` records the pre-label code hash; `evaluate()` has to be called directly to reproduce the test)
 - [ ] October 2026 labelled "test" in `systematic.py` (the paper P&L sample label; the file is hashed in `docs/v1.0_freeze.md`, so it stays until v1.1)
 - [ ] Raw data not kept (downloads live in the Actions cache and are refreshed monthly; only BondSpot, Borsa Istanbul and the IMF WEO files are committed)
-- [ ] 9 of 23 instruments lack daily prices and bond returns use monthly-average yields (the Ledger registry now marks 21 of 28 instruments daily, but the algorithm's inputs are unchanged; France is marked daily from the Riksbank since 6 Nov 2026; the Italian, Indonesian, Colombian and Chilean 10-year yields still have no free daily source)
+- [ ] 9 of 23 instruments lack daily prices and bond returns use monthly-average yields (the Ledger registry now marks 19 of 23 tradeable instruments daily (24 of 29 with the yield legs), but the algorithm's inputs are unchanged; France is marked daily from the Riksbank since 6 Nov 2026; the Italian, Indonesian, Colombian and Chilean 10-year yields still have no free daily source)
 - [ ] T02 data gaps (Chile CPI after 2023; stale euro-area, Mexican and South African series)
 - [x] Paper capital US$500m from the 3 Dec 2026 rebalance (C03; capacity checks on the Algorithm page)
 - [ ] Election tracker unmerged (`build/election-tracker`; `data/elections/` does not exist on main, the app falls back to `data/events/`)

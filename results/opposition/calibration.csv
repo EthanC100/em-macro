@@ -1,1 +1,28 @@
 logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
+2026-11-09,queue,Q003,80,advisory,claude-opus-5-5,,,test must not drift with the registry; keep '9 of 23' (algorithm inputs) unchanged
+2026-11-09,queue,Q005,55,advisory,claude-opus-5-5,,,test_automation.py:100-117 asserts current pairing; ledger-daily test step; old rows not rewritten
+2026-11-09,queue,Q006,50,advisory,claude-opus-5-5,,,existing 30 Nov row keeps winning latest_marks; evidence's stale-flag claim wrong (monthly marks)
+2026-11-09,pr,27,80,advisory,claude-opus-5-5,,,doc-prose test gates systematic-monthly's commit step (filed Q007)
+2026-11-10,queue,Q009,55,advisory,claude-opus-5-5,,,reviewed before the cause was found; evidence since corrected (1.2% hash-digit collision)
+2026-11-10,queue,Q008,80,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q007,75,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q010,85,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q011,55,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q012,40,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q013,55,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q014,68,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q012,50,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q015,45,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q017,60,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q016,50,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q019,35,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q020,50,advisory,claude-opus-5-5,,,
+2026-11-11,queue,Q018,60,advisory,claude-opus-5-5,,,"reviewed as built on main (764d2ea, 5148b45) at Ethan's request; findings fixed in 07bdfbd"
+2026-11-11,queue,Q022,55,advisory,claude-opus-5-5,,,PR #35 reviewed at 7816fd9 at Ethan's request; findings fixed in 659c182
+2026-11-11,queue,Q023,80,advisory,claude-opus-5-5,,,reword not just tick; test must skip not fail; merge after Q007
+2026-11-11,queue,Q021,72,advisory,claude-opus-5-5,,,"gap: a daily spread with one carried leg (date=min, mixed-date value) passes mark_can_act and still overwrites a first-hand row (marks.py:530-541); add a 5th test for it; decide revision-on-stale-refetch rule; watchdog fetched_at heartbeat meaning changes"
+2026-11-11,pr,37,70,advisory,claude-opus-5-5,,,
+2026-11-11,pr,38,55,advisory,claude-opus-5-5,,,
+2026-11-11,pr,39,72,advisory,claude-opus-5-5,,,
+2026-11-12,queue,Q001,50,advisory,claude-opus-5-5,,,Ethan's decision 2026-11-12 (estimate from actual rebalance date): run_date restamped on re-runs; clamp to month start; weekend run dates; v1.1 has no run_date; label via books.json not app.js; found test_books tripwire (Q025)
+2026-11-12,queue,Q002,70,advisory,claude-opus-5-5,,,"kick + backup cron + due gate: gate failure must fail open (done), gate on as_of not run_date alone (done), fail-open re-run trade-off, expressions unproven until a live only_if_due dispatch; PR #42"

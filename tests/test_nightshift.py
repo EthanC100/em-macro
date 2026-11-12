@@ -279,7 +279,9 @@ def test_promote_run_end_to_end_on_a_scratch_repo(repo, monkeypatch, tmp_path):
 
 
 # ------------------------------------------------------------------------------------------------ logs
-def test_exploration_log_refuses_2020_data_and_duplicates(tmp_path):
+def test_exploration_log_refuses_2020_data_and_duplicates(tmp_path, monkeypatch):
+    # Q015: the cutoff comes from main's config (load_main); a fixture, never the real remote
+    monkeypatch.setattr(C, "load_main", lambda *a, **k: {"window": {}, "explorer": {"data_end": "2019-12-31"}})
     p = tmp_path / "log.csv"
     row = {"hypothesis_id": "H1", "variant_id": "V1", "description": "d", "data_start": "2005-01-01",
            "data_end": "2019-12-31", "metric": "sharpe", "value": "0.4"}

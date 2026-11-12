@@ -1,10 +1,111 @@
 {
  "schema": 1,
  "lock": null,
- "night": null,
- "runs_used": 0,
- "last_kind": null,
- "chain_stopped": null,
- "log": [],
+ "night": "2026-11-11",
+ "runs_used": 4,
+ "last_kind": "worker",
+ "chain_stopped": {
+  "reason": "run cap reached (4 of 4); PR #40 (Q019) awaits review and merge",
+  "at": "2026-11-12T00:25:40+08:00"
+ },
+ "log": [
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-09T22:57:46+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main 3e4059a (clean); triage filed Q005, Q006; Opposition: Q003/Q005/Q006 no block; approved Q003, Q005, Q006",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-09T22:58:06+08:00",
+   "finished_at": "2026-11-09T23:07:47+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q003"
+   ],
+   "commits": [
+    "2317609"
+   ],
+   "note": "Q003 implemented (PR #27), reviewed, merged into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qeLpHu9tU83oY5YgvB",
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": null,
+   "finished_at": "2026-11-09T23:18:41+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "check only (dry run): refused on (c) protected paths and (b) app.js/lab.json, both from the unmerged setup PR; as if merged: all checks pass, only todo.json (Q003) differs",
+   "session": null
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-11T22:38:19+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (1b4b29c, no auto_resolved); filed Q023 (data, approved p=80) and Q024 (research, waits for Ethan); Q021 reviewed no block p=72 and approved; 0 blocked; night-worker not fired (exit 6, no API trigger; hourly schedule picks it up). Triage: Actions API 403, run reports not audited; Q005 should also cover GB-DE and PL-DE (marks.csv:799, :807)",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-11T23:35:43+08:00",
+   "finished_at": "2026-11-11T23:45:53+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q021"
+   ],
+   "commits": [],
+   "note": "Q021 implemented, PR #37 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
+   "run": 1
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-11T23:50:49+08:00",
+   "finished_at": "2026-11-11T23:57:41+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q020"
+   ],
+   "commits": [],
+   "note": "Q020 implemented, PR #38 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
+   "run": 2
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-12T00:03:27+08:00",
+   "finished_at": "2026-11-12T00:09:14+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q015"
+   ],
+   "commits": [],
+   "note": "Q015 implemented, PR #39 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
+   "run": 3
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-12T00:13:49+08:00",
+   "finished_at": "2026-11-12T00:25:33+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q019"
+   ],
+   "commits": [],
+   "note": "Q019 implemented, PR #40 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
+   "run": 4
+  }
+ ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
 }

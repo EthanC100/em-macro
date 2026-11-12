@@ -1,0 +1,99 @@
+{
+ "base": "3e4059a",
+ "head": "1d3143d",
+ "today": "2026-11-09",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": false,
+   "touched": [
+    ".claude/agents/explorer.md",
+    ".claude/agents/implementer.md",
+    ".claude/agents/opposition.md",
+    ".claude/agents/reporter.md",
+    ".claude/agents/triage.md",
+    ".claude/routines/morning-report.md",
+    ".claude/routines/night-explorer.md",
+    ".claude/routines/night-start.md",
+    ".claude/routines/night-worker.md",
+    ".claude/routines/pr-review.md",
+    ".claude/routines/promote.md",
+    ".claude/routines/weekly-brief.md",
+    ".github/CODEOWNERS",
+    "docs/rulesets/frozen-tags.json",
+    "docs/rulesets/main-guard.yml.proposal",
+    "docs/rulesets/main.json"
+   ],
+   "n_changed": 48
+  },
+  "a_tests": {
+   "ok": true,
+   "summary": "467 passed, 126 skipped, 10 warnings in 184.02s (0:03:04)"
+  },
+  "b_ledger_rebuild": {
+   "ok": false,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "c19502c3a0ff9b72fab8f2459626e7f15ab3aa0f",
+   "same_snapshot": true,
+   "items_merged": [
+    "Q003",
+    "Q005",
+    "Q006",
+    "Q007"
+   ],
+   "intended_files": [
+    "books.json",
+    "marks.json",
+    "todo.json"
+   ],
+   "differences": [
+    {
+     "file": "app.js",
+     "paths": [
+      "(content)"
+     ]
+    },
+    {
+     "file": "data/lab.json",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/todo.json",
+     "paths": [
+      ".sections[0].items[4].note",
+      ".updated"
+     ]
+    }
+   ],
+   "unexplained": [
+    "app.js",
+    "data/lab.json"
+   ],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": false,
+ "dev_commits_ahead": 9,
+ "mode": "check only",
+ "reasons": [
+  "(c) protected paths touched: ['.claude/agents/explorer.md', '.claude/agents/implementer.md', '.claude/agents/opposition.md', '.claude/agents/reporter.md', '.claude/agents/triage.md', '.claude/routines/morning-report.md', '.claude/routines/night-explorer.md', '.claude/routines/night-start.md', '.claude/routines/night-worker.md', '.claude/routines/pr-review.md', '.claude/routines/promote.md', '.claude/routines/weekly-brief.md', '.github/CODEOWNERS', 'docs/rulesets/frozen-tags.json', 'docs/rulesets/main-guard.yml.proposal', 'docs/rulesets/main.json']",
+  "(b) Ledger rebuild differs: ['app.js', 'data/lab.json']"
+ ]
+}

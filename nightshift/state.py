@@ -11,9 +11,18 @@ Every routine starts with no memory, so this file is the hand-over between runs:
 
 CLI (all write the file in place; ``scripts/night_commit.sh`` commits it to dev):
   python -m nightshift.state status
-  python -m nightshift.state acquire <routine> [--session URL]   (exit 3 if held and not stale)
+  python -m nightshift.state acquire <routine> [--session URL]   (exit 3 if held and not stale; for night-worker
+                                     and night-explorer also exit 3 unless the guard check passes, see below)
   python -m nightshift.state release <routine> --outcome merged|empty|failed|blocked|stopped|ok
-                                     [--items Q001,Q002] [--commits sha,sha] [--note TEXT] [--kind worker|explorer]
+                                     [--items Q001] [--commits sha,sha] [--note TEXT] [--kind worker|explorer]
+                                     (exit 2 if refused: a night-worker release names one item, see below)
+
+Per item, in code (Q020): night-worker runs as one session that loops over items, so each item is its own counted
+run. ``acquire`` of a counted routine runs ``guard.check`` for it first (main's config, the Actions API; window, run
+cap, chain stopped, busy writers, fail safe when either cannot be read), so a loop that acquires per item re-checks
+the guard per item and stops at the cap. A night-worker release names at most one item, and exactly one unless the
+outcome is ``empty`` or ``stopped`` (nothing worked); each counted release adds one run. There is no heartbeat: a
+lock held longer than ``lock_stale_hours`` is taken over as before.
   python -m nightshift.state stop --reason TEXT
 """
 from __future__ import annotations
@@ -82,10 +91,25 @@ def acquire(s: dict, routine: str, now: datetime, cfg: dict, session: str | None
     return True, note or "acquired"
 
 
-def release(s: dict, routine: str, now: datetime, outcome: str, items=(), commits=(), note: str = "",
-            kind: str | None = None) -> dict:
+NO_ITEM_OUTCOMES = ("empty", "stopped")       # a worker run that worked no item
+
+
+def check_release(routine: str, outcome: str, items) -> None:
+    """Raises ValueError if the release is refused (Q020: one item per counted worker run)."""
     if outcome not in OUTCOMES:
         raise ValueError(f"outcome must be one of {OUTCOMES}")
+    if routine == "night-worker":
+        n = len(list(items))
+        if n > 1:
+            raise ValueError(f"a night-worker release names one item, got {n}: release once per item")
+        if n == 0 and outcome not in NO_ITEM_OUTCOMES:
+            raise ValueError(f"a night-worker release with outcome {outcome} must name its item (--items Qnnn)")
+
+
+def release(s: dict, routine: str, now: datetime, outcome: str, items=(), commits=(), note: str = "",
+            kind: str | None = None) -> dict:
+    items = list(items)
+    check_release(routine, outcome, items)
     lk = s.get("lock") or {}
     entry = {"routine": routine, "started_at": lk.get("acquired_at"), "finished_at": _iso(now), "outcome": outcome,
              "items": list(items), "commits": list(commits), "note": note, "session": lk.get("session")}
@@ -127,6 +151,12 @@ def main(argv=None) -> int:
                          | {"cap": C.run_cap(cfg), "last_runs": s["log"][-5:]}, indent=1))
         return 0
     if a.cmd == "acquire":
+        if a.routine in COUNTED:                # Q020: the guard binds every counted run, so every item of a loop
+            from . import guard as G            # (local import: guard imports this module)
+            v = G.check(a.routine, now, cfg, load(path), G.busy_runs(cfg))
+            if not v["go"]:
+                print("refused: guard check failed: " + "; ".join(v["reasons"]))
+                return 3
         ok, msg = acquire(s, a.routine, now, cfg, a.session)
         print(msg)
         if not ok:
@@ -135,7 +165,11 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "release":
         split = lambda x: [v for v in x.split(",") if v]
-        e = release(s, a.routine, now, a.outcome, split(a.items), split(a.commits), a.note, a.kind)
+        try:
+            e = release(s, a.routine, now, a.outcome, split(a.items), split(a.commits), a.note, a.kind)
+        except ValueError as err:
+            print(f"refused: {err}")
+            return 2
         save(s, path)
         print(json.dumps(e))
         return 0

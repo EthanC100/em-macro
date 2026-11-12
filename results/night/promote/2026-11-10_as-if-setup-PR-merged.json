@@ -1,0 +1,59 @@
+{
+ "base": "ca6a3ed",
+ "head": "1d3143d",
+ "today": "2026-11-09",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 10
+  },
+  "a_tests": {
+   "ok": true,
+   "summary": "468 passed, 126 skipped, 10 warnings in 187.91s (0:03:07)"
+  },
+  "b_ledger_rebuild": {
+   "ok": true,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "c19502c3a0ff9b72fab8f2459626e7f15ab3aa0f",
+   "same_snapshot": true,
+   "items_merged": [
+    "Q003"
+   ],
+   "intended_files": [
+    "todo.json"
+   ],
+   "differences": [
+    {
+     "file": "data/todo.json",
+     "paths": [
+      ".sections[0].items[4].note",
+      ".updated"
+     ]
+    }
+   ],
+   "unexplained": [],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": true,
+ "dev_commits_ahead": 8,
+ "mode": "check only",
+ "reasons": []
+}
