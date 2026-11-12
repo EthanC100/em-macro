@@ -197,6 +197,7 @@ on main (the test checks each exists):
 | config changes, commitments, trials | `docs/config_changes.md`, `ledger/commitments.py`, `trials.csv` |
 | D005 volatility floor (supersedes D004 rule 4) | `config/v1_managed_fx.csv` (managed-currency list), `em_macro/d005.py`, `em_macro/d005_fallback.py` (the override and its fail-safe); all three also always protected in `nightshift/protected.py` |
 | the agents' own rules and switches | `.claude/`, `config/night.yaml` (also always protected in `nightshift/protected.py`), `.github/CODEOWNERS`, `docs/rulesets/` |
+| exploration data (Q019, `docs/exploration_data.md`) | `nightshift/explore_data.py` (builder, loader, gate), `nightshift/explore_sandbox.py`, `config/exploration_manifest.json` (the extract's public manifest: the extract itself is in em-macro-data `exploration/`), `nightshift/logs.py`; all four also always protected in `nightshift/protected.py`, and night-explorer is gated until main covers them |
 
 Tags cannot be covered by CODEOWNERS: `docs/rulesets/frozen-tags.json` blocks updating or deleting both tags.
 `data/processed/*.csv` (hashed v1.0 inputs) are not protected: the monthly workflow rewrites them by design, the
