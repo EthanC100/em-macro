@@ -44,7 +44,8 @@ STORE_PATH = "exploration/v1/extract.csv"
 MUST_PROTECT = ("nightshift/explore_data.py", "nightshift/explore_sandbox.py", MANIFEST, "nightshift/logs.py")
 FULL_BLOCK = ("/nightshift/explore_data.py @E\n/nightshift/explore_sandbox.py @E\n/config/exploration_manifest.json @E\n"
               "/nightshift/logs.py @E\n")
-MARK = 'python -I "$MAINCODE/run.py" --repo "$PWD" create'
+MARK = ('MAINCODE=$(fresh_main)\npython -I "$MAINCODE/run.py" --repo "$PWD" create --dest "$SBX"\n'
+        'MAINCODE=$(fresh_main)\npython -I "$MAINCODE/run.py" --repo "$PWD" collect --sandbox "$SBX" --into "$PWD"')
 
 
 def _ed():
@@ -212,7 +213,7 @@ def _ready_main(ED, repos: Repos, block: str = FULL_BLOCK, routine: str = MARK, 
     (repos.main / "requirements.txt").write_text("pyyaml\n")
     rd = repos.main / ".claude/routines"
     rd.mkdir(parents=True, exist_ok=True)
-    (rd / "night-explorer.md").write_text(f"# routine\n```\n{routine} --dest /tmp/x\n```\n" if routine else "# r\n")
+    (rd / "night-explorer.md").write_text(f"# routine\n```\n{routine}\n```\n" if routine else "# r\n")
     repos.codeowners("/docs/prereg/ @E\n" + block)
     repos.push_main("exploration manifest")
     repos.sync_dev()
@@ -898,9 +899,11 @@ def test_q019_routine_draft_runs_the_tested_runner():
     doc = (ROOT / "docs/exploration_data.md").read_text(encoding="utf-8")
     for line in RUN_PY.splitlines():
         assert line in doc, line
-    assert _ed().SANDBOX_MARK in doc                     # applying the draft is what opens gate check 4
+    for mark, n in _ed().ROUTINE_MARKS.items():           # applying the draft is what opens gate check 4
+        assert doc.count(mark) >= n, mark
     assert 'python -I "$MAINCODE/run.py" --repo "$PWD" create --dest "$SBX"' in doc
     assert 'python -I "$MAINCODE/run.py" --repo "$PWD" collect --sandbox "$SBX" --into "$PWD"' in doc
+    assert doc.count("MAINCODE=$(fresh_main)") >= 2 and "core.hooksPath=/dev/null" in doc
 
 
 def test_q019_F1_main_code_ignores_a_dev_config_that_loosens_the_cutoff(repos, tmp_path):
@@ -1011,3 +1014,60 @@ def test_q019_F6_sandbox_log_copy_has_no_free_text_notes(guard_env, tmp_path):
     rows = list(csv.DictReader((dest / ".explore/exploration_log.csv").open()))
     assert set(rows[0]) == set(SB.LOG_COLS) and rows[0]["description"].startswith("[withheld")
     assert "Sharpe" not in (dest / ".explore/exploration_log.csv").read_text()
+
+
+# ========================================== (8) the re-review's attacks (N3, N4, N6, N8), now refused or narrowed
+@pytest.mark.parametrize("kind, body", [
+    ("sleeve", "id: L999\nlaunched: 2026-11-20\nlaunched: 2020-03-02,FX_BR,4.48\nretire_on: 2027-05-20\n"),
+    ("sleeve", "id: L999\nlaunched: 2020-03-02,FX_BR,4.48\n"),
+    ("draft", "2020-03: 4.48\n"),
+    ("table", "date,fx\n2020/03/02,4.48\n"), ("table", "date,fx\n20200302,4.48\n"), ("table", "d,fx\n02.03.2020,4.48\n"),
+    ("table", "month,fx\nMar 2020,4.48\n"), ("table", "metric,value\nsharpe_2020_26,0.916\n"),
+])
+def test_q019_N3_screens_catch_other_date_forms_and_the_sleeve_line_trick(kind, body):
+    SB = _sb()
+    assert SB._screen(kind, body.encode(), datetime(2019, 12, 31).date()), (kind, body)
+
+
+@pytest.mark.parametrize("kind, body", [
+    ("sleeve", "id: L1\nlaunched: 2026-11-20\nretire_on: 2027-05-20\nrules: carry\n"),
+    ("draft", "Confirmatory test on 2020-01..2026-09 (2020-2026), by Ethan only.\n"),
+    ("table", "variant,sharpe,data_start,data_end\nV1,0.31,2005-01-03,2019-12-31\n"),
+])
+def test_q019_N3_screens_pass_legitimate_files(kind, body):
+    assert _sb()._screen(kind, body.encode(), datetime(2019, 12, 31).date()) is None
+
+
+def test_q019_N4_variant_free_text_is_screened_at_collect_and_in_the_copy(sandbox, guard_env, tmp_path):
+    dest, _ = sandbox
+    SB = _sb()
+    head = ",".join(LG.EXP_COLS) + "\n"
+    (dest / ".explore/out/variants.csv").write_text(head + "2026-11-12,H1,V1,ok,2005-01-03,2019-06-28,1,sharpe,0.3,,,,\n"
+                                                    "2026-11-12,H1,V2,x,2005-01-03,2019-12-31,1,sharpe_2020_26,0.9,,,,\n")
+    r = SB.collect(dest, repo=guard_env.dev, log_path=tmp_path / "log.csv")
+    assert r["variants_logged"] == ["V1"] and r["refused"][0].startswith("V2: free text"), r
+    raw = (head + "2026-11-01,H0,V0,x,2005-01-03,2019-06-28,1,sharpe_2020_26,0.916,,,,\n").encode()
+    rows = list(csv.DictReader(io.StringIO(SB._checked_log(raw, datetime(2019, 12, 31).date()).decode())))
+    assert rows[0]["variant_id"] == "V0" and "0.916" not in rows[0].values() and rows[0]["metric"].startswith("[withheld")
+
+
+def test_q019_N6_reads_never_follow_a_link_swapped_in(tmp_path):
+    SB = _sb()
+    root, outside = tmp_path / "sbx", tmp_path / "store"
+    (root / "lab/sleeves").mkdir(parents=True)
+    outside.mkdir()
+    (outside / "settle.yaml").write_text("secret\n")
+    (root / "lab/sleeves/ok.yaml").write_text("id: L1\n")
+    assert SB._read_inside(root / "lab/sleeves/ok.yaml", root, 100) == b"id: L1\n"
+    (root / "lab/sleeves/a.yaml").symlink_to(outside / "settle.yaml")             # swapped in after a check
+    assert SB._read_inside(root / "lab/sleeves/a.yaml", root, 100) is None
+    (root / "lab/linked").symlink_to(outside, target_is_directory=True)           # a linked parent directory
+    assert SB._read_inside(root / "lab/linked/settle.yaml", root, 100) is None
+
+
+def test_q019_N8_gate_needs_fresh_extraction_and_both_invocations(guard_env, capsys):
+    ED = _ed()
+    only_create = 'MAINCODE=$(fresh_main)\npython -I "$MAINCODE/run.py" --repo "$PWD" create --dest "$SBX"\n'
+    _ready_main(ED, guard_env, routine=only_create)
+    rc, v = _guard(capsys, "check", "night-explorer")
+    assert rc == 4 and any("collect" in r for r in v["reasons"]), v

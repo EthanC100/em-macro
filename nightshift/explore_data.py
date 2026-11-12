@@ -30,7 +30,7 @@ and verified the same way, and never touches git or the network.
 
 Gate (``explorer_gate``): the reasons night-explorer may not run (empty list = may run): main's cutoff and manifest
 must load as above, the four protected files must exist on origin/main, main's CODEOWNERS protected block must cover
-them, and main's night-explorer routine must make the sandbox with main's own code (``SANDBOX_MARK``). ``nightshift.guard`` applies it to
+them, and main's night-explorer routine must make and collect the sandbox with main's own code (``ROUTINE_MARKS``). ``nightshift.guard`` applies it to
 ``check night-explorer``, ``next`` and ``state acquire``; ``explore_sandbox create`` applies it again.
 
   python -m nightshift.explore_data status                     # the gate, as JSON (exit 0 open, 4 closed)
@@ -63,8 +63,11 @@ MANIFEST_REL = "config/exploration_manifest.json"
 SANDBOX_REL = "nightshift/explore_sandbox.py"
 MUST_PROTECT = ("nightshift/explore_data.py", SANDBOX_REL, MANIFEST_REL, "nightshift/logs.py")
 ROUTINE_REL = ".claude/routines/night-explorer.md"
-# main's routine must make the sandbox with main's own code (docs/exploration_data.md, section 5)
-SANDBOX_MARK = 'python -I "$MAINCODE/run.py" --repo "$PWD" create'
+# main's routine must make the sandbox and collect from it with main's own code, extracted afresh each time
+# (docs/exploration_data.md, section 5): each text must appear in it at least this many times.
+ROUTINE_MARKS = {'MAINCODE=$(fresh_main)': 2,
+                 'python -I "$MAINCODE/run.py" --repo "$PWD" create': 1,
+                 'python -I "$MAINCODE/run.py" --repo "$PWD" collect': 1}
 REMOTE, BRANCH = C.MAIN_REMOTE, C.MAIN_BRANCH
 HEADER = ["date", "series", "value"]
 DATA_REPO = "EthanC100/em-macro-data"
@@ -364,9 +367,11 @@ def explorer_gate(repo=None) -> list[str]:
         reasons += [f"{REMOTE}/{BRANCH}'s CODEOWNERS protected block does not cover {rel}"
                     for rel in MUST_PROTECT if not any(P.matches(q, rel) for q in pats)]
     ro = _show_main(repo, ROUTINE_REL)
-    if ro is None or SANDBOX_MARK not in ro.decode("utf-8", errors="replace"):
-        reasons.append(f"{REMOTE}/{BRANCH}'s {ROUTINE_REL} does not run the explorer in the sandbox "
-                       f"({SANDBOX_MARK!r}): routine-level isolation is Ethan's change")
+    text = ro.decode("utf-8", errors="replace") if ro is not None else ""
+    short = [m for m, n in ROUTINE_MARKS.items() if text.count(m) < n]
+    if short:
+        reasons.append(f"{REMOTE}/{BRANCH}'s {ROUTINE_REL} does not make and collect the sandbox with main's code "
+                       f"extracted afresh (missing: {short}): routine-level isolation is Ethan's change")
     return reasons
 
 

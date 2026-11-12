@@ -46,6 +46,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import date, datetime, timezone
@@ -77,8 +78,25 @@ LOG_COLS = ("logged_on", "hypothesis_id", "variant_id", "description", "data_sta
 KIND = {"lab/sleeves/": "sleeve", "docs/prereg_drafts/": "draft", f"{ED.BUNDLE}/out/exploration/": "table"}
 MAX_BYTES = {"sleeve": 20_000, "draft": 200_000, "table": 2_000_000}
 SECRET_ENV = re.compile(r"TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|FIRE_URL", re.I)
-# In collected tables: a day or month stamp after the cutoff means row-level post-cutoff data, which is refused.
-STAMP = re.compile(r"(?<![0-9])((?:19|20)[0-9]{2}-(?:0[1-9]|1[0-2]))(?:-(0[1-9]|[12][0-9]|3[01]))?(?![0-9])")
+# Date stamps after the cutoff mean row-level post-cutoff data. Recognised: ISO-like (2020-03, 2020-03-02, 2020/03/02,
+# 2020_03, 2020.03.02), compact 20200302, day-first or month-first 02.03.2020 / 3/2/2020, month names (Mar 2020,
+# 2020 March), and year ranges (2020-26, 2020_2026, 2020 to 2026). These are tripwires, not proofs: prose can always
+# describe a figure without a stamp.
+MONTHS = ("jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|"
+          "september|october|november|december")
+_ISO = re.compile(r"(?<![0-9])((?:19|20)[0-9]{2})[-/_.](0[1-9]|1[0-2])(?:[-/_.](0[1-9]|[12][0-9]|3[01]))?(?![0-9])")
+_COMPACT = re.compile(r"(?<![0-9])((?:19|20)[0-9]{2})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])(?![0-9])")
+_DMY = re.compile(r"(?<![0-9])[0-9]{1,2}[./-][0-9]{1,2}[./-]((?:19|20)[0-9]{2})(?![0-9])")
+_NAMED = re.compile(rf"(?i)(?<![a-z])(?:{MONTHS})\.?,?\s+((?:19|20)[0-9]{{2}})(?![0-9])"
+                    rf"|(?<![0-9])((?:19|20)[0-9]{{2}}),?\s+(?:{MONTHS})(?![a-z])")
+_RANGE = re.compile(r"(?<![0-9])((?:19|20)[0-9]{2})\s*(?:-|_|\u2013|/|to|\.\.)\s*((?:19|20)?[0-9]{2})(?![0-9])")
+# A draft may name a test window explicitly (2020-01..2026-09): planning text, removed before its screen.
+WINDOW = re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}-[0-9]{2}(?:-[0-9]{2})?\.\.(?:19|20)[0-9]{2}-[0-9]{2}(?:-[0-9]{2})?"
+                    r"(?![0-9])")
+# A sleeve's own dates: exactly "launched: YYYY-MM-DD" and "retire_on: YYYY-MM-DD", once each.
+SLEEVE_DATE = re.compile(r"^\s*(launched|retire_on)\s*:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}\s*$")
+VARIANT_TEXT = ("hypothesis_id", "variant_id", "description", "n_obs", "metric", "value", "params", "code_ref",
+                "notes")
 DEV_REF = "origin/dev"
 
 
@@ -93,10 +111,39 @@ def _allowed(rel: str, allow: tuple[str, ...] = ALLOW) -> bool:
     return any(rel == a or (a.endswith("/") and rel.startswith(a)) for a in allow)
 
 
-def _late_stamps(text: str, cutoff: date, months: bool = True) -> list[str]:
-    cut = cutoff.isoformat()
-    return sorted({m.group(0) for m in STAMP.finditer(text)
-                   if (m.group(0) > cut if m.group(2) else months and m.group(1) > cut[:7])})
+def _late_stamps(text: str, cutoff: date, ranges: bool = True) -> list[str]:
+    """Date stamps in the text that fall after the cutoff (see the patterns above)."""
+    out = set()
+
+    def year_late(y: int) -> bool:          # formats with no reliable month: late if the year can be after the cutoff
+        return y > cutoff.year or (y == cutoff.year and (cutoff.month, cutoff.day) != (12, 31))
+    for m in _ISO.finditer(text):
+        y, mo = int(m[1]), int(m[2])
+        try:
+            late = date(y, mo, int(m[3])) > cutoff if m[3] else (y, mo) > (cutoff.year, cutoff.month)
+        except ValueError:
+            late = (y, mo) > (cutoff.year, cutoff.month)
+        if late:
+            out.add(m[0])
+    for m in _COMPACT.finditer(text):
+        try:
+            if date(int(m[1]), int(m[2]), int(m[3])) > cutoff:
+                out.add(m[0])
+        except ValueError:
+            pass
+    for m in _DMY.finditer(text):
+        if year_late(int(m[1])):
+            out.add(m[0])
+    for m in _NAMED.finditer(text):
+        if year_late(int(m[1] or m[2])):
+            out.add(m[0])
+    if ranges:
+        for m in _RANGE.finditer(text):
+            y1, y2 = int(m[1]), m[2]
+            y2 = int(y2) if len(y2) == 4 else int(m[1][:2] + y2)
+            if year_late(max(y1, y2)):
+                out.add(m[0])
+    return sorted(out)
 
 
 def _secrets_in(text: str) -> list[str]:
@@ -105,9 +152,10 @@ def _secrets_in(text: str) -> list[str]:
 
 
 def _screen(kind: str, b: bytes, cutoff: date) -> str | None:
-    """Why a file may not cross the sandbox boundary (either way), or None. Tables: no day or month stamp after the
-    cutoff; drafts: no day stamp (a test window like 2020-01..2026-09 is planning text); sleeves: none outside their
-    launched / retire_on lines. Every kind: a size cap, UTF-8 text, and no credential value from the environment."""
+    """Why a file may not cross the sandbox boundary (either way), or None. Every kind: a size cap, UTF-8 text, no date
+    stamp after the cutoff (_late_stamps), and no credential value from the environment. Sleeves: their own
+    ``launched: YYYY-MM-DD`` and ``retire_on: YYYY-MM-DD`` lines (once each, exactly that) are exempt. Drafts: explicit
+    test windows (2020-01..2026-09) and year ranges (2020-2026) are planning text and allowed."""
     if len(b) > MAX_BYTES[kind]:
         return f"{len(b)} bytes, over the {kind} cap of {MAX_BYTES[kind]}"
     try:
@@ -116,14 +164,52 @@ def _screen(kind: str, b: bytes, cutoff: date) -> str | None:
         return "not UTF-8 text"
     body = text
     if kind == "sleeve":
-        body = "\n".join(x for x in text.splitlines() if not re.match(r"\s*(launched|retire_on)\s*:", x))
-    late = _late_stamps(body, cutoff, months=kind != "draft")
+        seen, keep = set(), []
+        for x in text.splitlines():
+            m = SLEEVE_DATE.match(x)
+            if m and m[1] not in seen:
+                seen.add(m[1])
+                continue
+            keep.append(x)
+        body = "\n".join(keep)
+    if kind == "draft":
+        body = WINDOW.sub(" ", body)
+    late = _late_stamps(body, cutoff, ranges=kind != "draft")
     if late:
         return f"dated after the cutoff {cutoff} ({', '.join(late[:3])}): row-level post-cutoff data never crosses"
     sec = _secrets_in(text)
     if sec:
         return f"contains the value of {', '.join(sec)}"
     return None
+
+
+def _variant_text_late(row: dict, cutoff: date) -> list[str]:
+    return _late_stamps(" ; ".join(str(row.get(k) or "") for k in VARIANT_TEXT), cutoff)
+
+
+def _read_inside(p: Path, root: Path, limit: int) -> bytes | None:
+    """The file's bytes if it is a regular file inside root when opened (no link as its last part, and its real path,
+    read from the open descriptor, inside root: a link swapped in after a check cannot redirect the read)."""
+    try:
+        fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        real = Path(os.readlink(f"/proc/self/fd/{fd}"))
+        if not stat.S_ISREG(os.fstat(fd).st_mode) or not real.is_relative_to(root.resolve()):
+            return None
+        chunks, n = [], 0
+        while n <= limit:
+            c = os.read(fd, 1 << 16)
+            if not c:
+                break
+            chunks.append(c)
+            n += len(c)
+        return b"".join(chunks)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
 
 
 def _inside(p: Path, root: Path) -> bool:
@@ -197,8 +283,9 @@ def _checked_log(raw: bytes | None, cutoff: date) -> bytes:
             raise Refused(f"results/exploration/log.csv line {n} ends {end}, after main's cutoff {cutoff}: the log "
                           "is not copied into a sandbox")
         row = {c: r.get(c, "") or "" for c in LOG_COLS}
-        if _late_stamps(" ".join(row.values()), cutoff):
-            row["description"] = "[withheld: dated after the cutoff]"
+        if _variant_text_late(r, cutoff):
+            for c in ("description", "n_obs", "metric", "value"):
+                row[c] = "[withheld: dated after the cutoff]"
         w.writerow([row[c] for c in LOG_COLS])
     return out.getvalue().encode()
 
@@ -315,6 +402,10 @@ def collect(sandbox: Path, repo=None, log_path: Path | None = None) -> dict:
         with vp.open(newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
                 row = {k: (r.get(k) or "") for k in LG.EXP_COLS if k != "logged_on"}
+                late = _variant_text_late(row, cutoff)
+                if late:
+                    refused.append(f"{row.get('variant_id')}: free text dated after the cutoff ({', '.join(late[:3])})")
+                    continue
                 try:
                     LG.log_variant(row, path=log_path)        # main's cutoff, fetched fresh; the real log
                     logged.append(row["variant_id"])
@@ -335,7 +426,10 @@ def collect(sandbox: Path, repo=None, log_path: Path | None = None) -> dict:
                 continue
             if not p.is_file():
                 continue
-            b = p.read_bytes()
+            b = _read_inside(p, sandbox, MAX_BYTES[KIND[src_prefix]])
+            if b is None:
+                refused.append(f"{rel}: not a regular file inside the sandbox when read")
+                continue
             if known.get(rel) == ED._sha(b):
                 continue                                       # unchanged from what create put there
             kind = KIND[src_prefix]
