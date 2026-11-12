@@ -1,7 +1,7 @@
-# Atlas audit: what exists, what can be reused, what conflicts
+# Manhattan audit: what exists, what can be reused, what conflicts
 
-Recorded 2026-11-12 on branch `build/atlas`, from `main` at `a2e24fa`. Phase A of
-[ATLAS_PROGRESS.md](ATLAS_PROGRESS.md).
+Recorded 2026-11-12 on branch `build/manhattan`, from `main` at `a2e24fa`. Phase A of
+[MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md).
 
 **What this audit read, and what it did not.** It read code, documentation, workflow files, `trials.csv` (every
 column except `result` and `notes`) and the pre-registrations in `docs/prereg/` (by search for windows, samples and
@@ -10,7 +10,7 @@ rows), ran no backtest, and read no return series. Some pre-registrations quote 
 in their disclosure sections (for example a pooled Sharpe ratio in T25-T26 §5.2); a few such lines were displayed by
 the search. No return dated 2010 or later was read.
 
-Words used below: **reuse** = import and call unchanged; **pattern** = the design is copied into `atlas/` because
+Words used below: **reuse** = import and call unchanged; **pattern** = the design is copied into `manhattan/` because
 the existing code is tied to its own files; **protected** = in the CODEOWNERS block or `nightshift/protected.py`
 `ALWAYS` (never edited by this work; importing is allowed).
 
@@ -20,13 +20,13 @@ the existing code is tied to its own files; **protected** = in the CODEOWNERS bl
 
 ### 1.1 The five components named in the brief
 
-| component | what it does today | how Atlas uses it | limits found |
+| component | what it does today | how Manhattan uses it | limits found |
 |---|---|---|---|
-| `lab/book.py` | One YAML per sleeve; `sha256(path)` of the file bytes appended to `lab/registry.csv` (`id, launched, sha256, file`); `check_frozen` refuses a file whose hash changed. | **Reuse** `sha256`, `registry`, `check_frozen` and the registry row format for Atlas spec files. | It hashes raw file bytes, not a canonical form, so two YAML files with the same content and different key order have different hashes. Its validator accepts only ids `L\d{3}`, `kind: static`, one public daily-marked instrument and at most 12 months. Atlas therefore adds its own canonical form and validator in `atlas/` and keeps `lab.book` for the Lab. `lab/registry.csv` has a header and no rows: no sleeve has been launched. |
-| `nightshift/logs.py` and `results/exploration/log.csv` | `log_variant` appends one row per variant (`logged_on, hypothesis_id, variant_id, description, data_start, data_end, n_obs, metric, value, params, code_ref, nominated, notes`); refuses a duplicate `variant_id` and any `data_end` after `config/night.yaml` `explorer.data_end` (2019-12-31). `log_opposition` appends to `results/opposition/calibration.csv`. | **Reuse** `log_variant` for every exploration-role variant (hard rule 6) and `log_opposition` (target type `idea`) for the critic's probability. | (a) The 2019-12-31 cap means reserve and forward evaluations cannot be logged there: they go to the Atlas ledger only. (b) Each append re-reads the whole CSV, so cost grows with the square of the row count; it suits thousands of variants, not 250,000 executables. Variants are logged there; executables are logged in the Atlas ledger. (c) The log has 0 rows today: the explorer has not yet produced a variant. |
-| The Opposition (`.claude/agents/opposition.md`) | Read-only critic (tools: Read, Grep, Glob, WebSearch, WebFetch; Opus 5.5, high). Returns a JSON case against a PR, queue item, idea or sleeve with `p_works` 0-100; may block only for reasons (a)-(e). | **Reuse** as the pre-freeze critic. | Its "Read first" list includes "the hypothesis and its exploration log rows", and it can read the whole repository, which holds results. The Atlas rule "the critic never sees outcomes" is therefore not enforced by the agent definition. `.claude/` is protected, so a restricted critic definition is Ethan's to add ([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 7). Until then the restriction is an instruction in the caller's prompt, not a mechanism. |
+| `lab/book.py` | One YAML per sleeve; `sha256(path)` of the file bytes appended to `lab/registry.csv` (`id, launched, sha256, file`); `check_frozen` refuses a file whose hash changed. | **Reuse** `sha256`, `registry`, `check_frozen` and the registry row format for Manhattan spec files. | It hashes raw file bytes, not a canonical form, so two YAML files with the same content and different key order have different hashes. Its validator accepts only ids `L\d{3}`, `kind: static`, one public daily-marked instrument and at most 12 months. Manhattan therefore adds its own canonical form and validator in `manhattan/` and keeps `lab.book` for the Lab. `lab/registry.csv` has a header and no rows: no sleeve has been launched. |
+| `nightshift/logs.py` and `results/exploration/log.csv` | `log_variant` appends one row per variant (`logged_on, hypothesis_id, variant_id, description, data_start, data_end, n_obs, metric, value, params, code_ref, nominated, notes`); refuses a duplicate `variant_id` and any `data_end` after `config/night.yaml` `explorer.data_end` (2019-12-31). `log_opposition` appends to `results/opposition/calibration.csv`. | **Reuse** `log_variant` for every exploration-role variant (hard rule 6) and `log_opposition` (target type `idea`) for the critic's probability. | (a) The 2019-12-31 cap means reserve and forward evaluations cannot be logged there: they go to the Manhattan ledger only. (b) Each append re-reads the whole CSV, so cost grows with the square of the row count; it suits thousands of variants, not 250,000 executables. Variants are logged there; executables are logged in the Manhattan ledger. (c) The log has 0 rows today: the explorer has not yet produced a variant. |
+| The Opposition (`.claude/agents/opposition.md`) | Read-only critic (tools: Read, Grep, Glob, WebSearch, WebFetch; Opus 5.5, high). Returns a JSON case against a PR, queue item, idea or sleeve with `p_works` 0-100; may block only for reasons (a)-(e). | **Reuse** as the pre-freeze critic. | Its "Read first" list includes "the hypothesis and its exploration log rows", and it can read the whole repository, which holds results. The Manhattan rule "the critic never sees outcomes" is therefore not enforced by the agent definition. `.claude/` is protected, so a restricted critic definition is Ethan's to add ([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 7). Until then the restriction is an instruction in the caller's prompt, not a mechanism. |
 | `em_macro/mtstats.py` | `sr_sigma`, `psr` (probabilistic Sharpe ratio), `sr0` (expected maximum of N independent trials), `dsr` (deflated Sharpe ratio), `min_trl` (minimum track record length), Harvey-Liu haircuts. Per-period (monthly in the spec) Sharpe; `g4` is raw kurtosis. Not protected. Tests: `tests/test_mtstats.py`. | **Reuse** for descriptive columns in reports. | `dsr` assumes N independent trials; with correlated variants it is descriptive only. Protocol v3 makes no decision from PSR, DSR or minTRL. Callers must convert daily Sharpe ratios consistently (`sr` is per period, `T` is the number of periods). |
-| `nightshift/guard.py`, `nightshift/protected.py` | `guard check <routine>` exits 4 while a busy workflow is queued or running (public Actions API), inside a busy window, or when main's `config/night.yaml` cannot be fetched. `protected <paths>` exits 1 for a protected path. | **Reuse** both from every Atlas runner and build session. | `guard.check` applies the night window and run cap only to the three night routine names. For any other name (for example `atlas-runner`) it checks busy workflows and busy windows only, which is what a runner needs. Atlas compute caps therefore need their own config (`config/atlas.yaml`); agents may not add them to `config/night.yaml`. |
+| `nightshift/guard.py`, `nightshift/protected.py` | `guard check <routine>` exits 4 while a busy workflow is queued or running (public Actions API), inside a busy window, or when main's `config/night.yaml` cannot be fetched. `protected <paths>` exits 1 for a protected path. | **Reuse** both from every Manhattan runner and build session. | `guard.check` applies the night window and run cap only to the three night routine names. For any other name (for example `manhattan-runner`) it checks busy workflows and busy windows only, which is what a runner needs. Manhattan compute caps therefore need their own config (`config/manhattan.yaml`); agents may not add them to `config/night.yaml`. |
 
 ### 1.2 Engine modules
 
@@ -43,7 +43,7 @@ the existing code is tied to its own files; **protected** = in the CODEOWNERS bl
 | `em_macro/events.py`, `calendar.py`, `event_study.py`, `data/events/calendar_13.csv` | 2,755 dated events with source URLs; event-window study code. | reuse for event-frequency hypotheses |
 | `ledger/marks.py`, `ledger/pricing.py`, `data/ledger/instruments.csv` | 41 registered instruments with daily or monthly public marks; `mark_can_act` (first-hand daily marks only); `position_return` by instrument kind. | reuse for forward recording of public-data executables; `data/ledger/` is never hand-edited |
 | `ledger/settlements.py` | Databento final settlements for CME-group futures, quoted before every request, shared US$1 daily cap, stored only in em-macro-data. | reuse read-only; hard rule 9 (`REFETCH_DAYS`) untouched |
-| `ledger/audit.py` | hash chain (`prev_hash`, `hash`, genesis of 64 zeros), `verify`, correction records. | **pattern**: tied to `data/ledger/seals.jsonl`; the Atlas ledger copies the chain and correction design in its own file |
+| `ledger/audit.py` | hash chain (`prev_hash`, `hash`, genesis of 64 zeros), `verify`, correction records. | **pattern**: tied to `data/ledger/seals.jsonl`; the Manhattan ledger copies the chain and correction design in its own file |
 | `ledger/commitments.py` | salted SHA-256 commitments; salts only in the private store. | protected; import only (used if an outcome must be committed publicly before it is disclosed) |
 | `ledger/capacity.py`, `data/ledger/capacity_reference.csv` | capacity against daily volume. | reuse for the Scale-eligible tier |
 
@@ -66,10 +66,10 @@ approval before the first batch is frozen (ETHAN_ACTIONS item 10).
 | OECD revisions database, ECB RTD, ALFRED | T02 macro vintages | first-release vintages | **vintage data**; archived in `data/kept/T02/` | public |
 | Ledger marks (`data/ledger/marks.csv`) | daily public marks for 41 instruments | written by ledger-daily (dispatched at 06:07 and 22:07 UTC; its own crons start hours late) | append-only marks with source fallbacks; first-hand marks flagged | public sources |
 | Norgate Futures | 24 commodity and 10 financial futures markets, per contract, from 1977-1990 by market | exported on the AWS Windows server; snapshots `2026-11_*` in em-macro-data | fixed snapshots with per-file SHA-256 manifests | **Personal Use; no redistribution; 6-month subscription bought November 2026, ending about 5 May 2027.** `docs/shadows/operation.md` says the snapshot is deleted when the subscription ends. No row-level data in the public repository (hard rule 7). |
-| Databento GLBX.MDP3 | final settlements of CME-group futures | history from 2010-06-06; a day's final settlement usually by 09:00 UTC next day | every fetch re-requests the last 7 days (late finals; hard rule 9) | **passes on CME terms; stored only in em-macro-data; paid per request (shared US$1 daily cap; T25-T26 history cap US$20).** Any Atlas purchase of history is spending (hard rule 11). |
+| Databento GLBX.MDP3 | final settlements of CME-group futures | history from 2010-06-06; a day's final settlement usually by 09:00 UTC next day | every fetch re-requests the last 7 days (late finals; hard rule 9) | **passes on CME terms; stored only in em-macro-data; paid per request (shared US$1 daily cap; T25-T26 history cap US$20).** Any Manhattan purchase of history is spending (hard rule 11). |
 | AQR data sets | commodity benchmark checks | monthly, public download | fixed files with SHA-256, kept privately by practice | public, kept privately |
 
-Consequences for Atlas. (1) Public macro data in the monthly panel are latest-vintage: any hypothesis using them
+Consequences for Manhattan. (1) Public macro data in the monthly panel are latest-vintage: any hypothesis using them
 must declare a publication lag or a vintage source, and the critic checks it. (2) Licensed futures history has a
 hard end date unless the subscription is renewed, and Databento history starts in June 2010 and costs money
 (ETHAN_ACTIONS item 8). (3) Raw data used by a designated evaluation is archived and hashed with
@@ -80,14 +80,14 @@ hard end date unless the subscription is renewed, and Databento history starts i
 48 test files in `tests/`. Baseline on `a2e24fa` in this session: **705 passed, 127 skipped** in 3 minutes 25 seconds
 (`python -m pytest -q -p no:cacheprovider tests`, exit code 0, output not piped), without the private data store
 attached (the skips are tests that need the private Norgate snapshot, the v1.0 commit that a shallow clone lacks,
-or an opt-in download). Two properties bind Atlas tests:
+or an opt-in download). Two properties bind Manhattan tests:
 
 1. **Tests gate existing writers.** `systematic-monthly` runs `python -m pytest -q tests` before it commits the
    rebalance, and ledger-daily runs four test files before it commits marks. A new test that fails on main would
    block the 3 December rebalance. The repository's convention (`.claude/agents/implementer.md`, "Tests gate existing
    writers") is to skip with a message in the writers' workflows and keep strict checks where `NIGHT_SHIFT_STRICT=1`
-   (pr-review and promote). The Atlas tests follow it: they fail in every Claude Code session and under
-   `NIGHT_SHIFT_STRICT=1` or `ATLAS_STRICT=1`, and skip with a message inside a GitHub Actions workflow that sets
+   (pr-review and promote). The Manhattan tests follow it: they fail in every Claude Code session and under
+   `NIGHT_SHIFT_STRICT=1` or `MANHATTAN_STRICT=1`, and skip with a message inside a GitHub Actions workflow that sets
    neither (ETHAN_ACTIONS item 11).
 2. **No test runs on a pull request.** No workflow is triggered by `pull_request`. A PR into main is tested only by
    the session that opens it (hard rule 15) and, for dev, by pr-review and promote.
@@ -110,15 +110,15 @@ the AWS Windows server that exports Norgate data (`docs/infra/`). The iMac runne
 
 ### 1.6 Night-shift interactions
 
-| night-shift element | effect on Atlas |
+| night-shift element | effect on Manhattan |
 |---|---|
 | Explorer: at most one hypothesis per run, three per night, public data only, data to 2019-12-31, scratch code in `/tmp` | The explorer cannot generate a 50-100 hypothesis batch, and it reads `trials.csv`, `docs/prereg/` and the exploration log, so it is an **adaptive** generator by construction. The blind channel cannot be the explorer. |
-| `scripts/night_commit.sh` path list | It commits only night-shift paths. `atlas/`, `docs/atlas/`, `config/atlas.yaml` and any Atlas data path are outside it, so the night shift cannot write Atlas files except through a worker PR into dev. That is the conservative state and is left unchanged. |
-| Promotion check (a) | Runs the full suite with `NIGHT_SHIFT_STRICT=1` on main merged with dev: Atlas tests are strict there, so a changed SIM_PREREG without a matching hash blocks promotion. |
-| Promotion check (c) | Refuses a dev that changes a protected path. Atlas files are not protected today; ETHAN_ACTIONS item 5 proposes adding the frozen ones. |
-| Safe mode | `config/night.yaml` has `safe_mode.enabled: true` on main today (run cap 4, explorer on Sonnet). Atlas adds no night-shift load in this phase. |
-| The Lab | Paper sleeves on public daily marks, 0.5% risk each. Atlas tiers are separate: an Atlas "Live-experiment eligible" family is not a Lab sleeve, and nothing in Atlas writes `lab/`. |
-| Guard windows | Atlas runners call `python -m nightshift.guard check atlas-runner` and do not start while ledger-daily, the Janus daily review or the monthly rebalance is running (hard rule 14). |
+| `scripts/night_commit.sh` path list | It commits only night-shift paths. `manhattan/`, `docs/manhattan/`, `config/manhattan.yaml` and any Manhattan data path are outside it, so the night shift cannot write Manhattan files except through a worker PR into dev. That is the conservative state and is left unchanged. |
+| Promotion check (a) | Runs the full suite with `NIGHT_SHIFT_STRICT=1` on main merged with dev: Manhattan tests are strict there, so a changed SIM_PREREG without a matching hash blocks promotion. |
+| Promotion check (c) | Refuses a dev that changes a protected path. Manhattan files are not protected today; ETHAN_ACTIONS item 5 proposes adding the frozen ones. |
+| Safe mode | `config/night.yaml` has `safe_mode.enabled: true` on main today (run cap 4, explorer on Sonnet). Manhattan adds no night-shift load in this phase. |
+| The Lab | Paper sleeves on public daily marks, 0.5% risk each. Manhattan tiers are separate: an Manhattan "Live-experiment eligible" family is not a Lab sleeve, and nothing in Manhattan writes `lab/`. |
+| Guard windows | Manhattan runners call `python -m nightshift.guard check manhattan-runner` and do not start while ledger-daily, the Janus daily review or the monthly rebalance is running (hard rule 14). |
 
 ---
 
@@ -126,21 +126,21 @@ the AWS Windows server that exports Norgate data (`docs/infra/`). The iMac runne
 
 | rule | conflict or contact point | how this design resolves it (default) |
 |---|---|---|
-| 1 Never push to main | Atlas code reaches main only through a PR merged by Ethan. | This session opens one PR and does not merge it. |
-| 2 Protected paths | The critic and generator definitions and any Atlas routine live under `.claude/` (protected). `trials.csv` is protected. | No `.claude/` file is touched. Atlas families are not rows of `trials.csv`. Whether Atlas evaluations count in the trial ledger's N is Ethan's decision (item 12); default: they do not, and no Atlas result is called a trial result. |
-| 3 Writer-owned data | Atlas needs a ledger directory. | A new directory owned by one writer (`python -m atlas.ledger`, Phase D), never hand-edited, added to the inventory when built. No existing data path or workflow is changed. |
-| 4 **Never pre-register a trial or run a confirmatory 2020-2026 test (Ethan only); the explorer never reads 2020+ returns** | A batch freeze is a pre-registration. A screening-reserve evaluation on 2020-2026 data is a confirmatory test on that window. | **Both are disabled by default.** `config/atlas.yaml`: `freeze.authority: ethan_only`, `reserve.enabled: false`, no reserve window set. A runner refuses a reserve evaluation until Ethan sets the fence on main (items 1 and 2). The simulation pre-registration is not a trial: it concerns synthetic data only, is not in `docs/prereg/` and adds nothing to `trials.csv`. |
-| 5 T25-T26 untouched | Basis-momentum and diversified futures trend on the CME universe are live shadows from 4 December 2026. Atlas uses trend as a core benchmark factor. | No T25-T26 file is read or written. The critic rejects a family that duplicates T21/T22 on the shadow universe. Using a trend factor as a hedge is not a trial of it. |
-| 6 Log every variant | 250,000 executables do not fit the CSV log (section 1.1). | Every exploration-role **variant** is logged with `nightshift.logs.log_variant`; every **executable** evaluation, in every role, is a record of the Atlas ledger. Nothing is evaluated without a ledger record. |
+| 1 Never push to main | Manhattan code reaches main only through a PR merged by Ethan. | This session opens one PR and does not merge it. |
+| 2 Protected paths | The critic and generator definitions and any Manhattan routine live under `.claude/` (protected). `trials.csv` is protected. | No `.claude/` file is touched. Manhattan families are not rows of `trials.csv`. Whether Manhattan evaluations count in the trial ledger's N is Ethan's decision (item 12); default: they do not, and no Manhattan result is called a trial result. |
+| 3 Writer-owned data | Manhattan needs a ledger directory. | A new directory owned by one writer (`python -m manhattan.ledger`, Phase D), never hand-edited, added to the inventory when built. No existing data path or workflow is changed. |
+| 4 **Never pre-register a trial or run a confirmatory 2020-2026 test (Ethan only); the explorer never reads 2020+ returns** | A batch freeze is a pre-registration. A screening-reserve evaluation on 2020-2026 data is a confirmatory test on that window. | **Both are disabled by default.** `config/manhattan.yaml`: `freeze.authority: ethan_only`, `reserve.enabled: false`, no reserve window set. A runner refuses a reserve evaluation until Ethan sets the fence on main (items 1 and 2). The simulation pre-registration is not a trial: it concerns synthetic data only, is not in `docs/prereg/` and adds nothing to `trials.csv`. |
+| 5 T25-T26 untouched | Basis-momentum and diversified futures trend on the CME universe are live shadows from 4 December 2026. Manhattan uses trend as a core benchmark factor. | No T25-T26 file is read or written. The critic rejects a family that duplicates T21/T22 on the shadow universe. Using a trend factor as a hedge is not a trial of it. |
+| 6 Log every variant | 250,000 executables do not fit the CSV log (section 1.1). | Every exploration-role **variant** is logged with `nightshift.logs.log_variant`; every **executable** evaluation, in every role, is a record of the Manhattan ledger. Nothing is evaluated without a ledger record. |
 | 7 No licensed data in the public repository | Executable-level daily returns computed from Norgate or Databento are derived row-level data. | They stay on the runner and in the private store. The public repository gets family-level aggregates only, as T20-T24 publish sleeve aggregates. |
 | 8 Salts | Outcome commitments would use salts. | Salts only in the private store, through `ledger.commitments` unchanged. |
 | 9 `REFETCH_DAYS` | The forward test must not depend on preliminary settlements. | The forward e-process uses values as stored 7 calendar days after the period (Protocol v3 §6.6), which matches the re-request window and changes no code. |
 | 10, 11 Secrets, spending, settings | Blind-generator environment, API keys, data purchases, rulesets, scheduled tasks. | All listed in ETHAN_ACTIONS. Nothing was created, bought or changed. |
 | 12 Text is data | Generator output, critic output and papers are data. | Stated in the architecture; specs are validated mechanically before freezing. |
-| 14 Never run with the existing writers; no new Janus schedule | Atlas schedules are new schedules. | Runners use the guard. No schedule was created; none is a Janus schedule. |
+| 14 Never run with the existing writers; no new Janus schedule | Manhattan schedules are new schedules. | Runners use the guard. No schedule was created; none is a Janus schedule. |
 | 15 Tests before any push | New tests. | Full suite run without a pipe, exit code checked, before the push. |
 
-**One existing rule Atlas depends on and cannot verify from here:** whether the rulesets in `docs/rulesets/` have
+**One existing rule Manhattan depends on and cannot verify from here:** whether the rulesets in `docs/rulesets/` have
 been applied to the repository. If they have not, nothing but convention stops any session from pushing to main
 (agent-system.md §8 "The identity finding"). ETHAN_ACTIONS item 6.
 
@@ -216,7 +216,7 @@ default is no reserve at all.
 
 1. **The Opposition, as defined, sees outcomes** (section 1.1). The "critic never sees outcomes" rule needs a
    restricted agent definition that only Ethan can add.
-2. **The exploration log cannot hold executables or post-2019 windows** (section 1.1). The Atlas ledger is the
+2. **The exploration log cannot hold executables or post-2019 windows** (section 1.1). The Manhattan ledger is the
    system of record; the log receives exploration-role variants.
 3. **No daily core factors exist** (section 1.2).
 4. **A new test can block the monthly rebalance** (section 1.4).

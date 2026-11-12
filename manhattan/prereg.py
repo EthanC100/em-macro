@@ -1,12 +1,12 @@
 """Frozen pre-registrations: check a file against its recorded SHA-256.
 
-    python -m atlas.prereg verify      # exit 1 unless every recorded file matches
+    python -m manhattan.prereg verify      # exit 1 unless every recorded file matches
 
 A record is a line of ``sha256sum`` output (``<64 hex>  <path from the repository root>``), so
-``sha256sum -c docs/atlas/sim_prereg.sha256`` run from the root gives the same answer. The hash is of the file's
+``sha256sum -c docs/manhattan/sim_prereg.sha256`` run from the root gives the same answer. The hash is of the file's
 bytes, computed with ``lab.book.sha256`` (the Lab's frozen-file check).
 
-docs/atlas/SIM_PREREG.md is never edited: additions go to docs/atlas/SIM_PREREG_AMENDMENTS.md (its section 8.4).
+docs/manhattan/SIM_PREREG.md is never edited: additions go to docs/manhattan/SIM_PREREG_AMENDMENTS.md (its section 8.4).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from lab.book import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
-RECORDS = (ROOT / "docs/atlas/sim_prereg.sha256",)
+RECORDS = (ROOT / "docs/manhattan/sim_prereg.sha256",)
 _LINE = re.compile(r"^([0-9a-f]{64}) [ *](\S.*)$")
 
 

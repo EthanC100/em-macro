@@ -1,13 +1,13 @@
-# Atlas architecture
+# Manhattan architecture
 
-Version 0.1, 2026-11-12, branch `build/atlas`. Phase B of [ATLAS_PROGRESS.md](ATLAS_PROGRESS.md). Design only: apart
+Version 0.1, 2026-11-12, branch `build/manhattan`. Phase B of [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md). Design only: apart
 from a hash check and a config loader, nothing described here is built yet. Statistical rules are in
 [PROTOCOL_v3.md](PROTOCOL_v3.md); what exists today is in [AUDIT.md](AUDIT.md); decisions that are Ethan's are in
 [ETHAN_ACTIONS.md](ETHAN_ACTIONS.md).
 
-## 1. What Atlas is
+## 1. What Manhattan is
 
-Atlas is a research lab that starts from stated mechanisms, not from data. It may run up to 250,000 executable
+Manhattan is a research lab that starts from stated mechanisms, not from data. It may run up to 250,000 executable
 strategies, but it judges evidence family by family. Three principles shape every component:
 
 1. **Write it down before looking.** Every hypothesis, every parameter grid and every rule of evidence is frozen and
@@ -35,15 +35,15 @@ strategies, but it judges evidence family by family. Three principles shape ever
 Package layout (new code only; nothing existing is edited):
 
 ```
-atlas/            __init__.py, prereg.py, config.py      (this PR)
+manhattan/            __init__.py, prereg.py, config.py      (this PR)
                   spec.py, ledger.py, roles.py           (Phase D)
                   engine/, factors/                      (Phase E)
                   generate/, freeze.py                   (Phase F)
                   runner/                                (Phase G)
                   stats/                                 (Phase H)
                   sim/                                   (Phase C; must follow SIM_PREREG.md)
-config/atlas.yaml switches and defaults (conservative; see section 9)
-docs/atlas/       these documents
+config/manhattan.yaml switches and defaults (conservative; see section 9)
+docs/manhattan/       these documents
 ```
 
 ## 3. Four levels with immutable links
@@ -58,7 +58,7 @@ docs/atlas/       these documents
 **Canonical form.** A spec is a mapping. Its canonical bytes are JSON with keys sorted, UTF-8 (NFC), no insignificant
 white space, integers as integers, every non-integer number as a decimal string, dates as `YYYY-MM-DD`, and list
 order kept unless the schema marks the list as a set (then sorted). The spec hash is the SHA-256 of those bytes.
-`lab.book.sha256` hashes file bytes; Atlas stores each spec as its canonical JSON file, so the two agree.
+`lab.book.sha256` hashes file bytes; Manhattan stores each spec as its canonical JSON file, so the two agree.
 
 **IDs are content addresses.** `id = prefix + first 16 hex characters of the spec hash`; the full hash is stored
 beside it.
@@ -89,8 +89,8 @@ read, nor data derived row by row from licensed sources:
 
 | ledger | where | holds |
 |---|---|---|
-| **Full ledger** | private store (em-macro-data `atlas/ledger/`, or the iMac only: ETHAN_ACTIONS item 4), one JSONL file per batch | every record, with outcome fields |
-| **Public index** | `data/atlas/ledger/index.jsonl` in this repository | one record per freeze, per runner run (Merkle root, record count and head hash of the full ledger), per screening decision once its window is retired for that batch, per tier change, per correction |
+| **Full ledger** | private store (em-macro-data `manhattan/ledger/`, or the iMac only: ETHAN_ACTIONS item 4), one JSONL file per batch | every record, with outcome fields |
+| **Public index** | `data/manhattan/ledger/index.jsonl` in this repository | one record per freeze, per runner run (Merkle root, record count and head hash of the full ledger), per screening decision once its window is retired for that batch, per tier change, per correction |
 
 Each record is one JSON line:
 
@@ -116,7 +116,7 @@ Payload of an `evaluation` record:
 | `designated` | true only for the one evaluation the batch manifest names for this executable and window |
 | `spec_hash` | the executable's hash |
 | `data_hash` | SHA-256 of the manifest of every input file read (path, bytes, SHA-256), built as `em_macro.archive_raw` builds its manifests |
-| `code_version` | git commit and the SHA-256 of the `atlas/` tree |
+| `code_version` | git commit and the SHA-256 of the `manhattan/` tree |
 | `result_hash` | SHA-256 of the canonical result (the return series and the summary) |
 | `n_obs`, `summary` | number of periods; summary statistics (full ledger only) |
 | `evidential_weight` | 1 or 0, by the table in section 6.3 |
@@ -146,7 +146,7 @@ re-run automatically only when the code version and the data hash are unchanged,
 
 Every exploration-role variant is also logged with `nightshift.logs.log_variant` (hard rule 6), with `code_ref` set
 to the ledger record's hash. That log refuses any window ending after 2019-12-31 and is not designed for executable
-counts (AUDIT §1.1), so reserve and forward evaluations exist only in the Atlas ledger. The critic's probability is
+counts (AUDIT §1.1), so reserve and forward evaluations exist only in the Manhattan ledger. The critic's probability is
 logged with `nightshift.logs.log_opposition` (target type `idea`, target id the family ID).
 
 ## 5. Generation, critique and freezing
@@ -186,7 +186,7 @@ its place in the sequence and its number of families fix the levels at which its
    root, the PROTOCOL hash, the data-role fence in force, the designated evaluations (which executable on which
    window), and the critic record hashes.
 4. Commit the spec files and the manifest; append `batch_freeze` to the ledger and the registry.
-5. **Signed tag** `atlas-batch-<NNNN>` on that commit, signed with Ethan's key on the iMac (a cloud session cannot
+5. **Signed tag** `manhattan-batch-<NNNN>` on that commit, signed with Ethan's key on the iMac (a cloud session cannot
    sign as Ethan: section 8).
 6. **External timestamp** of the manifest hash (OpenTimestamps by default; the proof file is committed). GitHub's
    push time is a second, weaker witness.
@@ -206,7 +206,7 @@ agents prepare steps 1-4 on a branch; Ethan reviews, merges, tags and timestamps
 | **Screening reserve** | **the runner only** | one designated evaluation per batch and domain; then retired for that batch | weight 1 for blind-channel specs, at the 20% screening level only |
 | **Forward** | recorded by the runner; everyone may read results after they are recorded | the forward e-process and the hierarchical model | weight 1 for every spec, from its own freeze date |
 
-The fence (which dates are exploration and which are reserve, per domain) is set by Ethan in `config/atlas.yaml` on
+The fence (which dates are exploration and which are reserve, per domain) is set by Ethan in `config/manhattan.yaml` on
 main. Default: **no reserve** (`reserve.enabled: false`). The exploration cap already enforced for the night shift
 is 2019-12-31. Between two roles an embargo of the hypothesis's longest holding period plus one period is dropped,
 so no position spans the fence.
@@ -252,23 +252,23 @@ dormancy rule (PROTOCOL §9).
 | data | licensed (Norgate snapshot, Databento settlements) and the reserve slices | public sources only |
 | jobs | designated reserve evaluations; forward recording of licensed-data executables; hierarchical model fits; simulation runs | forward recording of public-data executables; public index updates; watchdog |
 | schedule | launchd | workflow schedule plus `workflow_dispatch` (this repository's schedules start hours late, Q018) |
-| writes | full ledger and private results; public index through a PR-free path limited to `data/atlas/` | `data/atlas/` only, through a commit script with a path list, in the `ledger-writers` concurrency group |
+| writes | full ledger and private results; public index through a PR-free path limited to `data/manhattan/` | `data/manhattan/` only, through a commit script with a path list, in the `ledger-writers` concurrency group |
 | identity | a fine-grained token on the iMac limited to the two repositories, kept in the macOS Keychain | `GITHUB_TOKEN` |
 
-Every run, on either runner, does in order: `git fetch`; `python -m nightshift.guard check atlas-runner` (stop if an
-existing writer is busy or main's config cannot be read); read `config/atlas.yaml` **from main**; verify the tag and
+Every run, on either runner, does in order: `git fetch`; `python -m nightshift.guard check manhattan-runner` (stop if an
+existing writer is busy or main's config cannot be read); read `config/manhattan.yaml` **from main**; verify the tag and
 manifest of any batch it will evaluate; verify the ledger chain; run jobs; append records; write the heartbeat;
 commit with a script that refuses any path outside its list (the `night_commit.sh` pattern); push.
 
 ### 7.2 iMac launchd
 
-- A LaunchAgent (`~/Library/LaunchAgents/com.horizons.atlas.runner.plist`) with `StartCalendarInterval` (daily,
+- A LaunchAgent (`~/Library/LaunchAgents/com.horizons.manhattan.runner.plist`) with `StartCalendarInterval` (daily,
   after the Databento finals are available, and never inside the guard's busy windows), `RunAtLoad` false,
-  `ProcessType` Background, standard output and error to `~/Library/Logs/atlas/`.
+  `ProcessType` Background, standard output and error to `~/Library/Logs/manhattan/`.
 - launchd runs a missed calendar job once when the Mac wakes. The Mac must be awake or woken (`pmset repeat
   wakeorpoweron`) for the schedule to hold; the heartbeat shows when it did not.
-- The job is one shell script in the repository (`atlas/runner/imac.sh`, Phase G) that activates a pinned Python
-  environment, takes a lock file, and calls `python -m atlas.runner`. No secret is in the plist or the repository:
+- The job is one shell script in the repository (`manhattan/runner/imac.sh`, Phase G) that activates a pinned Python
+  environment, takes a lock file, and calls `python -m manhattan.runner`. No secret is in the plist or the repository:
   tokens come from the Keychain (`security find-generic-password`), and are never printed.
 - A designated evaluation is refused if the working tree is dirty, if the checked-out commit is not the tagged
   commit's descendant on main, or if the reserve path is readable by anything but the runner's user.
@@ -276,10 +276,10 @@ commit with a script that refuses any path outside its list (the `night_commit.s
 ### 7.3 Heartbeat and watchdog
 
 - **Heartbeat.** At the end of every run the runner writes `{runner, started, finished, jobs, ledger_head, next_due,
-  watchdog_last_seen}`. The iMac pushes its heartbeat to a branch `atlas-heartbeat` of this repository (not main: no
+  watchdog_last_seen}`. The iMac pushes its heartbeat to a branch `manhattan-heartbeat` of this repository (not main: no
   commit noise, no Pages rebuild). The Actions runner writes its own in the same place.
 - **Watchdog.** A read-only scheduled workflow, modelled on `ledger-watchdog`, opens or updates an issue
-  `[ALERT] Atlas runner silent` when a heartbeat is older than its limit (36 hours for a daily runner, allowing for
+  `[ALERT] Manhattan runner silent` when a heartbeat is older than its limit (36 hours for a daily runner, allowing for
   late schedules), when `next_due` has passed, or when the public index's last `run_summary` does not match the
   heartbeat's `ledger_head`. It closes the issue when the heartbeat returns.
 - **Who watches the watchdog.** Each runner reads the watchdog's last run from the public Actions API and records
@@ -314,10 +314,10 @@ ledger and this design. Stated plainly:
    history up to its cutoff, and possibly this public repository. No access control changes that. It is the reason
    historical screening is a filter and forward evidence is required.
 3. **That only the runner reads a public-data reserve.** FRED, BIS and exchange data can be downloaded by anyone. For
-   public data "runner-only" means: no Atlas code path outside the runner will read reserve dates, and the ledger
-   shows every evaluation that Atlas code made. It does not show what an agent did outside Atlas code.
+   public data "runner-only" means: no Manhattan code path outside the runner will read reserve dates, and the ledger
+   shows every evaluation that Manhattan code made. It does not show what an agent did outside Manhattan code.
 4. **Who wrote a commit.** Night agents, Janus, the clerk and build sessions all push as EthanC100 through the Claude
-   GitHub App (`docs/agent-system.md` §8). GitHub cannot tell an Atlas runner session from any other session, so
+   GitHub App (`docs/agent-system.md` §8). GitHub cannot tell an Manhattan runner session from any other session, so
    "only the runner writes the ledger" is a script-level rule for cloud sessions. The iMac's own token is the one
    distinct identity.
 5. **Signatures from the cloud.** A cloud session cannot sign a tag with Ethan's key. Signed freezes must be made
@@ -333,7 +333,7 @@ forward data, which no one, model or agent, can have seen.
 
 ## 9. Configuration
 
-`config/atlas.yaml` holds every switch that is Ethan's, with the conservative value as the default. Runners read
+`config/manhattan.yaml` holds every switch that is Ethan's, with the conservative value as the default. Runners read
 main's copy, as the night shift reads main's `config/night.yaml`. The defaults in this PR:
 
 | key | default | meaning |
@@ -353,4 +353,4 @@ main's copy, as the night shift reads main's `config/night.yaml`. The defaults i
 ## 10. What is not designed here
 
 Real-money execution (none will be built); the generator templates; the daily core-factor definitions; the report
-pages. Each is a later phase in ATLAS_PROGRESS.md.
+pages. Each is a later phase in MANHATTAN_PROGRESS.md.

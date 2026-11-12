@@ -1,6 +1,6 @@
-# Atlas switches (docs/atlas/ARCHITECTURE.md section 9; decisions in docs/atlas/ETHAN_ACTIONS.md).
+# Manhattan switches (docs/manhattan/ARCHITECTURE.md section 9; decisions in docs/manhattan/ETHAN_ACTIONS.md).
 # Ethan sets this file on main; runners read main's copy. Every default is the conservative one: nothing is frozen
-# by an agent, screened on a reserve, claimed or traded until Ethan changes it. Check: python -m atlas.config check
+# by an agent, screened on a reserve, claimed or traded until Ethan changes it. Check: python -m manhattan.config check
 
 freeze:
   authority: ethan_only        # ethan_only | delegated. A batch freeze is a pre-registration (CLAUDE.md rule 4).
@@ -16,7 +16,7 @@ exploration:
   data_end: "2019-12-31"       # the cap config/night.yaml already enforces for the explorer
 
 forward:
-  real_money: false            # must stay false: Atlas builds no real-money execution
+  real_money: false            # must stay false: Manhattan builds no real-money execution
   loss_cap_usd: 0              # 0 closes the Live-experiment tier (PROTOCOL_v3 section 8.3)
 
 programme:
@@ -27,8 +27,8 @@ levels:
   forward_fdr: 0.05
 
 claims:
-  enabled: false               # stays false until docs/atlas/SIM_PREREG.md has passed
+  enabled: false               # stays false until docs/manhattan/SIM_PREREG.md has passed
   screening_method: null       # batch_bh_prds | ebh_elond, set only from the simulation's selection report
 
 trial_ledger:
-  count_in_trials_csv: false   # Atlas evaluations are not rows of trials.csv unless Ethan decides otherwise
+  count_in_trials_csv: false   # Manhattan evaluations are not rows of trials.csv unless Ethan decides otherwise

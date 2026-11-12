@@ -1,4 +1,4 @@
-# Atlas: what only Ethan can do
+# Manhattan: what only Ethan can do
 
 Recorded 2026-11-12. Each item is something no agent may decide or do under the CLAUDE.md hard rules, or cannot do
 from a cloud session. For each: the conservative default now in force, what it blocks, and what to do. Nothing in
@@ -10,17 +10,17 @@ until the phase that needs them.
 | # | decision or action | default in force | blocks |
 |---|---|---|---|
 | 1 | the reserve-window fence | no reserve (`reserve.enabled: false`) | all historical screening |
-| 2 | authority for Atlas batch freezes under rule 4 | Ethan only (`freeze.authority: ethan_only`) | any freeze |
+| 2 | authority for Manhattan batch freezes under rule 4 | Ethan only (`freeze.authority: ethan_only`) | any freeze |
 | 3 | a separate repository and environment for the blind generator | none exists; nothing is called blind | the blind channel |
 | 4 | iMac setup | no runner | licensed-data evaluations, signed freezes |
-| 5 | protect the frozen Atlas files | not protected | nothing; a risk |
+| 5 | protect the frozen Manhattan files | not protected | nothing; a risk |
 | 6 | confirm the rulesets on main | unknown | nothing; a risk |
 | 7 | critic and generator definitions, routines | none added | the critic's "never sees outcomes" rule |
 | 8 | data licences and spending | no spending | futures history after May 2027; a tool-less generator |
 | 9 | programme parameters | conservative values | dormancy, live tier |
 | 10 | core factor definitions | none approved | every hedged return |
-| 11 | Atlas tests inside the writers' workflows | skip there, fail elsewhere | nothing |
-| 12 | Atlas and the trial ledger | separate | nothing |
+| 11 | Manhattan tests inside the writers' workflows | skip there, fail elsewhere | nothing |
+| 12 | Manhattan and the trial ledger | separate | nothing |
 | 13 | merge this PR; go-ahead and compute for the simulation | not merged | Phase C |
 
 ---
@@ -39,17 +39,17 @@ domain whose history is already spent (AUDIT §3.1).
 filter. The natural fence, if you want one, is exploration to 2019-12-31 (the cap the night shift already enforces)
 and reserve 2020-01-01 to 2026-09-30, the dates rule 4 already protects.
 
-**Do.** Edit `config/atlas.yaml` on main: `reserve.windows`, then `reserve.enabled: true`. `python -m atlas.config
+**Do.** Edit `config/manhattan.yaml` on main: `reserve.windows`, then `reserve.enabled: true`. `python -m manhattan.config
 check` must pass. Until then every runner refuses a reserve evaluation.
 
-## 2. Authority for Atlas batch freezes under rule 4
+## 2. Authority for Manhattan batch freezes under rule 4
 
 **Why Ethan.** A batch freeze is a pre-registration of 50-100 hypotheses; rule 4 reserves pre-registration to you.
 
 **Options.** (a) Keep it yours (default): agents prepare a batch on a branch (specs, hashes, critic reviews,
 manifest); you review, merge, sign the tag and timestamp it. (b) Delegate the mechanical freeze of **blind-channel**
 batches to the runner, keeping the signed tag yours. That needs a sentence added to CLAUDE.md rule 4 (for example:
-"An Atlas batch freeze prepared under docs/atlas/ and signed by Ethan is not a trial pre-registration") and
+"An Manhattan batch freeze prepared under docs/manhattan/ and signed by Ethan is not a trial pre-registration") and
 `freeze.authority: delegated`.
 
 **Recommendation.** (a) for the first batches; revisit after three.
@@ -64,7 +64,7 @@ batches to the runner, keeping the signed tag yours. That needs a sentence added
 - **A tool-less model call (strongest).** A script on the iMac sends the fixed template to the model through the
   API with no tools and stores the reply. The model can read nothing. This needs an API key, which is spending
   (item 8) and reverses the earlier choice to run without one (`docs/todo.md`).
-- **A separate cloud environment.** A new private repository (suggested name `atlas-blind`) holding only the
+- **A separate cloud environment.** A new private repository (suggested name `manhattan-blind`) holding only the
   template and the spec schema; a new environment with that repository only, network access set to none, no
   connectors, and the Claude GitHub App not given em-macro or em-macro-data in that environment. Check from inside
   it that `git clone https://github.com/EthanC100/em-macro` fails; if a public repository can still be fetched
@@ -87,25 +87,45 @@ around it.
    imac_only`; back them up), or in em-macro-data (convenient, but readable by any session that attaches that
    repository, so not runner-only).
 6. Power: `pmset repeat wakeorpoweron` shortly before the scheduled run, or leave the Mac awake.
-7. Install the LaunchAgent when Phase G delivers it (`~/Library/LaunchAgents/com.horizons.atlas.runner.plist`), and
-   allow the heartbeat branch `atlas-heartbeat`.
+7. Install the LaunchAgent when Phase G delivers it (`~/Library/LaunchAgents/com.horizons.manhattan.runner.plist`), and
+   allow the heartbeat branch `manhattan-heartbeat`.
 
 Nothing needs doing before Phase C unless you want the simulation to run on the iMac (item 13).
 
-## 5. Protect the frozen Atlas files
+## 5. Protect the frozen Manhattan files
 
-**Why Ethan.** `.github/CODEOWNERS` is protected. Suggested additions to its protected block:
+**Why Ethan.** `.github/CODEOWNERS` is protected (hard rule 2), so no session edits it. Add these lines to
+`.github/CODEOWNERS` on main, **inside** the protected block: paste them on the line just above
+`# protected:end`, after the `/docs/rulesets/ @EthanC100` line. Copy them exactly:
 
 ```
-/docs/atlas/SIM_PREREG.md @EthanC100
-/docs/atlas/sim_prereg.sha256 @EthanC100
-/docs/atlas/PROTOCOL_v3.md @EthanC100
-/config/atlas.yaml @EthanC100
+# Manhattan: the frozen simulation pre-registration, its recorded hash, the protocol it tests, the code and the
+# test that check the hash, and Manhattan's switches (docs/manhattan/ETHAN_ACTIONS.md item 5)
+/docs/manhattan/SIM_PREREG.md @EthanC100
+/docs/manhattan/sim_prereg.sha256 @EthanC100
+/docs/manhattan/PROTOCOL_v3.md @EthanC100
+/manhattan/prereg.py @EthanC100
+/tests/test_manhattan_prereg.py @EthanC100
+/config/manhattan.yaml @EthanC100
 ```
 
-and, when they exist, the batch manifests and the public ledger index. Until then the pre-registration is guarded
-by its hash test only: an agent that edited both the file and the hash would pass the test (git history would still
-show it).
+What each line does:
+
+- `SIM_PREREG.md` and `sim_prereg.sha256`: the frozen file and its hash. Protecting only one would let a session
+  edit the other.
+- `PROTOCOL_v3.md`: the method under test. Changes go through a new version and need your review.
+- `manhattan/prereg.py` and `tests/test_manhattan_prereg.py`: the verifier and the test that also holds the
+  pre-rename hashes. Without these lines a session could weaken the check instead of the file.
+- `config/manhattan.yaml`: your switches (reserve fence, freeze authority, claims), like `config/night.yaml`.
+
+`SIM_PREREG_AMENDMENTS.md` is left out on purpose: it is append-only and is written during Phase C. Add the batch
+manifests and the public ledger index when they exist. Afterwards, `python -m nightshift.protected
+docs/manhattan/SIM_PREREG.md` prints `PROTECTED: docs/manhattan/SIM_PREREG.md` and exits 1 (checked on a copy of
+CODEOWNERS with these lines added: all six paths match; `SIM_PREREG_AMENDMENTS.md` and `manhattan/sim/` do not), and the night shift's promotion check will refuse
+any dev -> main change to these paths.
+
+Until then, only the hash test guards the pre-registration. A session that edited the file, the hash record and
+the test together would pass, though git history would still show the change.
 
 ## 6. Confirm the rulesets on main
 
@@ -116,18 +136,18 @@ applied cannot be seen from a session. If they are not, only convention keeps an
 
 **Why Ethan.** `.claude/` is protected, and creating scheduled tasks is a settings change.
 
-- A critic definition that reads **specs only** (suggested `.claude/agents/atlas-critic.md`: tools Read only, with
+- A critic definition that reads **specs only** (suggested `.claude/agents/manhattan-critic.md`: tools Read only, with
   the batch folder as its only input, no WebSearch). The Opposition as defined reads exploration results and the
   whole repository (AUDIT §1.1).
-- Later: generator definitions and any Atlas routine. No Atlas schedule exists, and none will be a Janus schedule
+- Later: generator definitions and any Manhattan routine. No Manhattan schedule exists, and none will be a Janus schedule
   (rule 14).
 
 ## 8. Data licences and spending
 
 - **Norgate** (Personal Use; no redistribution) ends about 5 May 2027, and `docs/shadows/operation.md` says the
-  snapshot is deleted then. Decide before that date whether to renew for Atlas. Without it, futures history for
+  snapshot is deleted then. Decide before that date whether to renew for Manhattan. Without it, futures history for
   screening is Databento only (CME group, from June 2010, paid per request).
-- **Databento**: any purchase of history for Atlas beyond the shared US$1 daily cap.
+- **Databento**: any purchase of history for Manhattan beyond the shared US$1 daily cap.
 - **An API key** for a tool-less blind generator (item 3).
 
 No spending was made or assumed.
@@ -152,18 +172,18 @@ Daily carry, trend, value and buy-and-hold returns per asset class do not exist 
 definitions built from the frozen v1.0 signals and the T20-T22 sleeves. They decide what "core-hedged" means for
 every family, so they are yours to approve and are frozen before the first batch.
 
-## 11. Atlas tests inside the writers' workflows
+## 11. Manhattan tests inside the writers' workflows
 
-`systematic-monthly` runs the whole test suite before it commits the rebalance. The Atlas checks of hand-edited
-files (the pre-registration hash, `config/atlas.yaml`) **skip with a message there** and fail everywhere else,
-following the repository's own convention, so an Atlas document can never stop the rebalance or the 4 December
-shadow go-live. If you would rather a changed pre-registration stopped everything, add `ATLAS_STRICT: "1"` to the
+`systematic-monthly` runs the whole test suite before it commits the rebalance. The Manhattan checks of hand-edited
+files (the pre-registration hash, `config/manhattan.yaml`) **skip with a message there** and fail everywhere else,
+following the repository's own convention, so an Manhattan document can never stop the rebalance or the 4 December
+shadow go-live. If you would rather a changed pre-registration stopped everything, add `MANHATTAN_STRICT: "1"` to the
 workflow's environment (a workflow change, so yours).
 
-## 12. Atlas and the trial ledger
+## 12. Manhattan and the trial ledger
 
-Default: Atlas evaluations are not rows of `trials.csv`, do not change the spec's multiple-testing count (N = 21
-after T27), and no Atlas result is called a trial result. If you want Atlas screening counted there, say how.
+Default: Manhattan evaluations are not rows of `trials.csv`, do not change the spec's multiple-testing count (N = 21
+after T27), and no Manhattan result is called a trial result. If you want Manhattan screening counted there, say how.
 
 ## 13. Merge, and the go-ahead for Phase C
 
@@ -172,4 +192,4 @@ after T27), and no Atlas result is called a trial result. If you want Atlas scre
   12 model-fitting runs. Decide where it runs: GitHub Actions (public repository, so results and logs are public,
   which is fine for synthetic data) or the iMac. The hierarchical model needs a sampler (for example `numpyro` or
   `pymc`) that is not in `requirements.txt`; adding it there changes what every existing workflow installs, so the
-  design default is a separate `requirements-atlas.txt`.
+  design default is a separate `requirements-manhattan.txt`.

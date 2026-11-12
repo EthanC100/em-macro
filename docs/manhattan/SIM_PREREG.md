@@ -1,4 +1,4 @@
-# Atlas simulation pre-registration
+# Manhattan simulation pre-registration
 
 Version 1.0, written 2026-11-12, before any simulation code exists.
 
@@ -9,9 +9,9 @@ numeric thresholds, the number of replications and the rule that chooses between
 **What it is not.** It is not a pre-registration of a trial on market data. It adds nothing to `trials.csv` or
 `docs/prereg/`, and no market result may enter any decision described here.
 
-**Frozen.** The SHA-256 of this file is recorded in `docs/atlas/sim_prereg.sha256` in the same commit, and a test
-(`tests/test_atlas_prereg.py`, added in the commit that follows) checks it. This file is never edited. Additions go in a separate append-only file
-(section 8.4). At the commit that adds this file, the repository contains no simulation code: no `atlas/sim/`
+**Frozen.** The SHA-256 of this file is recorded in `docs/manhattan/sim_prereg.sha256` in the same commit, and a test
+(`tests/test_manhattan_prereg.py`, added in the commit that follows) checks it. This file is never edited. Additions go in a separate append-only file
+(section 8.4). At the commit that adds this file, the repository contains no simulation code: no `manhattan/sim/`
 directory and no data-generating code for these scenarios.
 
 **Method under test.** PROTOCOL_v3.md version 3.0.0, SHA-256
@@ -216,7 +216,7 @@ A criterion is **required** in the scenarios listed for it. Every threshold is a
 | V7 | premature elimination (M8) | upper bound ≤ **0.10**; in H09, for late-starting families, ≤ **0.25** | every scenario run at HB |
 | V8 | selection bias (M9), at years 4 and 10 | upper bound of the bias ≤ **+0.10**; lower bound ≥ **−0.25** (annualised Sharpe units), for both tier groups | every scenario run at HB |
 | V9 | rare events | H08m is subject to V2 with the practical truth of section 2.4; H08x: M10 is reported with no threshold, as the measured size of the guarantee lost in Protocol v3 §6.3 | H08m, H08x |
-| V10 | adaptive variants | (a) the designated blind p-values and e-values of record are bit-for-bit identical with and without the adaptive channel: **required**; (b) if the upper bound of M11 exceeds **0.06**, SPA p-values on windows holding adaptive variants are labelled "descriptive, not error-controlled" in every Atlas report. (b) is a consequence fixed in advance, not a failure | D09a, D09b |
+| V10 | adaptive variants | (a) the designated blind p-values and e-values of record are bit-for-bit identical with and without the adaptive channel: **required**; (b) if the upper bound of M11 exceeds **0.06**, SPA p-values on windows holding adaptive variants are labelled "descriptive, not error-controlled" in every Manhattan report. (b) is a consequence fixed in advance, not a failure | D09a, D09b |
 | V11 | power floors (M6), scenario P4 | screening power of the selected candidate: lower bound ≥ **0.50**; forward power by `T_end`: lower bound ≥ **0.50** | P4 |
 
 **Small groups.** If a group defined by a condition (for example `Π^min ≥ 0.80`, or "passed screening") holds fewer
@@ -299,7 +299,7 @@ dormancy) have no alternative candidate. Each is implemented only if it meets it
 ### 8.2 Held-out sets
 
 There are three held-out parameter sets, `k = 1, 2, 3`. Set `k` fixes every range of section 3.2 by draws from a
-random generator seeded with the SHA-256 of the text `atlas-sim-heldout-<k>-` followed by this file's SHA-256.
+random generator seeded with the SHA-256 of the text `manhattan-sim-heldout-<k>-` followed by this file's SHA-256.
 Confirmation run 1 uses set 1. If a required criterion fails there for a component that has no passing alternative,
 set 1 is **burned**: it becomes development material, the method is revised, the development scenarios are re-run,
 and confirmation run 2 uses set 2; likewise set 3. If set 3 fails, this pre-registration is exhausted: nothing
@@ -315,7 +315,7 @@ discarded. No other re-run of a confirmation scenario is allowed.
 
 ### 8.4 Amendments
 
-This file is frozen. An append-only file `docs/atlas/SIM_PREREG_AMENDMENTS.md` may: correct an error in a scenario's
+This file is frozen. An append-only file `docs/manhattan/SIM_PREREG_AMENDMENTS.md` may: correct an error in a scenario's
 description, stating the error; add scenarios, metrics or held-out sets; raise a replication count; tighten a
 threshold. It may **not** loosen a threshold, lower a replication count, remove a scenario or a required criterion,
 or change the selection rule. Any of those needs version 2 of this pre-registration, and voids earlier passes.
@@ -324,7 +324,7 @@ or change the selection rule. Any of those needs version 2 of this pre-registrat
 
 ## 9. Records and reporting
 
-- Every simulation run appends one record to `results/atlas_sim/runs.jsonl`: time, commit, protocol hash, this
+- Every simulation run appends one record to `results/manhattan_sim/runs.jsonl`: time, commit, protocol hash, this
   file's hash, scenario, size, held-out set if any, replications, seeds, status. A held-out run before a tagged
   confirmation run is a breach and is reported as one.
 - A confirmation report gives, for every scenario and metric, the estimate, its interval, the threshold and

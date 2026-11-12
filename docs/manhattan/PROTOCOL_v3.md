@@ -1,11 +1,11 @@
-# Atlas Protocol v3: rules of evidence
+# Manhattan Protocol v3: rules of evidence
 
-Version **3.0.0**, 2026-11-12. Phase B of [ATLAS_PROGRESS.md](ATLAS_PROGRESS.md). Structure and data roles are in
+Version **3.0.0**, 2026-11-12. Phase B of [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md). Structure and data roles are in
 [ARCHITECTURE.md](ARCHITECTURE.md). No earlier protocol version is in this repository; this is the first committed
 version.
 
 **Status: not in force.** No rule below produces a claim until the simulation of [SIM_PREREG.md](SIM_PREREG.md) has
-passed (`claims.enabled: false` in `config/atlas.yaml`). Where this document says "fixed in v3.0" for a number, the
+passed (`claims.enabled: false` in `config/manhattan.yaml`). Where this document says "fixed in v3.0" for a number, the
 number is an assumed parameter: it is fixed here before any simulation or market result, and the simulation checks
 whether the rules work with it.
 
@@ -218,7 +218,7 @@ dependent (PRDS)**, and each null p-value is **independent of the p-values of al
 >
 > **Assumes.** PRDS within a batch; independence across batches; valid p-values.
 >
-> **How it fails.** (1) **Atlas does not meet the across-batch condition as designed.** With one shared reserve
+> **How it fails.** (1) **Manhattan does not meet the across-batch condition as designed.** With one shared reserve
 > window per domain (ARCHITECTURE §6.2), p-values of different batches come from the same dates and are dependent.
 > The theorem then does not apply, and the candidate rests on the simulation alone. It applies as stated only with
 > `reserve.mode: disjoint_slices`. (2) Families that bet against each other give negatively dependent p-values,
@@ -393,7 +393,7 @@ frozen grid, and every variant the adaptive channel added, kept or not.
 >
 > **Problem it solves.** Quietly dropping the variants that failed.
 >
-> **Assumes.** The ledger is complete (every evaluation by Atlas code is recorded).
+> **Assumes.** The ledger is complete (every evaluation by Manhattan code is recorded).
 >
 > **How it fails.** The bootstrap recomputes the maximum over the final set; it does not replay how that set was
 > found. When later variants were proposed after seeing earlier results on the same window, the true chance of a
@@ -511,7 +511,7 @@ it can be watched every day without inflating the error rate.
 | **gross-exposure cap `G`** | bounds the loss by `G` times the worst adverse move of any held instrument, and **that move is itself unbounded** for a short or a futures position. A cap alone guarantees nothing |
 
 A guaranteed bound would need every position to be long, unlevered and in cash instruments, or to hold bought
-options against every leg. Atlas families are not restricted in that way. There is also a general obstacle
+options against every leg. Manhattan families are not restricted in that way. There is also a general obstacle
 (Bahadur and Savage 1956): over all distributions with a finite mean and unbounded support, no test of the mean
 has more power than its size. Something must be assumed or changed.
 
@@ -1033,7 +1033,7 @@ no minute-frequency or newly purchased data.
 
 > **Problem it solves.** Rules that can be adjusted after results are seen are not rules.
 >
-> **How it fails.** The annual estimators themselves were chosen today, with no Atlas data; they may prove poor.
+> **How it fails.** The annual estimators themselves were chosen today, with no Manhattan data; they may prove poor.
 > They can be replaced only for later batches.
 
 ### Change log
@@ -1125,4 +1125,4 @@ distinct families have distinct numbers, so their `γ_i` sum to at most 1. Summi
 The update equations of §4.3, the e-LOND levels of §4.4 and §6.8, the selection-adjusted procedure of §5.5 and the
 confidence sequence of §6.3 were checked against the papers' arXiv sources (1910.04968, 2311.06412, 1106.3670,
 2103.06476) on 2026-11-12. Hansen's recentring, the Politis-White rule and the Li-Ji formula are written from
-memory of the papers and must be checked against them when they are implemented (ATLAS_PROGRESS.md, Phase H).
+memory of the papers and must be checked against them when they are implemented (MANHATTAN_PROGRESS.md, Phase H).

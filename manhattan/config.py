@@ -1,6 +1,6 @@
-"""Atlas switches: config/atlas.yaml (docs/atlas/ARCHITECTURE.md section 9).
+"""Manhattan switches: config/manhattan.yaml (docs/manhattan/ARCHITECTURE.md section 9).
 
-    python -m atlas.config check       # exit 1 if the file is not valid
+    python -m manhattan.config check       # exit 1 if the file is not valid
 
 Ethan sets the file on main; runners read main's copy. Every default is the conservative one. ``validate`` checks
 the shape of the file and the rules that hold whatever Ethan chooses: no real-money execution exists, a reserve
@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = ROOT / "config/atlas.yaml"
+CONFIG = ROOT / "config/manhattan.yaml"
 SCREENING_FDR_MAX, FORWARD_FDR_MAX = 0.20, 0.05          # Protocol v3 section 3
 SCREENING_METHODS = (None, "batch_bh_prds", "ebh_elond")   # Protocol v3 sections 4.3 and 4.4
 
@@ -66,7 +66,7 @@ def validate(cfg: dict) -> list[str]:
     if cap is not None and _day(cap) is None:
         errs.append("exploration.data_end must be a date (YYYY-MM-DD)")
     if get("forward", "real_money") is not False:
-        errs.append("forward.real_money must be false: Atlas builds no real-money execution")
+        errs.append("forward.real_money must be false: Manhattan builds no real-money execution")
     lc = get("forward", "loss_cap_usd")
     if lc is not None and (isinstance(lc, bool) or not isinstance(lc, (int, float)) or lc < 0):
         errs.append("forward.loss_cap_usd must be a number >= 0")
@@ -97,8 +97,8 @@ def main(argv=None) -> int:
     try:
         errs = validate(load())
     except (OSError, yaml.YAMLError) as e:
-        errs = [f"config/atlas.yaml could not be read: {e}"]
-    print("\n".join(errs) or "atlas config ok")
+        errs = [f"config/manhattan.yaml could not be read: {e}"]
+    print("\n".join(errs) or "manhattan config ok")
     return 1 if errs else 0
 
 
