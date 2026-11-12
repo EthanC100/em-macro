@@ -76,5 +76,13 @@
 /tests/test_manhattan_prereg.py @EthanC100
 /config/manhattan.yaml @EthanC100
 
+# Q019: exploration data: the only loader and the explorer's sandbox, the extract's public manifest (hashes; the
+# extract itself lives in the private em-macro-data), and the variant log's cutoff check (also always protected in
+# nightshift/protected.py)
+/nightshift/explore_data.py @EthanC100
+/nightshift/explore_sandbox.py @EthanC100
+/config/exploration_manifest.json @EthanC100
+/nightshift/logs.py @EthanC100
+
 
 # protected:end

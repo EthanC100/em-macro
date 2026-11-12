@@ -104,7 +104,7 @@ def test_guard_refuses_busy_writers_cap_window_and_unknown_api():
     assert not G.check("night-worker", sgt("2026-11-09T23:00"), CFG, st, None)["go"]          # fail safe
     assert not G.check("night-worker", sgt("2026-11-10T05:10"), CFG, st, [])["go"]
     st["runs_used"], st["night"] = 12, "2026-11-09"
-    assert not G.check("night-explorer", sgt("2026-11-09T23:00"), CFG, st, [])["go"]
+    assert not G.check("night-explorer", sgt("2026-11-09T23:00"), CFG, st, [], explorer_gate=[])["go"]   # cap
     # the Janus daily review fires 23:07 UTC = 07:07 SGT, outside the chain window, but promote must not overlap it
     assert not G.check("promote", datetime(2026, 11, 9, 23, 10, tzinfo=timezone.utc), CFG, S.empty(), [])["go"]
 
@@ -128,8 +128,8 @@ def test_next_routine_alternates_and_stops():
     now, st = sgt("2026-11-09T23:30"), S.empty()
     assert G.next_routine(now, CFG, st, _items(2), 0)["next"] == "night-worker"
     st["last_kind"] = "worker"
-    assert G.next_routine(now, CFG, st, _items(2), 0)["next"] == "night-explorer"
-    assert G.next_routine(now, CFG, st, _items(0), 0)["next"] == "night-explorer"
+    assert G.next_routine(now, CFG, st, _items(2), 0, explorer_gate=[])["next"] == "night-explorer"   # Q019 gate open
+    assert G.next_routine(now, CFG, st, _items(0), 0, explorer_gate=[])["next"] == "night-explorer"
     assert G.next_routine(now, CFG, st, _items(0), 3)["next"] == "stop"
     assert G.next_routine(now, CFG, st, _items(2), 3)["next"] == "night-worker"
     assert G.next_routine(sgt("2026-11-10T05:01"), CFG, S.empty(), _items(2), 0)["next"] == "stop"

@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-11",
+ "night": "2026-11-12",
  "runs_used": 4,
  "last_kind": "worker",
  "chain_stopped": {
-  "reason": "run cap reached (4 of 4); PR #40 (Q019) awaits review and merge",
-  "at": "2026-11-12T00:25:40+08:00"
+  "reason": "run cap reached (4 of 4)",
+  "at": "2026-11-13T00:42:49+08:00"
  },
  "log": [
   {
@@ -105,6 +105,78 @@
    "note": "Q019 implemented, PR #40 opened into dev",
    "session": "https://claude.ai/code/session_01Ayx8qaLkxNLMVmrXAyc8cA",
    "run": 4
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-12T22:41:02+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (6fc4524, no auto_resolved; full suite 1172 passed, 131 skipped before push); filed Q027 (research: J005 filled on a same-day DE10Y mark fetched 14:02Z, waits for Ethan); 0 approved, 0 blocked; Q025 and Q026 left proposed and unreviewed (built by Ethan's session as PRs #47 and #46 to main, not for the night shift; Q026's fix is already on dev via main). Triage: Q005 confirmed wider than filed, add GB-DE and PL-DE fixtures to its test (marks.csv:801, :809, :829; ES-DE :796); Actions API 403, run reports not audited. night-worker fire: see exit code in session; the 23:35 SGT worker session picks up 13 approved items",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-12T23:36:13+08:00",
+   "finished_at": "2026-11-12T23:53:50+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q009"
+   ],
+   "commits": [],
+   "note": "Q009 implemented, PR #55 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
+   "run": 1
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-13T00:01:25+08:00",
+   "finished_at": "2026-11-13T00:08:42+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q008"
+   ],
+   "commits": [],
+   "note": "Q008 implemented, PR #57 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
+   "run": 2
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-13T00:14:03+08:00",
+   "finished_at": "2026-11-13T00:25:45+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q007"
+   ],
+   "commits": [],
+   "note": "Q007 implemented, PR #58 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
+   "run": 3
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-13T00:30:57+08:00",
+   "finished_at": "2026-11-13T00:37:45+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q010"
+   ],
+   "commits": [],
+   "note": "Q010 implemented, PR #59 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdBDZPxJQJs3H9mjFn",
+   "run": 4
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-13T05:32:18+08:00",
+   "finished_at": "2026-11-13T05:40:48+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "checks ok; PR #60 opened for promote-merge",
+   "session": "https://claude.ai/code/session_01Ayx8qa8WFs5C99Ff4VuNG8"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
