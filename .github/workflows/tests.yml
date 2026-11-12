@@ -1,0 +1,63 @@
+# The full test suite on every pull request to main, so a PR whose tests fail shows a red "tests / pytest" check
+# before it is merged (asked by Ethan on 2026-11-11, after #34 merged with two failing ledger tests that would have
+# stopped ledger-daily from committing marks).
+#
+# It writes nothing: read-only token (contents: read, nothing else), no stored credentials in the checkout, no commit,
+# push, issue, comment or artifact. It runs on the pull request's merge commit with main, the code that would land.
+# Licensed data stays out: no secrets are passed, the private store (em-macro-data) is pointed at a path that does not
+# exist and its clone URL at nothing, so tests that need it skip as they do in any session without it.
+#
+# To make a failing check block the merge (not only show red), add "tests / pytest" as a required status check in the
+# main ruleset (GitHub settings; docs/rulesets/main.json records the ruleset): that is a settings change for Ethan.
+name: tests
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true        # a newer push to the same PR supersedes the older run
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash               # -eo pipefail: the step fails when pytest fails, even through tee (hard rule 15)
+    env:
+      EM_MACRO_DATA: /nonexistent/em-macro-data
+      DATA_REPO_URL: /nonexistent/em-macro-data.git
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-elections.txt
+
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-elections.txt pytest
+
+      - name: Full test suite
+        run: python -m pytest -q -p no:cacheprovider 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Tests on ${GITHUB_SHA::7} (PR #${{ github.event.pull_request.number }})"
+            echo '```'
+            grep -E "^(FAILED|ERROR)|passed|failed|error" "$RUNNER_TEMP/tests.log" | tail -n 40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
