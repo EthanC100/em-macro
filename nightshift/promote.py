@@ -1,5 +1,7 @@
-"""Promotion checks for the dev -> main pull request (section 5 of the brief). The promote routine opens the PR,
-with auto-merge, only when every check passes; otherwise it opens nothing and the morning report says why.
+"""Promotion checks for the dev -> main pull request (section 5 of the brief). The promote routine opens (or reuses)
+the PR and records these checks on dev, naming it; the promote-merge workflow (nightshift/promote_merge.py, main's
+code) merges it only when every check passed and the tests workflow is green, otherwise it stays open and the
+morning report flags it.
 
 Checks, all on the exact tree the PR would produce (current origin/main merged with origin/dev):
   (d) the merge is conflict-free (a trial merge in a scratch worktree; conflicts are never resolved here);
@@ -17,7 +19,7 @@ Also refused: a busy existing writer or the wrong time (nightshift.guard), unles
 
 python -m nightshift.promote [--check-only] [--ignore-window] [--skip-tests] [--today YYYY-MM-DD]
        [--data-snapshot PATH] [--base origin/main] [--head origin/dev] [--out results/night/promote/<date>.json]
-Exit 0: all checks pass (the routine may open the PR, unless --check-only). Exit 5: a check failed.
+Exit 0: all checks pass (promote-merge may then merge the PR; never in --check-only mode). Exit 5: a check failed.
 """
 from __future__ import annotations
 

@@ -11,7 +11,8 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-WRITERS = ("systematic.yml", "ledger-daily.yml", "v1-rules-monitor.yml", "private-commitments.yml", "shadows-setup.yml")
+WRITERS = ("systematic.yml", "ledger-daily.yml", "v1-rules-monitor.yml", "private-commitments.yml", "shadows-setup.yml",
+           "promote-merge.yml")
 MAIN, BRANCH = "refs/heads/main", "refs/heads/test/kick-gate"
 EVENTS = ("schedule", "workflow_dispatch", "pull_request", "pull_request_target", "push", "workflow_run",
           "repository_dispatch")
@@ -23,7 +24,7 @@ def wf(name):
 
 
 def ev(expr, event, ref, schedule="", due_result="success", due_run="true", cancelled=False, wr_branch="main",
-       wr_event="workflow_dispatch", ran_run="true"):
+       wr_event="workflow_dispatch", ran_run="true", wr_repo="EthanC100/em-macro"):
     """Evaluate a GitHub Actions `if:` expression of the kind the writer workflows use (==, !=, &&, ||, !, ())."""
     e = expr.strip()
     if e.startswith("${{"):
@@ -31,8 +32,9 @@ def ev(expr, event, ref, schedule="", due_result="success", due_run="true", canc
     assert re.fullmatch(r"[\w.\s'=!&|()*,\-/]+", e), e          # nothing but the operators this evaluator handles
     py = e.replace("&&", " and ").replace("||", " or ").replace("!cancelled()", " not cancelled() ")
     assert "!" not in py.replace("!=", ""), py
-    ctx = {"github": NS(ref=ref, event_name=event,
-                        event=NS(schedule=schedule, workflow_run=NS(head_branch=wr_branch, event=wr_event))),
+    ctx = {"github": NS(ref=ref, event_name=event, repository="EthanC100/em-macro",
+                        event=NS(schedule=schedule, workflow_run=NS(head_branch=wr_branch, event=wr_event,
+                                                                    head_repository=NS(full_name=wr_repo)))),
            "needs": NS(due=NS(result=due_result, outputs=NS(run=due_run)), ran=NS(outputs=NS(run=ran_run))),
            "cancelled": lambda: cancelled}
     return bool(eval(py, {"__builtins__": {}}, ctx))
@@ -46,7 +48,8 @@ def test_no_writer_runs_on_pull_request_or_push():
     assert {k: set(wf(k)[1]) for k in WRITERS} == {
         "systematic.yml": {"schedule", "workflow_dispatch"}, "ledger-daily.yml": {"schedule", "workflow_dispatch"},
         "v1-rules-monitor.yml": {"workflow_run", "workflow_dispatch"},
-        "private-commitments.yml": {"workflow_dispatch"}, "shadows-setup.yml": {"workflow_dispatch"}}
+        "private-commitments.yml": {"workflow_dispatch"}, "shadows-setup.yml": {"workflow_dispatch"},
+        "promote-merge.yml": {"workflow_run"}}
 
 
 def test_every_writer_job_is_guarded():
@@ -100,3 +103,19 @@ def test_the_update_job_never_runs_when_cancelled_or_when_due_was_skipped():
     upd = wf("systematic.yml")[0]["jobs"]["update"]["if"]
     assert not ev(upd, "workflow_dispatch", MAIN, cancelled=True)
     assert not ev(upd, "schedule", MAIN, "37 6 * * 1,4", due_result="skipped", due_run="")
+
+
+@pytest.mark.parametrize("event", EVENTS)
+@pytest.mark.parametrize("ref", REFS)
+def test_promote_merge_acts_only_on_the_tests_of_the_dev_promotion_pr(event, ref):
+    """promote-merge (Ethan, 2026-11-12) runs only on main, after a tests run of a pull request from this repository's
+    dev; it has no workflow_dispatch, so nobody can start it by hand."""
+    doc, on = wf("promote-merge.yml")
+    assert on["workflow_run"] == {"workflows": ["tests"], "types": ["completed"]}
+    expr = doc["jobs"]["merge"]["if"]
+    for wr_branch in ("dev", "main", "night/Q019"):
+        for wr_event in ("pull_request", "push", "workflow_dispatch"):
+            for wr_repo in ("EthanC100/em-macro", "someone/fork"):
+                ok = (ref == MAIN and event == "workflow_run" and wr_event == "pull_request" and wr_branch == "dev"
+                      and wr_repo == "EthanC100/em-macro")
+                assert ev(expr, event, ref, wr_branch=wr_branch, wr_event=wr_event, wr_repo=wr_repo) == ok
