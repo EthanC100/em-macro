@@ -12,6 +12,7 @@ everything else and is not changed by this one.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import sys
 from collections import Counter
@@ -66,16 +67,24 @@ def v2_plan() -> list[tuple[str, str]]:
 
 
 def collect(out: Path = run.OUT) -> dict:
-    """{(scenario, size): records} for every version 2 run on file, most common code only."""
+    """{(scenario, size): records} for every version 2 run on file: the records made by the code now checked
+    out, or, when there are none (a report built on another checkout), by the most common code. Records of
+    different code are never pooled; how many were left out is kept."""
     found = {}
     for scenario, size in v2_plan():
-        reps = run.load_reps(scenario, size, seeds.DEVELOPMENT, out, version="v2")
-        if not reps:
+        path = run.reps_path(scenario, size, seeds.DEVELOPMENT, out, "v2")
+        rows = []
+        for p_, opener in ((path, open), (path.with_suffix(".jsonl.gz"), gzip.open)):
+            if p_.exists():
+                with opener(p_, "rt", encoding="utf-8") as f:
+                    rows += [json.loads(line) for line in f if line.strip()]
+        if not rows:
             continue
-        codes = Counter(r["code"] for r in reps)
-        code = codes.most_common(1)[0][0]
-        found[(scenario, size)] = {"reps": [r for r in reps if r["code"] == code], "code": code,
-                                   "other_code_reps": len(reps) - codes[code]}
+        codes = Counter(r["code"] for r in rows)
+        now = run.code_hash(size, version="v2")
+        code = now if now in codes else codes.most_common(1)[0][0]
+        reps = run.load_reps(scenario, size, seeds.DEVELOPMENT, out, code, "v2")
+        found[(scenario, size)] = {"reps": reps, "code": code, "other_code_reps": len(rows) - codes[code]}
     return found
 
 
@@ -157,6 +166,10 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
             continue
         n = len(v["reps"])
         L.append(f"| {scenario} | {size} | {what} | {n} | {need} | {max(0, need - n)} | `{v['code']}` | {_secs(v['reps']):.0f} |")
+    stale_reps = sum(v["other_code_reps"] for v in found.values())
+    if stale_reps:
+        L += ["", f"{stale_reps} replication records on file were made by earlier code (the model changed during this "
+                  "revision) and are **not counted** anywhere in this report: records of different code are never pooled."]
     # ---------------------------------------------------------------- 1. the SPA test with an estimated hedge
     L += ["", "## 1. The SPA test where the hedge is estimated", "",
           "Share of families with no edge rejected at the 0.05 level (the bound on the upper end is 0.06), by three "
