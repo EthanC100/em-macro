@@ -11,11 +11,55 @@ import numpy as np
 
 from . import criteria as cr
 from . import criteria_v2 as cr2
-from . import metrics, pipeline_v2
+from . import metrics, pipeline_v2, world
 from .metrics import Row, col, mean_ci, per_rep_share, ratio_ci
 
 NAME = {"v31": "hedge-aware test (3.1)", "v30": "3.0 test on the estimated hedge",
         "oracle": "3.0 test on the true hedged returns (oracle)"}
+CAND = {"i": "candidate (i)", "ii": "candidate (ii)"}
+# true Sharpe ratio of the family portfolio, for the table of who reaches Statistically supported (reported only)
+SHARPE_BINS = ((0.25, 0.5), (0.5, 0.75), (0.75, 1.0), (1.0, 1.5), (1.5, math.inf))
+
+
+def bin_label(lo: float, hi: float) -> str:
+    return f"{lo:g} to {hi:g}" if math.isfinite(hi) else f"{lo:g} and above"
+
+
+def tier_power(reps: list[dict], cand: str = "i") -> dict:
+    """Who reaches Statistically supported, by true Sharpe ratio: for each bin and each evaluation date, among
+    the families with a true edge frozen before that date, the share that entered the tier at that date or an
+    earlier one (pooled over replications, with the interval of a ratio). ``{bin label: {year: (estimate, lo,
+    hi, families)}}``; empty when the records do not carry the per-family fields. Reported, never judged."""
+    if not reps or any("edge_true" not in r for r in reps):
+        return {}
+    out = {}
+    for lo_, hi_ in SHARPE_BINS + ((world.THETA_MIN, math.inf),):
+        row = {}
+        for y in reps[0]["eval_years"]:
+            num, den = [], []
+            for r in reps:
+                true, frozen = np.asarray(r["edge_true"], dtype=float), np.asarray(r["edge_freeze"], dtype=float)
+                first = np.asarray(r[f"edge_first_supported_{cand}"], dtype=float)
+                sel = (true >= lo_) & (true < hi_) & (frozen < y * world.YEAR)
+                den.append(int(sel.sum()))
+                num.append(int((sel & (first > 0) & (first <= y)).sum()))
+            row[int(y)] = (*ratio_ci(num, den), int(sum(den)))
+        out["all with a true edge" if (lo_, hi_) == (world.THETA_MIN, math.inf) else bin_label(lo_, hi_)] = row
+    return out
+
+
+def attention(reps: list[dict], cand: str = "i") -> dict:
+    """What dormancy saves and what it risks, from the records: reviews written, families dormant at the end
+    (all, without and with a true edge), per replication or as pooled shares. Empty for records without the
+    fields."""
+    if not reps or any(f"written_{cand}" not in r for r in reps):
+        return {}
+    fam, edge = col(reps, "n_families"), col(reps, f"m8_den_{cand}")
+    return {"family_reviews": float(col(reps, "family_reviews").mean()),
+            "written": mean_ci(col(reps, f"written_{cand}")),
+            "dormant_end": mean_ci(col(reps, f"end_dormant_{cand}")),
+            "null_dormant_share": ratio_ci(col(reps, f"null_dormant_{cand}"), fam - edge),
+            "edge_dormant_share": ratio_ci(np.array([sum(r[f"edge_dormant_end_{cand}"]) for r in reps], dtype=float), edge)}
 
 
 def half_width(reps: list[dict], key: str) -> float:
@@ -139,6 +183,26 @@ def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
                         None, None, None, len(v), "text",
                         verdict=" / ".join([f"{h['mu_A']:.3f}", f"{h['tau_A']:.3f}", f"{h['psi']:.3f}",
                                             ", ".join(f"{x:.2f}" for x in rho)])))
+    for cand in ("i", "ii"):
+        att = attention(reps, cand)
+        if not att:
+            continue
+        e, lo, hi = att["written"]
+        tail.append(Row("cost", f"attention: reviews written per replication, {CAND[cand]} (of {att['family_reviews']:.0f} "
+                                "family-reviews; a family dormant before and after a date needs none)", e, lo, hi, R, "mean"))
+        e, lo, hi = att["null_dormant_share"]
+        tail.append(Row("cost", f"attention: share of the families with no edge of at least θ_min that are dormant at the end, "
+                                f"{CAND[cand]}", e, lo, hi, int((col(reps, "n_families") - col(reps, f"m8_den_{cand}")).sum()), "ratio"))
+        for y in years:
+            v = [r["reviews"][y] for r in reps if y in r["reviews"] and f"dormant_{cand}" in r["reviews"][y]]
+            if v and cand == "i":
+                tail.append(Row("info", f"year {y}: families dormant after the review / reviews written / families evaluated "
+                                        f"(means), {CAND[cand]}", None, None, None, len(v), "text",
+                                verdict=" / ".join(f"{np.mean([x[k] for x in v]):.1f}" for k in
+                                                   (f"dormant_{cand}", f"written_{cand}", "n_live"))))
+    rules = sorted({r["dormancy"] for r in reps if "dormancy" in r})
+    if rules:
+        tail.append(Row("info", "dormancy rule", None, None, None, R, "text", verdict=", ".join(rules)))
     tail.append(Row("cost", "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)",
                     float(col(reps, "model_seconds").mean()), None, None, R, "mean"))
     tail.append(Row("info", "model", None, None, None, R, "text", verdict=", ".join(sorted({r["model"] for r in reps}))))

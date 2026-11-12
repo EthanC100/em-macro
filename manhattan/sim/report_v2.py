@@ -53,6 +53,14 @@ READINGS = (
                                "needs all six fits. There is no sampler and no convergence diagnostic."),
     ("HB: dormancy forecast", "Version 1's normal-update approximation (no refit), fed with 200 draws of θ_f per "
                               "family and model from the closed-form posterior; not evaluated at the last date."),
+    ("HB: dormancy rule", "Protocol 3.1 §9.1 as revised before adoption: dormant when PP^max < 0.05 and Π^max < 0.05 "
+                          "at two consecutive evaluation dates with at least 252 forward days at each; reactivated when "
+                          "either is at least 0.15. At the last date there is no forecast, so no family becomes dormant "
+                          "there; a dormant family is reactivated there if Π^max ≥ 0.15. A review is \"written\" for "
+                          "every family that is not dormant both before and after the date."),
+    ("HB: who reaches Statistically supported", "A family counts from the first evaluation date at which it holds "
+        "the tier, whether or not it leaves later. Its true Sharpe ratio is that of the family portfolio over its "
+        "forward life (SIM_PREREG section 2.4). With four evaluation dates a family can only enter at one of them."),
     ("HB: evaluation dates", "Years 2, 4, 7 and 10 (version 1's reduction (c)), consecutive dates standing for "
                              "consecutive reviews."),
     ("HB: naive estimate (M9)", "Version 1's: the largest sample Sharpe ratio among the family's variants, each over "
@@ -220,6 +228,51 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
         summary["runs"][f"{scenario}_HB"] = {"replications": len(v["reps"]), "code": v["code"], "rows": [r.as_dict() for r in rows]}
         L += ["", f"### {scenario} at HB: {world.SCENARIOS[scenario].title} ({len(v['reps'])} of {cr.REPLICATIONS['HB']} replications)",
               "", table(rows)]
+    # ---------------------------------------------------------------- 2b, 2c: dormancy and the tier, side by side
+    hb_runs = [(s_, v) for (s_, z), v in found.items() if z == "HB"]
+    cell = lambda e: f"{fmt(e[0])} ({fmt(e[1])} to {fmt(e[2])})"
+    att = {s_: metrics_v2.attention(v["reps"]) for s_, v in hb_runs}
+    if any(att.values()):
+        L += ["", "### Dormancy under Protocol 3.1 §9.1: what it retires and what it leaves to review (candidate (i))", "",
+              "Premature elimination is M8 (bound 0.10 on the upper end of the interval). The other columns have no "
+              "threshold: they are the attention the rule saves. A review is written for every family that is not "
+              "dormant both before and after an evaluation date.", "",
+              "| scenario | replications | premature elimination (M8) | families with a true edge dormant at the end | "
+              "families with no edge dormant at the end | families dormant at the end, of 240 | reviews written per "
+              "replication | family-reviews per replication |", "|---|---|---|---|---|---|---|---|"]
+        summary["dormancy"] = {}
+        for s_, v in hb_runs:
+            a = att[s_]
+            if not a:
+                continue
+            m8 = metrics.ratio_ci(metrics.col(v["reps"], "m8_num_i"), metrics.col(v["reps"], "m8_den_i"))
+            n_edge = int(metrics.col(v["reps"], "m8_den_i").sum())
+            summary["dormancy"][s_] = {"m8": m8, "n_edge": n_edge, **a}
+            L.append(f"| {s_} | {len(v['reps'])} | {cell(m8) if n_edge else '- (no family has an edge)'} | "
+                     f"{cell(a['edge_dormant_share']) if n_edge else '-'} | {cell(a['null_dormant_share'])} | "
+                     f"{cell(a['dormant_end'])} | {cell(a['written'])} | {a['family_reviews']:.0f} |")
+    power = {s_: metrics_v2.tier_power(v["reps"]) for s_, v in hb_runs}
+    if any(power.values()):
+        L += ["", "### Who reaches Statistically supported, by true Sharpe ratio (candidate (i); reported, no threshold)", "",
+              "Among the families with a true edge that were frozen before the date, the share that held the tier at "
+              "that date or an earlier one. The Sharpe ratio is the true one of the family portfolio, hedged and net. "
+              "Entry needs Π^min ≥ 0.80 (the most cautious of six models), a positive forward mean, 504 forward days "
+              "(252 if Romano-Wolf named a variant on the reserve) and the tier Promising. A dormant family is not "
+              "evaluated. Intervals are over replications; a cell with few families says little.", ""]
+        summary["tier_power"] = {}
+        for s_, v in hb_runs:
+            pw = power[s_]
+            if not pw:
+                continue
+            years = [int(y) for y in v["reps"][0]["eval_years"]]
+            summary["tier_power"][s_] = {b: {str(y): c for y, c in row.items()} for b, row in pw.items()}
+            L += [f"**{s_}: {world.SCENARIOS[s_].title}** ({len(v['reps'])} replications)", "",
+                  "| true Sharpe ratio | " + " | ".join(f"by year {y}" for y in years) + " |", "|---|" + "---|" * len(years)]
+            for b, row in pw.items():
+                cells = [f"{fmt(row[y][0])} ({fmt(row[y][1])} to {fmt(row[y][2])}), {row[y][3]} families" if row[y][3]
+                         else "- (no family)" for y in years]
+                L.append(f"| {b} | " + " | ".join(cells) + " |")
+            L.append("")
     # ---------------------------------------------------------------- 3. cost
     rows, tot = cost_table(found, out)
     summary["cost"] = tot

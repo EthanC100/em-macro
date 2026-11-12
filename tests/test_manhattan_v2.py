@@ -16,7 +16,7 @@ import pytest
 
 from manhattan import prereg_v2
 from manhattan.sim import criteria, criteria_v2, hb, hb_v2, metrics_v2, pipeline, pipeline_v2, report_v2, run, runlog, seeds, world
-from manhattan.stats import hier_analytic
+from manhattan.stats import dormancy, hier_analytic, tiers
 from manhattan.testing import prereg_or_skip, reads_hand_edited_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,10 @@ def test_version_1_is_untouched_by_the_v2_code_lists():
     assert set(run.CODE_FILES_V2) - set(run.CODE_FILES) == {"manhattan/stats/spa_hedged.py", "manhattan/sim/pipeline_v2.py"}
     assert "manhattan/stats/hier.py" not in run.CODE_FILES_V2_HB                    # the sampler is not in the main loop
     assert {"manhattan/stats/hier_analytic.py", "manhattan/sim/hb_v2.py", "manhattan/ledger.py"} <= set(run.CODE_FILES_V2_HB)
+    # the revised dormancy rule is a new file; version 1's tier code is in both lists and is the same file
+    assert "manhattan/stats/dormancy.py" in run.CODE_FILES_V2_HB and "manhattan/stats/dormancy.py" not in run.CODE_FILES_HB
+    assert "manhattan/stats/tiers.py" in run.CODE_FILES_V2_HB and "manhattan/stats/tiers.py" in run.CODE_FILES_HB
+    assert run.code_hash("HB") == "0b8dd1af6db62c9f" and run.code_hash("STD") == "da641c096d17bbf4"      # version 1's, as on its records
     hashes = {run.code_hash("STD"), run.code_hash("HB"), run.code_hash("STD", version="v2"), run.code_hash("HB", version="v2")}
     assert len(hashes) == 4
 
@@ -137,6 +141,17 @@ def test_hb_replication_with_the_analytic_model(tiny):
         assert 0.0 <= v["r_F"] <= hier_analytic.R_F_MAX and len(v["fit_seconds"]) == 6 and v["six_fits_seconds"] > 0
         assert sum(v["cal_n"]) == v["n_eval"] == v["n_live"] and {"mu_A", "tau_A", "psi", "nu", "rho_0"} <= set(v["hyper"])
     assert all(f"m8_den_{c}" in r and f"end_dormant_{c}" in r for c in pipeline.CANDIDATES)
+    # the dormancy rule of Protocol 3.1 section 9.1, and what the report needs about attention and the tier
+    assert r["dormancy"] == dormancy.RULE and r["family_reviews"] == sum(v["n_live"] for v in r["reviews"].values())
+    assert len(r["edge_true"]) == len(r["edge_freeze"]) == r["m8_den_i"] and all(x >= world.THETA_MIN for x in r["edge_true"])
+    for c in pipeline.CANDIDATES:
+        assert len(r[f"edge_first_supported_{c}"]) == len(r[f"edge_dormant_end_{c}"]) == r[f"m8_den_{c}"]
+        assert set(r[f"edge_first_supported_{c}"]) <= {0, 2, 4, 7, 10}
+        assert r[f"written_{c}"] == sum(v[f"written_{c}"] for v in r["reviews"].values()) <= r["family_reviews"]
+        assert all(0 <= v[f"dormant_{c}"] <= v["n_live"] and v[f"written_{c}"] >= v["n_live"] - v[f"dormant_{c}"]
+                   for v in r["reviews"].values())
+        assert r["reviews"]["2"][f"dormant_{c}"] == 0                                # one review cannot retire a family
+        assert r[f"null_dormant_{c}"] + sum(r[f"edge_dormant_end_{c}"]) == r[f"end_dormant_{c}"]
     again = hb_v2.run_replication("D02", 0)
     strip = lambda x: {k: ({y: {a: b for a, b in rv.items() if "seconds" not in a} for y, rv in v.items()} if k == "reviews" else v)
                        for k, v in x.items() if "seconds" not in k}
@@ -179,6 +194,8 @@ def test_the_runner_keeps_v2_records_apart_and_logs_the_hashes(tiny, tmp_path):
     assert text.startswith("# Manhattan simulation, the parts changed by Protocol v3.1: PILOT report")
     assert "| D11 | 1 |" in text and "| D05h | 1 |" in text and "### D02 at HB" in text and "Held-out runs made: 0." in text
     assert set(summary["runs"]) == {"D11_STD", "D05h_STD", "D02_HB"} and "pipeline_rows" in summary["runs"]["D11_STD"]
+    assert "### Dormancy under Protocol 3.1 §9.1" in text and "| D02 | 1 |" in text and set(summary["dormancy"]) == {"D02"}
+    assert "### Who reaches Statistically supported, by true Sharpe ratio" in text and "all with a true edge" in summary["tier_power"]["D02"]
     assert all("pass" != r["verdict"] and "FAIL" != r["verdict"] for v in summary["runs"].values() for r in v["rows"])
     assert summary["cost"]["HB"]["runs"] == 5 and summary["cost"]["twin"]["runs"] == 9 and summary["cost"]["D11"]["runs"] == 1
     assert summary["cost"]["v1"]["runs"] == len([p for p in run.development_plan() if p[1] != "HB" and p[0] != "D11"])
@@ -248,11 +265,47 @@ def hb_rep(ok=True) -> dict:
         return r
 
     r = {"model": hb_v2.MODEL, "eval_years": [2, 4, 7, 10], "seconds": 80.0, "model_seconds": 30.0,
-         "reviews": {str(y): review() for y in (2, 4, 7, 10)}}
+         "reviews": {str(y): review() for y in (2, 4, 7, 10)}, "n_families": 240, "family_reviews": 400,
+         "dormancy": dormancy.RULE,
+         # ten families with a true edge: Sharpe ratio, freeze day, and the first date each held the tier (0: never)
+         "edge_true": [0.3, 0.3, 0.4, 0.6, 0.6, 0.9, 1.2, 1.2, 1.6, 2.0],
+         "edge_freeze": [0, 600, 1300, 0, 1300, 0, 0, 2000, 0, 600]}
     for c in ("i", "ii"):
         r.update({f"m8_den_{c}": 10, f"m8_num_{c}": 1, f"screened_{c}": 2, f"end_promising_{c}": 3,
-                  f"end_supported_{c}": 1, f"end_dormant_{c}": 50})
+                  f"end_supported_{c}": 1, f"end_dormant_{c}": 50, f"null_dormant_{c}": 49, f"written_{c}": 330,
+                  f"edge_first_supported_{c}": [0, 0, 0, 0, 0, 10, 7, 0, 4, 4],
+                  f"edge_dormant_end_{c}": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]})
+        for y, v in r["reviews"].items():
+            v.update({f"written_{c}": 90, f"dormant_{c}": 0 if y == "2" else 50})
     return r
+
+
+def test_attention_and_tier_power_are_counted_from_the_records():
+    reps = [hb_rep() for _ in range(8)]
+    att = metrics_v2.attention(reps)
+    assert att["family_reviews"] == 400 and att["written"][0] == 330 and att["dormant_end"][0] == 50
+    assert att["null_dormant_share"][0] == pytest.approx(49 / 230) and att["edge_dormant_share"][0] == pytest.approx(0.1)
+    pw = metrics_v2.tier_power(reps)
+    assert list(pw) == ["0.25 to 0.5", "0.5 to 0.75", "0.75 to 1", "1 to 1.5", "1.5 and above", "all with a true edge"]
+    # a family counts once it is frozen (day 600 is after year 2, day 1300 after year 4, day 2000 after year 7)
+    assert [pw["0.25 to 0.5"][y][3] for y in (2, 4, 7, 10)] == [8, 16, 24, 24]
+    assert all(pw["0.25 to 0.5"][y][0] == 0 for y in (2, 4, 7, 10))                 # the weakest never hold the tier
+    assert [pw["1.5 and above"][y][0] for y in (2, 4, 7, 10)] == [0.0, 1.0, 1.0, 1.0]
+    assert [pw["1.5 and above"][y][3] for y in (2, 4, 7, 10)] == [8, 16, 16, 16]
+    assert [pw["1 to 1.5"][y][0] for y in (4, 7, 10)] == [0.0, 1.0, 0.5]           # the one frozen in year 8 never enters
+    assert pw["0.75 to 1"][10][0] == 1.0 and pw["0.75 to 1"][7][0] == 0.0
+    assert pw["all with a true edge"][10][0] == pytest.approx(0.4) and pw["all with a true edge"][10][3] == 80
+    rows = {r.what: r for r in metrics_v2.summarise_hb(reps, "D02")}
+    assert rows["dormancy rule"].verdict == dormancy.RULE
+    assert rows["attention: reviews written per replication, candidate (i) (of 400 family-reviews; a family dormant before "
+                "and after a date needs none)"].estimate == 330
+    assert rows["year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"].verdict \
+        == "50.0 / 90.0 / 100.0"
+    # records made before the fields existed are still summarised: the new rows are simply absent
+    old = [{k: v for k, v in r.items() if not k.startswith(("edge_", "written_", "null_dormant_", "family_reviews", "dormancy"))}
+           for r in reps]
+    assert metrics_v2.attention(old) == {} and metrics_v2.tier_power(old) == {}
+    assert "dormancy rule" not in {r.what for r in metrics_v2.summarise_hb(old, "D02")}
 
 
 def test_hb_rows_are_version_1s_verdicts_plus_the_grid_gate(monkeypatch):
@@ -312,6 +365,13 @@ def test_v2_adds_requirements_and_loosens_no_threshold():
                    "200 draws", "floored at 0 and capped at 0.9"):
         assert needle in text, needle
     assert hb.SE_RESAMPLES == 199 and hb.MIN_FWD_DAYS == 63 and hb.PP_DRAWS == 200
+    # the dormancy rule of Protocol 3.1 section 9.1, as the code applies it; V7's number is version 1's
+    assert ("a family becomes dormant when `PP^max < 0.05` and `Π^max < 0.05` at two\n  consecutive dates with at "
+            "least 252 forward days at each, and is reactivated when either is at least 0.15") in text
+    assert (dormancy.PP_BELOW, dormancy.PI_BELOW, dormancy.MIN_FORWARD_DAYS, dormancy.REACTIVATE_AT) == (0.05, 0.05, 252, 0.15)
+    assert criteria_v2.V7_ELIM_MAX is criteria.V7_ELIM_MAX or criteria_v2.V7_ELIM_MAX == criteria.V7_ELIM_MAX == 0.10
+    assert "**no threshold, metric,\nscenario or replication count was touched**" in text
+    assert "V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged)" in text
 
 
 @reads_hand_edited_file
@@ -325,12 +385,26 @@ def test_protocol_31_keeps_every_constant_of_30_and_says_what_changed():
         assert needle in new[: new.index("## 1. Symbols")], needle
     # sections the pilot gave no reason to touch are word for word those of 3.0.0
     def section(text, start, end):
-        return text[text.index(start):text.index(end)]
+        a = text.index(start)
+        return text[a:text.index(end, a)]
     for start, end in (("## 4. Across-family screening", "## 5. Within a family"),
                        ("## 6. Forward e-process", "## 7. One hierarchical model"),
-                       ("## 8. Tiers", "## 9. Dormancy"), ("### 9.2 The cost", "## 10. Governance"),
+                       ("## 8. Tiers", "## 9. Dormancy"), ("### 9.2 The cost", "> **In plain English.** When"),
+                       ("> **Problem it solves.** Attention is the scarce resource", "> **Assumes.** The model's"),
+                       ("> **How it fails.** A family whose edge appears late", "## 10. Governance"),
                        ("## Appendix A. Proofs", "## Appendix B.")):
         assert section(new, start, end) == section(old, start, end), start
+    # section 9.1 is the one rule changed before adoption (change 5): the forecast is kept, with 3.0's levels, and
+    # the probability of an edge is added; what 3.0 said about the forecast and about a dormant family still stands
+    rule30, rule31 = section(old, "### 9.1 The rule", "### 9.2 The cost"), section(new, "### 9.1 The rule", "### 9.2 The cost")
+    assert "| **Become dormant** | `PP_f^max < 0.05` at two consecutive reviews |" in rule30
+    assert "| **Become dormant** | `PP_f^max < 0.05` **and** `Π_f^max < 0.05`, at two consecutive reviews, each with at least 252 forward days |" in rule31
+    for line in rule30.splitlines():
+        if line.startswith(("PP_f = Pr(", "| **While dormant**", "With `programme.end` unset")):
+            assert line in rule31, line
+    top = new[: new.index("## 1. Symbols")]
+    assert "| 5 | §9.1" in top and "a pre-adoption change of this draft" in top and "D02, D05, D08 and D10 are development scenarios" in top
+    assert "| 3.1.0, revised before adoption | 2026-11-12 |" in new
     # every row of 3.0's table of constants is still there
     consts = section(old, "## Appendix B. Constants fixed in v3.0", "## Appendix C.")
     for line in consts.splitlines():
