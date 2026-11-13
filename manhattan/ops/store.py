@@ -276,8 +276,8 @@ class Store:
         return {"source": it.source, "retrieved_utc": it.retrieved_utc or _iso(self.clock()), "run_id": str(self.run_id),
                 "run_attempt": int(self.run_attempt), "commit": self.commit}
 
-    def _append_local(self, intents: list[Intent], torn_after: int | None = None) -> dict:
-        """Append to chain.jsonl in the clone. Returns counts. ``torn_after``: write that many records, then half a
+    def _append_local(self, intents: list[Intent], torn: bool = False) -> dict:
+        """Append to chain.jsonl in the clone. Returns counts. ``torn``: write half of the new lines, then half a
         line, then crash (the crash test of a write cut short)."""
         out = {"appended": 0, "duplicate": 0, "conflict": 0, "hashes": []}
         lines = []
@@ -310,9 +310,10 @@ class Store:
                 out["appended"] += 1
                 out["hashes"].append(rec["hash"])
         path = self.workdir / CHAIN
+        cut = len(lines) // 2 if torn and lines else None
         with path.open("a", encoding="utf-8") as f:
             for i, line in enumerate(lines):
-                if torn_after is not None and i == torn_after:
+                if cut is not None and i == cut:
                     f.write(line[: len(line) // 2])
                     f.flush()
                     raise SimulatedCrash("mid_chain_write")
@@ -355,8 +356,10 @@ class Store:
 
     def _apply(self, entry: str, intents: list[Intent], label: str) -> dict:
         def commit_records():
-            torn = len(intents) // 2 if self.crash_at == "mid_chain_write" else None
-            res = self._append_local(intents, torn_after=torn if torn else None)
+            # the crash test cuts the first write that has at least two new lines
+            torn = self.crash_at == "mid_chain_write" and sum(
+                1 for it in intents if tuple(it.key) not in self._by_key) >= 2
+            res = self._append_local(intents, torn=torn)
             if not any(j["entry"] == entry and j["state"] in ("committed", "verified") for j in self.journal()):
                 self._journal_line({"entry": entry, "state": "committed", "ts_utc": _iso(self.clock()),
                                     "record_hashes": res["hashes"]})

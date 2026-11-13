@@ -138,10 +138,12 @@ def test_non_fast_forward_is_retried_by_reappending(tmp_path):
 
 
 def test_no_force_push_anywhere_in_the_ops_code():
-    for p in sorted((ROOT / "manhattan/ops").glob("*.py")):
+    for p in sorted((ROOT / "manhattan/ops").glob("*.py")) + [ROOT / ".github/workflows/manhattan-ops-runner.yml"]:
         src = p.read_text()
-        for bad in ("--force", "--force-with-lease", '"+HEAD', "'+HEAD", '"+refs', "'+refs", '"-f"', "--mirror"):
+        for bad in ("--force", "--force-with-lease", '"+HEAD', "'+HEAD", '"+refs', "'+refs", " +HEAD", " +refs"):
             assert bad not in src, f"{p.name} contains {bad}"
+        for call in re.findall(r"push[^\n]*", src):                 # every line that pushes
+            assert '"-f"' not in call and " -f " not in call and "--mirror" not in call, f"{p.name}: {call}"
 
 
 # ---- O-15: locks
