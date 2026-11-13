@@ -1,7 +1,8 @@
 """Q010: the morning report's Janus quick-check line never cuts a word, and marks a cut with "...".
 
-Fixture records only: ledger.janus.load and nightshift.morning._git are stubbed, so the live data/janus records and
-origin/main are never read.
+Fixture records only: ledger.janus.load, nightshift.morning._git and (since Q014, which fetches origin main in
+janus_records) nightshift.morning.janus_records are stubbed, so the live data/janus records, origin/main and the
+remote are never read. The fixture is served as a freshly fetched main copy (no "[dev copy]" label).
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ def _check(result: str) -> dict:
 def _line(monkeypatch, result: str) -> str:
     monkeypatch.setattr(J, "load", lambda *a, **k: [_check(result)])
     monkeypatch.setattr(M, "_git", lambda *a, **k: "")
+    monkeypatch.setattr(M, "janus_records", lambda *a, **k: ([_check(result)], ""))
     lines = [l for l in M.janus_section(TODAY) if l.startswith("Last quick check")]
     assert len(lines) == 1, lines
     assert lines[0].startswith(PREFIX), lines[0]

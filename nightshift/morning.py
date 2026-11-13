@@ -11,7 +11,10 @@ commits on origin/dev, and an explorer run must have rows in results/exploration
 during the night whose reason is not a normal end of night (NORMAL_STOPS) is listed there too (Q011).
 
 Janus is read, never written: the latest daily review and quick check from data/janus/records.jsonl through
-ledger.janus (review_status, budget_status, open positions), against mandate C05.
+ledger.janus (review_status, budget_status, open positions), against mandate C05. The records are main's: the
+section fetches origin main itself (Q014; timeout, no prompt, git show, never a checkout) and prints "records as of
+<newest recorded_at>". A failed fetch still reports, every line marked "[main not refreshed (fetch failed)]"; with no
+origin/main copy the working tree's records are read and every line is marked "[dev copy]".
 
 An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
 unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
@@ -24,11 +27,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import tempfile
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config as C
@@ -154,29 +158,74 @@ def chain_stop_line(st: dict, night: str) -> str | None:
     return f"chain stopped {ts.astimezone(C.SGT):%H:%M}: {_short(reason) or '(no reason given)'}"
 
 
-def janus_section(today: date) -> list[str]:
+JANUS_REL = "data/janus/records.jsonl"
+FETCH_TIMEOUT = 90                 # seconds; a hung fetch is a failed fetch, never a hung report
+NOT_REFRESHED = "main not refreshed (fetch failed)"
+
+
+def fetch_main(remote: str = "origin", branch: str = "main") -> str | None:
+    """Refresh refs/remotes/<remote>/<branch> from the remote (Q014: in code, not only in the routine's prose).
+    None when the fetch succeeded, else a short reason. Never raises and never prompts; touches only that ref."""
+    try:
+        r = subprocess.run(["git", "fetch", "--quiet", "--no-tags", remote,
+                            f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}"],
+                           cwd=ROOT, capture_output=True, text=True, timeout=FETCH_TIMEOUT,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"git fetch {remote} {branch}: {type(e).__name__}"
+    return None if r.returncode == 0 else f"git fetch {remote} {branch}: exit {r.returncode}"
+
+
+def janus_records() -> tuple[list[dict], str]:
+    """The Janus records and the label their lines carry ("" when read from a freshly fetched origin/main).
+    The Janus tasks write to main: fetch origin main, then read origin/main with git show (never a checkout). A
+    failed fetch still reads the existing ref, labelled NOT_REFRESHED; with no origin/main copy at all the working
+    tree's records are read, labelled "dev copy"."""
     from ledger import janus as J
-    recs = J.load()
-    live = _git("show", "origin/main:data/janus/records.jsonl")        # the existing Janus tasks write to main
-    if live:
+    stale = fetch_main() is not None
+    if _git("rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}") \
+            and _git("cat-file", "-t", f"origin/main:{JANUS_REL}") == "blob":
+        live = _git("show", f"origin/main:{JANUS_REL}")
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
             f.write(live + "\n")
-        recs = J.load(Path(f.name))
+        try:
+            recs = J.load(Path(f.name))
+        finally:
+            os.unlink(f.name)
+        return recs, NOT_REFRESHED if stale else ""
+    return J.load(ROOT / JANUS_REL), "dev copy" + (f"; {NOT_REFRESHED}" if stale else "")
+
+
+def _as_of(recs: list[dict]) -> str:
+    """The newest recorded_at among the records, as YYYY-MM-DDTHH:MMZ (UTC)."""
+    ts = []
+    for r in recs:
+        try:
+            t = datetime.fromisoformat(str(r.get("recorded_at") or ""))
+        except ValueError:
+            continue
+        ts.append((t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc))
+    return f"{max(ts):%Y-%m-%dT%H:%M}Z" if ts else "no records"
+
+
+def janus_section(today: date) -> list[str]:
+    from ledger import janus as J
+    recs, label = janus_records()
     rs, bs = J.review_status(recs, today), J.budget_status(recs, today)
     pos = J.positions(recs)
     open_pos = [k for k, v in pos.items() if (v.get("status") or "") in ("open", "pending")]
     checks = [r for r in recs if r.get("type") == "check"]
     last_check = checks[-1] if checks else {}
     c05 = "complies" if (rs["status"] == "ok" and not bs["flags"]) else "does NOT comply"
-    lines = [f"C05: {c05}. Last daily review {rs['last_date']} ({rs['status']}, {rs['sources_read']} sources); "
-             f"{len(open_pos)} open/pending, {bs['risk_used_pct']:.2f}% at risk (budget 3-10%)"
-             + (f"; reason: {bs['reason']}" if bs.get("reason") else "")]
+    lines = [f"C05: {c05} (records as of {_as_of(recs)}). Last daily review {rs['last_date']} ({rs['status']}, "
+             f"{rs['sources_read']} sources); {len(open_pos)} open/pending, {bs['risk_used_pct']:.2f}% at risk "
+             "(budget 3-10%)" + (f"; reason: {bs['reason']}" if bs.get("reason") else "")]
     flags = rs["flags"] + bs["flags"]
     if flags:
         lines.append("Flags: " + "; ".join(flags))
     if last_check:
         lines.append(f"Last quick check {last_check.get('recorded_at', '')[:16]}Z: {_clip_words(last_check.get('result') or '')}")
-    return lines
+    return [f"[{label}] {l}" for l in lines] if label else lines
 
 
 def v1_rules_state() -> dict | None:
