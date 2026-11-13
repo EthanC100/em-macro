@@ -311,6 +311,7 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                 try:                                                 # a handled failure ends the run: free the lock
                     s.release()
                     health["checkpoints"].append("unlock")
+                    health["mirror_status"] = s.mirror(cfg.mirror)["status"].replace("_", "-")
                 except Exception:                                    # noqa: BLE001 - it then expires on its own
                     traceback.print_exc()
         finally:

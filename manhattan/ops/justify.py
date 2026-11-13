@@ -77,10 +77,10 @@ def check_justification(h: dict) -> list[dict]:
             out.append({"param": name, "problem": "no justification: say why it varies and what range the mechanism implies"})
             continue
         reason = j.get("reason")
-        if not isinstance(reason, str) or len(reason.strip()) < MIN_REASON_CHARS:
-            out.append({"param": name, "problem": f"the reason is missing or shorter than {MIN_REASON_CHARS} characters"})
-        elif GENERIC.match(reason.strip()):
+        if isinstance(reason, str) and GENERIC.match(reason.strip()):
             out.append({"param": name, "problem": "the reason is a generic phrase, not an economic reason"})
+        elif not isinstance(reason, str) or len(reason.strip()) < MIN_REASON_CHARS:
+            out.append({"param": name, "problem": f"the reason is missing or shorter than {MIN_REASON_CHARS} characters"})
         rng, vals = j.get("mechanism_range"), j.get("mechanism_values")
         if rng is None and vals is None:
             out.append({"param": name, "problem": "no mechanism_range or mechanism_values"})

@@ -1,0 +1,123 @@
+# Manhattan ops: the nightly runner for public-data families (docs/manhattan/ops/RUNNER.md).
+#
+# COMMITTED WITH ITS SCHEDULE DISABLED. It runs only when started by hand (workflow_dispatch), and only from main.
+# Enabling the schedule is Ethan's (docs/manhattan/ops/ETHAN_OPS_ACTIONS.md, step 9). No session dispatches it
+# (CLAUDE.md rule 16).
+#
+# Blinding. This repository is public: its Actions logs, step summaries, artifacts and issues can be read by anyone.
+# Everything the runner learns (captures, observations, its own log) goes only to the PRIVATE repository
+# EthanC100/manhattan-ledger, written with a deploy key held in the secret MANHATTAN_LEDGER_DEPLOY_KEY. The public log
+# shows one health record (counts, dates, hashes, status words; no number with a decimal point). This workflow
+# uploads no artifact and caches nothing but pip's downloads. It writes nothing to em-macro (contents: read).
+#
+# It does not run the night-shift guard: it never writes em-macro, so it cannot collide with em-macro's writers, and
+# the guard's night window and cap are the night shift's, not the runner's.
+name: manhattan-ops-runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      asof:
+        description: "Date to run for (YYYY-MM-DD); empty means today in UTC"
+        required: false
+        default: ""
+  # schedule:                         # DISABLED until Ethan enables it (ETHAN_OPS_ACTIONS.md step 9)
+  #   - cron: "41 23 * * 1-5"         # 23:41 UTC on weekdays: after the 17:00 New York close, also in summer
+
+permissions:
+  contents: read
+  issues: write                       # the failure issue only
+
+concurrency:
+  group: manhattan-ops-ledger         # one writer of the private ledger at a time; the ledger lock is the second guard
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60               # the ledger lock expires after 75 minutes
+    defaults:
+      run:
+        shell: bash                   # -eo pipefail
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LEDGER_REMOTE: "ledger-primary:EthanC100/manhattan-ledger.git"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip                  # package downloads only; no outcome is ever in a cache
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Keys for the private ledger and its mirror (never printed)
+        env:
+          LEDGER_KEY: ${{ secrets.MANHATTAN_LEDGER_DEPLOY_KEY }}
+          MIRROR_KEY: ${{ secrets.MANHATTAN_MIRROR_DEPLOY_KEY }}
+          MIRROR_HOST: ${{ vars.MANHATTAN_MIRROR_HOST }}
+          MIRROR_KNOWN_HOSTS: ${{ vars.MANHATTAN_MIRROR_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          P="$RUNNER_TEMP/private"
+          mkdir -p "$P"
+          if [ -z "${LEDGER_KEY:-}" ]; then echo "MANHATTAN_LEDGER_DEPLOY_KEY is not set"; exit 1; fi
+          printf '%s\n' "$LEDGER_KEY" > "$P/ledger_key"
+          # GitHub's published ed25519 host key (check it against docs.github.com, "GitHub's SSH key fingerprints")
+          printf '%s\n' "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$P/known_hosts"
+          {
+            echo "Host ledger-primary"
+            echo "  HostName github.com"
+            echo "  User git"
+            echo "  IdentityFile $P/ledger_key"
+            echo "  IdentitiesOnly yes"
+          } > "$P/ssh_config"
+          if [ -n "${MIRROR_KEY:-}" ] && [ -n "${MIRROR_HOST:-}" ]; then
+            printf '%s\n' "$MIRROR_KEY" > "$P/mirror_key"
+            printf '%s\n' "$MIRROR_KNOWN_HOSTS" >> "$P/known_hosts"
+            {
+              echo "Host ledger-mirror"
+              echo "  HostName $MIRROR_HOST"
+              echo "  User git"
+              echo "  IdentityFile $P/mirror_key"
+              echo "  IdentitiesOnly yes"
+            } >> "$P/ssh_config"
+          fi
+          echo "GIT_SSH_COMMAND=ssh -F $P/ssh_config -o UserKnownHostsFile=$P/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes" >> "$GITHUB_ENV"
+
+      - name: Nightly run (public output is the health record only)
+        env:
+          ASOF_INPUT: ${{ inputs.asof }}
+          MANHATTAN_MIRROR_URL: ${{ vars.MANHATTAN_MIRROR_URL }}
+        run: |
+          ASOF="${ASOF_INPUT:-$(date -u +%F)}"
+          python -m manhattan.ops.runner nightly \
+            --ledger-dir "$RUNNER_TEMP/private/ledger" --private-dir "$RUNNER_TEMP/private" \
+            --remote "$LEDGER_REMOTE" --batches data/manhattan/batches --asof "$ASOF" \
+            --health-out "$RUNNER_TEMP/health.json"
+
+      - name: Open or update the failure issue (health record only)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m manhattan.ops.runner issue-body --health "$RUNNER_TEMP/health.json" > "$RUNNER_TEMP/issue.md"
+          TITLE="[ALERT] Manhattan ops runner failed"
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/issue.md"
+          fi
+
+      - name: Remove the private clone and keys from the runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/private" "$RUNNER_TEMP/health.json" "$RUNNER_TEMP/issue.md"

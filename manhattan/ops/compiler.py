@@ -27,6 +27,7 @@ import numpy as np
 from manhattan import spec as S
 from manhattan.engine import events as EV
 from manhattan.engine.backtest import Instrument, Strategy, View
+from manhattan.engine.pit import PitError
 
 FREQUENCIES = {"D": "D", "W": "W", "M": "M", "event": "D"}
 # the outcome horizon of one prediction, in sessions, implied by the frequency (a hypothesis may declare a longer one)
@@ -184,8 +185,18 @@ def make_signal(kind: str, params: dict, universe: Universe, sign: float):
             return {k: sign * on / len(names) for k in names}
         return cal
     if kind == "event":
-        base = EV.event_signal(dict(universe.events), params["hold"])
-        return lambda view: {k: sign * v / len(names) for k, v in base(view).items()}
+        hold = params["hold"]
+        per = {k: EV.event_signal({k: s}, hold) for k, s in universe.events.items()}
+
+        def event(view):
+            out = {}
+            for k, sig in per.items():
+                try:
+                    out.update(sig(view))
+                except PitError:                   # no event of this instrument in the data at all: no position
+                    out[k] = 0.0
+            return {k: sign * v / len(names) for k, v in out.items()}
+        return event
     if kind == "buy_hold":
         sc = float(params["scale"])
         return lambda view: {k: sign * sc / len(names) for k in names}
