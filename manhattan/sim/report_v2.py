@@ -176,8 +176,9 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
         L.append(f"| {scenario} | {size} | {what} | {n} | {need} | {max(0, need - n)} | `{v['code']}` | {_secs(v['reps']):.0f} |")
     stale_reps = sum(v["other_code_reps"] for v in found.values())
     if stale_reps:
-        L += ["", f"{stale_reps} replication records on file were made by earlier code (the model changed during this "
-                  "revision) and are **not counted** anywhere in this report: records of different code are never pooled."]
+        L += ["", f"{stale_reps} replication records on file were made by earlier code (the model, and then the "
+                  "dormancy rule, changed while the draft was revised) and are **not counted** anywhere in this report: "
+                  "records of different code are never pooled."]
     # ---------------------------------------------------------------- 1. the SPA test with an estimated hedge
     L += ["", "## 1. The SPA test where the hedge is estimated", "",
           "Share of families with no edge rejected at the 0.05 level (the bound on the upper end is 0.06), by three "
@@ -230,7 +231,7 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
               "", table(rows)]
     # ---------------------------------------------------------------- 2b, 2c: dormancy and the tier, side by side
     hb_runs = [(s_, v) for (s_, z), v in found.items() if z == "HB"]
-    cell = lambda e: f"{fmt(e[0])} ({fmt(e[1])} to {fmt(e[2])})"
+    cell = lambda e, d=3: f"{fmt(e[0], d)} ({fmt(max(e[1], 0.0), d)} to {fmt(e[2], d)})"       # shares and counts: never below 0
     att = {s_: metrics_v2.attention(v["reps"]) for s_, v in hb_runs}
     if any(att.values()):
         L += ["", "### Dormancy under Protocol 3.1 §9.1: what it retires and what it leaves to review (candidate (i))", "",
@@ -250,7 +251,7 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
             summary["dormancy"][s_] = {"m8": m8, "n_edge": n_edge, **a}
             L.append(f"| {s_} | {len(v['reps'])} | {cell(m8) if n_edge else '- (no family has an edge)'} | "
                      f"{cell(a['edge_dormant_share']) if n_edge else '-'} | {cell(a['null_dormant_share'])} | "
-                     f"{cell(a['dormant_end'])} | {cell(a['written'])} | {a['family_reviews']:.0f} |")
+                     f"{cell(a['dormant_end'], 1)} | {cell(a['written'], 1)} | {a['family_reviews']:.0f} |")
     power = {s_: metrics_v2.tier_power(v["reps"]) for s_, v in hb_runs}
     if any(power.values()):
         L += ["", "### Who reaches Statistically supported, by true Sharpe ratio (candidate (i); reported, no threshold)", "",
@@ -258,7 +259,8 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
               "that date or an earlier one. The Sharpe ratio is the true one of the family portfolio, hedged and net. "
               "Entry needs Π^min ≥ 0.80 (the most cautious of six models), a positive forward mean, 504 forward days "
               "(252 if Romano-Wolf named a variant on the reserve) and the tier Promising. A dormant family is not "
-              "evaluated. Intervals are over replications; a cell with few families says little.", ""]
+              "evaluated. Each cell: the share, its 95% interval over replications, and the number of families it "
+              "rests on; a cell with few families says little.", ""]
         summary["tier_power"] = {}
         for s_, v in hb_runs:
             pw = power[s_]
@@ -266,11 +268,14 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
                 continue
             years = [int(y) for y in v["reps"][0]["eval_years"]]
             summary["tier_power"][s_] = {b: {str(y): c for y, c in row.items()} for b, row in pw.items()}
+            if not any(c[3] for row in pw.values() for c in row.values()):
+                L += [f"**{s_}: {world.SCENARIOS[s_].title}** ({len(v['reps'])} replications): no family has an edge.", ""]
+                continue
             L += [f"**{s_}: {world.SCENARIOS[s_].title}** ({len(v['reps'])} replications)", "",
                   "| true Sharpe ratio | " + " | ".join(f"by year {y}" for y in years) + " |", "|---|" + "---|" * len(years)]
             for b, row in pw.items():
-                cells = [f"{fmt(row[y][0])} ({fmt(row[y][1])} to {fmt(row[y][2])}), {row[y][3]} families" if row[y][3]
-                         else "- (no family)" for y in years]
+                cells = [f"{fmt(row[y][0], 2)} ({fmt(row[y][1], 2)} to {fmt(row[y][2], 2)}), {row[y][3]}" if row[y][3]
+                         else "-" for y in years]
                 L.append(f"| {b} | " + " | ".join(cells) + " |")
             L.append("")
     # ---------------------------------------------------------------- 3. cost

@@ -3,14 +3,16 @@
 Recorded 2026-11-12; updated the same day by session "4M Manhattan C: simulation lab" (items 5 and 13 closed,
 items 14 to 18 added) and by session "5M Manhattan C: protocol 3.1 and prereg v2" (item 19 added; items 14 and 15
 answered by the draft of Protocol v3.1, which item 19 adopts; item 16 re-estimated; item 20 added and item 10
-updated by milestone E). Each item is something no
+updated by milestone E), and on 2026-11-13 by session "6M Manhattan C: dormancy fix before adoption" (item 19
+rewritten for the drafts as revised before adoption; item 21 added). Each item is something no
 agent may decide or do under the CLAUDE.md hard rules, or cannot do from a cloud session. For each: the
 conservative default now in force, what it blocks, and what to do. Nothing in this list was created, changed,
 bought or switched on by a session.
 
 **Order of urgency now:** item 19 (read and adopt Protocol v3.1 and version 2 of the simulation pre-registration:
 one paste into CODEOWNERS), then item 16 (start the simulation on the iMac: it now includes the model-fitting
-half), then items 2, 3 and 7 (they unblock the first real batch). Items 10 and 20 decide how far milestone E
+half), then items 2, 3 and 7 (they unblock the first real batch). Item 21 (three decisions about the middle
+tiers) can wait for the full run but is worth reading with item 19. Items 10 and 20 decide how far milestone E
 can go. Item 8 has a date (about 5 May 2027).
 
 | # | decision or action | default in force | blocks |
@@ -33,8 +35,9 @@ can go. Item 8 has a date (about 5 May 2027).
 | 16 | run the simulation on the iMac | pilot only | choosing the screening method; every claim |
 | 17 | the simulation's sampler in requirements | separate file; no longer needed by the simulation | nothing |
 | 18 | housekeeping: the pre-rename branch | left in place | nothing |
-| 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched | the full run of D11 and of the model-fitting half |
+| 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched. **Revised before adoption** (the dormancy rule) and re-hashed | the full run of D11 and of the model-fitting half |
 | 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
+| 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | nothing changed: the tier's bar is 3.0's, the calibration error is a stated limitation, the HB runs have four review dates | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all; how well V7 speaks for quarterly reviews |
 
 ---
 
@@ -290,13 +293,17 @@ repository as an optional check beside a real review that decides nothing. Adopt
 model-fitting pilot then showed about the tier and dormancy rules is new and is yours to weigh**: see
 MANHATTAN_PROGRESS.md, "Milestone C: state (session 5M)".
 
+**Status (session 6M).** The dormancy rule was revised before adoption and now sits inside its bound on the
+pilot (item 19, change 5). The other two findings are yours and are set out in item 21.
+
 ## 16. Run the simulation on the iMac
 
 **Why Ethan.** It is your machine, and the full run is far more than a cloud session can do.
 
-**What exists.** Two pilots, both labelled as such and deciding nothing: version 1's
-(`results/manhattan_sim/PILOT_REPORT.md`) and the rerun of the parts Protocol v3.1 changed
-(`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`). The full run is packaged, and after item 19 it covers
+**What exists.** Three pilots, all labelled as such and deciding nothing: version 1's
+(`results/manhattan_sim/PILOT_REPORT.md`), the rerun of the parts Protocol v3.1 changed
+(`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`) and the rerun of the HB scenarios under the dormancy rule as
+revised before adoption (`results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md`). The full run is packaged, and after item 19 it covers
 **everything**, the model-fitting half included:
 
 ```bash
@@ -318,7 +325,7 @@ seconds per replication the pilots measured:
 | version 1's code: STD and LONG except D11 | 17 × 2,000 | 60 to 150 on an idle core (pilot: 67 to 355 on a busy one) | 950 to 1,190 |
 | D11 with the hedge-aware test | 1 × 2,000 | about 370 | about 200 |
 | nine hedged twins, SPA only | 9 × 400 | 210 to 600 | about 300 |
-| five HB scenarios, analytic model | 5 × 400 | 70 to 150 | about 50 |
+| five HB scenarios, analytic model | 5 × 400 | 65 to 145 | about 47 |
 
 Before Protocol v3.1 the estimate was about 5 days for the STD and LONG half and of the order of 50,000
 CPU-hours for the HB half, which could not be run. The new work adds about 450 CPU-hours (D11's re-estimation
@@ -354,16 +361,16 @@ Delete it on GitHub's Branches page when convenient.
 ## 19. Adopt Protocol v3.1 and version 2 of the simulation pre-registration
 
 **Why Ethan.** Changing the protocol is yours (PROTOCOL §10.5), and the files that would hold the change are
-protected, so a session wrote **new** files beside them and edited none of the protected ones.
+protected, so sessions wrote **new** files beside them and edited none of the protected ones.
 
-**What was written (session 5M, pull request from `build/manhattan`).**
+**What was written (sessions 5M and 6M, pull request #56 from `build/manhattan`).**
 
 | new file | what it is |
 |---|---|
-| `docs/manhattan/PROTOCOL_v3.1.md` | the whole protocol, version 3.1.0: 3.0.0 with four changes, listed at its top with the pilot result behind each and why none is tuning to held-out results |
-| `docs/manhattan/SIM_PREREG_v2.md` | how the changed methods are tested. Only the changed parts; version 1 stays in force for the rest. No threshold loosened, no replication count lowered |
-| `docs/manhattan/sim_prereg_v2.sha256` | the SHA-256 of the two files above (two lines of `sha256sum` output) |
-| `manhattan/prereg_v2.py`, `tests/test_manhattan_prereg_v2.py` | the check of that record (`python -m manhattan.prereg_v2 verify`, which also runs version 1's check) and its test |
+| `docs/manhattan/PROTOCOL_v3.1.md` | the whole protocol, version 3.1.0: 3.0.0 with **five** changes, listed at its top with the pilot result behind each and why none is tuning to held-out results. Four are session 5M's. The fifth, the dormancy rule of §9.1, was made by session 6M **before adoption**, after the draft's own pilot put premature elimination above its bound; it is marked as a pre-adoption change in the table at the top and in the change log (§10) |
+| `docs/manhattan/SIM_PREREG_v2.md` | how the changed methods are tested. Only the changed parts; version 1 stays in force for the rest. No threshold loosened, no replication count lowered. Session 6M added the description of the revised dormancy rule (its section 1 row 4 and section 2(f)) and touched no threshold, metric or scenario |
+| `docs/manhattan/sim_prereg_v2.sha256` | the SHA-256 of the two files above (two lines of `sha256sum` output), **re-recorded by session 6M** when it revised them. The old and the new hashes are in MANHATTAN_PROGRESS.md, "Milestone C: state (session 6M)" |
+| `manhattan/prereg_v2.py`, `tests/test_manhattan_prereg_v2.py` | the check of that record (`python -m manhattan.prereg_v2 verify`, which also runs version 1's check) and its test. Unchanged since session 5M |
 
 **Protected files: what you must do to each.**
 
@@ -373,25 +380,40 @@ protected, so a session wrote **new** files beside them and edited none of the p
 | `docs/manhattan/SIM_PREREG.md`, `docs/manhattan/sim_prereg.sha256` | **none.** Version 1 stays frozen and in force for everything version 2 does not name; `python -m manhattan.prereg verify` still passes |
 | `config/manhattan.yaml` | **none.** `claims.enabled` stays `false`; no switch refers to a protocol version |
 | `manhattan/prereg.py`, `tests/test_manhattan_prereg.py` | **none.** The version 2 record is checked by the new module beside them |
-| `.github/CODEOWNERS` | **add five lines** (step 3 below). This is the only edit of a protected file |
+| `.github/CODEOWNERS` | **add five lines** (step 4 below). This is the only edit of a protected file |
 
-Nothing has to be copied or moved: the new files are already at their final paths.
+Nothing has to be copied or moved, and **nothing needs re-hashing unless you edit a draft**: the new files are
+already at their final paths and the hash record on the branch matches them as they now stand.
 
 **Steps, in order.**
 
-1. **Read** the table at the top of `PROTOCOL_v3.1.md` ("What changed from 3.0.0, and why"), then
-   `SIM_PREREG_v2.md` (it is short), then `results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`.
-2. **Merge the pull request** if you accept them. To change anything first, edit the draft on the branch and
-   then **re-hash** (the hash record must be rewritten whenever either file changes, even by a comma):
+1. **Read**, in this order:
+   - the table at the top of `PROTOCOL_v3.1.md` ("What changed from 3.0.0, and why"): five rows;
+   - `SIM_PREREG_v2.md` (it is short);
+   - `results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`: the first pilot of the draft (the SPA test, the model).
+     Its dormancy numbers are those of the old rule and are the reason for change 5;
+   - `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`: why the dormancy rule changed, what the change costs,
+     why D08's calibration error is a stated limitation and not a repair, and who reaches Statistically
+     supported;
+   - `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md`: the five HB scenarios again under the revised rule.
+2. **Decide change 5** (the dormancy rule). It is the one change you have not seen before. If you accept it, do
+   nothing. If you want 3.0's rule back, or another level (the diagnosis lists what each costs), say so and a
+   session makes the change: the rule is also in code (`manhattan/stats/dormancy.py`), a test compares the code
+   with the text of §9.1, and the four scenarios must be rerun. Item 21 holds three further decisions that
+   adoption does not wait for.
+3. **Merge the pull request** if you accept the drafts. To change anything in the text first, edit the draft on
+   the branch and then **re-hash** (the hash record must be rewritten whenever either file changes, even by a
+   comma):
 
    ```bash
    sha256sum docs/manhattan/SIM_PREREG_v2.md docs/manhattan/PROTOCOL_v3.1.md > docs/manhattan/sim_prereg_v2.sha256
    python -m manhattan.prereg_v2 verify          # must print: pre-registrations ok (v1 and v2)
    ```
 
-   A pilot run made before such an edit names the old hash; the report says so in its header. Pilots decide
+   A pilot run made before such an edit names the old hash; the report says so in its header (it already does
+   for session 5M's runs of D11 and the twins, which were made before session 6M's edit). Pilots decide
    nothing, so nothing is lost.
-3. **Protect the adopted files.** On main, add these lines to `.github/CODEOWNERS`, **inside** the protected
+4. **Protect the adopted files.** On main, add these lines to `.github/CODEOWNERS`, **inside** the protected
    block: paste them on the line just above `# protected:end`, after the `/config/manhattan.yaml @EthanC100`
    line. Copy them exactly:
 
@@ -405,7 +427,7 @@ Nothing has to be copied or moved: the new files are already at their final path
 /tests/test_manhattan_prereg_v2.py @EthanC100
 ```
 
-4. **Check.**
+5. **Check.**
 
    ```bash
    python -m manhattan.prereg_v2 verify                                   # pre-registrations ok (v1 and v2)
@@ -416,12 +438,12 @@ Nothing has to be copied or moved: the new files are already at their final path
 
    The second command was checked on a copy of CODEOWNERS with the lines added
    (`tests/test_manhattan_prereg_v2.py`): the five paths match, and no other file of this revision does.
-5. **Run** the simulation (item 16).
+6. **Run** the simulation (item 16).
 
 **What adopting does and does not do.** It makes 3.1.0 the protocol under test and lets the full run include D11
 and the model-fitting half. It enables no claim: `claims.enabled` stays `false` until a confirmation run passes.
 From the first batch frozen afterwards, manifests record the hash of PROTOCOL_v3.1.md (PROTOCOL §10.1-10.2); no
-batch exists yet, so nothing is judged under two versions.
+batch exists yet, so nothing is judged under two versions. It does not settle item 21.
 
 **If you do not adopt.** Version 1 and Protocol 3.0.0 stand as they are. D11 then goes to the full run with a
 test the pilot shows to be oversized, and the model-fitting half stays out of reach (item 15).
@@ -454,4 +476,81 @@ commodity and financial-futures core factor of [CORE_FACTORS_PROPOSAL.md](CORE_F
 **Recommendation.** (a) for the reproduction (it reads history up to 2019 only, which any session may read), (b)
 for anything on the reserve or forward. Either way a futures loader must be written first: it reads each contract
 file from the top and stops at the cut-off, as `manhattan/factors/public_fx.py` does for the public panel.
+
+## 21. Three decisions the model-fitting pilots leave with you
+
+**Why Ethan.** Each is a level of the protocol, the model's prior or the design of the simulation (PROTOCOL
+§10.5; SIM_PREREG §8.4). No session changed any of them. None has to be decided before the full run starts
+(item 16); all three are easier to decide after it. The evidence is in
+`results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md` (parts 2, 3 and 4) and in the two rerun reports. Everything
+below is from 12 replications a scenario.
+
+### (a) The bar of Statistically supported
+
+Share of the families with a true edge that hold or have held the tier, by their **true** hedged Sharpe ratio
+(yearly reviews, all four scenarios pooled; the pilot of record, at four dates, is a few points lower):
+
+| true hedged Sharpe ratio | by year 4 | by year 6 | by year 10 |
+|---|---|---|---|
+| 0.25 to 0.5 | 0.00 | 0.00 | 0.01 |
+| 0.5 to 0.75 | 0.00 | 0.01 | 0.02 |
+| 0.75 to 1 | 0.00 | 0.01 | 0.07 |
+| 1 to 1.5 | 0.09 | 0.16 | 0.29 |
+| 1.5 and above | 0.27 | 0.58 | 0.71 |
+| all with a true edge | 0.04 | 0.08 | 0.15 |
+
+Where edges are rare (D02) no family reaches the tier, at any Sharpe ratio. The intervals and the counts are in
+the diagnosis, part 4. The reason is the rule itself: entry needs the **smallest** of six `Π` to be at least
+0.80, and for families with an edge the smallest is the decay model (S5: the edge halves every three years and
+the question is about the edge now) or the model with standard errors inflated by half (S4).
+
+| option | what it means |
+|---|---|
+| (i) keep it | the tier then admits, in ten years, almost only families with a true hedged Sharpe ratio above 1. The live tiers sit behind it |
+| (ii) change which models enter the minimum for this tier | for example S5 as a reported sensitivity only. A new protocol version; V6 is then measured on the new rule |
+| (iii) lower 0.80 | a new protocol version; V6's groups are defined at 0.80, so the pre-registration needs an amendment that says what replaces them |
+
+**Recommendation.** (i) for the full run, and decide on its 400 replications: several cells above rest on a few
+dozen families.
+
+### (b) D08's calibration error
+
+The central model's calibration error at year 10 in D08 is 0.101 (0.034 to 0.136) against a bound of 0.10. The
+cause is the shape of the prior: D08 has a third of its families with an edge and two thirds at exactly zero,
+and one hump cannot describe two groups (diagnosis part 2; stated in Protocol 3.1 §7.2(d)). The ends of the
+scale, which the tiers use, are right. **If the full run confirms the error, V6 fails in D08 and the
+posterior-based tiers stay off** (SIM_PREREG_v2 §5).
+
+| option | what it means |
+|---|---|
+| (i) wait for the full run | nothing now. The interval is wide; the true value may be on either side of the bound |
+| (ii) a prior in two groups, as a later protocol version | another model: the share and scale of the second group are learned, the grid grows, and all five HB scenarios are judged again. It must not be built to fit the scenarios' convention that a family with no edge has a mean of exactly zero |
+| (iii) accept that the posterior-based tiers stay off | the screening route and the forward test do not depend on the model |
+
+**Recommendation.** (i); ask for (ii) only if D08 fails at full count.
+
+### (c) The review dates of the HB runs, and the dormancy level
+
+The simulation steps the tiers at years 2, 4, 7 and 10 (SIM_PREREG §2.5(c)); production reviews quarterly. At
+four dates the revised dormancy rule retires 0% to 1.4% of the families with an edge. With **yearly** reviews,
+on the same worlds (a development experiment, not a run of record):
+
+| rule | premature elimination: D02 / D05 / D08 / D10 | families with no edge retired |
+|---|---|---|
+| 3.0's rule (the forecast alone) | 0.71 / 0.58 / 0.45 / 0.43 | about 80% |
+| the revised rule (`Π^max < 0.05`) | 0.048 / 0.071 / 0.005 / 0.057, two upper ends above 0.10 | 40% to 52% (6% in D08) |
+| the revised rule with `Π^max < 0.02` | 0.024 / 0.021 / 0.001 / 0.008 | 20% to 34% (2% in D08) |
+| the revised rule with `Π^max < 0.01` | none of 1,249 families | 7% to 19% (1% in D08) |
+
+So V7 as pre-registered speaks for a programme reviewed four times in ten years. At a realistic cadence the
+revised rule is close to the bound where edges are rare.
+
+| option | what it means |
+|---|---|
+| (i) leave it | V7 is decided at four dates. Dormancy is off anyway until you set `programme.end` (item 9) |
+| (ii) add the HB scenarios with yearly (or quarterly) reviews, by amendment | SIM_PREREG §8.4 lets an amendment add scenarios; V7 is then also required at the cadence production uses. Cost: of the order of 100 to 150 CPU-hours for yearly reviews (47 at four dates); several times that for quarterly |
+| (iii) a lower level for `Π^max` | a change of Protocol §9.1 by a session (item 19, step 2), with the figures above as the guide; fewer families retired, so more reviews |
+
+**Recommendation.** (ii) before `programme.end` is ever set; until then (i) costs nothing. Choose (iii) only on
+the evidence of (ii).
 

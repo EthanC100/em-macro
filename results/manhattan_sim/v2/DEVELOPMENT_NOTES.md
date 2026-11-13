@@ -100,3 +100,10 @@ loss ("no sampling covariance between families"). What it does not repair is sai
 - A stopped run: the first logged HB pilot was stopped part-way through D05 because the model's code was
   about to change; its start record in the run log has no end record, and a note beside it says so. Its D01 and
   D02 replications were made by code that is no longer checked out and are not counted in any report.
+
+## 5. Session 6M: the dormancy rule, D08's calibration, yearly reviews
+
+The experiments behind the pre-adoption change of Protocol 3.1 §9.1 (its change 5) and the limitation stated in
+§7.2(d) are in [DORMANCY_DIAGNOSIS.md](DORMANCY_DIAGNOSIS.md): the replay of the pilot's 48 HB replications
+with per-family values, every variant of the rule that was scored on them, three posteriors on D08's estimates,
+and the same worlds with yearly reviews. Notes `note-6M-01` to `note-6M-04` in the run log.
