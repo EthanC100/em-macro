@@ -60,23 +60,37 @@ def cpu_model() -> str:
     return platform.processor() or platform.machine()
 
 
-def run_benchmark(jobs=SLICE, workers: int | None = None) -> dict:
+def _setup(workers: int | None) -> tuple[int, object]:
     for v in THREAD_VARS:
         os.environ[v] = "1"
-    workers = workers or os.cpu_count() or 1
-    ctx = mp.get_context("spawn")
+    return workers or os.cpu_count() or 1, mp.get_context("spawn")
+
+
+def run_alone(jobs=SLICE, workers: int | None = None) -> dict:
+    """Phase A: each job alone, one after the other, each in a fresh process."""
+    workers, ctx = _setup(workers)
     out = {"machine": {"cpu": cpu_model(), "logical_cores": os.cpu_count(), "platform": platform.platform(),
                        "python": platform.python_version()}, "workers": workers, "jobs": [list(j) for j in jobs]}
     t0 = time.time()
     with ctx.Pool(1, maxtasksperchild=1) as pool:
         out["alone"] = [pool.apply(_job, ((s, z, v, 0),)) for s, z, v in jobs]
     out["alone_wall_total"] = round(time.time() - t0, 1)
+    return out
+
+
+def run_busy(out: dict) -> dict:
+    """Phase B, added to the result of phase A: the same jobs for ``workers`` replications, every core busy."""
+    workers, ctx = _setup(out["workers"])
     t1 = time.time()
-    batch = [(s, z, v, r) for r in range(workers) for s, z, v in jobs]
+    batch = [(s, z, v, r) for r in range(workers) for s, z, v in out["jobs"]]
     with ctx.Pool(workers, maxtasksperchild=1) as pool:
         out["busy"] = pool.map(_job, batch, chunksize=1)
     out["busy_wall_total"] = round(time.time() - t1, 1)
     return summarise(out)
+
+
+def run_benchmark(jobs=SLICE, workers: int | None = None) -> dict:
+    return run_busy(run_alone(jobs, workers))
 
 
 def summarise(out: dict) -> dict:
@@ -108,10 +122,22 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--quick", action="store_true", help="two jobs only: enough to compare one machine with another")
+    ap.add_argument("--phase", choices=["all", "alone", "busy"], default="all",
+                    help="alone: phase A only, written to --out; busy: phase B added to the phase A already in --out "
+                         "(so that an interruption between the two loses only one of them)")
     a = ap.parse_args(argv)
-    res = run_benchmark(QUICK if a.quick else SLICE, a.workers)
     a.out.parent.mkdir(parents=True, exist_ok=True)
-    a.out.write_text(json.dumps(res, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    save = lambda r: a.out.write_text(json.dumps(r, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    if a.phase == "busy":
+        res = run_busy(json.loads(a.out.read_text(encoding="utf-8")))
+    else:
+        res = run_alone(QUICK if a.quick else SLICE, a.workers)
+        save(res)
+        if a.phase == "alone":
+            print(f"phase A written to {a.out}: " + ", ".join(f"{x['scenario']} {x['size']} {x['wall']:.0f} s" for x in res["alone"]))
+            return 0
+        res = run_busy(res)
+    save(res)
     for k, v in res["kinds"].items():
         print(f"{k:10s} alone {v['alone_wall']:7.1f} s   every core busy {v['busy_wall_mean']:7.1f} s   efficiency {v['efficiency']:.2f}"
               f"   peak memory {v['peak_rss_mb']:.0f} MB")

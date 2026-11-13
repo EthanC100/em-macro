@@ -766,7 +766,30 @@ unchanged.
 **6. Time and cost of the full run (`results/manhattan_sim/v2/COMPUTE_OPTIONS.md`;
 `python -m manhattan.sim.benchmark`).**
 
-The benchmark was killed by a restart of the session's machine and is being run again; its numbers follow in the next commit.
+- *Measured* (one replication of each kind of run: D02 STD, D08 STD, D02 LONG, D11 STD, D05h STD, D08 HB; each
+  alone on the idle machine, then four of each with four workers; Xeon at 2.1 GHz, 4 cores; timing only, no
+  record written): 50, 103, 69, 380, 225 and 169 seconds alone; **parallel efficiency 0.92** with four workers
+  (the same replication alone against busy; 0.88 to 0.97 by kind); 1.19 CPU-hours for the 24 busy replications;
+  **peak memory 0.3 to 0.4 GB a worker, and 1.8 GB for D08 at HB**. Seven workers that are all on an HB scenario
+  need 12.5 GB: on a 16 GB machine run the HB scenarios with four or five.
+- *The whole development programme*: 1,266 hours of one idle core of that machine, 1,252 still to run (version
+  1's STD runs 681, LONG 75, D11 207, the twins 233, the HB scenarios 55). Session 5M's 1,500 to 1,750 came from
+  pilot timings on a busy machine. *One confirmation run*, extrapolated from the development runs of the same
+  size because its worlds are not coded: about 877 more.
+- *Three ways to run it* (estimates only; nothing bought, no workflow added or started):
+
+| | development programme (32 runs, 41,600 replications; the pilot replications on file count) | with one confirmation run (extrapolated: its worlds are not coded) |
+|---|---|---|
+| hours of one idle core of the session's machine | **1,252** | **2,129** |
+| (a) the iMac, seven workers: cores like the session's / a recent Intel desktop (1.5 times as fast) / Apple silicon | 8.1 / 5.4 / 3.8 days | 13.8 / 9.2 / 6.5 days |
+| (b) GitHub's runners, 4 cores each, assumed as fast as the session's: runner-hours; jobs of 5 hours; wall-clock with 20 jobs at once; cost | 341; 69; 17 hours; US$0 | 580; 116; 29 hours; US$0 |
+| (c) rented whole cores (AWS c7a, assumed as fast as the session's): on demand / on spot; wall-clock on one 64-core machine | US$64 / US$20; 20 hours | US$109 / US$34; 33 hours |
+
+  The iMac's and the runners' speeds are assumptions; `python -m manhattan.sim.benchmark --quick --out bench.json`
+  on the machine itself (five minutes) replaces them. GitHub's figures are from its documentation on 2026-11-13
+  (standard runners free and unlimited for a public repository, 4 cores and 16 GB, 6 hours a job, 20 jobs at
+  once on the Free plan); the cloud prices are from a price aggregator the same day. A workflow for (b) is
+  Ethan's to add and to start (hard rules 3 and 16).
 
 **Implemented by this session** (new files only; no file of the pipeline, of version 1 or of the first session
 is edited, and no code hash moves):
@@ -790,8 +813,10 @@ is edited, and no code hash moves):
    D10, from a clean checkout of `1c1f648` on the other branch): first by a restart of the session's machine,
    then for good when the overlap was found. Its records are not on `build/manhattan` and are counted in no
    report; they retired 2 of 143 families with an edge in D02 and none of 190 in D10.
-4. **The machine restarted once** (00:22 UTC), killing that pilot and the yearly runs then in progress; the
-   files were intact, nothing was lost, and the runs were restarted.
+4. **The session's machine restarted twice.** At 00:22 UTC, killing that pilot and yearly runs then in progress,
+   and between about 02:21 and 03:57 UTC, killing the first benchmark part-way. Files were intact both times and
+   nothing was lost; the benchmark was run again in two phases that each save their result
+   (`--phase alone`, `--phase busy`).
 5. **Test failures on the way, none pushed to `build/manhattan`.** First runs of this session's new test
    files: one test used an unhashable object as a dictionary key (the test's mistake); one hand count in a test
    was wrong (the code was right: 4 and 6, not 5 and 7); one comparison needed a tolerance of one unit in the
@@ -926,6 +951,11 @@ checked against its frozen source.
 | session 6M, first run of `tests/test_manhattan_dormancy.py` | 1 of 10 failed, by design: the test that reads §9.1 was written before the text was changed. 10 passed after it |
 | session 6M, first full suite after the code change (uncommitted report and documents on top of `9b1f068`) | **1 failed**, 1345 passed, 132 skipped, exit code 1: `test_the_runner_keeps_v2_records_apart_and_logs_the_hashes` (this session's own assertion on the report's summary; "Milestone C: state (session 6M)", failed or not met, 4). Not pushed; fixed, and the file then passed (16 passed) |
 | session 6M, full suite on the tree that was pushed (the rerun, the reports and the documents on top of `9b1f068`) | run after this file was last edited, so that the tree tested is the tree pushed; its numbers and exit code are in the commit message and in the pull request's description |
+| second session of 2026-11-13 ("6M Manhattan C: dormancy fix and statistical checks"), `build/manhattan` with main merged in, before any change | **1335 passed, 132 skipped, exit code 0** (12 minutes) |
+| the same session, first runs of its new test files | five failures, each in a new test or in the new report code, none pushed: an unhashable object used as a dictionary key; a wrong hand count (4 and 6, not 5 and 7); a floating-point comparison one unit in the last place off; rows with no data listed by the interval report; a bound tighter than 300 simulated paths support. "Milestone C: statistical checks", failed or not met, 5 |
+| the same session, full suite on its alternative revision of §9.1 (branch `claude/epic-mayer-kfhpsh`, commit `1124fe7`; not on `build/manhattan`) | **1356 passed, 132 skipped, exit code 0** (15 minutes, while a pilot ran) |
+| the same session, full suite on its first push to `build/manhattan` (`50b0198`: the statistical checks beside the first session's revision) | **1357 passed, 132 skipped, exit code 0** (14 minutes) |
+| the same session, full suite on the tree of its last push (the benchmark, the compute options and these documents on top of `50b0198`) | run after this file was last edited, so that the tree tested is the tree pushed; its numbers and exit code are in the commit message and in the pull request's description |
 
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.

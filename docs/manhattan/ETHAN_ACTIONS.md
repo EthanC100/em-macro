@@ -352,7 +352,15 @@ next session then codes the held-out worlds (H01 to H12) and prepares confirmati
 `results/manhattan_sim/v2/COMPUTE_OPTIONS.md`: a benchmark on the session's machine and estimates from it; nothing
 was bought and no workflow was added or started):
 
-(The table of hours, days and cost follows in the next commit, with the benchmark it is computed from.)
+| | development programme (32 runs, 41,600 replications; the pilot replications on file count) | with one confirmation run (extrapolated: its worlds are not coded) |
+|---|---|---|
+| hours of one idle core of the session's machine | **1,252** | **2,129** |
+| (a) the iMac, seven workers: cores like the session's / a recent Intel desktop (1.5 times as fast) / Apple silicon | 8.1 / 5.4 / 3.8 days | 13.8 / 9.2 / 6.5 days |
+| (b) GitHub's runners, 4 cores each, assumed as fast as the session's: runner-hours; jobs of 5 hours; wall-clock with 20 jobs at once; cost | 341; 69; 17 hours; US$0 | 580; 116; 29 hours; US$0 |
+| (c) rented whole cores (AWS c7a, assumed as fast as the session's): on demand / on spot; wall-clock on one 64-core machine | US$64 / US$20; 20 hours | US$109 / US$34; 33 hours |
+
+Measured on the session's machine (4 cores): 50 to 380 seconds a replication alone, parallel efficiency 0.92 with four workers, peak memory 0.3 to 0.4 GB a worker for the SPA runs and **1.8 GB a worker for the dearest HB scenario** (so seven workers on HB scenarios need 12.5 GB: on a 16 GB machine run those with four or five). Session 5M's estimate above (1,500 to 1,750 CPU-hours) was made from pilot
+timings on a busy machine; on an idle core the same programme is about 1,250.
 
 - **(a) the iMac**: as above. Which iMac it is is not recorded in the repository, so the file gives three cases
   and one command that settles it in five minutes on the machine itself:

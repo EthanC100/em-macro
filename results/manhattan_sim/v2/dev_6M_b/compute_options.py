@@ -10,7 +10,7 @@ from manhattan.sim import criteria_v2, run, seeds
 bench = json.load(open(sys.argv[1]))
 out_path = sys.argv[2]
 K = bench["kinds"]
-EFF = bench["efficiency"]
+EFF = bench["efficiency_same_replication"]
 W = bench["workers"]
 
 # ---- seconds per replication on file (pilots, measured under load), and their ratio to an idle core here
@@ -60,15 +60,20 @@ L = ["# Running the full pre-registered simulation: time and cost on three kinds
      f"cores, {bench['machine']['platform']}, Python {bench['machine']['python']}. One replication of each kind of run, first alone on an "
      f"otherwise idle machine, then with {W} workers at once, every core busy. numpy runs on one thread in every worker, as in "
      "`scripts/manhattan_sim_run.sh`. Timing only: no record was written.", "",
-     f"| run | code | alone: seconds of wall-clock | alone: seconds of CPU | every core busy: seconds (mean of {W}) | parallel efficiency | peak memory of a worker (MB) |",
-     "|---|---|---|---|---|---|---|"]
+     f"| run | code | alone: seconds of wall-clock | alone: seconds of CPU | the same replication with every core busy: seconds | parallel efficiency | mean of the {W} replications run busy: seconds | peak memory of a worker (MB) |",
+     "|---|---|---|---|---|---|---|---|"]
 for k, b in K.items():
-    L.append(f"| {k} | {b['version']} | {b['alone_wall']:.0f} | {b['alone_cpu']:.0f} | {b['busy_wall_mean']:.0f} | {b['efficiency']:.2f} | {b['peak_rss_mb']:.0f} |")
-L += ["", f"- **Parallel efficiency: {EFF:.2f}** with {W} workers on {W} cores (time alone divided by time with every core busy, summed over the slice; "
-      f"{bench['efficiency_same_replication']:.2f} comparing the very same replication). The workers used {bench['busy_cpu_share_of_cores']:.0%} of the cores' time.",
+    L.append(f"| {k} | {b['version']} | {b['alone_wall']:.0f} | {b['alone_cpu']:.0f} | {b['busy_wall_same_replication']:.0f} | {b['efficiency_same_replication']:.2f} | {b['busy_wall_mean']:.0f} | {b['peak_rss_mb']:.0f} |")
+L += ["", f"- **Parallel efficiency: {EFF:.2f}** with {W} workers on {W} cores: the time of a replication alone divided by the time of the very same "
+      f"replication when every core is busy, summed over the slice. (Against the mean of the {W} replications of each kind it is {bench['efficiency']:.2f}; "
+      "replications of one scenario differ in length, the twins' most of all, so the first is the cleaner number.) The busy phase "
+      f"ends with a tail in which fewer than {W} jobs are left, which flatters the machine a little: its workers used {bench['busy_cpu_share_of_cores']:.0%} of the cores' time.",
       f"- **CPU time of the busy phase: {bench['busy_cpu_hours']:.2f} CPU-hours** for {len(bench['busy'])} replications in {bench['busy_wall_total'] / 60:.0f} minutes of wall-clock.",
-      f"- **Peak memory: {bench['peak_rss_mb_per_worker']:.0f} MB for the largest worker**, so about {bench['peak_rss_mb_all_workers'] / 1024:.1f} GB for {W} workers and "
-      f"{7 * bench['peak_rss_mb_per_worker'] / 1024:.1f} GB for seven. Memory is not a constraint on any of the three options.", "",
+      f"- **Peak memory: about {min(v['peak_rss_mb'] for v in K.values()) / 1024:.1f} to {sorted(v['peak_rss_mb'] for v in K.values())[-2] / 1024:.1f} GB a worker for version 1's runs, D11 and the twins, and "
+      f"{bench['peak_rss_mb_per_worker'] / 1024:.1f} GB a worker for the dearest HB scenario (D08).** So {W} workers need at most "
+      f"{bench['peak_rss_mb_all_workers'] / 1024:.1f} GB and seven at most {7 * bench['peak_rss_mb_per_worker'] / 1024:.1f} GB, and that only while "
+      "all of them are on an HB scenario. On a machine with 16 GB that leaves little room: run the HB scenarios with four or five "
+      "workers there (`WORKERS=4 SIZES=HB scripts/manhattan_sim_run.sh`, after `SIZES=STD,LONG` with seven). A GitHub runner has 16 GB for 4 workers.", "",
       "## 2. The whole development programme, in hours of one idle core of this machine", "",
       "Replications times seconds per replication. For a run in the slice the seconds are the benchmark's; for the others, "
       "the seconds on file from the pilots (measured while every core was busy) times the ratio the benchmark found for "
@@ -144,8 +149,9 @@ L += ["", "A machine with whole cores should lose little to parallelism (each wo
       "**Spending is Ethan's alone (ETHAN_ACTIONS item 8). Nothing here was bought.**", "",
       "## 4. What the numbers say", "",
       f"- The development programme is about {tot_left:,.0f} hours of one core like this session's; a confirmation run about {held_tot:,.0f} more.",
-      "- On the iMac that is one to two weeks of a machine doing nothing else. On GitHub's free runners it is a day or two "
-      "of wall-clock and a workflow to write. On rented cores it is tens of dollars and a day.",
+      "- On the iMac that is four to eight days of a machine doing nothing else for the development programme, and one "
+      "to two weeks with a confirmation run, depending on which iMac it is. On GitHub's free runners it is under a day "
+      "of wall-clock for the development programme and a workflow to write. On rented cores it is tens of dollars and a day.",
       "- The model-fitting half (HB) is small on every option. The bulk is version 1's STD runs and the hedge-aware "
       "bootstrap (D11 and the twins).", ""]
 open(out_path, "w", encoding="utf-8").write("\n".join(L))
