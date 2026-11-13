@@ -1,41 +1,57 @@
 # Manhattan simulation: how to run it
 
-For the full pre-registered run of [SIM_PREREG.md](SIM_PREREG.md) on the iMac (or any machine with Python 3.11+).
+For the full pre-registered run of the **development scenarios** on the iMac (or any machine with Python 3.11+).
 Everything is synthetic: no licensed data, no market data, no secret, no network after the install.
-State of the work and what the pilot showed: [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md), "Milestone C: state".
+State of the work and what the pilots showed: [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md), "Milestone C: state".
+
+Two pre-registrations are in play. [SIM_PREREG.md](SIM_PREREG.md) (version 1) is frozen and governs everything it
+always did, except the two parts the pilot showed must be repaired first. [SIM_PREREG_v2.md](SIM_PREREG_v2.md)
+(version 2) governs those two parts, tested with [PROTOCOL_v3.1.md](PROTOCOL_v3.1.md): the SPA test where the
+core hedge is estimated, and the hierarchical model. **Version 2 and Protocol v3.1 are drafts until Ethan adopts
+them** ([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 19). The script runs both by default.
 
 ## 1. What is ready to run, and what is not
 
-| part | ready? | size of the job |
-|---|---|---|
-| Development scenarios at **STD and LONG** (18 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | **yes** | about 60-150 seconds per replication on one idle core; about **1,000 CPU-hours** in all (about 5 days on 8 cores). The pilot report gives the seconds measured on a busy machine, which are higher |
-| Development scenarios at **HB** (5 runs × 400 replications): the hierarchical model, tiers, dormancy | code runs; **cost is out of reach as specified**, see section 6 | well over 10 CPU-hours per replication |
-| Held-out scenarios (H01-H11) and the confirmation run | **no**: their worlds are not coded, and they may run only from a tagged commit after the development criteria are met | - |
+| part | pre-registration | ready? | size of the job |
+|---|---|---|---|
+| Development scenarios at **STD and LONG**, except D11 (17 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | version 1, by its unchanged code; the 192 pilot replications on file count | **yes** | 60 to 150 seconds per replication on one idle core (the pilot's 67 to 355 were measured on a busy machine); about **950 to 1,190 CPU-hours** |
+| **D11** (1 run × 2,000): the same pipeline with the hedge re-estimated in every bootstrap resample | version 2 | **yes**, after item 19 | about 370 seconds per replication (the pipeline plus three SPA tests on the same resamples); about **200 CPU-hours** |
+| **Hedged twins** D01h to D08h (9 runs × 400): the SPA test only | version 2 | **yes**, after item 19 | 210 to 600 seconds per replication (measured: 290, 260, 304, 207, 291, 251, 305, 246 and 599); about **300 CPU-hours** |
+| Development scenarios at **HB** (5 runs × 400): the analytic hierarchical model, tiers, dormancy | version 2 | **yes**, after item 19 | 70 to 150 seconds per replication, 16 seconds for the six fits of a review; about **50 CPU-hours** |
+| Held-out scenarios (H01 to H12) and the confirmation run | both | **no**: their worlds are not coded, and they may run only from a tagged commit after the development criteria are met | - |
+
+In all: about **1,500 to 1,750 CPU-hours**: roughly **9 to 10.5 days on 8 cores** with seven workers (the script's default leaves one core free). The measured figures are from pilots on a 4-core machine with four workers, and version 1's share is the uncertain one: its pilot ran on a busier machine. Before Protocol v3.1 the STD and LONG half alone was about 5 days and the HB half could not be run at all.
 
 ## 2. Set up once
 
 ```bash
 git clone https://github.com/EthanC100/em-macro && cd em-macro
-git checkout main                              # or the branch that holds manhattan/sim
+git checkout main                              # after the pull request with Protocol v3.1 is merged
 python3 -m venv ~/.venvs/manhattan && . ~/.venvs/manhattan/bin/activate
-pip install -r requirements.txt                # STD and LONG need nothing else
-pip install -r requirements-manhattan.txt      # only for HB (the sampler)
-python -m manhattan.prereg verify              # must print: pre-registrations ok
-python -m pytest -q tests/test_manhattan_stats.py tests/test_manhattan_sim_world.py tests/test_manhattan_sim_pipeline.py
+pip install -r requirements.txt                # all the simulation needs: numpy, scipy
+python -m manhattan.prereg_v2 verify           # must print: pre-registrations ok (v1 and v2)
+python -m pytest -q tests/test_manhattan_stats.py tests/test_manhattan_spa_hedged.py \
+    tests/test_manhattan_hier_analytic.py tests/test_manhattan_sim_pipeline.py tests/test_manhattan_v2.py
 ```
+
+`requirements-manhattan.txt` (the sampler) is **not** needed any more: the model is fitted in closed form.
 
 ## 3. Run
 
 ```bash
-MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh         # STD and LONG, all cores but one
+MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh         # everything, all cores but one
 ```
 
 - **It can be stopped at any time** (Ctrl-C, sleep, power cut) and started again with the same command. Every
-  finished replication is already in `results/manhattan_sim/reps/`; a restart runs only what is missing. A
-  replication count is never lowered and a run is never cut (SIM_PREREG §6).
+  finished replication is already on disk (`results/manhattan_sim/reps/` for version 1's runs,
+  `results/manhattan_sim/v2/reps/` for version 2's); a restart runs only what is missing. A replication count is
+  never lowered and a run is never cut (SIM_PREREG §6).
 - One instance at a time: a second start exits with code 75 while the first is alive.
 - On macOS it runs under `caffeinate -i`, so the Mac does not sleep while it works.
-- Options, as environment variables: `WORKERS=6`, `SIZES=STD` (or `LONG`, `HB`), `OUT=/some/dir`.
+- Options, as environment variables: `WORKERS=6`; `SIZES=STD,LONG` (leave the HB scenarios out), `SIZES=HB`;
+  `OUT=/some/dir`; `PREREG=v1` (version 1 alone, as before this revision: D11 with the 3.0 test, no twins, and an
+  HB half that needs the sampler and cannot be afforded).
+- Order: the STD runs (D11 among them), the LONG runs, the twins, then the HB runs.
 - To let it restart by itself after a crash or a reboot, install the launchd job:
   `scripts/com.horizons.manhattan.sim.plist.template` (instructions inside). It stops being restarted once the run
   has finished.
@@ -43,46 +59,56 @@ MANHATTAN_VENV=~/.venvs/manhattan scripts/manhattan_sim_run.sh         # STD and
 ## 4. Watch
 
 ```bash
-python -m manhattan.sim.run --status           # table of replications on file; exit code 1 if the heartbeat is stale
+python -m manhattan.sim.run --status --prereg v2    # replications on file per run, and which code runs it; exit 1 if the heartbeat is stale
 tail -f results/manhattan_sim/logs/run_*.log
 ```
 
 The heartbeat (`results/manhattan_sim/heartbeat.json`) is rewritten after every replication. `--status` calls it
 stale after 90 minutes without one (`--stale-minutes` changes that). A cron line such as
-`*/30 * * * * cd ~/em-macro && python -m manhattan.sim.run --status || osascript -e 'display notification "Manhattan simulation is silent"'`
+`*/30 * * * * cd ~/em-macro && python -m manhattan.sim.run --status --prereg v2 || osascript -e 'display notification "Manhattan simulation is silent"'`
 is a sufficient watchdog for this job; the full runner package with a remote watchdog is milestone H.
 
 ## 5. When it finishes
 
-The script then checks criterion V10(a), gzips the completed replication files and writes
-`results/manhattan_sim/REPORT.md` and `summary.json`: every metric with its interval, its threshold and pass or
-fail.
+The script then checks criterion V10(a), gzips the completed replication files and writes two reports, each with
+every metric, its interval, its threshold and pass or fail:
 
-1. Read the report. A **FAIL** on a required criterion means the method is revised (a new protocol version) and
-   tested again; a threshold is never changed to make it pass (SIM_PREREG §8.1).
-2. Commit `results/manhattan_sim/` on a branch and open a pull request (synthetic numbers; safe in a public
+- `results/manhattan_sim/REPORT.md`: version 1's runs (everything at STD and LONG except D11);
+- `results/manhattan_sim/v2/REPORT.md`: D11, the twins and the HB scenarios under version 2.
+
+1. Read both. A **FAIL** on a required criterion means the method is revised (a new protocol version) and tested
+   again; a threshold is never changed to make it pass (SIM_PREREG §8.1).
+2. **Twins.** A twin's row "95% half-width of the hedge-aware size" must read "met". If one reads "not met:
+   continue the run", run the script again with `REPS_TWIN=800` (then 1,200, and so on): it continues, it does not
+   restart (SIM_PREREG_v2 §6).
+3. Commit `results/manhattan_sim/` on a branch and open a pull request (synthetic numbers; safe in a public
    repository). Never push to main.
-3. Tell the next Manhattan session. It writes the held-out worlds and prepares confirmation run 1; you tag the
+4. Tell the next Manhattan session. It writes the held-out worlds and prepares confirmation run 1; you tag the
    commit `manhattan-sim-confirm-1`. Until that tag exists the runner refuses every held-out scenario and logs the
    refusal.
 
-## 6. The HB runs: read before starting
+## 6. The model-fitting (HB) runs
 
-One fit of the hierarchical model at HB size (240 families) takes many minutes of one core, a review needs
-six fits, and a replication has four reviews. A pilot replication with the sampler at a fifth of the default
-budget was stopped unfinished after 2.5 CPU-hours, so at the pre-registered 400 replications per scenario the HB
-runs cost of the order of 50,000 CPU-hours or more. The measured numbers and the options are in
-[ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 15. Until that is decided, run `SIZES=STD,LONG` only. To see the HB
-pipeline work on a small budget (a pilot that decides nothing):
+Under version 2 they are ordinary runs: a replication is one simulated programme of 240 families, evaluated at
+years 2, 4, 7 and 10 with six closed-form fits each time. On the pilot a replication took 68 to 149 seconds, the model's part of it 46 to 105; the first review of a programme (50 families) is the slowest, about 25 seconds for its six fits, because the grid is widest where there are fewest families to narrow it.
+
+The sampled model of Protocol 3.0 (`manhattan/stats/hier.py`, `manhattan/sim/hb.py`) is still in the repository
+and is **not** part of this run. It cost well over 10 CPU-hours a replication (of the order of 50,000 CPU-hours
+for the pre-registered runs), which is why Protocol v3.1 replaced it. It can be tried on one replication as a
+check that decides nothing:
 
 ```bash
-MANHATTAN_SIM_SAMPLER=100,100 SIZES=HB REPS_HB=1 LABEL=pilot scripts/manhattan_sim_run.sh     # still hours
+pip install -r requirements-manhattan.txt
+MANHATTAN_SIM_SAMPLER=100,100 PREREG=v1 SIZES=HB REPS_HB=1 LABEL=pilot scripts/manhattan_sim_run.sh     # hours
 ```
 
 ## 7. What every run records
 
 `results/manhattan_sim/runs.jsonl` gets a start record and an end record for every call, with the commit, the
-protocol hash, the pre-registration hash, the scenario, the size, the replications, the seeds and the status. A
-start with no end is a run that died. Each replication record carries the hash of the simulation code that made
-it; replications made by different code are never pooled, so after any change to `manhattan/stats/` or
-`manhattan/sim/world.py`, `pipeline.py` or `seeds.py` the counts in `--status` start again from zero.
+protocol hash, the pre-registration hash, the scenario, the size, the replications, the seeds and the status; a
+run of a part version 2 changed also names version 2's hash and Protocol v3.1's. A start with no end is a run
+that died. Each replication record carries the hash of the simulation code that made it; replications made by
+different code are never pooled. Version 1's code files (`manhattan/stats/` as it was, `manhattan/sim/world.py`,
+`pipeline.py`, `seeds.py`) are untouched by version 2, so version 1's records keep counting; a change to any of
+them, or to version 2's files (`spa_hedged.py`, `pipeline_v2.py`, `hier_analytic.py`, `hb_v2.py`), starts the
+counts of the runs that use it again from zero.

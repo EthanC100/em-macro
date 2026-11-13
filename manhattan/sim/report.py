@@ -89,10 +89,16 @@ def table(rows: list[metrics.Row]) -> str:
     return "\n".join(out)
 
 
-def collect(out: Path = run.OUT) -> dict:
+def plan(prereg_version: str = "v1") -> list[tuple[str, str]]:
+    """The runs this report covers: every development run of version 1; with ``"v2"``, only those version 2
+    leaves to version 1's code (D11, its twins and the HB scenarios are in ``manhattan.sim.report_v2``)."""
+    return [(s, z) for s, z in run.development_plan() if run.route(s, z, prereg_version) == "v1"]
+
+
+def collect(out: Path = run.OUT, prereg_version: str = "v1") -> dict:
     """{(scenario, size): [replication records]} for every development run on file, most common code only."""
     found = {}
-    for scenario, size in run.development_plan():
+    for scenario, size in plan(prereg_version):
         reps = run.load_reps(scenario, size, seeds.DEVELOPMENT, out)
         if not reps:
             continue
@@ -103,13 +109,14 @@ def collect(out: Path = run.OUT) -> dict:
     return found
 
 
-def build(out: Path = run.OUT) -> tuple[str, dict]:
-    found = collect(out)
+def build(out: Path = run.OUT, prereg_version: str = "v1") -> tuple[str, dict]:
+    found = collect(out, prereg_version)
+    todo = plan(prereg_version)
     log = runlog.read(out / "runs.jsonl")
     sha = seeds.prereg_hash()
     summary = {"prereg_sha256": sha, "protocol_sha256": runlog.protocol_hash(), "runs": {}}
     pilot = any(len(v["reps"]) < cr.REPLICATIONS[size] for (_, size), v in found.items()) or \
-        len(found) < len(run.development_plan())
+        len(found) < len(todo)
     L = []
     L.append("# Manhattan simulation: " + ("PILOT report (nothing here is decided)" if pilot else "development report"))
     L.append("")
@@ -120,6 +127,10 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
     L.append(f"- Method under test: `docs/manhattan/PROTOCOL_v3.md` 3.0.0, SHA-256 `{summary['protocol_sha256']}` "
              "(the pre-rename hash named in SIM_PREREG.md is the same text before the project was renamed).")
     L.append(f"- Development scenarios only (seed branch 0). Held-out scenarios run: **none**.")
+    if prereg_version == "v2":
+        L.append("- **D11 and every HB scenario are not in this report.** Under `docs/manhattan/SIM_PREREG_v2.md` they "
+                 "are run with Protocol v3.1's methods and reported, with the hedged twins, in "
+                 "`results/manhattan_sim/v2/REPORT.md`. Version 1's pilot of D11 stays on file.")
     if pilot:
         L.append("- **This is a pilot.** Replication counts are below those pre-registered, so every verdict below "
                  "reads \"pilot: not decided\". \"within\" or \"outside\" only says where the interval sits so far. "
@@ -129,7 +140,7 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
     L.append("")
     L.append("| scenario | size | replications run | pre-registered | shortfall | code | seconds per replication |")
     L.append("|---|---|---|---|---|---|---|")
-    for scenario, size in run.development_plan():
+    for scenario, size in todo:
         need = cr.REPLICATIONS[size]
         v = found.get((scenario, size))
         if v is None:
@@ -141,7 +152,7 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
     L.append("")
     total = sum(max(0, cr.REPLICATIONS[size] - len(found.get((s, size), {"reps": []})["reps"]))
                 * (sum(r["seconds"] for r in found[(s, size)]["reps"]) / len(found[(s, size)]["reps"]) if (s, size) in found else 0)
-                for s, size in run.development_plan())
+                for s, size in todo)
     L.append(f"Remaining cost of the development runs that have a timing above: about **{total / 3600:.0f} CPU-hours** "
              "(one core; divide by the number of cores). Held-out scenarios are extra. Seconds are wall-clock per "
              "replication inside a worker and are inflated whenever more jobs than cores run at once; on an idle core "
@@ -225,8 +236,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m manhattan.sim.report")
     ap.add_argument("--out", type=Path, default=run.OUT)
     ap.add_argument("--name", default="REPORT.md")
+    ap.add_argument("--prereg", choices=list(run.PREREGS), default="v1",
+                    help="v2: leave out the runs SIM_PREREG_v2 moved to Protocol v3.1's code (they are in report_v2)")
     a = ap.parse_args(argv)
-    text, summary = build(a.out)
+    text, summary = build(a.out, a.prereg)
     (a.out / a.name).write_text(text, encoding="utf-8")
     (a.out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=float) + "\n", encoding="utf-8")
     print(f"wrote {a.out / a.name}")
