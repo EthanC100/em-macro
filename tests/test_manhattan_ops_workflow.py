@@ -24,6 +24,7 @@ def test_main_only_concurrency_and_permissions():
     assert doc["concurrency"] == {"group": "manhattan-ops-ledger", "cancel-in-progress": False}
     for job in doc["jobs"].values():
         assert "github.ref == 'refs/heads/main'" in job["if"]
+        assert job["environment"] == "manhattan-ledger"          # secrets live in a main-only environment
         assert job["defaults"]["run"]["shell"] == "bash"
 
 

@@ -1,5 +1,6 @@
 """Prepare a manifest pull request (criterion O-33). It writes files; it commits nothing and pushes nothing.
 
+    python -m manhattan.ops.freeze_pr --reply reply.json --number 1 --out data/manhattan/batches ... --critic-input-only
     python -m manhattan.ops.freeze_pr --reply reply.json --number 1 --out data/manhattan/batches \\
         --code-version <commit> --protocol docs/manhattan/PROTOCOL_v3.1.md --generator-model <id> \\
         --critic-reviews reviews.json
@@ -25,6 +26,7 @@ import json
 import sys
 from pathlib import Path
 
+from manhattan import critic as C
 from manhattan import freeze as F
 from manhattan import spec as S
 from manhattan.generate import parse_reply
@@ -110,8 +112,17 @@ def main(argv=None) -> int:
     ap.add_argument("--generator-model", required=True)
     ap.add_argument("--critic-reviews", help="JSON list of the critic model's reviews")
     ap.add_argument("--fence", default="{}")
+    ap.add_argument("--critic-input-only", action="store_true",
+                    help="step 1: write AB-NNNN/critic_input.json for the critic agent and stop")
     a = ap.parse_args(argv)
     fams, hyps = parse_reply(Path(a.reply).read_text(encoding="utf-8"), "blind")
+    if a.critic_input_only:
+        d = Path(a.out) / f"AB-{a.number:04d}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "critic_input.json").write_text(C.review_input(fams, hyps), encoding="utf-8")
+        mech = critic_rules.review(fams, hyps)
+        print(json.dumps([{"target_id": r["target_id"], "blocks": r["blocks"]} for r in mech if r["block"]], indent=1))
+        return 1 if any(r["block"] for r in mech) else 0
     reviews = json.loads(Path(a.critic_reviews).read_text()) if a.critic_reviews else None
     _, template_hash = mockgen.template_text()
     try:
