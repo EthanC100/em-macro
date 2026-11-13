@@ -17,7 +17,8 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>MANHATTAN_VENV</key><string>VENV</string>
-    <key>SIZES</key><string>STD,LONG</string>
+    <key>SIZES</key><string>STD,LONG,HB</string>
+    <key>PREREG</key><string>v2</string>
   </dict>
   <key>WorkingDirectory</key><string>REPO</string>
   <key>RunAtLoad</key><true/>
