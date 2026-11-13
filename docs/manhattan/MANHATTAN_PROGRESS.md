@@ -902,6 +902,43 @@ is in the table under item 6.
   records of another step refused; the amendment's text against the code. The tiny world's grid was coarsened
   further so that the tests that run a whole HB replication stay at a few minutes.
 
+**Item 3. D08 and a two-group ("spike and slab") prior: the share is not identified; not adopted
+(`results/manhattan_sim/v2/D08_SPIKE_SLAB.md`).**
+
+- *The candidate* (`manhattan/stats/hier_spike.py`, a development file in no code list): slab = the model as it
+  is; spike = the slab at retention 0 with the existing 0.02 innovation; edge share uniform on ten grid nodes.
+  **With the share fixed at 1 it reproduces `hier_analytic`** for all six models (log evidence to 1e-9; every
+  family's `Π`, mean and standard deviation to 1e-10; `tests/test_manhattan_hier_spike.py`, 5 tests).
+- *Identification, checked first, against a criterion written into the script before its first run*: in D08 at
+  years 4 and 10 on the pilot's 12 replications, the share's posterior standard deviation at most half the
+  prior's (0.144) and its posterior mean within 0.10 of the true share, on average.
+
+| D08, central model | families | true share with an edge | posterior mean of the share (range over replications) | posterior sd | mean absolute error | verdict |
+|---|---|---|---|---|---|---|
+| year 4 | 100 | 0.316 | **0.777** (0.499 to 0.885) | 0.163 | 0.461 | not identified (both conditions fail) |
+| year 10 | 240 | 0.328 | **0.896** (0.839 to 0.936) | 0.068 | 0.569 | not identified (narrow, and in the wrong place) |
+
+- *It is the earlier attempt's result again* (0.9 against 0.35), now with its cause. A family with no edge in
+  D08 has no apparent edge on the reserve window either: the best-of-20 selection is on the exploration window
+  (where such a family averages 0.7) and its reserve estimate averages about zero (−0.04 to −0.15 on three
+  replications, with the spread sampling error gives). `θ = ρ a` with `a` near zero already describes it, so the
+  spike has nothing to explain: the model gives a family with no edge a probability of 0.88 of being in the
+  slab, against 0.94 for a family with one, and learns the same retention (0.65 to 0.91) with one group or two.
+  **D08's two groups are in the apparent edge `a_f`, not in the retention.**
+- *On data drawn from the candidate itself* (share 0.35; spike families with a high apparent edge and nothing
+  forward) 240 families with up to ten forward years recover the share (0.375, sd 0.083) and the 96 families of
+  year 4 do not (0.546, sd 0.207). So the algebra is right, and even where the candidate is true V6's first
+  decision date comes too early for it.
+- *Calibration, for the record* (the pipeline's estimator; the one-group fit reproduces the pilot of record's
+  bin counts exactly): year 10, 0.101 (0.034 to 0.136) with one group and 0.096 (0.037 to 0.128) with two; year
+  4, 0.034 and 0.007.
+- *Stopped there, as the brief said.* The other four HB scenarios were not run with the candidate, it has no
+  posterior draws for the forecast, and no pipeline imports it. **D08 stays a documented limitation** (Protocol
+  3.1 §7.2(d), which now records the attempt). A repair would be two groups in the prior of `a_f`: another
+  model, not built (ETHAN_ACTIONS item 21(b)).
+- Development experiment outside the runner: note `note-10M-01` in the run log; script and outputs in
+  `results/manhattan_sim/v2/dev_10M/`.
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -1039,6 +1076,8 @@ checked against its frozen source.
 | session 10M, item 1, full suite on a clean checkout of its commit (`380a516`), before the push | **1489 passed, 132 skipped, exit code 0** (16 minutes) |
 | session 10M, item 2, first run of `tests/test_manhattan_v2.py` after the change | 17 passed (4 minutes) |
 
+| session 10M, item 3, first runs of `tests/test_manhattan_hier_spike.py` | 1 of 5 failed once: the test compared a sum of weights with exactly 1.0 (it is 1 to rounding); the model's numbers were right. 5 passed after it |
+
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.
 
@@ -1095,6 +1134,8 @@ conservative default and are in ETHAN_ACTIONS.md.
 | 43 | A study of what a test's null means (single series, a grid of parameters written in the code, no programme, no pipeline, no pre-registered metric, its own random streams) is not a run of a held-out scenario, even where its processes resemble one; it changes no method and is not used to choose one. | `manhattan/sim/estimand_study.py` |
 | 44 | Timing is measured by a module that writes no replication record and no run-log record, so that nothing it computes can be pooled into a result. | `manhattan/sim/benchmark.py` |
 | 45 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 22):** the second condition of the dormancy rule is a one-sided test of the family's own forward record against an edge of 0.25, not the model's `Π^max`. The session took the code and its tests as they stood on the branch where they were written and did not bring that branch's shadow paths. | PROTOCOL 3.1 §9.1; `manhattan/stats/dormancy.py`; `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` |
+| 46 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 21(c)):** the HB runs are reviewed every quarter, as production reviews. Made as amendment 1 inside the unadopted SIM_PREREG_v2, with the review step written into every record and other steps refused. M7 and M9 keep their four reading dates; M12 is counted over every review. | SIM_PREREG_v2 §11; `manhattan/sim/hb_v2.py` |
+| 47 | A candidate model is checked for identification before it is wired into a pipeline, against a criterion written before the check is run; when the check fails the work stops there and the evidence is recorded. The candidate's code is kept, outside every code list, so the check can be repeated. | `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`; `manhattan/stats/hier_spike.py` |
 
 ## Findings to keep in view
 

@@ -1026,6 +1026,17 @@ every family as its "conflict" weight.
 > convention that a family with no edge has a mean of exactly zero. If the full run confirms the error, V6
 > fails in D08 and the posterior-based tiers stay off (SIM_PREREG_v2 §5) until a later version changes the
 > prior.
+>
+> **One two-group prior was tried before adoption and not adopted** (2026-11-13, at Ethan's request;
+> `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`). It added a second group at retention 0 (`θ_f = η_f` with the
+> existing 0.02 innovation) and a share of families in the first group, uniform on ten nodes: no new constant,
+> and with the share fixed at 1 it is this section's model number for number. **The share is not identified.**
+> On the pilot's 12 replications of D08 its posterior mean was 0.78 at year 4 and 0.90 at year 10, where 0.32
+> and 0.33 of the families had an edge, and the calibration error at year 10 was 0.096 (0.037 to 0.128) against
+> 0.101: unchanged where the limitation is. The reason is where D08's two groups are. A family with no edge has
+> no apparent edge on the reserve window either (the selection is made on the exploration window, and its
+> reserve estimate averages about zero), so `θ = ρ a` already describes it: the groups differ in `a_f`, not in
+> retention. A repair would have to put two groups in the prior of `a_f`; it was not built.
 
 **(e) Required sensitivity analysis.** Every review fits six models:
 

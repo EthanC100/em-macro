@@ -551,6 +551,16 @@ dozen families.
 
 ### (b) D08's calibration error
 
+**Status after session 10M (2026-11-13): the repair you asked to have tried was tried and is not adopted; the
+limitation stands.** A second group at retention 0 with the existing 0.02 innovation, its share uniform on ten
+nodes (`manhattan/stats/hier_spike.py`; with the share fixed at 1 it reproduces the model exactly). The share was
+checked first, against a criterion written before the run, and **is not identified**: its posterior mean was 0.78
+at year 4 and 0.90 at year 10 in D08, where 0.32 and 0.33 of the families have an edge; the calibration error at
+year 10 was 0.096 (0.037 to 0.128) against 0.101. The session stopped there, as told: no pipeline uses the
+candidate and no other scenario was run with it. Why it fails, and what a repair would have to be (two groups in
+the apparent edge, not in the retention), is in `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`. Options (i) to
+(iii) below are unchanged; (ii) now means that other prior.
+
 The central model's calibration error at year 10 in D08 is 0.101 (0.034 to 0.136) against a bound of 0.10. The
 cause is the shape of the prior: D08 has a third of its families with an edge and two thirds at exactly zero,
 and one hump cannot describe two groups (diagnosis part 2; stated in Protocol 3.1 §7.2(d)). The ends of the
