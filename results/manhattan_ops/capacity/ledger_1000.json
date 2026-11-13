@@ -1,0 +1,14 @@
+{
+ "n_records": 1000,
+ "mode": "ledger",
+ "write_seconds": 0.43,
+ "open_and_verify_seconds": 0.08,
+ "chain_bytes": 616716,
+ "cpu_seconds": 0.92,
+ "peak_rss_mib_largest_process": 45.8,
+ "machine": {
+  "cpus": 4,
+  "python": "3.13.18"
+ },
+ "note": "local bare repository; a real push adds network time"
+}

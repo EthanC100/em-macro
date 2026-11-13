@@ -1,0 +1,17 @@
+{
+ "n_executables": 1000,
+ "mode": "full",
+ "workers": 4,
+ "wall_seconds": 57.22,
+ "cpu_seconds": 202.82,
+ "parent_cpu_seconds": 0.04,
+ "peak_rss_mib_largest_process": 47.0,
+ "peak_rss_mib_parent": 33.9,
+ "check": 64000,
+ "machine": {
+  "cpus": 4,
+  "python": "3.13.18",
+  "platform": "Linux-6.18.44-fc-v445-x86_64-with-glibc2.39"
+ },
+ "data": "synthetic, 6 instruments, sessions 2005-01-03 to 2019-12-31"
+}
