@@ -43,7 +43,7 @@ can go. Item 8 has a date (about 5 May 2027).
 | 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched. **Revised before adoption** (the dormancy rule) and re-hashed | the full run of D11 and of the model-fitting half |
 | 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
 | 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | nothing changed: the tier's bar is 3.0's, the calibration error is a stated limitation, the HB runs have four review dates | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all; how well V7 speaks for quarterly reviews |
-| 22 | which second condition the dormancy rule has: the model's `Π^max` (in the draft) or the family's own forward record (measured beside it) | the draft's: `Π^max` | nothing; how dormancy behaves when reviews are frequent |
+| 22 | which second condition the dormancy rule has: the model's `Π^max` or the family's own forward record | **decided 2026-11-13: the family's own forward record** (option (iii)); in the draft since session 10M | - |
 | 23 | a tail-risk check before any profitability claim, and one wording fix for §6.7 | none: proposed, not adopted | nothing yet; what "formally supported" means for a strategy with rare large losses |
 
 ---
@@ -397,7 +397,7 @@ protected, so sessions wrote **new** files beside them and edited none of the pr
 
 | new file | what it is |
 |---|---|
-| `docs/manhattan/PROTOCOL_v3.1.md` | the whole protocol, version 3.1.0: 3.0.0 with **five** changes, listed at its top with the pilot result behind each and why none is tuning to held-out results. Four are session 5M's. The fifth, the dormancy rule of §9.1, was made by session 6M **before adoption**, after the draft's own pilot put premature elimination above its bound; it is marked as a pre-adoption change in the table at the top and in the change log (§10) |
+| `docs/manhattan/PROTOCOL_v3.1.md` | the whole protocol, version 3.1.0: 3.0.0 with the changes listed at its top, each with the pilot result behind it and why none is tuning to held-out results. Four are session 5M's. The fifth, the dormancy rule of §9.1, was made **before adoption**, after the draft's own pilot put premature elimination above its bound: first by session 6M (a second condition on the model's `Π^max`), then, on your decision of 2026-11-13 (item 22), by session 10M (a test of the family's own forward record in its place). It is marked as a pre-adoption change in the table at the top and in the change log (§10) |
 | `docs/manhattan/SIM_PREREG_v2.md` | how the changed methods are tested. Only the changed parts; version 1 stays in force for the rest. No threshold loosened, no replication count lowered. Session 6M added the description of the revised dormancy rule (its section 1 row 4 and section 2(f)) and touched no threshold, metric or scenario |
 | `docs/manhattan/sim_prereg_v2.sha256` | the SHA-256 of the two files above (two lines of `sha256sum` output), **re-recorded by session 6M** when it revised them. The old and the new hashes are in MANHATTAN_PROGRESS.md, "Milestone C: state (session 6M)" |
 | `manhattan/prereg_v2.py`, `tests/test_manhattan_prereg_v2.py` | the check of that record (`python -m manhattan.prereg_v2 verify`, which also runs version 1's check) and its test. Unchanged since session 5M |
@@ -432,11 +432,9 @@ already at their final paths and the hash record on the branch matches them as t
    - `results/manhattan_sim/v2/CLUSTERED_INTERVALS.md`, at least its first section: every pilot interval again
      with the small number of replications allowed for. An interval printed as "0.000 to 0.000" in the reports
      means "no event in 6 or 12 replications", which bounds very little.
-2. **Decide change 5** (the dormancy rule). It is the one change you have not seen before. If you accept it, do
-   nothing. If you want 3.0's rule back, or another level (the diagnosis lists what each costs), say so and a
-   session makes the change: the rule is also in code (`manhattan/stats/dormancy.py`), a test compares the code
-   with the text of §9.1, and the four scenarios must be rerun. Item 21 holds three further decisions that
-   adoption does not wait for, and item 22 a fourth that is about change 5 itself.
+2. **Change 5** (the dormancy rule) is the rule you chose on 2026-11-13 (item 22): the forecast and a test of
+   the family's own forward record. Read §9.1 once to see that it says what you decided. Item 21 holds further
+   decisions that adoption does not wait for.
 3. **Merge the pull request** if you accept the drafts. To change anything in the text first, edit the draft on
    the branch and then **re-hash** (the hash record must be rewritten whenever either file changes, even by a
    comma):
@@ -593,6 +591,13 @@ revised rule is close to the bound where edges are rare.
 the evidence of (ii).
 
 ## 22. Which second condition the dormancy rule has
+
+**Decided on 2026-11-13: option (iii), the family's own forward record.** Session "10M Manhattan C: final
+pre-adoption changes" put it into the draft: Protocol 3.1 §9.1 is rewritten, `manhattan/stats/dormancy.py` is
+the file of branch `claude/epic-mayer-kfhpsh` at `1124fe7` with a rule id added, its 11 rule tests are on
+`build/manhattan`, and the hash record is rewritten (MANHATTAN_PROGRESS.md, "Milestone C: final pre-adoption
+changes (session 10M)"). What follows is the item as it was put to you, kept as the record of the choice;
+"the draft's rule" in it means the rule the draft held **then** (`Π^max`).
 
 **Why Ethan.** It is the text of Protocol §9.1, in a draft you have not adopted; and two sessions answered it
 differently.

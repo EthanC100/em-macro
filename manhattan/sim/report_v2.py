@@ -53,11 +53,14 @@ READINGS = (
                                "needs all six fits. There is no sampler and no convergence diagnostic."),
     ("HB: dormancy forecast", "Version 1's normal-update approximation (no refit), fed with 200 draws of θ_f per "
                               "family and model from the closed-form posterior; not evaluated at the last date."),
-    ("HB: dormancy rule", "Protocol 3.1 §9.1 as revised before adoption: dormant when PP^max < 0.05 and Π^max < 0.05 "
-                          "at two consecutive evaluation dates with at least 252 forward days at each; reactivated when "
-                          "either is at least 0.15. At the last date there is no forecast, so no family becomes dormant "
-                          "there; a dormant family is reactivated there if Π^max ≥ 0.15. A review is \"written\" for "
-                          "every family that is not dormant both before and after the date."),
+    ("HB: dormancy rule", "Protocol 3.1 §9.1 (the forward-record rule, a pre-adoption change): dormant when the "
+                          "forecast PP^max and the one-sided p-value p^F of the family's own forward record against an "
+                          "edge of θ_min are both below 0.05 at two consecutive evaluation dates (p^F is 1 until the "
+                          "family has 252 forward days); reactivated when either is at least 0.15. p^F is computed "
+                          "from the forward Sharpe estimate and standard error handed to the model. At the last date "
+                          "there is no forecast, so no family becomes dormant there; a dormant family is reactivated "
+                          "there if p^F ≥ 0.15. A review is \"written\" for every family that is not dormant both "
+                          "before and after the date."),
     ("HB: who reaches Statistically supported", "A family counts from the first evaluation date at which it holds "
         "the tier, whether or not it leaves later. Its true Sharpe ratio is that of the family portfolio over its "
         "forward life (SIM_PREREG section 2.4). With four evaluation dates a family can only enter at one of them."),

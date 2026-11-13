@@ -366,11 +366,13 @@ def test_v2_adds_requirements_and_loosens_no_threshold():
         assert needle in text, needle
     assert hb.SE_RESAMPLES == 199 and hb.MIN_FWD_DAYS == 63 and hb.PP_DRAWS == 200
     # the dormancy rule of Protocol 3.1 section 9.1, as the code applies it; V7's number is version 1's
-    assert ("a family becomes dormant when `PP^max < 0.05` and `Π^max < 0.05` at two\n  consecutive dates with at "
-            "least 252 forward days at each, and is reactivated when either is at least 0.15") in text
-    assert (dormancy.PP_BELOW, dormancy.PI_BELOW, dormancy.MIN_FORWARD_DAYS, dormancy.REACTIVATE_AT) == (0.05, 0.05, 252, 0.15)
+    assert ("a family becomes dormant when `PP^max < 0.05` and `p^F < 0.05` at two\n  consecutive dates, and is "
+            "reactivated when either is at least 0.15") in text
+    assert "`p^F = Φ((y^F_f − θ_min)/s^F_f)`" in text and "at least 252 forward days" in text
+    assert (dormancy.DORMANT_BELOW, dormancy.MIN_FORWARD_DAYS, dormancy.REACTIVATE_AT, dormancy.THETA_MIN) == (0.05, 252, 0.15, 0.25)
     assert criteria_v2.V7_ELIM_MAX is criteria.V7_ELIM_MAX or criteria_v2.V7_ELIM_MAX == criteria.V7_ELIM_MAX == 0.10
-    assert "**no threshold, metric,\nscenario or replication count was touched**" in text
+    assert "for that change **no threshold, metric,\nscenario or replication count was touched**" in text
+    assert "Sections 4, 6 and 8 of the protocol, and sections 9.2 and 9.3,\nare identical in the two versions." in text
     assert "V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged)" in text
 
 
@@ -389,22 +391,22 @@ def test_protocol_31_keeps_every_constant_of_30_and_says_what_changed():
         return text[a:text.index(end, a)]
     for start, end in (("## 4. Across-family screening", "## 5. Within a family"),
                        ("## 6. Forward e-process", "## 7. One hierarchical model"),
-                       ("## 8. Tiers", "## 9. Dormancy"), ("### 9.2 The cost", "> **In plain English.** When"),
-                       ("> **Problem it solves.** Attention is the scarce resource", "> **Assumes.** The model's"),
-                       ("> **How it fails.** A family whose edge appears late", "## 10. Governance"),
+                       ("## 8. Tiers", "## 9. Dormancy"), ("### 9.2 The cost", "## 10. Governance"),
                        ("## Appendix A. Proofs", "## Appendix B.")):
         assert section(new, start, end) == section(old, start, end), start
     # section 9.1 is the one rule changed before adoption (change 5): the forecast is kept, with 3.0's levels, and
-    # the probability of an edge is added; what 3.0 said about the forecast and about a dormant family still stands
+    # a test of the family's own forward record is added; what 3.0 said about the forecast and about a dormant
+    # family still stands, and sections 9.2 and 9.3 are 3.0's word for word (the loop above)
     rule30, rule31 = section(old, "### 9.1 The rule", "### 9.2 The cost"), section(new, "### 9.1 The rule", "### 9.2 The cost")
     assert "| **Become dormant** | `PP_f^max < 0.05` at two consecutive reviews |" in rule30
-    assert "| **Become dormant** | `PP_f^max < 0.05` **and** `Π_f^max < 0.05`, at two consecutive reviews, each with at least 252 forward days |" in rule31
+    assert "| **Become dormant** | `PP_f^max < 0.05` **and** `p^F_f < 0.05`, both at two consecutive reviews |" in rule31
     for line in rule30.splitlines():
         if line.startswith(("PP_f = Pr(", "| **While dormant**", "With `programme.end` unset")):
             assert line in rule31, line
     top = new[: new.index("## 1. Symbols")]
-    assert "| 5 | §9.1" in top and "a pre-adoption change of this draft" in top and "D02, D05, D08 and D10 are development scenarios" in top
-    assert "| 3.1.0, revised before adoption | 2026-11-12 |" in new
+    assert "| 5 | §9.1" in top and "**pre-adoption change**" in top and "D02, D05,\nD08 and D10 are development scenarios" not in top
+    assert "D08 and D10 are development scenarios" in top.replace("\n", " ")
+    assert "| 3.1.0, revised before adoption | 2026-11-12 |" in new and "| 3.1.0, pre-adoption change | 2026-11-13 |" in new
     # every row of 3.0's table of constants is still there
     consts = section(old, "## Appendix B. Constants fixed in v3.0", "## Appendix C.")
     for line in consts.splitlines():

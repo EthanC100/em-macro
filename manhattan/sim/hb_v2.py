@@ -24,11 +24,13 @@ What differs, each listed in the report:
   six fits, as before.
 - **Dormancy forecast.** ``tiers.support_probability`` as in version 1, fed with 200 draws of ``θ_f`` from
   each model's closed-form posterior.
-- **Dormancy rule.** Protocol v3.1 section 9.1 as revised before adoption: a family becomes dormant when, at
-  two consecutive evaluation dates with at least 252 forward days each, both the forecast ``PP^max`` and
-  ``Π^max`` (the largest of the six models' probabilities of an edge of at least ``θ_min``) are below 0.05; it
-  is reactivated when either is at least 0.15. At the last date there is no forecast, so no family becomes
-  dormant there; a dormant family can still be reactivated there by ``Π^max``.
+- **Dormancy rule.** Protocol v3.1 section 9.1 (the forward-record rule, a pre-adoption change): a family
+  becomes dormant when, at two consecutive evaluation dates, both the forecast ``PP^max`` and the one-sided
+  p-value ``p^F`` of its own forward record against an edge of ``θ_min`` are below 0.05 (``p^F`` is 1 until the
+  family has 252 forward days); it is reactivated when either is at least 0.15. ``p^F`` is computed from the
+  ``y^F_f`` and ``s^F_f`` handed to the model, by ``dormancy.forward_p``: no fit enters it. At the last date
+  there is no forecast, so no family becomes dormant there; a dormant family can still be reactivated there by
+  ``p^F``.
 - **Kept for the report, not used by any rule:** how many families are dormant after each date and how many
   reviews are written (a family that is dormant and stays so needs none), and for every family with a true
   edge its true Sharpe ratio, its freeze day and the first date at which it was Statistically supported.
@@ -144,7 +146,7 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
         ok = all(f.ok for f in fits)
         rec["review_ok"] = ok
         pi_min = np.min([f.pi for f in fits], axis=0) if ok else None
-        pi_max = np.max([f.pi for f in fits], axis=0) if ok else None
+        p_fwd = dormancy.forward_p(data.y_F, data.s_F, [t - f.freeze for f in live])     # the family's own record: no model
         gaps = [b - a for a, b in zip(years[yi:], years[yi + 1 :])]
         for cand in pipeline.CANDIDATES:
             pp_max, written = None, 0
@@ -165,7 +167,7 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
                     pi_min=None if pi_min is None else float(pi_min[j]), forward_days=t - f.freeze,
                     forward_mean_positive=bool(info["fwd_sharpe_f"][j] > 0),
                     rw_reserve=bool(f.ev.rw_adm_any.get(cand)), pp_max=None if pp_max is None else float(pp_max[j])),
-                    None if pi_max is None else float(pi_max[j]))
+                    float(p_fwd[j]))
                 states[cand][f.idx] = s
                 if s.dormant and not was:
                     dormant_since[cand][f.idx] = t
