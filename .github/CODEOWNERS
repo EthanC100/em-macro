@@ -85,4 +85,13 @@
 /nightshift/logs.py @EthanC100
 
 
+# Manhattan, version 2 of the simulation pre-registration and Protocol v3.1 (docs/manhattan/ETHAN_ACTIONS.md
+# item 19): the two frozen files, their recorded hashes, and the code and the test that check them
+/docs/manhattan/PROTOCOL_v3.1.md @EthanC100
+/docs/manhattan/SIM_PREREG_v2.md @EthanC100
+/docs/manhattan/sim_prereg_v2.sha256 @EthanC100
+/manhattan/prereg_v2.py @EthanC100
+/tests/test_manhattan_prereg_v2.py @EthanC100
+
+
 # protected:end
