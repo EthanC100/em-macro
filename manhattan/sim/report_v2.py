@@ -53,6 +53,14 @@ READINGS = (
                                "needs all six fits. There is no sampler and no convergence diagnostic."),
     ("HB: dormancy forecast", "Version 1's normal-update approximation (no refit), fed with 200 draws of θ_f per "
                               "family and model from the closed-form posterior; not evaluated at the last date."),
+    ("HB: dormancy rule", "Protocol 3.1 section 9.1 as revised before adoption: the forecast below 0.05 and the "
+                          "one-sided p-value of the family's own forward record against an edge of 0.25 below 0.05 "
+                          "(at least 252 forward days), both at two consecutive evaluation dates; reactivation when "
+                          "either is at or above 0.15. At the last date there is no forecast: nobody becomes dormant, "
+                          "and a dormant family can be reactivated by its forward record."),
+    ("HB: shadow paths", "On the same fits the tiers are also stepped with the dormancy rule of 3.0 (the forecast "
+                         "alone, on the random stream of session 5M's pilot, which it reproduces) and with no "
+                         "dormancy. They are diagnostics: no criterion reads them."),
     ("HB: evaluation dates", "Years 2, 4, 7 and 10 (version 1's reduction (c)), consecutive dates standing for "
                              "consecutive reviews."),
     ("HB: naive estimate (M9)", "Version 1's: the largest sample Sharpe ratio among the family's variants, each over "
@@ -212,6 +220,54 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
             L.append(table(rows))
     # ---------------------------------------------------------------- 2. the analytic model
     L += ["", "## 2. The analytic hierarchical model (HB scenarios)"]
+    hb_found = {s_: found[(s_, z)] for s_, z in plan if z == "HB" and (s_, z) in found and "diag" in found[(s_, z)]["reps"][0]}
+    if hb_found:
+        cell = lambda t: "-" if t[0] != t[0] else f"{fmt(t[0])} ({fmt(t[1])} to {fmt(t[2])})"
+        col_ = lambda reps, rule, k: [r["diag"]["i"][rule][k] for r in reps]
+        L += ["", "### Dormancy: the rule of Protocol 3.1 §9.1 beside the rule of 3.0, on the same fits", "",
+              "Premature elimination is metric M8 (families with a true edge dormant at the end or for more than half "
+              "their forward life; bound 0.10 on the upper end). The rule of 3.0 is a shadow on the same replications "
+              "and decides nothing. \"Family-reviews written\" is the share of all (family, review) pairs at which "
+              "the family is not dormant: 1 with no dormancy. Candidate (i)'s tiers.", "",
+              "| scenario | replications | families with a true edge | **premature elimination, 3.1** | premature elimination, 3.0 | "
+              "ever dormant, true edge, 3.1 / 3.0 | no edge, dormant at the end, 3.1 / 3.0 | family-reviews written, 3.1 / 3.0 |",
+              "|---|---|---|---|---|---|---|---|"]
+        for s_, v in hb_found.items():
+            reps = v["reps"]
+            den = col_(reps, "v31", "m8_den")
+            if not sum(den):
+                L.append(f"| {s_} | {len(reps)} | 0 | - | - | - | "
+                         + " / ".join(fmt(sum(col_(reps, r_, "null_end_dormant")) / sum(col_(reps, r_, "n_null"))) for r_ in ("v31", "v30")) + " | "
+                         + " / ".join(fmt(sum(col_(reps, r_, "reviews_written")) / sum(col_(reps, r_, "reviews_possible"))) for r_ in ("v31", "v30")) + " |")
+                continue
+            L.append(f"| {s_} | {len(reps)} | {sum(den)} | **{cell(metrics.ratio_ci(col_(reps, 'v31', 'm8_num'), den))}** | "
+                     f"{cell(metrics.ratio_ci(col_(reps, 'v30', 'm8_num'), den))} | "
+                     + " / ".join(fmt(sum(col_(reps, r_, "edge_ever_dormant")) / sum(den)) for r_ in ("v31", "v30")) + " | "
+                     + " / ".join(fmt(sum(col_(reps, r_, "null_end_dormant")) / sum(col_(reps, r_, "n_null"))) for r_ in ("v31", "v30")) + " | "
+                     + " / ".join(fmt(sum(col_(reps, r_, "reviews_written")) / sum(col_(reps, r_, "reviews_possible"))) for r_ in ("v31", "v30")) + " |")
+        summary["dormancy"] = {s_: {rule: {k: sum(col_(v["reps"], rule, k)) for k in
+                                            ("m8_num", "m8_den", "edge_ever_dormant", "null_ever_dormant", "null_end_dormant",
+                                             "n_null", "reviews_written", "reviews_possible")} for rule in ("v31", "v30", "none")}
+                               for s_, v in hb_found.items()}
+        years = tuple(int(y) for y in next(iter(hb_found.values()))["reps"][0]["eval_years"][1:])
+        L += ["", "### \"Statistically supported\" by programme year, by true hedged Sharpe ratio (reported; no threshold)", "",
+              "Among families with a true edge frozen before the year, the share that had entered the tier at a review "
+              "on or before it (so forward records are between 0 and that many years long). Rule of record; in "
+              "brackets the count entered and the families. Reviews are at years " + ", ".join(str(y) for y in next(iter(hb_found.values()))["reps"][0]["eval_years"])
+              + " only (version 1's reduction (c)); `TIER2_POWER.md` in this folder gives the same table with yearly reviews.", "",
+              "| scenario | true Sharpe of the family portfolio | " + " | ".join(f"by year {y}" for y in years) + " |",
+              "|---|---|" + "---|" * len(years)]
+        summary["tier_entry"] = {}
+        for s_, v in hb_found.items():
+            tab = metrics_v2.tier_entry_table(v["reps"], years)
+            summary["tier_entry"][s_] = tab
+            for row in tab:
+                if not any(row["years"][y]["n"] for y in years):
+                    continue
+                name = f"{row['sharpe_lo']:.2f} to {row['sharpe_hi']:.2f}" if row["sharpe_hi"] < 99 else f"{row['sharpe_lo']:.2f} or more"
+                L.append(f"| {s_} | {name} | " + " | ".join(
+                    f"{fmt(row['years'][y]['share'])} ({row['years'][y]['entered']} of {row['years'][y]['n']})" if row["years"][y]["n"] else "-"
+                    for y in years) + " |")
     for scenario, size in plan:
         if size != "HB" or (scenario, size) not in found:
             continue

@@ -46,7 +46,8 @@ CODE_FILES_HB = CODE_FILES + ("manhattan/stats/hier.py", "manhattan/stats/tiers.
 # their code hash; the code of the changed parts is in new files
 CODE_FILES_V2 = CODE_FILES + ("manhattan/stats/spa_hedged.py", "manhattan/sim/pipeline_v2.py")
 CODE_FILES_V2_HB = CODE_FILES + ("manhattan/stats/tiers.py", "manhattan/sim/hb.py", "manhattan/ledger.py",
-                                 "manhattan/stats/hier_analytic.py", "manhattan/sim/hb_v2.py")
+                                 "manhattan/stats/hier_analytic.py", "manhattan/sim/hb_v2.py",
+                                 "manhattan/stats/dormancy.py")
 PREREGS = ("v1", "v2")
 
 

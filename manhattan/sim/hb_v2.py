@@ -24,6 +24,15 @@ What differs, each listed in the report:
   six fits, as before.
 - **Dormancy forecast.** ``tiers.support_probability`` as in version 1, fed with 200 draws of ``θ_f`` from
   each model's closed-form posterior.
+- **Dormancy rule.** That of Protocol v3.1 section 9.1 as revised before adoption (``manhattan.stats.dormancy``):
+  the forecast below 0.05 **and** the family's own forward record against an edge of ``θ_min`` (one-sided
+  ``p^F`` below 0.05, at least 252 forward days), both at two consecutive evaluation dates; reactivation when
+  either is at or above 0.15. At the last date there is no forecast, so no family becomes dormant there, and a
+  dormant family can still be reactivated by its forward record.
+- **Two shadow paths, for diagnostics only.** On the same fits, the tier state machine is also stepped with the
+  dormancy rule of 3.0 (the forecast alone, on the random stream the pilot of session 5M used, so that it
+  reproduces that pilot) and with no dormancy at all. They decide nothing and feed no criterion: they give what
+  the revision costs in attention, the delays dormancy causes to tier entry, and what reactivation does.
 - **Channels.** Every family of these scenarios is a blind family with a designated evaluation, so every
   reserve estimate has evidential weight 1. The weight is computed by the model from the channel
   (``hier_analytic.Data.reserve_weight``), never passed in.
@@ -31,14 +40,17 @@ What differs, each listed in the report:
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 import numpy as np
 
-from manhattan.stats import hier_analytic, screening, tiers
+from manhattan.stats import dormancy, hier_analytic, screening, tiers
 
 from . import hb, pipeline, seeds, world
 
 MODEL = "analytic-normal-normal-3.1"
+RULES = ("v31", "v30", "none")          # the rule of record; the rule of 3.0 and no dormancy, as shadows
+FORECAST_STREAM = {"v31": 300, "v30": 100}      # 100 is the stream of session 5M's pilot, kept for the 3.0 shadow
 
 
 class Fam(hb.Fam):
@@ -97,6 +109,96 @@ def build_data(fams: list[Fam], t: int, se_H: dict, rng: np.random.Generator):
     return data, live, info
 
 
+class Track:
+    """One screening candidate's tiers and dormancy under one dormancy rule: ``"v31"`` (Protocol 3.1 section
+    9.1, the rule of record), ``"v30"`` (the forecast alone) or ``"none"``."""
+
+    def __init__(self, rule: str, cand: str, fams: list[Fam]):
+        self.rule, self.cand = rule, cand
+        self.state = {f.idx: tiers.at_freeze(f.ev.passed[cand]) for f in fams}
+        self.since: dict = {}                               # family -> day it became dormant (while dormant)
+        self.days = {f.idx: 0 for f in fams}                # dormant days so far
+        self.ever: set = set()
+        self.woken: dict = {}                               # family -> number of reactivations
+        self.entry: dict = {}                               # family -> day it first was Statistically supported
+        self.written = self.possible = 0                    # family-reviews with a write-up; family-reviews in all
+        self.gate = [0, 0, 0, 0]                            # both low / forecast only / forward record only / neither
+        self.dormant_at_last: set = set()
+
+    def review(self, f: Fam, t: int, rev: tiers.Review, p_forward: float, last: bool) -> None:
+        s = self.state[f.idx]
+        was = s.dormant
+        if last and was:
+            self.dormant_at_last.add(f.idx)
+        if self.rule == "v31":
+            if not was and not s.supported and rev.pp_max is not None and rev.pi_min is not None:
+                self.gate[(0 if p_forward < dormancy.DORMANT_BELOW else 1) if rev.pp_max < dormancy.DORMANT_BELOW
+                          else (2 if p_forward < dormancy.DORMANT_BELOW else 3)] += 1
+            s = dormancy.step(s, rev, p_forward)
+        elif self.rule == "v30":
+            s = tiers.step(s, rev)
+        else:
+            s = tiers.step(s, replace(rev, pp_max=None))
+        self.state[f.idx] = s
+        self.possible += 1
+        self.written += 0 if (was and s.dormant) else 1     # a dormant family gets the reactivation check only
+        if s.dormant and not was:
+            self.since[f.idx] = t
+            self.ever.add(f.idx)
+        if was and not s.dormant:
+            self.days[f.idx] += t - self.since.pop(f.idx)
+            self.woken[f.idx] = self.woken.get(f.idx, 0) + 1
+        if s.supported and f.idx not in self.entry:
+            self.entry[f.idx] = t
+
+    def close(self, end: int) -> None:
+        for idx, since in self.since.items():
+            self.days[idx] += end - since
+        self.since = {}
+
+    def gone(self, f: Fam, end: int) -> bool:
+        """Metric M8's numerator (SIM_PREREG section 4): dormant at the end, or for more than half its forward life."""
+        return bool(self.state[f.idx].dormant or self.days[f.idx] > 0.5 * (end - f.freeze))
+
+    def summary(self, fams: list[Fam], end: int, none: "Track | None" = None) -> dict:
+        """Diagnostics only (no criterion reads them). ``none`` is the path without dormancy on the same fits."""
+        edge = [f for f in fams if f.true >= world.THETA_MIN]
+        null = [f for f in fams if f.true < world.THETA_MIN]
+        share = lambda f: self.days[f.idx] / (end - f.freeze)
+        out = {"m8_num": sum(self.gone(f, end) for f in edge), "m8_den": len(edge), "n_null": len(null),
+               "edge_ever_dormant": sum(f.idx in self.ever for f in edge),
+               "null_ever_dormant": sum(f.idx in self.ever for f in null),
+               "edge_end_dormant": sum(self.state[f.idx].dormant for f in edge),
+               "null_end_dormant": sum(self.state[f.idx].dormant for f in null),
+               "edge_dormant_at_last": sum(f.idx in self.dormant_at_last for f in edge),
+               # M8's numerator had nothing been able to wake at the last date
+               "m8_num_no_last_wake": sum(f.idx in self.dormant_at_last or self.gone(f, end) for f in edge),
+               "edge_dormant_share": [round(share(f), 4) for f in edge if f.idx in self.ever],
+               "null_dormant_share_sum": round(sum(share(f) for f in null if f.idx in self.ever), 4),
+               "edge_reactivations": sum(self.woken.get(f.idx, 0) for f in edge),
+               "null_reactivations": sum(self.woken.get(f.idx, 0) for f in null),
+               "edge_woken": sum(f.idx in self.woken for f in edge),
+               "edge_woken_supported": sum(f.idx in self.woken and self.state[f.idx].supported for f in edge),
+               "edge_woken_end_dormant": sum(f.idx in self.woken and self.state[f.idx].dormant for f in edge),
+               "null_woken": sum(f.idx in self.woken for f in null),
+               "null_woken_end_dormant": sum(f.idx in self.woken and self.state[f.idx].dormant for f in null),
+               "reviews_written": self.written, "reviews_possible": self.possible,
+               "edge_supported_ever": sum(f.idx in self.entry for f in edge),
+               "edge_entry_years": [round((self.entry[f.idx] - f.freeze) / world.YEAR, 3) for f in edge if f.idx in self.entry]}
+        if self.rule == "v31":
+            out["gate"] = list(self.gate)
+        if none is not None:        # what dormancy did to tier entry, against the same fits without dormancy
+            both = [f for f in edge if f.idx in none.entry and f.idx in self.entry]
+            out["edge_entry_delay_years"] = [round((self.entry[f.idx] - none.entry[f.idx]) / world.YEAR, 3) for f in both]
+            out["edge_entry_lost"] = sum(f.idx in none.entry and f.idx not in self.entry for f in edge)
+            out["edge_entry_without_dormancy"] = sum(f.idx in none.entry for f in edge)
+            # one row per family with a true edge, for the table of tier entry against the true Sharpe ratio:
+            # true Sharpe, freeze day, day of first entry under this rule and with no dormancy (−1: never)
+            out["edge_families"] = [[round(f.true, 3), f.freeze, self.entry.get(f.idx, -1), none.entry.get(f.idx, -1)]
+                                    for f in edge]
+        return out
+
+
 def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPMENT, sha: str | None = None,
                     scenario: world.Scenario | None = None) -> dict:
     t0 = time.time()
@@ -117,11 +219,12 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
             se_H[f.idx] = float(se[j])
         fams.extend(new)
     t_eval = time.time()
-    states = {c: {f.idx: tiers.at_freeze(f.ev.passed[c]) for f in fams} for c in pipeline.CANDIDATES}
-    dormant_since = {c: {} for c in pipeline.CANDIDATES}
-    dormant_days = {c: {f.idx: 0 for f in fams} for c in pipeline.CANDIDATES}
+    tracks = {c: {rule: Track(rule, c, fams) for rule in RULES} for c in pipeline.CANDIDATES}
+    states = {c: tracks[c]["v31"].state for c in pipeline.CANDIDATES}       # the path of record
+    decay = next((k for k, sp in enumerate(hier_analytic.SPECS) if sp.decay), None)
+    forecast_seconds = 0.0
     out: dict = {"scenario": scenario_id, "size": "HB", "rep": rep, "branch": branch, "model": MODEL,
-                 "eval_years": list(years), "n_families": len(fams), "reviews": {}}
+                 "dormancy": "3.1", "eval_years": list(years), "n_families": len(fams), "reviews": {}}
     for yi, year in enumerate(years):
         t = year * world.YEAR
         data, live, info = build_data(fams, t, se_H, est_rng)
@@ -136,30 +239,27 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
         rec["review_ok"] = ok
         pi_min = np.min([f.pi for f in fits], axis=0) if ok else None
         gaps = [b - a for a, b in zip(years[yi:], years[yi + 1 :])]
-        for cand in pipeline.CANDIDATES:
-            pp_max = None
-            if ok and gaps:
-                st = [states[cand][f.idx] for f in live]
-                pp = tiers.support_probability(
-                    np.stack([f.draws for f in fits]), np.stack([f.mean for f in fits]), np.stack([f.sd for f in fits]),
-                    fwd_years=info["fwd_years"], fwd_sum=info["fwd_sharpe_f"] * info["fwd_years"],
-                    promising=np.array([s.promising for s in st]),
-                    rw_reserve=np.array([bool(f.ev.rw_adm_any.get(cand)) for f in live]), review_gaps=gaps,
-                    rng=streams.rng(seeds.MODEL, 100 + yi, pipeline.CANDIDATES.index(cand)),
-                    decay_model=next((k for k, sp in enumerate(hier_analytic.SPECS) if sp.decay), None))
-                pp_max = pp.max(axis=0)
-            for j, f in enumerate(live):
-                s = states[cand][f.idx]
-                was = s.dormant
-                s = tiers.step(s, tiers.Review(
-                    pi_min=None if pi_min is None else float(pi_min[j]), forward_days=t - f.freeze,
-                    forward_mean_positive=bool(info["fwd_sharpe_f"][j] > 0),
-                    rw_reserve=bool(f.ev.rw_adm_any.get(cand)), pp_max=None if pp_max is None else float(pp_max[j])))
-                states[cand][f.idx] = s
-                if s.dormant and not was:
-                    dormant_since[cand][f.idx] = t
-                if was and not s.dormant:
-                    dormant_days[cand][f.idx] += t - dormant_since[cand].pop(f.idx)
+        days = np.array([t - f.freeze for f in live])
+        p_fwd = dormancy.forward_p(data.y_F, data.s_F, days)             # the family's own forward record: no model
+        for ci, cand in enumerate(pipeline.CANDIDATES):
+            rw = np.array([bool(f.ev.rw_adm_any.get(cand)) for f in live])
+            for rule in RULES:
+                tr = tracks[cand][rule]
+                pp_max = None
+                if ok and gaps and rule in FORECAST_STREAM:
+                    t_pp = time.time()
+                    pp = tiers.support_probability(
+                        np.stack([f.draws for f in fits]), np.stack([f.mean for f in fits]), np.stack([f.sd for f in fits]),
+                        fwd_years=info["fwd_years"], fwd_sum=info["fwd_sharpe_f"] * info["fwd_years"],
+                        promising=np.array([tr.state[f.idx].promising for f in live]), rw_reserve=rw, review_gaps=gaps,
+                        rng=streams.rng(seeds.MODEL, FORECAST_STREAM[rule] + yi, ci), decay_model=decay)
+                    pp_max = pp.max(axis=0)
+                    forecast_seconds += time.time() - t_pp
+                for j, f in enumerate(live):
+                    tr.review(f, t, tiers.Review(
+                        pi_min=None if pi_min is None else float(pi_min[j]), forward_days=int(days[j]),
+                        forward_mean_positive=bool(info["fwd_sharpe_f"][j] > 0), rw_reserve=bool(rw[j]),
+                        pp_max=None if pp_max is None else float(pp_max[j])), float(p_fwd[j]), last=not gaps)
         if ok:
             rec.update(hb.review_metrics(live, pi_min, fits[0], states, year))
             # for the report only: among families with a true edge, which model is the most cautious, and how
@@ -174,18 +274,22 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
                 rec[f"edge_supported_{cand}"] = int(sum(s.supported for s, e in zip(st, edge) if e))
         out["reviews"][str(year)] = rec
     end = world.T_END
+    out["diag"] = {}
     for cand in pipeline.CANDIDATES:
-        for idx, since in dormant_since[cand].items():
-            dormant_days[cand][idx] += end - since
+        for tr in tracks[cand].values():
+            tr.close(end)
+        main, none = tracks[cand]["v31"], tracks[cand]["none"]
         edge = [f for f in fams if f.true >= world.THETA_MIN]
-        gone = [f for f in edge if states[cand][f.idx].dormant or dormant_days[cand][f.idx] > 0.5 * (end - f.freeze)]
         st = list(states[cand].values())
         out[f"m8_den_{cand}"] = len(edge)
-        out[f"m8_num_{cand}"] = len(gone)
+        out[f"m8_num_{cand}"] = sum(main.gone(f, end) for f in edge)
         out[f"end_promising_{cand}"] = sum(s.promising for s in st)
         out[f"end_supported_{cand}"] = sum(s.supported for s in st)
         out[f"end_dormant_{cand}"] = sum(s.dormant for s in st)
         out[f"screened_{cand}"] = sum(f.ev.passed[cand] for f in fams)
+        out["diag"][cand] = {rule: tracks[cand][rule].summary(fams, end, None if rule == "none" else none) for rule in RULES}
+        out["diag"][cand]["v30"]["end_dormant"] = sum(s.dormant for s in tracks[cand]["v30"].state.values())
+    out["forecast_seconds"] = round(forecast_seconds, 2)
     out["model_seconds"] = round(time.time() - t_eval, 2)
     out["seconds"] = round(time.time() - t0, 1)
     return out

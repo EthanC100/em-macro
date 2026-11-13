@@ -139,7 +139,121 @@ def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
                         None, None, None, len(v), "text",
                         verdict=" / ".join([f"{h['mu_A']:.3f}", f"{h['tau_A']:.3f}", f"{h['psi']:.3f}",
                                             ", ".join(f"{x:.2f}" for x in rho)])))
+    tail += dormancy_rows(reps)
     tail.append(Row("cost", "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)",
                     float(col(reps, "model_seconds").mean()), None, None, R, "mean"))
     tail.append(Row("info", "model", None, None, None, R, "text", verdict=", ".join(sorted({r["model"] for r in reps}))))
     return head + rows + tail
+
+
+RULE_NAME = {"v31": "rule of 3.1 (forecast and own forward record)", "v30": "rule of 3.0 (forecast alone), shadow",
+             "none": "no dormancy, shadow"}
+
+
+def dormancy_rows(reps: list[dict], cand: str = "i") -> list[Row]:
+    """Diagnostics of the dormancy rule, reported without a threshold (candidate (i)'s tiers; the two candidates
+    differ only in which families start as Promising). The rule of record is Protocol 3.1 section 9.1; the rule
+    of 3.0 and "no dormancy" are stepped on the same fits as shadows and decide nothing."""
+    if not reps or "diag" not in reps[0]:
+        return []
+    R = len(reps)
+    d = {rule: [r["diag"][cand][rule] for r in reps] for rule in ("v31", "v30", "none")}
+    g = lambda rule, k: np.array([x[k] for x in d[rule]], dtype=float)
+    cat = lambda rule, k: np.array([v for x in d[rule] for v in x[k]], dtype=float)
+    rows = []
+
+    def ratio(what, num, den):
+        e, lo, hi = ratio_ci(num, den)
+        rows.append(Row("diag", what, e, lo, hi, int(den.sum()), "ratio"))
+
+    def text(what, verdict, n=R):
+        rows.append(Row("diag", what, None, None, None, int(n), "text", verdict=verdict))
+
+    for rule in ("v31", "v30"):
+        name = RULE_NAME[rule]
+        den, nul = g(rule, "m8_den"), g(rule, "n_null")
+        if rule == "v30":
+            ratio(f"{name}: premature elimination (M8) on the same fits", g(rule, "m8_num"), den)
+        ratio(f"{name}: share of families with a true edge ever made dormant", g(rule, "edge_ever_dormant"), den)
+        ratio(f"{name}: share of families with a true edge dormant at the end", g(rule, "edge_end_dormant"), den)
+        ratio(f"{name}: premature elimination had nothing been able to wake at the last date", g(rule, "m8_num_no_last_wake"), den)
+        ratio(f"{name}: share of families with no edge ever made dormant", g(rule, "null_ever_dormant"), nul)
+        ratio(f"{name}: share of families with no edge dormant at the end", g(rule, "null_end_dormant"), nul)
+        ratio(f"{name}: share of family-reviews with a write-up (attention spent; 1 with no dormancy)",
+              g(rule, "reviews_written"), g(rule, "reviews_possible"))
+        sh = cat(rule, "edge_dormant_share")
+        text(f"{name}: dormant share of forward life, families with a true edge ever dormant: mean / median / largest",
+             " / ".join(f"{x:.2f}" for x in (sh.mean(), np.median(sh), sh.max())) if sh.size else "none was dormant", sh.size)
+        n_null = g(rule, "null_ever_dormant").sum()
+        text(f"{name}: dormant share of forward life, families with no edge ever dormant: mean",
+             f"{g(rule, 'null_dormant_share_sum').sum() / n_null:.2f}" if n_null else "none was dormant", n_null)
+        woke = int(g(rule, "edge_woken").sum())
+        text(f"{name}: reactivation, families with a true edge: woken / of those dormant again at the end / Statistically "
+             "supported at the end", f"{woke} / {int(g(rule, 'edge_woken_end_dormant').sum())} / {int(g(rule, 'edge_woken_supported').sum())}", woke)
+        nwoke = int(g(rule, "null_woken").sum())
+        text(f"{name}: reactivation, families with no edge: woken / of those dormant again at the end",
+             f"{nwoke} / {int(g(rule, 'null_woken_end_dormant').sum())}", nwoke)
+        delay = cat(rule, "edge_entry_delay_years")
+        late = delay[delay > 0]
+        text(f"{name}: tier entry of families with a true edge: enter Statistically supported with no dormancy / never "
+             "enter because dormant / enter later because dormant (mean delay in years)",
+             f"{int(g(rule, 'edge_entry_without_dormancy').sum())} / {int(g(rule, 'edge_entry_lost').sum())} / "
+             f"{late.size}" + (f" ({late.mean():.1f})" if late.size else ""), int(g(rule, "edge_entry_without_dormancy").sum()))
+    gate = np.sum([x["gate"] for x in d["v31"]], axis=0)
+    if gate.sum():
+        text("rule of 3.1: at reviews with a forecast, families not yet supported: forecast and forward record both below "
+             "0.05 / forecast only / forward record only / neither (shares)",
+             " / ".join(f"{x / gate.sum():.3f}" for x in gate), int(gate.sum()))
+    years = cat("none", "edge_entry_years")
+    text("no dormancy, shadow: years from freeze to Statistically supported, families with a true edge that enter: "
+         "median / 10th / 90th percentile", " / ".join(f"{x:.1f}" for x in np.percentile(years, [50, 10, 90])) if years.size
+         else "none entered", years.size)
+    if "forecast_seconds" in reps[0]:
+        rows.append(Row("cost", "seconds per replication spent on the dormancy forecast (both rules, both candidates)",
+                        float(col(reps, "forecast_seconds").mean()), None, None, R, "mean"))
+    return rows
+
+
+SHARPE_BINS = ((0.25, 0.40), (0.40, 0.70), (0.70, 1.00), (1.00, 1.40), (1.40, math.inf))
+
+
+def tier_entry_table(reps: list[dict], years: tuple, *, cand: str = "i", rule: str = "v31", by: str = "programme") -> list[dict]:
+    """Share of families with a true edge that have entered "Statistically supported", by true hedged Sharpe ratio
+    of the family portfolio. Reported for Ethan's decision on the tier's bar; no criterion reads it.
+
+    ``by="programme"``: among families frozen before programme year ``Y``, the share that entered at a review on
+    or before year ``Y`` (their forward records are between 0 and ``Y`` years long). ``by="age"``: among families
+    with at least ``Y`` years of forward life in the programme, the share that entered within ``Y`` years of
+    their freeze. ``rule`` is ``"v31"`` (the rule of record) or ``"none"`` (the same fits with no dormancy).
+    Intervals are percentile intervals from resampling whole replications."""
+    col_i = 2 if rule == "v31" else 3
+    out = []
+    for lo, hi in SHARPE_BINS:
+        row = {"sharpe_lo": lo, "sharpe_hi": hi, "years": {}}
+        true_all = []
+        for y in years:
+            num, den = [], []
+            for r in reps:
+                n = d = 0
+                for true, freeze, *entries in r["diag"][cand]["v31"]["edge_families"]:
+                    if not lo <= true < hi:
+                        continue
+                    entry = entries[col_i - 2]
+                    if by == "programme":
+                        if freeze >= y * 252:
+                            continue
+                        d += 1
+                        n += int(0 <= entry <= y * 252)
+                    else:
+                        if freeze + y * 252 > 2520:
+                            continue
+                        d += 1
+                        n += int(0 <= entry <= freeze + y * 252)
+                    true_all.append(true)
+                num.append(n)
+                den.append(d)
+            e, a, b = ratio_ci(num, den) if sum(den) else (math.nan, math.nan, math.nan)
+            row["years"][y] = {"share": e, "lo": a, "hi": b, "n": int(sum(den)), "entered": int(sum(num))}
+        row["mean_true_sharpe"] = float(np.mean(true_all)) if true_all else math.nan
+        out.append(row)
+    return out

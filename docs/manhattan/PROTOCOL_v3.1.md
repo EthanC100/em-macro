@@ -1,6 +1,7 @@
 # Manhattan Protocol v3.1: rules of evidence
 
-Version **3.1.0**, 2026-11-12, written by session "5M Manhattan C" for Ethan to adopt. It is the whole protocol:
+Version **3.1.0**, 2026-11-12, written by session "5M Manhattan C" for Ethan to adopt; section 9.1 was revised
+on 2026-11-13 by session "6M Manhattan C", **before adoption** (change 5 below). It is the whole protocol:
 [PROTOCOL_v3.md](PROTOCOL_v3.md) (3.0.0) with the changes listed below. Version 3.0.0 stays in the repository,
 unchanged and protected. Structure and data roles are in [ARCHITECTURE.md](ARCHITECTURE.md); the state of the work
 is in [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md).
@@ -17,8 +18,10 @@ it solves, what it assumes and how it fails. Every symbol is in section 1.
 
 ## What changed from 3.0.0, and why
 
-Every change comes from the **pilot on development scenarios** (`results/manhattan_sim/PILOT_REPORT.md`,
-2026-11-12: 12 replications a run, deciding nothing). SIM_PREREG.md gives development scenarios exactly this use:
+Changes 1 to 4 come from the **pilot on development scenarios** (`results/manhattan_sim/PILOT_REPORT.md`,
+2026-11-12: 12 replications a run, deciding nothing). Change 5 comes from the **pilot rerun of this draft**
+(`results/manhattan_sim/v2/PILOT_RERUN_REPORT_5M.md`, the same day: the first time the dormancy rule could be
+measured at all). SIM_PREREG.md gives development scenarios exactly this use:
 they "may be run as often as needed while the code is written and the methods are revised" (its section 3). The
 held-out scenarios, which run only in a confirmation run from a tagged commit (its section 8.1), judge the final
 methods.
@@ -29,14 +32,19 @@ methods.
 | 2 | §7, §9.1, Appendix B | **An analytic normal-normal hierarchical model replaces the sampled one.** Closed-form posteriors on a fixed grid of hyperparameters; the same single retention parameter; selection still handled once; wide normal components for prior-data conflict; family portfolios only (no hypothesis level); one common forward shock in place of the full sampling covariance; a grid check replaces the sampler's convergence gate. The sampled model of 3.0.0 stays as an optional robustness check that decides nothing (§7.4) | The model-fitting half of the pilot produced **no result**: one replication of D10, with the sampler at a fifth of its budget, was stopped unfinished after 2 hours 31 minutes of CPU time; at the pre-registered count that is of the order of 50,000 CPU-hours. Sampled as written, the model also did not mix (`R̂` about 3.5) and had to be re-expressed | No calibration result exists for any scenario, development or held-out, under either model: there was nothing to tune to. The priors and constants that survive are those fixed in 3.0 (`w`, `s_R`, 0.02, `θ_min`, every prior centre and scale). The model is judged by the held-out scenarios run at HB size (H03, H05, H06, H07, H09, H10, H11), none of which has been coded |
 | 3 | §5.3, §7.3 | **The rule that adaptive-channel families carry zero evidential weight on the reserve now cites its evidence and is enforced in code.** The rule itself is that of 3.0.0 | **D09b**: with three adaptive rounds proposed after looking at the reserve window, the SPA test recomputed on the full set rejects 0.344 (0.307 to 0.380) of families with no edge at the 0.05 level | The rule was written in 3.0.0 before any simulation; the pilot agrees with it. Nothing was changed to fit a result |
 | 4 | §5.1, Appendix C | **Two wording fixes** (ETHAN_ACTIONS item 14) and the stale sentence in Appendix C: what is Hansen's and what is the protocol's own in the p-value; what `g(x) = x` is. **Wording only; no rule changed** | none: found when the formulas were checked against the papers (MANHATTAN_PROGRESS, "Phase C entry criteria") | not a change of method |
+| 5 | §9.1, Appendix B (and one sentence of §7.2(e)) | **Pre-adoption change (2026-11-13). A family becomes dormant only if its own forward record also speaks against it.** Beside the forecast `PP_f^max < 0.05` of 3.0, the one-sided p-value of the family's own forward record against "the edge is at least `θ_min`", `p^F_f = Φ((y^F_f − θ_min)/s^F_f)`, must be below 0.05 at the same two consecutive reviews; a dormant family is reactivated when either number is at or above 0.15. The thresholds are those of 3.0 (0.05 twice, 0.15); the forecast is computed as before | **Pilot rerun of this draft** (12 replications a scenario): premature elimination **0.167 (0.045 to 0.261)** in D02, **0.179 (0.138 to 0.216)** in D05, **0.108 (0.081 to 0.138)** in D08 and **0.146 (0.092 to 0.197)** in D10, against a bound of 0.10 on the upper end. From the run records (152 retired families with an edge): the forecast was 0.00 for nine in ten of them and stays 0.00 with the family's **true** edge in place of the posterior draws; their own forward estimates had a median of 0.28 to 0.58 and were below `θ_min` at the 0.05 level for 0% to 6% of them. The cut-offs, the minimum forward record and the review dates are not the cause (`results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`) | D02, D05, D08 and D10 are development scenarios. The metric, its bound of 0.10 (0.25 for late starters in H09), the scenarios and every threshold of SIM_PREREG_v2 are unchanged, and no threshold of the rule moved. The second condition was not found by a search: it is the one statistic whose error is controlled **for a family that has an edge**, which is what the criterion measures, and its level is the 0.05 the rule already had. It is judged by the held-out scenarios run at HB size, H09 (dormancy then reactivation) among them, none of which has been coded |
 
 What 3.1.0 does **not** change: the screening candidates (§4), the forward e-process and e-LOND (§6), the tiers (§8),
-the dormancy rule (§9.1's thresholds), every level and every constant of Appendix B that 3.0 fixed. The pilot gave no
-reason to touch them, and none of its other observations (candidate (ii)'s low power, slow formal support, the
-variance-ratio rule's cost under serial correlation) is a failure of a rule.
+the thresholds of the dormancy rule (0.05 twice and 0.15, §9.1), the cost and reactivation rules (§9.2, §9.3), every
+level and every constant of Appendix B that 3.0 fixed. The pilots gave no reason to touch them, and none of their
+other observations (candidate (ii)'s low power, slow formal support, the variance-ratio rule's cost under serial
+correlation, how seldom "Statistically supported" is reached) is a failure of a rule. One observation is recorded
+as a **known limitation** and not repaired: the central model's calibration where most families have no edge at
+all and the rest have clear ones (pilot scenario D08; §7.2(d), "How it fails").
 
-The pilot rerun that tests changes 1 and 2 on the development scenarios is reported in
-`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`. It is again a pilot and decides nothing.
+The pilot rerun that tests changes 1, 2 and 5 on the development scenarios is reported in
+`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md` (the rerun made before change 5 is kept beside it as
+`PILOT_RERUN_REPORT_5M.md`). It is again a pilot and decides nothing.
 
 ---
 
@@ -989,11 +997,29 @@ every family as its "conflict" weight.
 > is otherwise dragged to the group; a family whose forward record contradicts its history is otherwise forced to
 > fit both. The wide component lets the data win when the conflict is large.
 >
-> **How it fails.** It also lets a lucky outlier keep more of its luck: a family with no edge whose forward
+> **How it fails.** (1) It also lets a lucky outlier keep more of its luck: a family with no edge whose forward
 > estimate is three standard errors above zero is given a posterior probability near one half by the central
 > model until its record lengthens. The tier rules use the most cautious of six models for that reason. The wide
 > component is a normal, not the Student-t of 3.0.0, so its tails are lighter; that is the price of the closed
-> form.
+> form. (2) **Known limitation: the prior on the apparent edge is one bell, with a tenth of its mass spread
+> wide.** It has no group of families with no edge at all whose share is learned. Where edges are rare the bell
+> sits on the families with no edge and the wide component holds the rest, and the central model is well
+> calibrated (pilot: calibration error 0.004 to 0.019 at year 10 in D01, D02, D05 and D10). Where a large share
+> of families has no edge and the rest have clear ones, the bell has to cover both groups and its centre lands
+> between them, near `θ_min`. In pilot scenario D08 (each family the best of 20: two thirds of the families
+> have an edge of exactly zero, one third an edge of 0.25 or more, almost none in between) the fitted bell is
+> centred at 0.26 with spread 0.39, and families with no edge are given middling probabilities: at year 10
+> those given 0.2 to 0.3 have an edge 0.07 of the time, 0.4 to 0.5, 0.18, and 0.7 to 0.8, 0.57, while those
+> given above 0.8 have one 0.90 to 0.99 of the time. Between 69% and 96% of the families in the bins from 0.1
+> to 0.6 have an edge of exactly zero. The central model's calibration error there is 0.034 at year 4, 0.069
+> at year 7 and **0.101 (0.034 to 0.136)** at year 10, against a bound of 0.10 (12 replications). The cause was
+> checked outside the model: on the same estimates, a prior made of a point mass at zero and one bell, fitted
+> to each replication, has a calibration error of 0.013 (0.006 to 0.031). That is a different model, not a
+> correction of this one: it would change every posterior probability in every scenario and needs its own
+> derivation, tests and pilot, so it is left to a later version (ETHAN_ACTIONS item 21). What rests on the top
+> of the scale is not affected by it: of the families with `Π^min ≥ 0.80` at year 10 in D08, 112 of 113 have
+> an edge. What rests on the middle is: route (b) into Promising (`Π^min ≥ 0.40`), and the criterion itself
+> (SIM_PREREG V6). If the full run confirms the number, V6 fails in D08 and the posterior-based tiers stay off.
 
 **(e) Required sensitivity analysis.** Every review fits six models:
 
@@ -1007,7 +1033,8 @@ every family as its "conflict" weight.
 | S5 | forward decay: `θ_f` at forward age `u` years is `θ_f · 2^(−u/3)` |
 
 `Π_f^min` is the smallest `Π_f` over the six and `Π_f^max` the largest. **Tier entry uses `Π_f^min`; dormancy uses
-`Π_f^max`** (so that neither promotion nor abandonment rests on one prior). Reports show the range. S4 was "no
+the forecast of the most hopeful model, `PP_f^max`, and the family's own forward record** (so that promotion does
+not rest on one prior, and abandonment on none: section 9.1). Reports show the range. S4 was "no
 cross-correlation and `ψ_H = ψ_F = 1.5`" in 3.0.0; no model uses a full correlation matrix any more ((g) below), and
 S4 keeps the common shock like the others, so what remains of it is the inflated standard error. Under S5 the forward estimate of a record of `u` years has mean
 `θ_f` times the average of `2^(−t/3)` over the record, and `Π_f` is about the edge at the family's current age.
@@ -1137,23 +1164,77 @@ This tier can be reached from Promising without passing through the live tiers.
 
 ### 9.1 The rule
 
-At each review, for each family below Statistically supported:
+At each review, for each family below Statistically supported, two numbers:
 
 ```
-PP_f = Pr( f enters Statistically supported at some review on or before T_end | data so far )
+PP_f  = Pr( f enters Statistically supported at some review on or before T_end | data so far )
+p^F_f = Φ( (y^F_f − θ_min) / s^F_f )
 ```
 
-computed by simulating the family's future forward record from the posterior to `T_end` and applying section 8.2,
-under each of S0-S5. `PP_f^max` is the largest of the six. The draws come from the closed-form posterior of
-section 7.1 (a grid node, then a component, then a normal).
+`PP_f` is the **forecast**. It is computed by simulating the family's future forward record from the posterior to
+`T_end` and applying section 8.2, under each of S0-S5. `PP_f^max` is the largest of the six. The draws come from
+the closed-form posterior of section 7.1 (a grid node, then a component, then a normal).
+
+`p^F_f` is the **family's own forward record**: the one-sided p-value of the hypothesis "the edge of `f` is at
+least `θ_min`". `y^F_f` and `s^F_f` are the forward sample Sharpe ratio of `P_f` and its standard error (section
+7.1) and `Φ` is the standard normal distribution function. It uses the family's forward returns and nothing else:
+no prior, no other family, no reserve result. It is defined once the family has at least 252 forward days;
+before that it is 1.
 
 | | rule |
 |---|---|
-| **Become dormant** | `PP_f^max < 0.05` at two consecutive reviews |
-| **Reactivate** | `PP_f^max ≥ 0.15` at any review, or on Ethan's recorded request |
+| **Become dormant** | `PP_f^max < 0.05` **and** `p^F_f < 0.05`, both at two consecutive reviews |
+| **Reactivate** | `PP_f^max ≥ 0.15` **or** `p^F_f ≥ 0.15` at any review, or on Ethan's recorded request |
 | **While dormant** | no review write-up, no adaptive variants, no tier evaluation other than the reactivation check. The family's data **stay in the model** of section 7 |
 
-With `programme.end` unset (the default), `T_end` is undefined and no family becomes dormant.
+With `programme.end` unset (the default), `T_end` is undefined and no family becomes dormant. At a review with no
+forecast (no later review before `T_end`) no family becomes dormant either; a dormant family can still be
+reactivated there by its forward record.
+
+> **In plain English.** A family is put aside only when two things are true at two reviews running. The model
+> sees almost no chance that it will reach the supported tier in the time left. And its own live record, read
+> with nothing else, is too poor for a family whose edge is `θ_min`: a record that poor would turn up less than
+> one time in twenty. If either stops being true by a clear margin, the family comes back.
+>
+> **Problem the second condition solves.** In 3.0 the forecast decided alone. In the pilot of this draft that
+> retired 11% to 18% of the families that **had** an edge (the bound is 10%). The run records showed why. The
+> forecast asks whether the family will reach a tier, not whether it has an edge, and for most families with a
+> real edge the answer is no: the tier needs the most cautious of six models to say 0.80, one of which asks
+> about an edge that has been halving every three years. And the forecast is drawn from a posterior that
+> leans on the other families: where edges are rare the model is rightly almost sure that any one family has
+> none, and the few that have are forecast with the rest. Of the 152 families with an edge that the rule
+> retired, nine in ten had a forecast of exactly 0.00, and it stayed 0.00 when their true edge was put in
+> place of the posterior draws; their own forward estimates had a median of 0.28 to 0.58 and were below
+> `θ_min` at the 0.05 level for 0% to 6% of them. "Cannot reach the tier in time" and "the model expects
+> nothing of it" are reasons to stop writing about a family; neither is evidence that it has no edge.
+>
+> **What the second condition guarantees.** The criterion the rule must meet is stated for a family that has an
+> edge (SIM_PREREG V7), so the rule needs an error that is controlled for such a family, whatever the other
+> families are. `p^F_f` is that: if the edge of `f` is exactly `θ_min`, then `p^F_f < 0.05` at a given review
+> with probability 0.05, and less with a larger edge. Dormancy also needs the forecast and a second review, so
+> it is rarer still. The same number is the posterior probability of `θ_f ≥ θ_min` under a flat prior on the
+> family's own forward record: the rule asks the model that pools every family and the reading that pools
+> none, and puts a family aside only when both agree.
+>
+> **Assumes.** For `p^F_f`: that the standard error of the forward Sharpe ratio is right (the bootstrap of
+> section 5.2) and that a year of forward days is enough for a normal approximation. For the forecast: the
+> model of section 7 and a declared approximation (each model's posterior is updated by the simulated future
+> record as a normal observation, not refitted), which makes the forecast too low for a family the model has
+> shrunk hard. Under this rule that error can only let the first condition hold more often; it cannot make a
+> family dormant, because the second condition does not use the model.
+>
+> **How it fails.** (1) **It retires few families, and that is arithmetic.** An edge of 0 and an edge of
+> `θ_min = 0.25` differ by a quarter of a Sharpe ratio, and the standard error of a forward Sharpe ratio after
+> `T` years is about `1/√T`. A family with no edge has `p^F < 0.05` with probability about 0.10 after two
+> years, 0.13 after four and 0.20 after ten, so most families with no edge are never dormant and the attention
+> dormancy saves is small (the measured cost is in the pilot rerun report). Ten years of returns cannot tell an
+> edge of 0 from an edge of 0.25; a rule that retires more does it on the model's word about the other
+> families, and retires real edges with the rest, which is what 3.0's rule did. (2) **The 0.05 is per review,
+> not per life.** Over many reviews a family whose edge is exactly `θ_min` is dormant at some time more often
+> than one time in twenty. Reactivation limits the harm, and the criterion counts a family dormant at the end
+> or for more than half its forward life. (3) A family whose edge appears late has a poor early record and can
+> be put aside on it; it comes back only when its whole record has recovered (section 9.3). (4) Fat tails and
+> serial correlation make the standard error, and so `p^F`, less exact; the simulation measures it.
 
 ### 9.2 The cost of continued evaluation, stated explicitly
 
@@ -1229,6 +1310,7 @@ no minute-frequency or newly purchased data.
 |---|---|---|
 | 3.0.0 | 2026-11-12 | first committed version (PROTOCOL_v3.md, unchanged) |
 | 3.1.0 | 2026-11-12 | after the pilot on development scenarios, before any full or held-out run: (1) §5.1, §5.2, §5.4: the SPA test re-estimates the core hedge in every resample and centres at the window's least-squares intercept (pilot D11: size 0.077 at 0.05); (2) §7, §9.1, Appendix B: an analytic normal-normal hierarchical model on a fixed grid replaces the sampled model, which stays as an optional check that decides nothing (the sampled model could not be run: of the order of 50,000 CPU-hours); (3) §5.3, §7.3: the zero evidential weight of the adaptive channel on the reserve cites pilot D09b and is enforced in code; (4) §5.1, Appendix C: wording only, no rule changed (ETHAN_ACTIONS item 14). Details and the reasons this is not tuning to held-out results: "What changed from 3.0.0, and why" at the top |
+| 3.1.0, pre-adoption change | 2026-11-13 | made to the draft before Ethan adopted it, and before any full or held-out run: §9.1, Appendix B (and one sentence of §7.2(e)): a family becomes dormant only if, at the same two consecutive reviews, the forecast `PP^max` is below 0.05 **and** the one-sided p-value of its own forward record against an edge of `θ_min` is below 0.05; it is reactivated when either is at or above 0.15. Motivated by the pilot rerun of this draft, in which the rule of 3.0 retired 0.108 to 0.179 of the families with an edge in D02, D05, D08 and D10 against the bound of 0.10 (0.167 (0.045 to 0.261), 0.179 (0.138 to 0.216), 0.108 (0.081 to 0.138), 0.146 (0.092 to 0.197)). No threshold of the rule changed (0.05 twice, 0.15), and no metric, bound, scenario or threshold of the simulation pre-registration. §7.2(d) also records a known limitation of the model's calibration (D08: 0.101 at year 10), which is not repaired. Details: row 5 of "What changed from 3.0.0, and why" |
 
 ---
 
@@ -1305,6 +1387,7 @@ The grid on which section 7 integrates the hyperparameters, fixed in v3.1 (no no
 | pruning | a `(μ_A, τ_A, ψ)` node whose reserve-only posterior is below `e^−18` of the largest is skipped; a family's posterior is summed over the grid cells that hold at least `10^−10` of the posterior weight in some class | §7.2(c) |
 | `r` | measured, not fixed: at most 0.9 | §7.1 |
 | draws for the dormancy forecast | 200 per family and model | §9.1 |
+| dormancy: the family's own forward record | `p^F_f = Φ((y^F_f − θ_min)/s^F_f)` below 0.05 at the same two reviews as the forecast; reactivation at 0.15 (the thresholds of 3.0, applied to both numbers); at least 252 forward days | §9.1 |
 
 ## Appendix C. References
 
