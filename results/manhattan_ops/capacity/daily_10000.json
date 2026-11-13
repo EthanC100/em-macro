@@ -1,0 +1,17 @@
+{
+ "n_executables": 10000,
+ "mode": "daily",
+ "workers": 4,
+ "wall_seconds": 25.99,
+ "cpu_seconds": 98.88,
+ "parent_cpu_seconds": 0.07,
+ "peak_rss_mib_largest_process": 44.3,
+ "peak_rss_mib_parent": 34.4,
+ "check": 1564866,
+ "machine": {
+  "cpus": 4,
+  "python": "3.13.18",
+  "platform": "Linux-6.18.44-fc-v445-x86_64-with-glibc2.39"
+ },
+ "data": "synthetic, 6 instruments, sessions 2005-01-03 to 2019-12-31"
+}
