@@ -29,9 +29,15 @@ TINY_HB = world.Size("HB", 4, 5, 5, 2, 3, 5, 10)
 def tiny(monkeypatch):
     monkeypatch.setitem(world.SIZES, "STD", TINY)
     monkeypatch.setitem(world.SIZES, "HB", TINY_HB)
-    # a coarse grid: these tests are about plumbing, and an HB replication now has 40 reviews of six fits each
+    # a coarse grid in every dimension: these tests are about plumbing, and an HB replication now has 40 reviews
+    # of six fits each (the grid of Protocol 3.1 Appendix B is checked in tests/test_manhattan_hier_analytic.py)
     monkeypatch.setattr(hier_analytic, "MU_A_GRID", hier_analytic.MU_A_GRID[::12])
     monkeypatch.setattr(hier_analytic, "TAU_A_GRID", hier_analytic.TAU_A_GRID[::3])
+    monkeypatch.setattr(hier_analytic, "MU_RHO_Z", hier_analytic.MU_RHO_Z[::4])
+    monkeypatch.setattr(hier_analytic, "SIGMA_RHO_GRID", hier_analytic.SIGMA_RHO_GRID[::2])
+    w = np.exp(hier_analytic.NU_LOGW[::3])
+    monkeypatch.setattr(hier_analytic, "NU_GRID", hier_analytic.NU_GRID[::3])
+    monkeypatch.setattr(hier_analytic, "NU_LOGW", np.log(w / w.sum()))
     return TINY
 
 
@@ -376,6 +382,26 @@ def test_records_of_another_review_step_are_refused(tmp_path):
     assert [r["rep"] for r in found[("D02", "HB")]["reps"]] == [0] and found[("D02", "HB")]["other_code_reps"] == 2
     path.write_text(json.dumps(rows[2]) + "\n", encoding="utf-8")                   # only records of another calendar on file
     assert ("D02", "HB") not in report_v2.collect(tmp_path)
+
+
+def test_the_report_shows_the_small_sample_interval_beside_premature_elimination(tmp_path):
+    """On a pilot "0.000 (0.000 to 0.000)" means no event in the replications run. The report prints beside it the
+    interval with the replication as the unit: the exact bound over replications when no replication had an event."""
+    code = run.code_hash("HB", version="v2")
+    for scenario, gone in (("D02", 0), ("D05", 1)):
+        path = run.reps_path(scenario, "HB", seeds.DEVELOPMENT, tmp_path, "v2")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = [{**hb_rep(), "rep": k, "code": code, "scenario": scenario, "m8_num_i": gone if k % 2 else 0} for k in range(12)]
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    text, summary = report_v2.build(tmp_path)
+    d02, d05 = summary["dormancy"]["D02"], summary["dormancy"]["D05"]
+    assert (d02["retired"], d02["n_edge"], d02["m8"][0]) == (0, 120, 0.0)
+    assert d02["m8_small_sample"] == pytest.approx((0.0, 1 - 0.025 ** (1 / 12)))      # 0.265, above the bound of 0.10
+    assert "| D02 | 12 | 120 | 0 | 0.000 (0.000 to 0.000) | **0.000 (0.000 to 0.265)** |" in text
+    # with events in some replications: the jackknife standard error and a Student-t quantile on 11 degrees of freedom
+    lo, hi = d05["m8_small_sample"]
+    assert d05["retired"] == 6 and d05["m8"][0] == pytest.approx(0.05) and lo < d05["m8"][1] <= 0.05 <= d05["m8"][2] < hi
+    assert "**the same, small-sample interval**" in text and "not a rate of zero" in text
 
 
 # ------------------------------------------------------------------ the text

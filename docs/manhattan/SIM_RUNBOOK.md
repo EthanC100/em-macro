@@ -17,10 +17,10 @@ them** ([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 19). The script runs both by d
 | Development scenarios at **STD and LONG**, except D11 (17 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | version 1, by its unchanged code; the 192 pilot replications on file count | **yes** | 60 to 150 seconds per replication on one idle core (the pilot's 67 to 355 were measured on a busy machine); about **950 to 1,190 CPU-hours** |
 | **D11** (1 run × 2,000): the same pipeline with the hedge re-estimated in every bootstrap resample | version 2 | **yes**, after item 19 | about 370 seconds per replication (the pipeline plus three SPA tests on the same resamples); about **200 CPU-hours** |
 | **Hedged twins** D01h to D08h (9 runs × 400): the SPA test only | version 2 | **yes**, after item 19 | 210 to 600 seconds per replication (measured: 290, 260, 304, 207, 291, 251, 305, 246 and 599); about **300 CPU-hours** |
-| Development scenarios at **HB** (5 runs × 400): the analytic hierarchical model, tiers, dormancy | version 2 | **yes**, after item 19 | 70 to 150 seconds per replication, 16 seconds for the six fits of a review; about **50 CPU-hours** |
+| Development scenarios at **HB** (5 runs × 400): the analytic hierarchical model, tiers, dormancy, reviewed every quarter (amendment 1) | version 2 | **yes**, after item 19 | 650 to 1,500 seconds per replication with four jobs on four cores (session 10M's pilot), 22 seconds for the six fits of a review on average, 40 reviews a replication; about **520 CPU-hours**. Up to 3.3 GB a worker |
 | Held-out scenarios (H01 to H12) and the confirmation run | both | **no**: their worlds are not coded, and they may run only from a tagged commit after the development criteria are met | - |
 
-In all: about **1,500 to 1,750 CPU-hours**: roughly **9 to 10.5 days on 8 cores** with seven workers (the script's default leaves one core free). The measured figures are from pilots on a 4-core machine with four workers, and version 1's share is the uncertain one: its pilot ran on a busier machine. Before Protocol v3.1 the STD and LONG half alone was about 5 days and the HB half could not be run at all.
+In all: about **2,000 to 2,200 CPU-hours** (the first three rows as before, about 1,500 to 1,700 by the pilot timings and about 1,200 on an idle core; the HB row about 520 since the quarterly reviews of amendment 1): roughly **12 to 13 days on 8 cores** with seven workers (the script's default leaves one core free), or a day and a half on GitHub's runners (section 8). The measured figures are from pilots on a 4-core machine with four workers, and version 1's share is the uncertain one: its pilot ran on a busier machine. Before Protocol v3.1 the STD and LONG half alone was about 5 days and the HB half could not be run at all.
 
 ## 2. Set up once
 
@@ -169,10 +169,10 @@ python -m manhattan.sim.report --prereg v2 && python -m manhattan.sim.report_v2
 run's `manhattan-sim-piece-earlier-runs` artifact already holds the earlier ones.) Then section 5 above: commit
 `results/manhattan_sim/` on a branch and open a pull request. The workflow itself commits nothing.
 
-**Size.** With the timings on file the plan is a little over 256 pieces and of the order of 800 runner-hours, so
-about two days at 20 jobs at once, and probably a second run for the last pieces. Those are estimates from this
-repository's pilot timings, most of them measured on a busy machine, and from an assumed runner speed; the plan
-job's summary gives the figure for the commit it runs from. A piece is sized to 60% of what its job could do at
+**Size.** With the timings on file (`python -m manhattan.sim.collect plan`) the plan is **225 pieces** for about
+2,200 core-hours: one run of the workflow, of the order of 650 runner-hours, so about a day and a half at 20 jobs
+at once. Those are estimates from this repository's pilot timings, most of them measured on a busy machine, and
+from an assumed runner speed; the plan job's summary gives the figure for the commit it runs from. A piece is sized to 60% of what its job could do at
 the timings' speed, so a slower runner still finishes most pieces, and one that does not is continued by
 "Re-run failed jobs". HB pieces use three workers, not four: an HB replication with quarterly reviews peaks at
 3.3 GB.

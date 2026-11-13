@@ -99,3 +99,34 @@ A machine with whole cores should lose little to parallelism (each worker is one
 - The development programme is about 1,252 hours of one core like this session's; a confirmation run about 877 more.
 - On the iMac that is four to eight days of a machine doing nothing else for the development programme, and one to two weeks with a confirmation run, depending on which iMac it is. On GitHub's free runners it is under a day of wall-clock for the development programme and a workflow to write. On rented cores it is tens of dollars and a day.
 - The model-fitting half (HB) is small on every option. The bulk is version 1's STD runs and the hedge-aware bootstrap (D11 and the twins).
+
+## 5. Addendum (session "10M Manhattan C: final pre-adoption changes", 2026-11-13): quarterly reviews, and a workflow
+
+Sections 1 to 4 are as session 6M wrote them and describe the HB runs with four review dates. Two things have
+changed since.
+
+**The HB runs are reviewed every quarter** (SIM_PREREG_v2 amendment 1): 40 reviews of six fits each in place of
+four. Measured on session 10M's pilot (12 replications a scenario, four jobs on the machine's four cores):
+
+| scenario at HB | seconds a replication | of which the model | mean seconds for the six fits of a review |
+|---|---|---|---|
+| D01 | 653 | 627 | 15 |
+| D02 | 721 | 691 | 17 |
+| D05 | 860 | 829 | 20 |
+| D08 | 1,489 | 1,428 | 35 |
+| D10 | 993 | 969 | 23 |
+
+One replication of D08 alone on a machine with one other job running took 1,201 seconds and peaked at **3.3 GB**
+(1.8 GB at four dates): the first reviews of a programme use nearly the whole grid. The five HB runs at 400
+replications are therefore about **520 core-hours** (section 2 says 57), and three workers, not four, fit a
+16 GB runner. With that, the development programme is about 1,700 hours of one idle core (section 2's 1,252 with
+the HB row replaced) and about 2,200 by the timings on file, most of which were measured on a busy machine.
+
+**The workflow for option (b) exists**: `.github/workflows/manhattan-sim.yml`, with
+`python -m manhattan.sim.collect` to plan and merge its pieces (docs/manhattan/SIM_RUNBOOK.md section 8). It was
+written by session 10M and has not been started: no session dispatches it, and it can only be started once it
+is on main. From the records now on file its plan is 225 pieces (HB pieces with three workers), of the order of
+650 runner-hours: about a day and a half at 20 jobs at once, at US$0, if a runner's core is as fast as the
+session's. `python -m manhattan.sim.benchmark --quick` still measures a machine's speed, but its HB half now
+takes about 20 minutes, not three.
+

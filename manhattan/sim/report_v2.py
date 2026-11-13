@@ -23,7 +23,7 @@ from manhattan import prereg_v2
 
 from . import criteria as cr
 from . import criteria_v2 as cr2
-from . import hb_v2, metrics, metrics_v2, pipeline_v2, run, runlog, seeds, world
+from . import cluster_ci, hb_v2, metrics, metrics_v2, pipeline_v2, run, runlog, seeds, world
 from .report import fmt, table
 
 READINGS = (
@@ -250,10 +250,15 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
         L += ["", "### Dormancy under Protocol 3.1 §9.1: what it retires and what it leaves to review (candidate (i))", "",
               "Premature elimination is M8 (bound 0.10 on the upper end of the interval). The other columns have no "
               "threshold: they are the attention the rule saves. A review is written for every family that is not "
-              "dormant both before and after a review.", "",
-              "| scenario | replications | premature elimination (M8) | families with a true edge dormant at the end | "
-              "families with no edge dormant at the end | families dormant at the end, of 240 | reviews written per "
-              "replication | family-reviews per replication |", "|---|---|---|---|---|---|---|---|"]
+              "dormant both before and after a review. **The small-sample interval** beside M8 is the one to read on a "
+              "pilot: the same estimate with the delete-one-replication jackknife and a Student-t quantile, and, where "
+              "no replication retired a family, the exact bound over replications, `1 − 0.025^(1/R)` "
+              "(`manhattan.sim.cluster_ci`). \"0.000 (0.000 to 0.000)\" in the pre-registered form means no event in "
+              "the replications run, not a rate of zero.", "",
+              "| scenario | replications | families with a true edge | retired | premature elimination (M8), pre-registered "
+              "interval | **the same, small-sample interval** | families with no edge dormant at the end | families "
+              "dormant at the end, of 240 | reviews written per replication | family-reviews per replication |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
         summary["dormancy"] = {}
         for s_, v in hb_runs:
             a = att[s_]
@@ -261,9 +266,16 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
                 continue
             m8 = metrics.ratio_ci(metrics.col(v["reps"], "m8_num_i"), metrics.col(v["reps"], "m8_den_i"))
             n_edge = int(metrics.col(v["reps"], "m8_den_i").sum())
-            summary["dormancy"][s_] = {"m8": m8, "n_edge": n_edge, **a}
-            L.append(f"| {s_} | {len(v['reps'])} | {cell(m8) if n_edge else '- (no family has an edge)'} | "
-                     f"{cell(a['edge_dormant_share']) if n_edge else '-'} | {cell(a['null_dormant_share'])} | "
+            gone = int(metrics.col(v["reps"], "m8_num_i").sum())
+            jk = cluster_ci.jackknife(lambda x: [metrics.Row(
+                "M8", "premature elimination", *metrics.ratio_ci(metrics.col(x, "m8_num_i"), metrics.col(x, "m8_den_i")),
+                0, "ratio", "V7", f"upper bound ≤ {cr.V7_ELIM_MAX:g}", True, "pilot")], v["reps"]) if n_edge else []
+            small = (jk[0]["lo"], jk[0]["hi"]) if jk and jk[0]["lo"] is not None else None
+            summary["dormancy"][s_] = {"m8": m8, "n_edge": n_edge, "retired": gone, "m8_small_sample": small, **a}
+            L.append(f"| {s_} | {len(v['reps'])} | {n_edge} | {gone if n_edge else '-'} | "
+                     f"{cell(m8) if n_edge else '- (no family has an edge)'} | "
+                     + (f"**{fmt(m8[0], 3)} ({fmt(max(small[0], 0.0), 3)} to {fmt(small[1], 3)})**" if small else "-")
+                     + f" | {cell(a['null_dormant_share'])} | "
                      f"{cell(a['dormant_end'], 1)} | {cell(a['written'], 1)} | {a['family_reviews']:.0f} |")
     power = {s_: metrics_v2.tier_power(v["reps"]) for s_, v in hb_runs}
     if any(power.values()):

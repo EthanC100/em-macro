@@ -102,3 +102,14 @@ def test_the_report_on_the_records_in_the_repository():
     tq = student_t.ppf(0.975, r["replications"] - 1)
     assert (r["hi"] - r["lo"]) / (r["old_hi"] - r["old_lo"]) == pytest.approx(tq / metrics.Z95, rel=1e-6)
     assert all(not r["changed"] for r in rows if r["old_verdict"].startswith("not evaluated"))
+
+
+def test_the_hb_runs_of_the_code_now_checked_out_can_be_reported_alone():
+    """``--current-hb``: the pilot of the drafts as they stand, without the superseded pilots beside it."""
+    text, summary = cluster_ci.build(current_hb=True)
+    assert text.startswith("# Manhattan simulation: every interval with the replication as the unit of clustering: the HB runs")
+    assert {r["source"] for r in summary["rows"]} <= {cluster_ci.HB_CURRENT} and all(r["run"].endswith(" HB") for r in summary["rows"])
+    assert "PILOT_RERUN3_REPORT.md" in cluster_ci.HB_CURRENT and "quarterly reviews" in cluster_ci.HB_CURRENT
+    # the two earlier HB pilots keep their own labels in the full file and are never pooled with the current one
+    assert set(cluster_ci.HB_SOURCES) == {cluster_ci.PILOT_5M_HB_CODE, cluster_ci.PILOT_6M_HB_CODE}
+    assert "superseded" in cluster_ci.HB_SOURCES[cluster_ci.PILOT_5M_HB_CODE] and "Π^max" in cluster_ci.HB_SOURCES[cluster_ci.PILOT_6M_HB_CODE]

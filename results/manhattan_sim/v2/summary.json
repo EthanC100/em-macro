@@ -7,13 +7,13 @@
    "timed_runs": 1
   },
   "HB": {
-   "cpu_hours": 46.86087962962963,
+   "cpu_hours": 508.2108425925926,
    "replications_left": 1940,
    "runs": 5,
    "timed_runs": 5
   },
-  "six_fits_seconds_mean": 15.291779166666666,
-  "total_cpu_hours": 1740.8587518518518,
+  "six_fits_seconds_mean": 21.730246666666666,
+  "total_cpu_hours": 2202.208714814815,
   "twin": {
    "cpu_hours": 301.2689990740741,
    "replications_left": 3546,
@@ -36,157 +36,179 @@
  "dormancy": {
   "D01": {
    "dormant_end": [
-    33.833333333333336,
-    29.218821747941316,
-    38.44784491872536
+    43.25,
+    32.74170933370833,
+    53.75829066629167
    ],
    "edge_dormant_share": [
     NaN,
     NaN,
     NaN
    ],
-   "family_reviews": 560.0,
+   "family_reviews": 5080.0,
    "m8": [
     NaN,
     NaN,
     NaN
    ],
+   "m8_small_sample": null,
    "n_edge": 0,
    "null_dormant_share": [
-    0.14097222222222222,
-    0.12256944444444444,
-    0.159375
+    0.18020833333333333,
+    0.13680555555555557,
+    0.2204861111111111
    ],
+   "retired": 0,
    "written": [
-    517.75,
-    511.40747182612773,
-    524.0925281738723
+    4442.25,
+    4315.505218109921,
+    4568.994781890079
    ]
   },
   "D02": {
    "dormant_end": [
-    32.583333333333336,
-    28.586442243518857,
-    36.58022442314782
+    30.0,
+    24.12495157982558,
+    35.87504842017442
    ],
    "edge_dormant_share": [
     0.0,
     0.0,
     0.0
    ],
-   "family_reviews": 560.0,
+   "family_reviews": 5080.0,
    "m8": [
     0.0,
     0.0,
     0.0
    ],
+   "m8_small_sample": [
+    0.0,
+    0.2646484693970512
+   ],
    "n_edge": 42,
    "null_dormant_share": [
-    0.13777307963354474,
-    0.12153119224886247,
-    0.1534667410403012
+    0.12684989429175475,
+    0.10578236858661418,
+    0.15327830629830366
    ],
+   "retired": 0,
    "written": [
-    518.25,
-    512.389210674734,
-    524.110789325266
+    4684.166666666667,
+    4604.580400174631,
+    4763.752933158703
    ]
   },
   "D05": {
    "dormant_end": [
-    31.916666666666668,
-    25.351671417143432,
-    38.4816619161899
+    28.5,
+    18.423270732659695,
+    38.576729267340305
    ],
    "edge_dormant_share": [
     0.014285714285714285,
     0.0,
-    0.03226330121491409
+    0.03546099290780142
    ],
-   "family_reviews": 560.0,
+   "family_reviews": 5080.0,
    "m8": [
     0.014285714285714285,
     0.0,
-    0.03226330121491409
+    0.03546099290780142
+   ],
+   "m8_small_sample": [
+    -0.007474783580708208,
+    0.036046212152136776
    ],
    "n_edge": 140,
    "null_dormant_share": [
-    0.13905109489051096,
-    0.11086616514244739,
-    0.16265543335415047
+    0.12408759124087591,
+    0.08509352829989619,
+    0.16660945230297766
    ],
+   "retired": 2,
    "written": [
-    520.0,
-    511.74413560130154,
-    528.2558643986985
+    4630.416666666667,
+    4514.557052612904,
+    4746.27628072043
    ]
   },
   "D08": {
    "dormant_end": [
-    4.333333333333333,
-    -1.0793416527572326,
-    9.746008319423899
+    23.166666666666668,
+    17.970715251274957,
+    28.36261808205838
    ],
    "edge_dormant_share": [
-    0.00211864406779661,
-    0.0,
-    0.00679520959006479
+    0.005296610169491525,
+    0.0010581730930568141,
+    0.010214533582067921
    ],
-   "family_reviews": 560.0,
+   "family_reviews": 5080.0,
    "m8": [
-    0.00211864406779661,
-    0.0,
-    0.00679520959006479
+    0.005296610169491525,
+    0.0010581730930568141,
+    0.010214533582067921
+   ],
+   "m8_small_sample": [
+    -0.00013092399351132076,
+    0.01072414433249437
    ],
    "n_edge": 944,
    "null_dormant_share": [
-    0.025826446280991736,
-    0.005173238869234131,
-    0.058123513610877336
+    0.14101239669421486,
+    0.11099551121591772,
+    0.17596113295958493
    ],
+   "retired": 5,
    "written": [
-    554.1666666666666,
-    546.9820250787045,
-    561.3513082546287
+    4741.583333333333,
+    4676.969754413666,
+    4806.196912253
    ]
   },
   "D10": {
    "dormant_end": [
-    45.333333333333336,
-    42.17538488792793,
-    48.49128177873874
+    69.66666666666667,
+    59.65125631838615,
+    79.6820770149472
    ],
    "edge_dormant_share": [
-    0.008130081300813009,
-    0.0,
-    0.028846153846153848
+    0.04065040650406504,
+    0.008547008547008548,
+    0.08
    ],
-   "family_reviews": 560.0,
+   "family_reviews": 5080.0,
    "m8": [
-    0.008130081300813009,
-    0.0,
-    0.028846153846153848
+    0.04878048780487805,
+    0.016129032258064516,
+    0.08621518567639254
+   ],
+   "m8_small_sample": [
+    0.0074539812239123315,
+    0.09010699438584377
    ],
    "n_edge": 123,
    "null_dormant_share": [
-    0.1969532100108814,
-    0.1846967927945101,
-    0.20864907870451843
+    0.3014145810663765,
+    0.2622733396831169,
+    0.34225903850351885
    ],
+   "retired": 6,
    "written": [
-    501.3333333333333,
-    496.9884322232313,
-    505.6782344434353
+    4012.5833333333335,
+    3854.4433301172853,
+    4170.723336549381
    ]
   }
  },
  "prereg_sha256": "e4bbcc44bebbc601b8bccc0e609131ad5185982f3047108dfaaf2fe2908c21e6",
- "prereg_v2_sha256": "77496b2f4cb785cb8d49258701fdd6f66f4164d3f2394d6af29af92e31754ca4",
+ "prereg_v2_sha256": "65c19e68f673e2eb3254e3d4e226ec90e187976645735ea1bde27babfb6cebbf",
  "protocol_sha256": "4fbb5c72ad7214710aea7417fbf2fe131edb56f4eb83bffccac97478472f3a9f",
- "protocol_v31_sha256": "9fdc8b07838c94f139b6dd686eb5189fb250e2de58da7b67ac1f45f19a1f0046",
+ "protocol_v31_sha256": "c4ce79d25bf1503981ce72071fcb257fe3f268761341fe256db1bf174dfc78a1",
  "runs": {
   "D01_HB": {
-   "code": "630059032fd6e5b8",
+   "code": "4252b971831004e3",
    "replications": 12,
    "rows": [
     {
@@ -196,11 +218,11 @@
      "kind": "count",
      "lo": null,
      "metric": "M12",
-     "n": 48,
+     "n": 480,
      "required": true,
      "threshold": "exactly 0",
      "verdict": "pilot: not decided (none so far)",
-     "what": "reviews not computed (a fit fails the grid gate), of 48"
+     "what": "reviews not computed (a fit fails the grid gate), of 480"
     },
     {
      "criterion": "",
@@ -209,11 +231,24 @@
      "kind": "max",
      "lo": null,
      "metric": "fit",
-     "n": 48,
+     "n": 480,
      "required": false,
      "threshold": "gate: at most 0.01",
      "verdict": "reported",
-     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit"
+     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit of any review"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10",
+     "what": "review calendar"
     },
     {
      "criterion": "",
@@ -243,10 +278,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.036949881729371296,
-     "hi": 0.04125692301409889,
+     "estimate": 0.03720606365260086,
+     "hi": 0.041668007725229245,
      "kind": "ratio",
-     "lo": 0.033633344970287825,
+     "lo": 0.03371188970504747,
      "metric": "M7",
      "n": 600,
      "required": false,
@@ -399,10 +434,10 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.029463416384221303,
-     "hi": 0.032761532483273736,
+     "estimate": 0.029560067386641853,
+     "hi": 0.033057907354145745,
      "kind": "ratio",
-     "lo": 0.026490462201314957,
+     "lo": 0.026441974089047655,
      "metric": "M7",
      "n": 1200,
      "required": true,
@@ -555,10 +590,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.022432064648833454,
-     "hi": 0.023860173075972116,
+     "estimate": 0.022241464162571948,
+     "hi": 0.023535763680127577,
      "kind": "ratio",
-     "lo": 0.02107694074069531,
+     "lo": 0.021000441852492426,
      "metric": "M7",
      "n": 2040,
      "required": false,
@@ -703,18 +738,18 @@
      "kind": "ratio",
      "lo": 0.0,
      "metric": "M7",
-     "n": 2,
+     "n": 1,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (2 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (1 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.018857929984203575,
-     "hi": 0.019777646210923434,
+     "estimate": 0.018572619475581746,
+     "hi": 0.019594757345210927,
      "kind": "ratio",
-     "lo": 0.01810051558460996,
+     "lo": 0.01768151358237504,
      "metric": "M7",
      "n": 2880,
      "required": true,
@@ -737,10 +772,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 1.3528874165967473,
-     "hi": 2.0037037316217767,
+     "estimate": 1.6365512903056596,
+     "hi": 2.0047735092436647,
      "kind": "ratio",
-     "lo": 0.09197291126057941,
+     "lo": 1.1909233728509987,
      "metric": "M9",
      "n": 3,
      "required": true,
@@ -750,10 +785,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.5269060752288323,
-     "hi": 0.8012950009914572,
+     "estimate": 0.31076529074283643,
+     "hi": 0.4223286520247002,
      "kind": "ratio",
-     "lo": 0.3570945726703395,
+     "lo": 0.15287264753346966,
      "metric": "M9",
      "n": 3,
      "required": false,
@@ -789,25 +824,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 1.9833446692648313,
-     "hi": 2.0037037316217767,
+     "estimate": 1.6365512903056596,
+     "hi": 2.0047735092436647,
      "kind": "ratio",
-     "lo": 1.9629856069078857,
+     "lo": 1.1909233728509987,
      "metric": "M9",
-     "n": 2,
+     "n": 3,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (2 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (3 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.38971161234751983,
+     "estimate": 0.31076529074283643,
      "hi": 0.4223286520247002,
      "kind": "ratio",
-     "lo": 0.35709457267033945,
+     "lo": 0.15287264753346966,
      "metric": "M9",
-     "n": 2,
+     "n": 3,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -862,7 +897,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.1 / 0.2 / 0.0 / 33.8",
+     "verdict": "0.1 / 0.2 / 0.0 / 43.2",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
@@ -888,12 +923,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 0.2 / 0.0 / 33.8",
+     "verdict": "0.0 / 0.2 / 0.0 / 43.2",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 65.28333333333335,
+     "estimate": 653.0499999999998,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -906,7 +941,7 @@
     },
     {
      "criterion": "",
-     "estimate": 18.393916666666666,
+     "estimate": 21.72458333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -945,7 +980,7 @@
     },
     {
      "criterion": "",
-     "estimate": 11.040583333333332,
+     "estimate": 13.19225,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -984,7 +1019,7 @@
     },
     {
      "criterion": "",
-     "estimate": 7.182083333333332,
+     "estimate": 8.49825,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -1023,7 +1058,7 @@
     },
     {
      "criterion": "",
-     "estimate": 6.247166666666666,
+     "estimate": 7.456416666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -1062,23 +1097,23 @@
     },
     {
      "criterion": "",
-     "estimate": 517.75,
-     "hi": 524.0925281738723,
+     "estimate": 4442.25,
+     "hi": 4568.994781890079,
      "kind": "mean",
-     "lo": 511.40747182612773,
+     "lo": 4315.505218109921,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (i) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.14097222222222222,
-     "hi": 0.159375,
+     "estimate": 0.18020833333333333,
+     "hi": 0.2204861111111111,
      "kind": "ratio",
-     "lo": 0.12256944444444444,
+     "lo": 0.13680555555555557,
      "metric": "cost",
      "n": 2880,
      "required": false,
@@ -1096,7 +1131,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 50.0 / 50.0",
+     "verdict": "1.7 / 48.8 / 50.0",
      "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -1109,7 +1144,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "8.4 / 100.0 / 100.0",
+     "verdict": "7.6 / 93.6 / 100.0",
      "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -1122,7 +1157,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "33.8 / 161.6 / 170.0",
+     "verdict": "24.8 / 147.2 / 170.0",
      "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -1135,28 +1170,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "33.8 / 206.2 / 240.0",
+     "verdict": "43.2 / 196.8 / 240.0",
      "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
      "criterion": "",
-     "estimate": 517.6666666666666,
-     "hi": 523.9871697792329,
+     "estimate": 4442.25,
+     "hi": 4569.234278017542,
      "kind": "mean",
-     "lo": 511.3461635541004,
+     "lo": 4315.265721982458,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (ii) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.140625,
-     "hi": 0.15903645833333327,
+     "estimate": 0.18020833333333333,
+     "hi": 0.2204861111111111,
      "kind": "ratio",
-     "lo": 0.12222222222222222,
+     "lo": 0.13680555555555557,
      "metric": "cost",
      "n": 2880,
      "required": false,
@@ -1174,12 +1209,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "protocol-3.1-section-9.1-revised",
+     "verdict": "protocol-3.1-section-9.1-forward-record",
      "what": "dormancy rule"
     },
     {
      "criterion": "",
-     "estimate": 43.38750000000001,
+     "estimate": 626.9916666666667,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -1188,7 +1223,33 @@
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"
+     "what": "seconds per replication spent on the model (estimates, six fits at every review, forecasts)"
+    },
+    {
+     "criterion": "",
+     "estimate": 35.9775,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "of which the dormancy forecasts"
+    },
+    {
+     "criterion": "",
+     "estimate": 14.713727083333334,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 480,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "seconds for the six fits of a review, mean over every review"
     },
     {
      "criterion": "",
@@ -1615,7 +1676,7 @@
    ]
   },
   "D02_HB": {
-   "code": "630059032fd6e5b8",
+   "code": "4252b971831004e3",
    "replications": 12,
    "rows": [
     {
@@ -1625,24 +1686,37 @@
      "kind": "count",
      "lo": null,
      "metric": "M12",
-     "n": 48,
+     "n": 480,
      "required": true,
      "threshold": "exactly 0",
      "verdict": "pilot: not decided (none so far)",
-     "what": "reviews not computed (a fit fails the grid gate), of 48"
+     "what": "reviews not computed (a fit fails the grid gate), of 480"
     },
     {
      "criterion": "",
-     "estimate": 0.0,
+     "estimate": 1e-06,
      "hi": null,
      "kind": "max",
      "lo": null,
      "metric": "fit",
-     "n": 48,
+     "n": 480,
      "required": false,
      "threshold": "gate: at most 0.01",
      "verdict": "reported",
-     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit"
+     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit of any review"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10",
+     "what": "review calendar"
     },
     {
      "criterion": "",
@@ -1672,10 +1746,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.030695784309831647,
-     "hi": 0.037957553194499734,
+     "estimate": 0.030687685719679343,
+     "hi": 0.03822299941242414,
      "kind": "ratio",
-     "lo": 0.02046053627227821,
+     "lo": 0.020300978479198036,
      "metric": "M7",
      "n": 600,
      "required": false,
@@ -1685,10 +1759,10 @@
     },
     {
      "criterion": "",
-     "estimate": -0.30025517742360475,
-     "hi": -0.25238421747076567,
+     "estimate": -0.34002857702750516,
+     "hi": -0.2523821858076062,
      "kind": "ratio",
-     "lo": -0.3481261373764439,
+     "lo": -0.42767496824740414,
      "metric": "M9",
      "n": 2,
      "required": false,
@@ -1737,25 +1811,25 @@
     },
     {
      "criterion": "",
-     "estimate": NaN,
-     "hi": NaN,
+     "estimate": -0.42767496824740414,
+     "hi": -0.42767496824740414,
      "kind": "ratio",
-     "lo": NaN,
+     "lo": -0.42767496824740414,
      "metric": "M9",
-     "n": 0,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (0 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (1 obs.)"
     },
     {
      "criterion": "",
-     "estimate": NaN,
-     "hi": NaN,
+     "estimate": 0.23699105986978308,
+     "hi": 0.23699105986978308,
      "kind": "ratio",
-     "lo": NaN,
+     "lo": 0.23699105986978308,
      "metric": "M9",
-     "n": 0,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -1815,10 +1889,10 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.022397484773182506,
-     "hi": 0.029079835483500193,
+     "estimate": 0.022956687889121342,
+     "hi": 0.02873052056531749,
      "kind": "ratio",
-     "lo": 0.013351569776009849,
+     "lo": 0.015908859421211383,
      "metric": "M7",
      "n": 1200,
      "required": true,
@@ -1828,25 +1902,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.18779161153579255,
-     "hi": 0.04853825336338535,
+     "estimate": -0.23540178205585902,
+     "hi": 0.005432131663918094,
      "kind": "ratio",
-     "lo": -0.6490563905028801,
+     "lo": -0.6867421756950343,
      "metric": "M9",
-     "n": 5,
+     "n": 4,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (5 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (4 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.5076365911258596,
-     "hi": 0.7303447169503107,
+     "estimate": 0.48776631135767745,
+     "hi": 0.7661514686382414,
      "kind": "ratio",
      "lo": 0.20115150642131474,
      "metric": "M9",
-     "n": 5,
+     "n": 4,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -1880,10 +1954,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.04853825336338535,
-     "hi": 0.04853825336338535,
+     "estimate": 0.005432131663918094,
+     "hi": 0.005432131663918094,
      "kind": "ratio",
-     "lo": 0.04853825336338535,
+     "lo": 0.005432131663918094,
      "metric": "M9",
      "n": 1,
      "required": true,
@@ -1958,10 +2032,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.01712111067028404,
-     "hi": 0.02090156661294595,
+     "estimate": 0.01697138526406595,
+     "hi": 0.020834148074762526,
      "kind": "ratio",
-     "lo": 0.01273895904969816,
+     "lo": 0.01249916835071006,
      "metric": "M7",
      "n": 2040,
      "required": false,
@@ -1971,25 +2045,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.1755129005654716,
-     "hi": 0.027506549516790546,
+     "estimate": -0.1284669829758672,
+     "hi": 0.15937456909303704,
      "kind": "ratio",
-     "lo": -0.5063897419331279,
+     "lo": -0.5046646238689446,
      "metric": "M9",
-     "n": 7,
+     "n": 6,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (7 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (6 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.5458129913038289,
-     "hi": 0.731606421475149,
+     "estimate": 0.46396092355124324,
+     "hi": 0.6984810661834095,
      "kind": "ratio",
-     "lo": 0.13788002327525328,
+     "lo": 0.16709772445129534,
      "metric": "M9",
-     "n": 7,
+     "n": 6,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -2023,25 +2097,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.037899173022219367,
-     "hi": 0.24745763661016273,
+     "estimate": 0.006705840138851754,
+     "hi": 0.24228651916744778,
      "kind": "ratio",
-     "lo": -0.3122032537721879,
+     "lo": -0.2392408610802015,
      "metric": "M9",
-     "n": 3,
+     "n": 4,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (3 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (4 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.46592480377241946,
-     "hi": 0.6598244435776501,
+     "estimate": 0.42948795772542847,
+     "hi": 0.6448858187993263,
      "kind": "ratio",
-     "lo": 0.13788002327525328,
+     "lo": 0.19864582204498737,
      "metric": "M9",
-     "n": 3,
+     "n": 4,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -2093,18 +2167,18 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 5,
+     "n": 4,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (5 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (4 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.014130811765435609,
-     "hi": 0.017558600045655858,
+     "estimate": 0.014219721459013861,
+     "hi": 0.017701506133402562,
      "kind": "ratio",
-     "lo": 0.010451358883652796,
+     "lo": 0.010628150657099662,
      "metric": "M7",
      "n": 2880,
      "required": true,
@@ -2114,25 +2188,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.21872324257826134,
-     "hi": 0.045093189800462743,
+     "estimate": -0.16553855350734098,
+     "hi": 0.07921871250025249,
      "kind": "ratio",
-     "lo": -0.5624749808923559,
+     "lo": -0.49239509907457985,
      "metric": "M9",
-     "n": 12,
+     "n": 10,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (12 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (10 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.396767427475532,
-     "hi": 0.5750008110271853,
+     "estimate": 0.34991927358950614,
+     "hi": 0.5273030771462109,
      "kind": "ratio",
-     "lo": 0.14173704832049494,
+     "lo": 0.11152892733056136,
      "metric": "M9",
-     "n": 12,
+     "n": 10,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -2166,25 +2240,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.002046419195849932,
-     "hi": 0.16053337455942762,
+     "estimate": -0.033610388453934284,
+     "hi": 0.15345316809714873,
      "kind": "ratio",
-     "lo": -0.2222332261664386,
+     "lo": -0.25220379231415424,
      "metric": "M9",
-     "n": 6,
+     "n": 7,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (6 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (7 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.39486190076817795,
-     "hi": 0.588862873567981,
+     "estimate": 0.36180861040720785,
+     "hi": 0.5442686995271926,
      "kind": "ratio",
-     "lo": 0.1281590623282225,
+     "lo": 0.13685842061743417,
      "metric": "M9",
-     "n": 6,
+     "n": 7,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -2239,7 +2313,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "1.0 / 1.0 / 0.0 / 32.6",
+     "verdict": "1.0 / 0.8 / 0.0 / 30.0",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
@@ -2265,12 +2339,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.1 / 0.5 / 0.0 / 32.7",
+     "verdict": "0.1 / 0.6 / 0.0 / 30.0",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 70.17500000000001,
+     "estimate": 720.5250000000001,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2283,7 +2357,7 @@
     },
     {
      "criterion": "",
-     "estimate": 20.27808333333333,
+     "estimate": 24.74808333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2317,7 +2391,7 @@
      "n": 8,
      "required": false,
      "threshold": "",
-     "verdict": "0.131 / 0.269 / 0.405",
+     "verdict": "0.127 / 0.268 / 0.406",
      "what": "year 2: families with a true edge (8 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -2356,12 +2430,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.034 / 0.101 / 1.068 / 0.38, 0.38, 0.38",
+     "verdict": "0.034 / 0.101 / 1.069 / 0.38, 0.38, 0.38",
      "what": "year 2: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 12.232166666666666,
+     "estimate": 15.053083333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2395,7 +2469,7 @@
      "n": 18,
      "required": false,
      "threshold": "",
-     "verdict": "0.144 / 0.300 / 0.430",
+     "verdict": "0.141 / 0.297 / 0.429",
      "what": "year 4: families with a true edge (18 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -2434,12 +2508,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.026 / 0.071 / 1.058 / 0.39, 0.38, 0.38",
+     "verdict": "0.026 / 0.071 / 1.058 / 0.39, 0.38, 0.37",
      "what": "year 4: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 7.824833333333333,
+     "estimate": 9.553083333333332,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2473,7 +2547,7 @@
      "n": 28,
      "required": false,
      "threshold": "",
-     "verdict": "0.133 / 0.286 / 0.382",
+     "verdict": "0.132 / 0.281 / 0.379",
      "what": "year 7: families with a true edge (28 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -2486,7 +2560,7 @@
      "n": 28,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.14 / 0.00 / 0.00 / 0.46 / 0.39",
+     "verdict": "0.00 / 0.14 / 0.00 / 0.00 / 0.50 / 0.36",
      "what": "year 7: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -2512,12 +2586,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.030 / 0.054 / 1.053 / 0.37, 0.34, 0.34",
+     "verdict": "0.031 / 0.054 / 1.053 / 0.36, 0.34, 0.34",
      "what": "year 7: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 6.309166666666666,
+     "estimate": 7.506083333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2551,7 +2625,7 @@
      "n": 42,
      "required": false,
      "threshold": "",
-     "verdict": "0.144 / 0.377 / 0.466",
+     "verdict": "0.143 / 0.380 / 0.465",
      "what": "year 10: families with a true edge (42 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -2590,28 +2664,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.043 / 0.046 / 1.053 / 0.40, 0.37, 0.37",
+     "verdict": "0.043 / 0.046 / 1.053 / 0.40, 0.37, 0.36",
      "what": "year 10: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 518.25,
-     "hi": 524.110789325266,
+     "estimate": 4684.166666666667,
+     "hi": 4763.752933158703,
      "kind": "mean",
-     "lo": 512.389210674734,
+     "lo": 4604.580400174631,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (i) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.13777307963354474,
-     "hi": 0.1534667410403012,
+     "estimate": 0.12684989429175475,
+     "hi": 0.15327830629830366,
      "kind": "ratio",
-     "lo": 0.12153119224886247,
+     "lo": 0.10578236858661418,
      "metric": "cost",
      "n": 2838,
      "required": false,
@@ -2629,7 +2703,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 50.0 / 50.0",
+     "verdict": "1.3 / 49.0 / 50.0",
      "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -2642,7 +2716,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "9.2 / 100.0 / 100.0",
+     "verdict": "6.2 / 94.7 / 100.0",
      "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -2655,7 +2729,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "33.0 / 160.8 / 170.0",
+     "verdict": "14.6 / 156.6 / 170.0",
      "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -2668,28 +2742,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "32.6 / 207.4 / 240.0",
+     "verdict": "30.0 / 210.0 / 240.0",
      "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
      "criterion": "",
-     "estimate": 518.1666666666666,
-     "hi": 523.9207562970728,
+     "estimate": 4685.166666666667,
+     "hi": 4764.259933565227,
      "kind": "mean",
-     "lo": 512.4125770362605,
+     "lo": 4606.073399768107,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (ii) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.13812544045102185,
-     "hi": 0.15352585477529485,
+     "estimate": 0.12684989429175475,
+     "hi": 0.15327830629830366,
      "kind": "ratio",
-     "lo": 0.1222683218342664,
+     "lo": 0.10578236858661418,
      "metric": "cost",
      "n": 2838,
      "required": false,
@@ -2707,12 +2781,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "protocol-3.1-section-9.1-revised",
+     "verdict": "protocol-3.1-section-9.1-forward-record",
      "what": "dormancy rule"
     },
     {
      "criterion": "",
-     "estimate": 47.166666666666664,
+     "estimate": 690.6641666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2721,7 +2795,33 @@
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"
+     "what": "seconds per replication spent on the model (estimates, six fits at every review, forecasts)"
+    },
+    {
+     "criterion": "",
+     "estimate": 36.3325,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "of which the dormancy forecasts"
+    },
+    {
+     "criterion": "",
+     "estimate": 16.29491458333333,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 480,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "seconds for the six fits of a review, mean over every review"
     },
     {
      "criterion": "",
@@ -3966,7 +4066,7 @@
    ]
   },
   "D05_HB": {
-   "code": "630059032fd6e5b8",
+   "code": "4252b971831004e3",
    "replications": 12,
    "rows": [
     {
@@ -3976,24 +4076,37 @@
      "kind": "count",
      "lo": null,
      "metric": "M12",
-     "n": 48,
+     "n": 480,
      "required": true,
      "threshold": "exactly 0",
      "verdict": "pilot: not decided (none so far)",
-     "what": "reviews not computed (a fit fails the grid gate), of 48"
+     "what": "reviews not computed (a fit fails the grid gate), of 480"
     },
     {
      "criterion": "",
-     "estimate": 0.0,
+     "estimate": 6e-06,
      "hi": null,
      "kind": "max",
      "lo": null,
      "metric": "fit",
-     "n": 48,
+     "n": 480,
      "required": false,
      "threshold": "gate: at most 0.01",
      "verdict": "reported",
-     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit"
+     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit of any review"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10",
+     "what": "review calendar"
     },
     {
      "criterion": "",
@@ -4023,10 +4136,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.01736934930317347,
-     "hi": 0.02305040535373216,
+     "estimate": 0.01885669682247185,
+     "hi": 0.024399440868479793,
      "kind": "ratio",
-     "lo": 0.011691087609172342,
+     "lo": 0.013632652612114845,
      "metric": "M7",
      "n": 600,
      "required": false,
@@ -4036,25 +4149,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.4291460086113991,
-     "hi": -0.2852128187653327,
+     "estimate": -0.5061311038975483,
+     "hi": -0.3727903560903974,
      "kind": "ratio",
-     "lo": -0.7132806202607084,
+     "lo": -0.8935852903598873,
      "metric": "M9",
-     "n": 9,
+     "n": 7,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (9 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (7 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.49406509772904506,
-     "hi": 0.5597779857391398,
+     "estimate": 0.4513647121973418,
+     "hi": 0.5602278017884774,
      "kind": "ratio",
-     "lo": 0.36119010216614794,
+     "lo": 0.16690554850821226,
      "metric": "M9",
-     "n": 9,
+     "n": 7,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4088,10 +4201,10 @@
     },
     {
      "criterion": "",
-     "estimate": -0.46671895897742965,
-     "hi": -0.46671895897742965,
+     "estimate": -0.4788707801063025,
+     "hi": -0.4788707801063025,
      "kind": "ratio",
-     "lo": -0.46671895897742965,
+     "lo": -0.4788707801063025,
      "metric": "M9",
      "n": 2,
      "required": false,
@@ -4140,16 +4253,16 @@
     },
     {
      "criterion": "V6",
-     "estimate": 1.0,
-     "hi": 1.0,
+     "estimate": NaN,
+     "hi": NaN,
      "kind": "ratio",
-     "lo": 1.0,
+     "lo": NaN,
      "metric": "M7",
-     "n": 1,
+     "n": 0,
      "required": true,
      "threshold": "lower bound \u2265 0.7",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.8 (1 family observations)"
+     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.8 (0 family observations)"
     },
     {
      "criterion": "V6",
@@ -4166,10 +4279,10 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.013042248644175672,
-     "hi": 0.02237566948917481,
+     "estimate": 0.013524996760066096,
+     "hi": 0.02194443746875171,
      "kind": "ratio",
-     "lo": 0.004923339948444828,
+     "lo": 0.00625830409293719,
      "metric": "M7",
      "n": 1200,
      "required": true,
@@ -4179,25 +4292,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.44352042950668474,
-     "hi": -0.2621274911984418,
+     "estimate": -0.43720578395668175,
+     "hi": -0.19874787478827338,
      "kind": "ratio",
-     "lo": -0.6356710604786026,
+     "lo": -0.6906182873270282,
      "metric": "M9",
-     "n": 18,
+     "n": 14,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (18 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (14 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3609504657098362,
-     "hi": 0.447217082523049,
+     "estimate": 0.3578560967358216,
+     "hi": 0.46878859744241386,
      "kind": "ratio",
-     "lo": 0.23271039682908787,
+     "lo": 0.18853952579230782,
      "metric": "M9",
-     "n": 18,
+     "n": 14,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4205,10 +4318,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.07743865187146648,
-     "hi": 0.07743865187146648,
+     "estimate": 0.06023332296022521,
+     "hi": 0.06023332296022521,
      "kind": "ratio",
-     "lo": 0.07743865187146648,
+     "lo": 0.06023332296022521,
      "metric": "M9",
      "n": 1,
      "required": true,
@@ -4231,10 +4344,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.07511992339035667,
-     "hi": 0.56107484646735,
+     "estimate": -0.06309694074462703,
+     "hi": 0.6047808048809902,
      "kind": "ratio",
-     "lo": -0.5941394996931798,
+     "lo": -0.581383545519998,
      "metric": "M9",
      "n": 6,
      "required": true,
@@ -4257,10 +4370,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.07743865187146648,
-     "hi": 0.07743865187146648,
+     "estimate": 0.06023332296022521,
+     "hi": 0.06023332296022521,
      "kind": "ratio",
-     "lo": 0.07743865187146648,
+     "lo": 0.06023332296022521,
      "metric": "M9",
      "n": 1,
      "required": true,
@@ -4288,11 +4401,11 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 5,
+     "n": 6,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (5 family observations)"
+     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (6 family observations)"
     },
     {
      "criterion": "",
@@ -4309,10 +4422,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.004016496947049168,
-     "hi": 0.012696405394248093,
+     "estimate": 0.0029508278519741206,
+     "hi": 0.011825776610879033,
      "kind": "ratio",
-     "lo": 0.0002239678515444216,
+     "lo": 0.00018082555718501375,
      "metric": "M7",
      "n": 2040,
      "required": false,
@@ -4322,25 +4435,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.21895011621768085,
-     "hi": -0.09729609291646633,
+     "estimate": -0.17363537638235418,
+     "hi": 0.08328290450028993,
      "kind": "ratio",
-     "lo": -0.4047581060005504,
+     "lo": -0.4463010883369616,
      "metric": "M9",
-     "n": 26,
+     "n": 17,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (26 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (17 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.41468328177686475,
-     "hi": 0.5076855043773861,
+     "estimate": 0.2980536729338845,
+     "hi": 0.43185836263919014,
      "kind": "ratio",
-     "lo": 0.3196946504564353,
+     "lo": 0.1749437270839592,
      "metric": "M9",
-     "n": 26,
+     "n": 17,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4348,25 +4461,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.05393904272700367,
-     "hi": 0.46785245216985105,
+     "estimate": 0.088692033772049,
+     "hi": 0.6667027179620264,
      "kind": "ratio",
-     "lo": -0.3909442745063736,
+     "lo": -0.40957523306261345,
      "metric": "M9",
-     "n": 4,
+     "n": 5,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (4 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (5 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.2140782781434774,
-     "hi": 0.4007056118480504,
+     "estimate": 0.2605004646907834,
+     "hi": 0.4430621530712928,
      "kind": "ratio",
-     "lo": 0.062147109428424274,
+     "lo": 0.11884951723276027,
      "metric": "M9",
-     "n": 4,
+     "n": 5,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4374,10 +4487,10 @@
     },
     {
      "criterion": "",
-     "estimate": -0.07625410633061805,
-     "hi": 0.15413110301801755,
+     "estimate": -0.08358196013343133,
+     "hi": 0.12481045029598573,
      "kind": "ratio",
-     "lo": -0.2106393732816106,
+     "lo": -0.2323719758866638,
      "metric": "M9",
      "n": 16,
      "required": false,
@@ -4387,10 +4500,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.34814230941035584,
-     "hi": 0.45946509584429784,
+     "estimate": 0.3100379430254926,
+     "hi": 0.43934466225417185,
      "kind": "ratio",
-     "lo": 0.20683045257989915,
+     "lo": 0.18278976668087027,
      "metric": "M9",
      "n": 16,
      "required": false,
@@ -4400,25 +4513,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.05393904272700367,
-     "hi": 0.46785245216985105,
+     "estimate": 0.088692033772049,
+     "hi": 0.6667027179620264,
      "kind": "ratio",
-     "lo": -0.3909442745063736,
+     "lo": -0.40957523306261345,
      "metric": "M9",
-     "n": 4,
+     "n": 5,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (4 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (5 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.2140782781434774,
-     "hi": 0.4007056118480504,
+     "estimate": 0.2605004646907834,
+     "hi": 0.4430621530712928,
      "kind": "ratio",
-     "lo": 0.062147109428424274,
+     "lo": 0.11884951723276027,
      "metric": "M9",
-     "n": 4,
+     "n": 5,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4444,18 +4557,18 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 20,
+     "n": 21,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (20 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (21 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.004846301517958473,
-     "hi": 0.022902867971797972,
+     "estimate": 0.005161794687204689,
+     "hi": 0.022846250779007073,
      "kind": "ratio",
-     "lo": 0.00020849452209984704,
+     "lo": 0.00036477284416898534,
      "metric": "M7",
      "n": 2880,
      "required": true,
@@ -4465,25 +4578,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.12017284568004952,
-     "hi": 0.04225669068791889,
+     "estimate": -0.0859700194302091,
+     "hi": 0.0527636930689575,
      "kind": "ratio",
-     "lo": -0.3626852714456224,
+     "lo": -0.26740419017798706,
      "metric": "M9",
-     "n": 36,
+     "n": 31,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (36 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (31 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3976614313762415,
-     "hi": 0.5162803407038726,
+     "estimate": 0.3343366465187855,
+     "hi": 0.4464477598403141,
      "kind": "ratio",
-     "lo": 0.26536119101707073,
+     "lo": 0.22338094006446105,
      "metric": "M9",
-     "n": 36,
+     "n": 31,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4491,10 +4604,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.071284501603293,
-     "hi": 0.19777237146622723,
+     "estimate": 0.16021740925417258,
+     "hi": 0.2578960417160618,
      "kind": "ratio",
-     "lo": -0.21687852320376877,
+     "lo": 0.024667474241186295,
      "metric": "M9",
      "n": 10,
      "required": true,
@@ -4504,10 +4617,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.22453134419083645,
-     "hi": 0.38136258586218225,
+     "estimate": 0.26542509271175724,
+     "hi": 0.39522818986009944,
      "kind": "ratio",
-     "lo": 0.05990671490134201,
+     "lo": 0.1163128070738403,
      "metric": "M9",
      "n": 10,
      "required": false,
@@ -4517,25 +4630,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.037060519807270015,
-     "hi": 0.10490069740238757,
+     "estimate": -0.031069245955855203,
+     "hi": 0.091657852746473,
      "kind": "ratio",
-     "lo": -0.1985533847602764,
+     "lo": -0.16637739339190666,
      "metric": "M9",
-     "n": 25,
+     "n": 29,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (25 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (29 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.30524784282392015,
-     "hi": 0.41632270301267243,
+     "estimate": 0.31980948757481,
+     "hi": 0.43305958825330715,
      "kind": "ratio",
-     "lo": 0.15267953475579674,
+     "lo": 0.20010282192629342,
      "metric": "M9",
-     "n": 25,
+     "n": 29,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4543,10 +4656,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.071284501603293,
-     "hi": 0.19777237146622723,
+     "estimate": 0.16021740925417258,
+     "hi": 0.2578960417160618,
      "kind": "ratio",
-     "lo": -0.21687852320376877,
+     "lo": 0.024667474241186295,
      "metric": "M9",
      "n": 10,
      "required": true,
@@ -4556,10 +4669,10 @@
     },
     {
      "criterion": "",
-     "estimate": 0.22453134419083645,
-     "hi": 0.38136258586218225,
+     "estimate": 0.26542509271175724,
+     "hi": 0.39522818986009944,
      "kind": "ratio",
-     "lo": 0.05990671490134201,
+     "lo": 0.1163128070738403,
      "metric": "M9",
      "n": 10,
      "required": false,
@@ -4570,7 +4683,7 @@
     {
      "criterion": "V7",
      "estimate": 0.014285714285714285,
-     "hi": 0.03226330121491409,
+     "hi": 0.03546099290780142,
      "kind": "ratio",
      "lo": 0.0,
      "metric": "M8",
@@ -4590,13 +4703,13 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "3.4 / 3.0 / 0.8 / 31.9",
+     "verdict": "3.4 / 2.6 / 0.8 / 28.5",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
      "estimate": 0.014285714285714285,
-     "hi": 0.03226330121491409,
+     "hi": 0.03546099290780142,
      "kind": "ratio",
      "lo": 0.0,
      "metric": "M8",
@@ -4616,12 +4729,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "1.0 / 2.1 / 0.8 / 31.9",
+     "verdict": "1.0 / 2.4 / 0.8 / 28.5",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 76.60833333333333,
+     "estimate": 859.8416666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4634,7 +4747,7 @@
     },
     {
      "criterion": "",
-     "estimate": 21.37908333333333,
+     "estimate": 28.77441666666667,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4668,7 +4781,7 @@
      "n": 24,
      "required": false,
      "threshold": "",
-     "verdict": "0.122 / 0.232 / 0.349",
+     "verdict": "0.122 / 0.233 / 0.348",
      "what": "year 2: families with a true edge (24 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -4712,7 +4825,7 @@
     },
     {
      "criterion": "",
-     "estimate": 13.813749999999999,
+     "estimate": 19.516000000000002,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4746,7 +4859,7 @@
      "n": 51,
      "required": false,
      "threshold": "",
-     "verdict": "0.158 / 0.295 / 0.402",
+     "verdict": "0.159 / 0.291 / 0.398",
      "what": "year 4: families with a true edge (51 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -4759,7 +4872,7 @@
      "n": 51,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.14 / 0.00 / 0.00 / 0.67 / 0.20",
+     "verdict": "0.00 / 0.14 / 0.00 / 0.00 / 0.69 / 0.18",
      "what": "year 4: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -4772,7 +4885,7 @@
      "n": 51,
      "required": false,
      "threshold": "",
-     "verdict": "0.020 / 0.000",
+     "verdict": "0.020 / 0.020",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -4785,12 +4898,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.018 / 0.089 / 1.059 / 0.39, 0.41, 0.39",
+     "verdict": "0.018 / 0.089 / 1.058 / 0.39, 0.41, 0.39",
      "what": "year 4: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 10.305416666666664,
+     "estimate": 14.005416666666667,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4824,7 +4937,7 @@
      "n": 93,
      "required": false,
      "threshold": "",
-     "verdict": "0.171 / 0.316 / 0.410",
+     "verdict": "0.168 / 0.309 / 0.403",
      "what": "year 7: families with a true edge (93 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -4837,7 +4950,7 @@
      "n": 93,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.16 / 0.00 / 0.00 / 0.52 / 0.32",
+     "verdict": "0.00 / 0.17 / 0.01 / 0.00 / 0.47 / 0.34",
      "what": "year 7: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -4850,7 +4963,7 @@
      "n": 93,
      "required": false,
      "threshold": "",
-     "verdict": "0.043 / 0.022",
+     "verdict": "0.054 / 0.011",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -4863,12 +4976,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.010 / 0.074 / 1.053 / 0.41, 0.43, 0.41",
+     "verdict": "0.010 / 0.074 / 1.053 / 0.40, 0.42, 0.40",
      "what": "year 7: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 8.094,
+     "estimate": 10.137083333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4902,7 +5015,7 @@
      "n": 140,
      "required": false,
      "threshold": "",
-     "verdict": "0.183 / 0.390 / 0.479",
+     "verdict": "0.186 / 0.389 / 0.477",
      "what": "year 10: families with a true edge (140 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -4915,7 +5028,7 @@
      "n": 140,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.08 / 0.00 / 0.01 / 0.41 / 0.51",
+     "verdict": "0.00 / 0.09 / 0.00 / 0.01 / 0.39 / 0.51",
      "what": "year 10: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -4941,28 +5054,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.031 / 0.062 / 1.053 / 0.54, 0.54, 0.51",
+     "verdict": "0.031 / 0.061 / 1.053 / 0.54, 0.54, 0.51",
      "what": "year 10: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 520.0,
-     "hi": 528.2558643986985,
+     "estimate": 4630.416666666667,
+     "hi": 4746.27628072043,
      "kind": "mean",
-     "lo": 511.74413560130154,
+     "lo": 4514.557052612904,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (i) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.13905109489051096,
-     "hi": 0.16265543335415047,
+     "estimate": 0.12408759124087591,
+     "hi": 0.16660945230297766,
      "kind": "ratio",
-     "lo": 0.11086616514244739,
+     "lo": 0.08509352829989619,
      "metric": "cost",
      "n": 2740,
      "required": false,
@@ -4980,7 +5093,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 50.0 / 50.0",
+     "verdict": "1.2 / 49.0 / 50.0",
      "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -4993,7 +5106,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "8.1 / 100.0 / 100.0",
+     "verdict": "7.4 / 93.8 / 100.0",
      "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -5006,7 +5119,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "32.0 / 161.9 / 170.0",
+     "verdict": "17.4 / 153.8 / 170.0",
      "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -5019,28 +5132,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "31.9 / 208.1 / 240.0",
+     "verdict": "28.5 / 211.5 / 240.0",
      "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
      "criterion": "",
-     "estimate": 520.0,
-     "hi": 528.2558643986985,
+     "estimate": 4631.5,
+     "hi": 4746.773365895373,
      "kind": "mean",
-     "lo": 511.74413560130154,
+     "lo": 4516.226634104627,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (ii) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.13905109489051096,
-     "hi": 0.16265543335415047,
+     "estimate": 0.12408759124087591,
+     "hi": 0.16660945230297766,
      "kind": "ratio",
-     "lo": 0.11086616514244739,
+     "lo": 0.08509352829989619,
      "metric": "cost",
      "n": 2740,
      "required": false,
@@ -5058,12 +5171,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "protocol-3.1-section-9.1-revised",
+     "verdict": "protocol-3.1-section-9.1-forward-record",
      "what": "dormancy rule"
     },
     {
      "criterion": "",
-     "estimate": 54.08833333333333,
+     "estimate": 829.3383333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -5072,7 +5185,33 @@
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"
+     "what": "seconds per replication spent on the model (estimates, six fits at every review, forecasts)"
+    },
+    {
+     "criterion": "",
+     "estimate": 38.1125,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "of which the dormancy forecasts"
+    },
+    {
+     "criterion": "",
+     "estimate": 19.716027083333334,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 480,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "seconds for the six fits of a review, mean over every review"
     },
     {
      "criterion": "",
@@ -6726,7 +6865,7 @@
    ]
   },
   "D08_HB": {
-   "code": "630059032fd6e5b8",
+   "code": "4252b971831004e3",
    "replications": 12,
    "rows": [
     {
@@ -6736,11 +6875,11 @@
      "kind": "count",
      "lo": null,
      "metric": "M12",
-     "n": 48,
+     "n": 480,
      "required": true,
      "threshold": "exactly 0",
      "verdict": "pilot: not decided (none so far)",
-     "what": "reviews not computed (a fit fails the grid gate), of 48"
+     "what": "reviews not computed (a fit fails the grid gate), of 480"
     },
     {
      "criterion": "",
@@ -6749,11 +6888,24 @@
      "kind": "max",
      "lo": null,
      "metric": "fit",
-     "n": 48,
+     "n": 480,
      "required": false,
      "threshold": "gate: at most 0.01",
      "verdict": "reported",
-     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit"
+     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit of any review"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10",
+     "what": "review calendar"
     },
     {
      "criterion": "",
@@ -6762,31 +6914,31 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.8 (2 family observations)"
+     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.8 (1 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.9777777777777777,
+     "estimate": 0.9772727272727273,
      "hi": 1.0,
      "kind": "ratio",
-     "lo": 0.9605263157894737,
+     "lo": 0.959592547092547,
      "metric": "M7",
-     "n": 45,
+     "n": 44,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.4 (45 family observations)"
+     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.4 (44 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.007580712679393917,
-     "hi": 0.036792266830051,
+     "estimate": 0.009611604424238222,
+     "hi": 0.03926345073930497,
      "kind": "ratio",
-     "lo": 0.000521812314471158,
+     "lo": 0.0006208750827518659,
      "metric": "M7",
      "n": 600,
      "required": false,
@@ -6796,25 +6948,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.5376040394377203,
-     "hi": -0.4724665880295481,
+     "estimate": -0.5404662501687303,
+     "hi": -0.4740365985588207,
      "kind": "ratio",
-     "lo": -0.6188574840575919,
+     "lo": -0.6258912049115858,
      "metric": "M9",
-     "n": 87,
+     "n": 81,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (87 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (81 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.43962836629843244,
-     "hi": 0.5168953858063067,
+     "estimate": 0.426242251484617,
+     "hi": 0.49738547681570866,
      "kind": "ratio",
-     "lo": 0.37781404179974876,
+     "lo": 0.3639335002704126,
      "metric": "M9",
-     "n": 87,
+     "n": 81,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6822,25 +6974,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.4257689296520283,
-     "hi": -0.24043498773454064,
+     "estimate": -0.2894118256003362,
+     "hi": -0.2894118256003362,
      "kind": "ratio",
-     "lo": -0.6111028715695159,
+     "lo": -0.2894118256003362,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (2 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (1 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.2546339717070222,
+     "estimate": 0.3687468007486219,
      "hi": 0.3687468007486219,
      "kind": "ratio",
-     "lo": 0.14052114266542248,
+     "lo": 0.3687468007486219,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6848,25 +7000,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.5420604692335977,
-     "hi": -0.4626476017665053,
+     "estimate": -0.5798160620129205,
+     "hi": -0.5093193745402634,
      "kind": "ratio",
-     "lo": -0.6732328705433455,
+     "lo": -0.7110910529241303,
      "metric": "M9",
-     "n": 43,
+     "n": 42,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (43 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (42 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.36097580363112625,
-     "hi": 0.41537863702279904,
+     "estimate": 0.355383231180125,
+     "hi": 0.41016506117466106,
      "kind": "ratio",
-     "lo": 0.2654332509346923,
+     "lo": 0.2479888909915177,
      "metric": "M9",
-     "n": 43,
+     "n": 42,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6874,25 +7026,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.4257689296520283,
-     "hi": -0.24043498773454064,
+     "estimate": -0.2894118256003362,
+     "hi": -0.2894118256003362,
      "kind": "ratio",
-     "lo": -0.6111028715695159,
+     "lo": -0.2894118256003362,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (2 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (1 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.2546339717070222,
+     "estimate": 0.3687468007486219,
      "hi": 0.3687468007486219,
      "kind": "ratio",
-     "lo": 0.14052114266542248,
+     "lo": 0.3687468007486219,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6905,31 +7057,31 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 18,
+     "n": 16,
      "required": true,
      "threshold": "lower bound \u2265 0.7",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.8 (18 family observations)"
+     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.8 (16 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.927536231884058,
+     "estimate": 0.924812030075188,
      "hi": 1.0,
      "kind": "ratio",
-     "lo": 0.8894332774986041,
+     "lo": 0.8838575268817205,
      "metric": "M7",
-     "n": 138,
+     "n": 133,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.4 (138 family observations)"
+     "what": "year 4: share with a true edge among families with \u03a0^min \u2265 0.4 (133 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.034305511965747215,
-     "hi": 0.0674582706660978,
+     "estimate": 0.031671157757494885,
+     "hi": 0.06487322599563057,
      "kind": "ratio",
-     "lo": 0.004213234510816793,
+     "lo": 0.004599779589880954,
      "metric": "M7",
      "n": 1200,
      "required": true,
@@ -6939,25 +7091,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.30791025879129863,
-     "hi": -0.2258945192742661,
+     "estimate": -0.28810059088201934,
+     "hi": -0.19802997303987513,
      "kind": "ratio",
-     "lo": -0.41755323927125076,
+     "lo": -0.4152084550916139,
      "metric": "M9",
-     "n": 208,
+     "n": 202,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "pilot: not decided",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (208 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (202 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.43648073082131883,
-     "hi": 0.4826798176827088,
+     "estimate": 0.42717113458462974,
+     "hi": 0.4666098313812015,
      "kind": "ratio",
-     "lo": 0.3888462771059706,
+     "lo": 0.37263149387946315,
      "metric": "M9",
-     "n": 208,
+     "n": 202,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6965,25 +7117,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.09782841428565735,
-     "hi": 0.026135815614767292,
+     "estimate": -0.08267292175868997,
+     "hi": 0.07688889591114735,
      "kind": "ratio",
-     "lo": -0.23585435658681922,
+     "lo": -0.2220672004796178,
      "metric": "M9",
-     "n": 16,
+     "n": 18,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (16 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (18 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.267436290573841,
-     "hi": 0.4155499871925496,
+     "estimate": 0.26918839460898514,
+     "hi": 0.4181423906050128,
      "kind": "ratio",
-     "lo": 0.10981036867064835,
+     "lo": 0.14901911070916166,
      "metric": "M9",
-     "n": 16,
+     "n": 18,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6991,25 +7143,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.227931379910894,
-     "hi": -0.16397389729995532,
+     "estimate": -0.21802625784314889,
+     "hi": -0.14844548663168042,
      "kind": "ratio",
-     "lo": -0.3350934884105835,
+     "lo": -0.33601558688037036,
      "metric": "M9",
-     "n": 137,
+     "n": 152,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (137 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (152 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.4057071101222392,
-     "hi": 0.4506012770698322,
+     "estimate": 0.4103795883246417,
+     "hi": 0.4601445552404028,
      "kind": "ratio",
-     "lo": 0.3212623880581414,
+     "lo": 0.3181361734370311,
      "metric": "M9",
-     "n": 137,
+     "n": 152,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7017,25 +7169,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.09782841428565735,
-     "hi": 0.026135815614767292,
+     "estimate": -0.08267292175868997,
+     "hi": 0.07688889591114735,
      "kind": "ratio",
-     "lo": -0.23585435658681922,
+     "lo": -0.2220672004796178,
      "metric": "M9",
-     "n": 16,
+     "n": 18,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (16 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (18 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.267436290573841,
-     "hi": 0.4155499871925496,
+     "estimate": 0.26918839460898514,
+     "hi": 0.4181423906050128,
      "kind": "ratio",
-     "lo": 0.10981036867064835,
+     "lo": 0.14901911070916166,
      "metric": "M9",
-     "n": 16,
+     "n": 18,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7048,31 +7200,31 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 57,
+     "n": 56,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (57 family observations)"
+     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (56 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.884375,
-     "hi": 0.9774640405361228,
+     "estimate": 0.8819875776397516,
+     "hi": 0.9772944610034773,
      "kind": "ratio",
-     "lo": 0.8162644166409228,
+     "lo": 0.8092944865429841,
      "metric": "M7",
-     "n": 320,
+     "n": 322,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.4 (320 family observations)"
+     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.4 (322 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.06859271822154547,
-     "hi": 0.10829140699813077,
+     "estimate": 0.06863331400880084,
+     "hi": 0.11083345923406313,
      "kind": "ratio",
-     "lo": 0.02216776066791291,
+     "lo": 0.020879472829279884,
      "metric": "M7",
      "n": 2040,
      "required": false,
@@ -7082,25 +7234,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.20345163987631656,
-     "hi": -0.13106763829657253,
+     "estimate": -0.16650452263583548,
+     "hi": -0.08912578479332275,
      "kind": "ratio",
-     "lo": -0.29882734509186193,
+     "lo": -0.2718800674959743,
      "metric": "M9",
-     "n": 442,
+     "n": 453,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (442 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (453 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.41220477909398395,
-     "hi": 0.45563842904831414,
+     "estimate": 0.40650251531251597,
+     "hi": 0.4554383099260799,
      "kind": "ratio",
-     "lo": 0.3590741297637277,
+     "lo": 0.34243268425417484,
      "metric": "M9",
-     "n": 442,
+     "n": 453,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7108,25 +7260,25 @@
     },
     {
      "criterion": "",
-     "estimate": 0.005474789696226707,
-     "hi": 0.0679090105958799,
+     "estimate": -0.07030646471238665,
+     "hi": 0.008169250869721876,
      "kind": "ratio",
-     "lo": -0.05856894340936739,
+     "lo": -0.1493913550368303,
      "metric": "M9",
-     "n": 56,
+     "n": 72,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (56 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (72 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3346901489065064,
-     "hi": 0.41065163822280787,
+     "estimate": 0.3218516241474747,
+     "hi": 0.40880770947772554,
      "kind": "ratio",
-     "lo": 0.1952505403384443,
+     "lo": 0.17791971404237406,
      "metric": "M9",
-     "n": 56,
+     "n": 72,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7134,25 +7286,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.15997712941685266,
-     "hi": -0.08786949673209661,
+     "estimate": -0.13762084248984136,
+     "hi": -0.0610125367106735,
      "kind": "ratio",
-     "lo": -0.263931217331117,
+     "lo": -0.2462163769972088,
      "metric": "M9",
-     "n": 341,
+     "n": 394,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (341 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (394 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3831367707486724,
-     "hi": 0.4355767640128144,
+     "estimate": 0.39351509759384823,
+     "hi": 0.44666887834861035,
      "kind": "ratio",
-     "lo": 0.304006374979203,
+     "lo": 0.31723452282415376,
      "metric": "M9",
-     "n": 341,
+     "n": 394,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7160,25 +7312,25 @@
     },
     {
      "criterion": "",
-     "estimate": 0.02605029216993873,
-     "hi": 0.07755345183581022,
+     "estimate": -0.0618893661299317,
+     "hi": 0.011024979123192523,
      "kind": "ratio",
-     "lo": -0.04327952493024254,
+     "lo": -0.14680667359738386,
      "metric": "M9",
-     "n": 52,
+     "n": 68,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (52 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (68 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.34529107555990013,
-     "hi": 0.4249549919238172,
+     "estimate": 0.32272412654850097,
+     "hi": 0.41037462593746127,
      "kind": "ratio",
-     "lo": 0.19625896377474444,
+     "lo": 0.17791971404237406,
      "metric": "M9",
-     "n": 52,
+     "n": 68,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7186,36 +7338,36 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.9911504424778761,
+     "estimate": 0.9914529914529915,
      "hi": 1.0,
      "kind": "ratio",
-     "lo": 0.9772727272727273,
+     "lo": 0.9777746741154562,
      "metric": "M7",
-     "n": 113,
+     "n": 117,
      "required": true,
      "threshold": "lower bound \u2265 0.7",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.8 (113 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.8 (117 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.9011494252873563,
-     "hi": 0.9397607622466946,
+     "estimate": 0.8979591836734694,
+     "hi": 0.9369717303814725,
      "kind": "ratio",
-     "lo": 0.8685302502013325,
+     "lo": 0.8681712438442248,
      "metric": "M7",
-     "n": 435,
+     "n": 441,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "pilot: not decided (within threshold so far)",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (435 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (441 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.10147221222308041,
-     "hi": 0.13567801654935274,
+     "estimate": 0.09981359911128959,
+     "hi": 0.13561366254806054,
      "kind": "ratio",
-     "lo": 0.03414510855445184,
+     "lo": 0.035655241543362075,
      "metric": "M7",
      "n": 2880,
      "required": true,
@@ -7225,25 +7377,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.14588455820688215,
-     "hi": -0.08424684885174936,
+     "estimate": -0.11321563926311577,
+     "hi": -0.059473332509815964,
      "kind": "ratio",
-     "lo": -0.2276468946469529,
+     "lo": -0.1940982384644524,
      "metric": "M9",
-     "n": 655,
+     "n": 580,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "pilot: not decided",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (655 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (580 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.39076894173053045,
-     "hi": 0.4274789391894804,
+     "estimate": 0.397435872816062,
+     "hi": 0.43651438541063503,
      "kind": "ratio",
-     "lo": 0.3356650851975619,
+     "lo": 0.34029207445205495,
      "metric": "M9",
-     "n": 655,
+     "n": 580,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7251,25 +7403,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.025121250453802445,
-     "hi": 0.03749722751920139,
+     "estimate": -0.043992621939954256,
+     "hi": 0.008650134796691949,
      "kind": "ratio",
-     "lo": -0.0688722885441902,
+     "lo": -0.0826829117177417,
      "metric": "M9",
-     "n": 120,
+     "n": 138,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (120 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (138 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3335460918727354,
-     "hi": 0.38259327490316525,
+     "estimate": 0.31505277320306546,
+     "hi": 0.36391710954498513,
      "kind": "ratio",
-     "lo": 0.24771298962383628,
+     "lo": 0.24809337242171758,
      "metric": "M9",
-     "n": 120,
+     "n": 138,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7277,25 +7429,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.11690415682530088,
-     "hi": -0.052748815494373026,
+     "estimate": -0.09890563636681231,
+     "hi": -0.04538829920745013,
      "kind": "ratio",
-     "lo": -0.2041253622587735,
+     "lo": -0.18028543042974512,
      "metric": "M9",
-     "n": 573,
+     "n": 548,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "pilot: not decided",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (573 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (548 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3784439334096108,
-     "hi": 0.4202396887723021,
+     "estimate": 0.3898645661236745,
+     "hi": 0.43327639997537093,
      "kind": "ratio",
-     "lo": 0.31243990079622247,
+     "lo": 0.32636315887513734,
      "metric": "M9",
-     "n": 573,
+     "n": 548,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7303,25 +7455,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.017500400544958335,
-     "hi": 0.047529809461426785,
+     "estimate": -0.04042203769545834,
+     "hi": 0.016346819385256593,
      "kind": "ratio",
-     "lo": -0.07082433808103909,
+     "lo": -0.08788412386044411,
      "metric": "M9",
-     "n": 112,
+     "n": 133,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (112 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (133 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.332908181902234,
-     "hi": 0.38253413602269526,
+     "estimate": 0.3103299797050381,
+     "hi": 0.35894918623804584,
      "kind": "ratio",
-     "lo": 0.24710014479289694,
+     "lo": 0.24418969360302156,
      "metric": "M9",
-     "n": 112,
+     "n": 133,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -7329,10 +7481,10 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.00211864406779661,
-     "hi": 0.00679520959006479,
+     "estimate": 0.005296610169491525,
+     "hi": 0.010214533582067921,
      "kind": "ratio",
-     "lo": 0.0,
+     "lo": 0.0010581730930568141,
      "metric": "M8",
      "n": 944,
      "required": true,
@@ -7350,15 +7502,15 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "40.8 / 54.6 / 10.0 / 4.3",
+     "verdict": "40.8 / 48.3 / 11.5 / 23.2",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.00211864406779661,
-     "hi": 0.00679520959006479,
+     "estimate": 0.005296610169491525,
+     "hi": 0.010214533582067921,
      "kind": "ratio",
-     "lo": 0.0,
+     "lo": 0.0010581730930568141,
      "metric": "M8",
      "n": 944,
      "required": true,
@@ -7376,12 +7528,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "10.0 / 47.8 / 9.3 / 4.3",
+     "verdict": "10.0 / 45.7 / 11.1 / 23.2",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 143.10833333333332,
+     "estimate": 1488.5333333333335,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7394,7 +7546,7 @@
     },
     {
      "criterion": "",
-     "estimate": 31.499083333333328,
+     "estimate": 42.123916666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7428,7 +7580,7 @@
      "n": 182,
      "required": false,
      "threshold": "",
-     "verdict": "0.285 / 0.512 / 0.622",
+     "verdict": "0.277 / 0.502 / 0.617",
      "what": "year 2: families with a true edge (182 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -7441,7 +7593,7 @@
      "n": 182,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.32 / 0.00 / 0.00 / 0.62 / 0.06",
+     "verdict": "0.00 / 0.34 / 0.00 / 0.00 / 0.60 / 0.06",
      "what": "year 2: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -7454,7 +7606,7 @@
      "n": 182,
      "required": false,
      "threshold": "",
-     "verdict": "0.011 / 0.000",
+     "verdict": "0.005 / 0.000",
      "what": "year 2: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7467,12 +7619,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.230 / 0.311 / 1.114 / 0.50, 0.51, 0.51",
+     "verdict": "0.230 / 0.309 / 1.116 / 0.49, 0.50, 0.50",
      "what": "year 2: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 26.769583333333333,
+     "estimate": 36.76841666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7506,7 +7658,7 @@
      "n": 379,
      "required": false,
      "threshold": "",
-     "verdict": "0.336 / 0.649 / 0.707",
+     "verdict": "0.333 / 0.648 / 0.706",
      "what": "year 4: families with a true edge (379 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -7532,7 +7684,7 @@
      "n": 379,
      "required": false,
      "threshold": "",
-     "verdict": "0.042 / 0.000",
+     "verdict": "0.047 / 0.003",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7545,12 +7697,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.229 / 0.348 / 1.081 / 0.62, 0.63, 0.66",
+     "verdict": "0.229 / 0.349 / 1.080 / 0.62, 0.63, 0.66",
      "what": "year 4: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 22.63383333333333,
+     "estimate": 29.016833333333334,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7584,7 +7736,7 @@
      "n": 667,
      "required": false,
      "threshold": "",
-     "verdict": "0.380 / 0.770 / 0.796",
+     "verdict": "0.381 / 0.771 / 0.796",
      "what": "year 7: families with a true edge (667 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -7597,7 +7749,7 @@
      "n": 667,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.00 / 0.00 / 0.00 / 0.53 / 0.47",
+     "verdict": "0.00 / 0.00 / 0.00 / 0.00 / 0.52 / 0.47",
      "what": "year 7: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -7610,7 +7762,7 @@
      "n": 667,
      "required": false,
      "threshold": "",
-     "verdict": "0.084 / 0.003",
+     "verdict": "0.108 / 0.003",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7623,12 +7775,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.254 / 0.380 / 1.060 / 0.76, 0.74, 0.77",
+     "verdict": "0.254 / 0.380 / 1.061 / 0.76, 0.75, 0.77",
      "what": "year 7: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 19.846833333333333,
+     "estimate": 24.668666666666667,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7662,7 +7814,7 @@
      "n": 944,
      "required": false,
      "threshold": "",
-     "verdict": "0.361 / 0.813 / 0.827",
+     "verdict": "0.364 / 0.813 / 0.827",
      "what": "year 10: families with a true edge (944 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -7675,7 +7827,7 @@
      "n": 944,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.00 / 0.00 / 0.01 / 0.33 / 0.67",
+     "verdict": "0.00 / 0.00 / 0.00 / 0.01 / 0.32 / 0.67",
      "what": "year 10: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -7688,7 +7840,7 @@
      "n": 944,
      "required": false,
      "threshold": "",
-     "verdict": "0.126 / 0.002",
+     "verdict": "0.145 / 0.005",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7701,28 +7853,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.264 / 0.386 / 1.058 / 0.82, 0.79, 0.82",
+     "verdict": "0.265 / 0.387 / 1.058 / 0.82, 0.79, 0.82",
      "what": "year 10: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 554.1666666666666,
-     "hi": 561.3513082546287,
+     "estimate": 4741.583333333333,
+     "hi": 4806.196912253,
      "kind": "mean",
-     "lo": 546.9820250787045,
+     "lo": 4676.969754413666,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (i) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.025826446280991736,
-     "hi": 0.058123513610877336,
+     "estimate": 0.14101239669421486,
+     "hi": 0.17596113295958493,
      "kind": "ratio",
-     "lo": 0.005173238869234131,
+     "lo": 0.11099551121591772,
      "metric": "cost",
      "n": 1936,
      "required": false,
@@ -7740,7 +7892,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 50.0 / 50.0",
+     "verdict": "1.1 / 49.3 / 50.0",
      "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -7753,7 +7905,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "1.5 / 100.0 / 100.0",
+     "verdict": "5.5 / 95.3 / 100.0",
      "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -7766,7 +7918,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "4.5 / 168.5 / 170.0",
+     "verdict": "12.8 / 158.0 / 170.0",
      "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -7779,28 +7931,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "4.3 / 235.7 / 240.0",
+     "verdict": "23.2 / 216.8 / 240.0",
      "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
      "criterion": "",
-     "estimate": 554.1666666666666,
-     "hi": 561.3513082546287,
+     "estimate": 4740.916666666667,
+     "hi": 4805.477976115731,
      "kind": "mean",
-     "lo": 546.9820250787045,
+     "lo": 4676.355357217603,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (ii) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.025826446280991736,
-     "hi": 0.058123513610877336,
+     "estimate": 0.14101239669421486,
+     "hi": 0.17596113295958493,
      "kind": "ratio",
-     "lo": 0.005173238869234131,
+     "lo": 0.11099551121591772,
      "metric": "cost",
      "n": 1936,
      "required": false,
@@ -7818,12 +7970,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "protocol-3.1-section-9.1-revised",
+     "verdict": "protocol-3.1-section-9.1-forward-record",
      "what": "dormancy rule"
     },
     {
      "criterion": "",
-     "estimate": 101.2525,
+     "estimate": 1428.36,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7832,7 +7984,33 @@
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"
+     "what": "seconds per replication spent on the model (estimates, six fits at every review, forecasts)"
+    },
+    {
+     "criterion": "",
+     "estimate": 35.43750000000001,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "of which the dormancy forecasts"
+    },
+    {
+     "criterion": "",
+     "estimate": 34.75999375,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 480,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "seconds for the six fits of a review, mean over every review"
     },
     {
      "criterion": "",
@@ -8259,7 +8437,7 @@
    ]
   },
   "D10_HB": {
-   "code": "630059032fd6e5b8",
+   "code": "4252b971831004e3",
    "replications": 12,
    "rows": [
     {
@@ -8269,24 +8447,37 @@
      "kind": "count",
      "lo": null,
      "metric": "M12",
-     "n": 48,
+     "n": 480,
      "required": true,
      "threshold": "exactly 0",
      "verdict": "pilot: not decided (none so far)",
-     "what": "reviews not computed (a fit fails the grid gate), of 48"
+     "what": "reviews not computed (a fit fails the grid gate), of 480"
     },
     {
      "criterion": "",
-     "estimate": 0.0,
+     "estimate": 4.1e-05,
      "hi": null,
      "kind": "max",
      "lo": null,
      "metric": "fit",
-     "n": 48,
+     "n": 480,
      "required": false,
      "threshold": "gate: at most 0.01",
      "verdict": "reported",
-     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit"
+     "what": "largest posterior mass on the ends of the grid of \u03bc_A, any fit of any review"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10",
+     "what": "review calendar"
     },
     {
      "criterion": "",
@@ -8295,31 +8486,31 @@
      "kind": "ratio",
      "lo": 1.0,
      "metric": "M7",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.8 (2 family observations)"
+     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.8 (1 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.8333333333333334,
+     "estimate": 0.7142857142857143,
      "hi": 1.0,
      "kind": "ratio",
-     "lo": 0.5,
+     "lo": 0.4,
      "metric": "M7",
-     "n": 6,
+     "n": 7,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.4 (6 family observations)"
+     "what": "year 2: share with a true edge among families with \u03a0^min \u2265 0.4 (7 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.014803082288937074,
-     "hi": 0.021514867487403534,
+     "estimate": 0.014183397749157832,
+     "hi": 0.020862010056070267,
      "kind": "ratio",
-     "lo": 0.00752829143256074,
+     "lo": 0.006894634741684531,
      "metric": "M7",
      "n": 600,
      "required": false,
@@ -8329,25 +8520,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.31063559401193713,
-     "hi": -0.12354407647787997,
+     "estimate": -0.24909003199413027,
+     "hi": -0.008174291306568571,
      "kind": "ratio",
-     "lo": -0.4827937742666832,
+     "lo": -0.4849625076378208,
      "metric": "M9",
-     "n": 31,
+     "n": 22,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (31 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (22 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.1455196399873213,
-     "hi": 1.286658948044822,
+     "estimate": 1.194510650656201,
+     "hi": 1.365484858266883,
      "kind": "ratio",
-     "lo": 1.0079978449965232,
+     "lo": 1.0029898622152442,
      "metric": "M9",
-     "n": 31,
+     "n": 22,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8355,25 +8546,25 @@
     },
     {
      "criterion": "",
-     "estimate": 0.12907512356683015,
-     "hi": 0.36536733755414263,
+     "estimate": 0.36748588147298045,
+     "hi": 0.36748588147298045,
      "kind": "ratio",
-     "lo": -0.10721709042048233,
+     "lo": 0.36748588147298045,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (2 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (1 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.1940690911233531,
-     "hi": 1.3537065379475788,
+     "estimate": 1.0344316442991273,
+     "hi": 1.0344316442991273,
      "kind": "ratio",
      "lo": 1.0344316442991273,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8381,25 +8572,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.24716315921731555,
-     "hi": 0.005870340063219247,
+     "estimate": -0.14505163066992702,
+     "hi": 0.16330883776483027,
      "kind": "ratio",
-     "lo": -0.5655863508864747,
+     "lo": -0.5102925089345802,
      "metric": "M9",
-     "n": 13,
+     "n": 11,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (13 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (11 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.1698713089374486,
-     "hi": 1.4224397638608235,
+     "estimate": 1.2518520253172198,
+     "hi": 1.5640940627064008,
      "kind": "ratio",
-     "lo": 0.7984425585325163,
+     "lo": 0.8869512144123666,
      "metric": "M9",
-     "n": 13,
+     "n": 11,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8407,25 +8598,25 @@
     },
     {
      "criterion": "",
-     "estimate": 0.12907512356683015,
-     "hi": 0.36536733755414263,
+     "estimate": 0.36748588147298045,
+     "hi": 0.36748588147298045,
      "kind": "ratio",
-     "lo": -0.10721709042048233,
+     "lo": 0.36748588147298045,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (2 obs.)"
+     "what": "year 2: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (1 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.1940690911233531,
-     "hi": 1.3537065379475788,
+     "estimate": 1.0344316442991273,
+     "hi": 1.0344316442991273,
      "kind": "ratio",
      "lo": 1.0344316442991273,
      "metric": "M9",
-     "n": 2,
+     "n": 1,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8459,10 +8650,10 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.00891896091178254,
-     "hi": 0.015807570501924655,
+     "estimate": 0.008157450463461642,
+     "hi": 0.014301606425693454,
      "kind": "ratio",
-     "lo": 0.0013985355615376567,
+     "lo": 0.0011970840030461475,
      "metric": "M7",
      "n": 1200,
      "required": true,
@@ -8472,25 +8663,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.15543075891196395,
-     "hi": 0.037459353693612724,
+     "estimate": -0.15471482786004312,
+     "hi": 0.08191638228506494,
      "kind": "ratio",
-     "lo": -0.3112458055907775,
+     "lo": -0.3714071598867902,
      "metric": "M9",
-     "n": 54,
+     "n": 39,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (54 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (39 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.0493898430633612,
-     "hi": 1.1652628309757458,
+     "estimate": 0.9909711365626246,
+     "hi": 1.1510853152834228,
      "kind": "ratio",
-     "lo": 0.9435319570736366,
+     "lo": 0.8355677327662379,
      "metric": "M9",
-     "n": 54,
+     "n": 39,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8498,10 +8689,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.03731887475838569,
-     "hi": 0.1751867399269813,
+     "estimate": -0.01824352674119173,
+     "hi": 0.28446084047005127,
      "kind": "ratio",
-     "lo": -0.44920154422581415,
+     "lo": -0.558215864582005,
      "metric": "M9",
      "n": 4,
      "required": true,
@@ -8524,25 +8715,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.10634270534899404,
-     "hi": 0.14754651584132625,
+     "estimate": -0.17100388801765323,
+     "hi": 0.10848241255112687,
      "kind": "ratio",
-     "lo": -0.387161195988112,
+     "lo": -0.4430511566092775,
      "metric": "M9",
-     "n": 33,
+     "n": 31,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (33 obs.)"
+     "what": "year 4: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (31 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.0053912317296674,
-     "hi": 1.1928068390680713,
+     "estimate": 0.9086595088808208,
+     "hi": 1.1163467393685766,
      "kind": "ratio",
-     "lo": 0.7259496431724815,
+     "lo": 0.6702580196778914,
      "metric": "M9",
-     "n": 33,
+     "n": 31,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8550,10 +8741,10 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.0999753483974238,
-     "hi": 0.1751867399269813,
+     "estimate": 0.16174725253907937,
+     "hi": 0.28446084047005127,
      "kind": "ratio",
-     "lo": 0.03226355136356274,
+     "lo": 0.025005876134071903,
      "metric": "M9",
      "n": 3,
      "required": true,
@@ -8576,36 +8767,36 @@
     },
     {
      "criterion": "",
-     "estimate": 0.9166666666666666,
+     "estimate": 0.9230769230769231,
      "hi": 1.0,
      "kind": "ratio",
-     "lo": 0.7,
+     "lo": 0.7272727272727273,
      "metric": "M7",
-     "n": 12,
+     "n": 13,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (12 family observations)"
+     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.8 (13 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.7906976744186046,
-     "hi": 0.911127450980392,
+     "estimate": 0.7857142857142857,
+     "hi": 0.9062681686046511,
      "kind": "ratio",
-     "lo": 0.6409722222222223,
+     "lo": 0.6388888888888888,
      "metric": "M7",
-     "n": 43,
+     "n": 42,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.4 (43 family observations)"
+     "what": "year 7: share with a true edge among families with \u03a0^min \u2265 0.4 (42 family observations)"
     },
     {
      "criterion": "",
-     "estimate": 0.00418544826624882,
-     "hi": 0.00908765160613799,
+     "estimate": 0.004407741173933901,
+     "hi": 0.009222600365107829,
      "kind": "ratio",
-     "lo": 0.0002647367048440176,
+     "lo": 0.00028641082883553944,
      "metric": "M7",
      "n": 2040,
      "required": false,
@@ -8615,25 +8806,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.012865460946300469,
-     "hi": 0.10164141488171446,
+     "estimate": 0.022255965723452856,
+     "hi": 0.16532484692435098,
      "kind": "ratio",
-     "lo": -0.1255090353028961,
+     "lo": -0.12260340325140714,
      "metric": "M9",
-     "n": 84,
+     "n": 67,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (84 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (67 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.0460018884247178,
-     "hi": 1.2114091454131035,
+     "estimate": 1.0195753257733866,
+     "hi": 1.1919515927534576,
      "kind": "ratio",
-     "lo": 0.9022468727786828,
+     "lo": 0.856469259479579,
      "metric": "M9",
-     "n": 84,
+     "n": 67,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8641,25 +8832,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.2714987756593882,
-     "hi": -0.10545344768533745,
+     "estimate": -0.2769198403383534,
+     "hi": -0.10014369757319563,
      "kind": "ratio",
-     "lo": -0.4341541064669132,
+     "lo": -0.4209938667717826,
      "metric": "M9",
-     "n": 13,
+     "n": 14,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (13 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (14 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.43562645848544285,
+     "estimate": 0.4562125156464512,
      "hi": 0.7273015189238473,
      "kind": "ratio",
-     "lo": 0.12963298783823168,
+     "lo": 0.22798336007790793,
      "metric": "M9",
-     "n": 13,
+     "n": 14,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8667,25 +8858,25 @@
     },
     {
      "criterion": "",
-     "estimate": 0.029396053208738747,
-     "hi": 0.18950519803314173,
+     "estimate": 0.04537053482214206,
+     "hi": 0.1938136252394361,
      "kind": "ratio",
-     "lo": -0.10869808647010896,
+     "lo": -0.10812900509089077,
      "metric": "M9",
-     "n": 64,
+     "n": 58,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (64 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (58 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.0329852530314314,
-     "hi": 1.2646382142274577,
+     "estimate": 0.9801935392934392,
+     "hi": 1.1616163091306633,
      "kind": "ratio",
-     "lo": 0.8278401608649336,
+     "lo": 0.8048765739881121,
      "metric": "M9",
-     "n": 64,
+     "n": 58,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8693,25 +8884,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.2714987756593882,
-     "hi": -0.10545344768533745,
+     "estimate": -0.2769198403383534,
+     "hi": -0.10014369757319563,
      "kind": "ratio",
-     "lo": -0.4341541064669132,
+     "lo": -0.4209938667717826,
      "metric": "M9",
-     "n": 13,
+     "n": 14,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (13 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (14 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.43562645848544285,
+     "estimate": 0.4562125156464512,
      "hi": 0.7273015189238473,
      "kind": "ratio",
-     "lo": 0.12963298783823168,
+     "lo": 0.22798336007790793,
      "metric": "M9",
-     "n": 13,
+     "n": 14,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8719,36 +8910,36 @@
     },
     {
      "criterion": "V6",
-     "estimate": 0.7083333333333334,
-     "hi": 0.8947368421052632,
+     "estimate": 0.75,
+     "hi": 0.9090909090909091,
      "kind": "ratio",
-     "lo": 0.533235294117647,
+     "lo": 0.5666666666666667,
      "metric": "M7",
-     "n": 24,
+     "n": 28,
      "required": true,
      "threshold": "lower bound \u2265 0.7",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.8 (24 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.8 (28 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.7543859649122807,
-     "hi": 0.8666666666666667,
+     "estimate": 0.7666666666666667,
+     "hi": 0.8727272727272727,
      "kind": "ratio",
-     "lo": 0.6440375302663438,
+     "lo": 0.6666666666666666,
      "metric": "M7",
-     "n": 57,
+     "n": 60,
      "required": true,
      "threshold": "lower bound \u2265 0.3",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (57 family observations)"
+     "what": "year 10: share with a true edge among families with \u03a0^min \u2265 0.4 (60 family observations)"
     },
     {
      "criterion": "V6",
-     "estimate": 0.0035315868526978717,
-     "hi": 0.007563098465720127,
+     "estimate": 0.0030496096074372923,
+     "hi": 0.007311068485797655,
      "kind": "ratio",
-     "lo": 0.0002981357211481179,
+     "lo": 0.0001459320489907653,
      "metric": "M7",
      "n": 2880,
      "required": true,
@@ -8758,25 +8949,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.08285759295195247,
-     "hi": 0.17289024768113906,
+     "estimate": 0.11551117684329525,
+     "hi": 0.1993085295619344,
      "kind": "ratio",
-     "lo": -0.008249394770372433,
+     "lo": 0.027183426495031932,
      "metric": "M9",
-     "n": 113,
+     "n": 94,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (113 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (94 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.9746091288913091,
-     "hi": 1.0340792912660761,
+     "estimate": 0.9383801771631802,
+     "hi": 1.0119174640770197,
      "kind": "ratio",
-     "lo": 0.9235815035131235,
+     "lo": 0.861665669890344,
      "metric": "M9",
-     "n": 113,
+     "n": 94,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8784,25 +8975,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.044820750434289736,
-     "hi": 0.2504948519156851,
+     "estimate": 0.11507240498454156,
+     "hi": 0.2919849213381865,
      "kind": "ratio",
-     "lo": -0.13308990153714909,
+     "lo": -0.023682229425091246,
      "metric": "M9",
-     "n": 24,
+     "n": 31,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (24 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (i) (31 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.5838217894298328,
-     "hi": 0.8922487305736772,
+     "estimate": 0.6704503638816316,
+     "hi": 0.9224912843251585,
      "kind": "ratio",
-     "lo": 0.3162928949389112,
+     "lo": 0.4693261067740616,
      "metric": "M9",
-     "n": 24,
+     "n": 31,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8810,25 +9001,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.11607684260350576,
-     "hi": 0.21582408289340196,
+     "estimate": 0.12615381051587177,
+     "hi": 0.2340326463329326,
      "kind": "ratio",
-     "lo": 0.035664624424758026,
+     "lo": 0.029810874009044367,
      "metric": "M9",
-     "n": 88,
+     "n": 86,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (88 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (86 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.9254947453849016,
-     "hi": 1.0133978645273918,
+     "estimate": 0.9087146807664368,
+     "hi": 1.0061619538430253,
      "kind": "ratio",
-     "lo": 0.842321415567462,
+     "lo": 0.8120509965017817,
      "metric": "M9",
-     "n": 88,
+     "n": 86,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8836,25 +9027,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.044820750434289736,
-     "hi": 0.2504948519156851,
+     "estimate": 0.11507240498454156,
+     "hi": 0.2919849213381865,
      "kind": "ratio",
-     "lo": -0.13308990153714909,
+     "lo": -0.023682229425091246,
      "metric": "M9",
-     "n": 24,
+     "n": 31,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (24 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Statistically supported or higher, candidate (ii) (31 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.5838217894298328,
-     "hi": 0.8922487305736772,
+     "estimate": 0.6704503638816316,
+     "hi": 0.9224912843251585,
      "kind": "ratio",
-     "lo": 0.3162928949389112,
+     "lo": 0.4693261067740616,
      "metric": "M9",
-     "n": 24,
+     "n": 31,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8862,10 +9053,10 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.008130081300813009,
-     "hi": 0.028846153846153848,
+     "estimate": 0.04878048780487805,
+     "hi": 0.08621518567639254,
      "kind": "ratio",
-     "lo": 0.0,
+     "lo": 0.016129032258064516,
      "metric": "M8",
      "n": 123,
      "required": true,
@@ -8883,15 +9074,15 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "11.8 / 9.4 / 2.0 / 45.3",
+     "verdict": "11.8 / 7.8 / 2.6 / 69.7",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.008130081300813009,
-     "hi": 0.028846153846153848,
+     "estimate": 0.04878048780487805,
+     "hi": 0.08621518567639254,
      "kind": "ratio",
-     "lo": 0.0,
+     "lo": 0.016129032258064516,
      "metric": "M8",
      "n": 123,
      "required": true,
@@ -8909,12 +9100,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "6.1 / 7.3 / 2.0 / 45.3",
+     "verdict": "6.1 / 7.2 / 2.6 / 69.7",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 79.61666666666667,
+     "estimate": 993.4083333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8927,7 +9118,7 @@
     },
     {
      "criterion": "",
-     "estimate": 24.121749999999995,
+     "estimate": 32.8655,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8961,7 +9152,7 @@
      "n": 27,
      "required": false,
      "threshold": "",
-     "verdict": "0.207 / 0.355 / 0.477",
+     "verdict": "0.206 / 0.356 / 0.477",
      "what": "year 2: families with a true edge (27 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -8987,7 +9178,7 @@
      "n": 27,
      "required": false,
      "threshold": "",
-     "verdict": "0.074 / 0.000",
+     "verdict": "0.037 / 0.000",
      "what": "year 2: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -9000,12 +9191,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "-0.243 / 0.146 / 1.087 / 0.40, 0.43, 0.42",
+     "verdict": "-0.243 / 0.145 / 1.087 / 0.40, 0.43, 0.42",
      "what": "year 2: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 16.192166666666665,
+     "estimate": 21.41333333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -9039,7 +9230,7 @@
      "n": 55,
      "required": false,
      "threshold": "",
-     "verdict": "0.297 / 0.482 / 0.579",
+     "verdict": "0.299 / 0.485 / 0.580",
      "what": "year 4: families with a true edge (55 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -9052,7 +9243,7 @@
      "n": 55,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.11 / 0.00 / 0.00 / 0.67 / 0.22",
+     "verdict": "0.00 / 0.13 / 0.00 / 0.00 / 0.65 / 0.22",
      "what": "year 4: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -9078,12 +9269,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "-0.270 / 0.105 / 1.060 / 0.47, 0.51, 0.50",
+     "verdict": "-0.270 / 0.105 / 1.060 / 0.48, 0.51, 0.50",
      "what": "year 4: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 11.732833333333334,
+     "estimate": 15.546916666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -9117,7 +9308,7 @@
      "n": 88,
      "required": false,
      "threshold": "",
-     "verdict": "0.321 / 0.537 / 0.597",
+     "verdict": "0.328 / 0.540 / 0.600",
      "what": "year 7: families with a true edge (88 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -9130,7 +9321,7 @@
      "n": 88,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.01 / 0.02 / 0.00 / 0.59 / 0.38",
+     "verdict": "0.00 / 0.01 / 0.02 / 0.00 / 0.58 / 0.39",
      "what": "year 7: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -9143,7 +9334,7 @@
      "n": 88,
      "required": false,
      "threshold": "",
-     "verdict": "0.148 / 0.011",
+     "verdict": "0.159 / 0.023",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -9156,12 +9347,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "-0.268 / 0.073 / 1.055 / 0.56, 0.57, 0.56",
+     "verdict": "-0.268 / 0.073 / 1.055 / 0.56, 0.57, 0.57",
      "what": "year 7: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 9.93925,
+     "estimate": 13.012,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -9195,7 +9386,7 @@
      "n": 123,
      "required": false,
      "threshold": "",
-     "verdict": "0.330 / 0.589 / 0.644",
+     "verdict": "0.340 / 0.591 / 0.647",
      "what": "year 10: families with a true edge (123 observations): mean \u03a0^min / mean \u03a0 under S0 / mean \u03a0^max"
     },
     {
@@ -9208,7 +9399,7 @@
      "n": 123,
      "required": false,
      "threshold": "",
-     "verdict": "0.00 / 0.03 / 0.01 / 0.00 / 0.44 / 0.52",
+     "verdict": "0.00 / 0.03 / 0.01 / 0.00 / 0.42 / 0.54",
      "what": "year 10: families with a true edge: the most cautious model is S0 / S1 / S2 / S3 / S4 / S5 (shares)"
     },
     {
@@ -9221,7 +9412,7 @@
      "n": 123,
      "required": false,
      "threshold": "",
-     "verdict": "0.171 / 0.008",
+     "verdict": "0.211 / 0.041",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -9234,28 +9425,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "-0.258 / 0.065 / 1.054 / 0.61, 0.61, 0.60",
+     "verdict": "-0.258 / 0.065 / 1.054 / 0.60, 0.60, 0.60",
      "what": "year 10: posterior means under S0 of \u03bc_A / \u03c4_A / \u03c8 / the classes' \u03c1 (means over reviews)"
     },
     {
      "criterion": "",
-     "estimate": 501.3333333333333,
-     "hi": 505.6782344434353,
+     "estimate": 4012.5833333333335,
+     "hi": 4170.723336549381,
      "kind": "mean",
-     "lo": 496.9884322232313,
+     "lo": 3854.4433301172853,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (i) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.1969532100108814,
-     "hi": 0.20864907870451843,
+     "estimate": 0.3014145810663765,
+     "hi": 0.34225903850351885,
      "kind": "ratio",
-     "lo": 0.1846967927945101,
+     "lo": 0.2622733396831169,
      "metric": "cost",
      "n": 2757,
      "required": false,
@@ -9273,7 +9464,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 50.0 / 50.0",
+     "verdict": "3.3 / 47.3 / 50.0",
      "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -9286,7 +9477,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "13.3 / 100.0 / 100.0",
+     "verdict": "17.1 / 85.2 / 100.0",
      "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -9299,7 +9490,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "45.3 / 156.7 / 170.0",
+     "verdict": "41.7 / 132.0 / 170.0",
      "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
@@ -9312,28 +9503,28 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "45.3 / 194.7 / 240.0",
+     "verdict": "69.7 / 170.3 / 240.0",
      "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
     },
     {
      "criterion": "",
-     "estimate": 501.3333333333333,
-     "hi": 505.6782344434353,
+     "estimate": 4013.0833333333335,
+     "hi": 4171.193704408143,
      "kind": "mean",
-     "lo": 496.9884322232313,
+     "lo": 3854.9729622585232,
      "metric": "cost",
      "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+     "what": "attention: reviews written per replication, candidate (ii) (of 5080 family-reviews; a family dormant before and after a date needs none)"
     },
     {
      "criterion": "",
-     "estimate": 0.1969532100108814,
-     "hi": 0.20864907870451843,
+     "estimate": 0.3014145810663765,
+     "hi": 0.34225903850351885,
      "kind": "ratio",
-     "lo": 0.1846967927945101,
+     "lo": 0.2622733396831169,
      "metric": "cost",
      "n": 2757,
      "required": false,
@@ -9351,12 +9542,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "protocol-3.1-section-9.1-revised",
+     "verdict": "protocol-3.1-section-9.1-forward-record",
      "what": "dormancy rule"
     },
     {
      "criterion": "",
-     "estimate": 62.494166666666665,
+     "estimate": 969.1883333333334,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -9365,7 +9556,33 @@
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"
+     "what": "seconds per replication spent on the model (estimates, six fits at every review, forecasts)"
+    },
+    {
+     "criterion": "",
+     "estimate": 39.94416666666667,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "of which the dormancy forecasts"
+    },
+    {
+     "criterion": "",
+     "estimate": 23.16657083333333,
+     "hi": null,
+     "kind": "mean",
+     "lo": null,
+     "metric": "cost",
+     "n": 480,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "seconds for the six fits of a review, mean over every review"
     },
     {
      "criterion": "",
@@ -10569,9 +10786,9 @@
    },
    "0.75 to 1": {
     "10": [
+     0.03125,
      0.0,
-     0.0,
-     0.0,
+     0.09375,
      32
     ],
     "2": [
@@ -10613,9 +10830,9 @@
      14
     ],
     "7": [
-     0.125,
+     0.1875,
      0.0,
-     0.2777777777777778,
+     0.4,
      16
     ]
    },
@@ -10647,9 +10864,9 @@
    },
    "all with a true edge": {
     "10": [
-     0.07142857142857142,
-     0.026845637583892617,
-     0.12878787878787878,
+     0.07857142857142857,
+     0.03520511178961883,
+     0.1338042031717866,
      140
     ],
     "2": [
@@ -10665,9 +10882,9 @@
      51
     ],
     "7": [
-     0.043010752688172046,
-     0.010638297872340425,
-     0.08235597331716189,
+     0.053763440860215055,
+     0.02040816326530612,
+     0.08974719101123593,
      93
     ]
    }
@@ -10675,9 +10892,9 @@
   "D08": {
    "0.25 to 0.5": {
     "10": [
-     0.009345794392523364,
+     0.018691588785046728,
      0.0,
-     0.029133352370074205,
+     0.05826670474014841,
      107
     ],
     "2": [
@@ -10701,9 +10918,9 @@
    },
    "0.5 to 0.75": {
     "10": [
-     0.02717391304347826,
+     0.03804347826086957,
      0.0,
-     0.06289970208540215,
+     0.08523944805194798,
      184
     ],
     "2": [
@@ -10719,17 +10936,17 @@
      70
     ],
     "7": [
-     0.015873015873015872,
+     0.031746031746031744,
      0.0,
-     0.037884199134199104,
+     0.08130081300813008,
      126
     ]
    },
    "0.75 to 1": {
     "10": [
-     0.06896551724137931,
-     0.01979988843954818,
-     0.1368431058635181,
+     0.1,
+     0.032364166806090014,
+     0.1902834008097166,
      290
     ],
     "2": [
@@ -10745,17 +10962,17 @@
      125
     ],
     "7": [
-     0.031818181818181815,
-     0.004404324490698883,
-     0.06796668137687552,
+     0.05,
+     0.0,
+     0.12020682367149751,
      220
     ]
    },
    "1 to 1.5": {
     "10": [
-     0.24,
-     0.1488618472841774,
-     0.3231342682789379,
+     0.3415384615384615,
+     0.22950138881324547,
+     0.43386357416529825,
      325
     ],
     "2": [
@@ -10765,29 +10982,29 @@
      59
     ],
     "4": [
-     0.088,
-     0.028532818532818534,
-     0.1439409090909091,
+     0.104,
+     0.039356700558061314,
+     0.16418176972281448,
      125
     ],
     "7": [
-     0.16129032258064516,
-     0.06598984771573604,
-     0.2577812971342383,
+     0.2073732718894009,
+     0.10424028951164228,
+     0.31250643004115225,
      217
     ]
    },
    "1.5 and above": {
     "10": [
-     0.5789473684210527,
-     0.3666463414634146,
-     0.8158492822966503,
+     0.7105263157894737,
+     0.5238095238095238,
+     0.9090909090909091,
      38
     ],
     "2": [
-     0.1,
      0.0,
-     0.4,
+     0.0,
+     0.0,
      10
     ],
     "4": [
@@ -10797,35 +11014,35 @@
      17
     ],
     "7": [
-     0.41379310344827586,
-     0.25,
-     0.5925925925925926,
+     0.5862068965517241,
+     0.3333333333333333,
+     0.8125,
      29
     ]
    },
    "all with a true edge": {
     "10": [
-     0.13347457627118645,
-     0.07473453479670741,
-     0.19510644312454542,
+     0.1864406779661017,
+     0.11085665024630542,
+     0.2625383043922368,
      944
     ],
     "2": [
-     0.01098901098901099,
+     0.005494505494505495,
      0.0,
-     0.03030764966740574,
+     0.01818181818181818,
      182
     ],
     "4": [
-     0.04221635883905013,
-     0.021052016724053123,
-     0.06599104491906906,
+     0.047493403693931395,
+     0.023254315511867657,
+     0.07368421052631578,
      379
     ],
     "7": [
-     0.08395802098950525,
-     0.0409665266883358,
-     0.13324055615889893,
+     0.11544227886056972,
+     0.05705027834735564,
+     0.18154354567011083,
      667
     ]
    }
@@ -10885,9 +11102,9 @@
    },
    "0.75 to 1": {
     "10": [
+     0.058823529411764705,
      0.0,
-     0.0,
-     0.0,
+     0.2,
      17
     ],
     "2": [
@@ -10911,15 +11128,15 @@
    },
    "1 to 1.5": {
     "10": [
-     0.30612244897959184,
-     0.19148936170212766,
-     0.4146341463414634,
+     0.42857142857142855,
+     0.3,
+     0.5576923076923077,
      49
     ],
     "2": [
-     0.14285714285714285,
+     0.07142857142857142,
      0.0,
-     0.35714285714285715,
+     0.266818181818181,
      14
     ],
     "4": [
@@ -10929,9 +11146,9 @@
      25
     ],
     "7": [
-     0.2222222222222222,
-     0.08333333333333333,
-     0.40625,
+     0.25,
+     0.11363636363636363,
+     0.42424242424242425,
      36
     ]
    },
@@ -10963,15 +11180,15 @@
    },
    "all with a true edge": {
     "10": [
-     0.18699186991869918,
-     0.1171875,
-     0.25225225225225223,
+     0.24390243902439024,
+     0.15178571428571427,
+     0.3409181096681096,
      123
     ],
     "2": [
-     0.07407407407407407,
+     0.037037037037037035,
      0.0,
-     0.21052631578947367,
+     0.15,
      27
     ],
     "4": [
@@ -10981,9 +11198,9 @@
      55
     ],
     "7": [
-     0.14772727272727273,
-     0.08602150537634409,
-     0.23076923076923078,
+     0.1590909090909091,
+     0.0891089108910891,
+     0.2421337126600283,
      88
     ]
    }

@@ -1,6 +1,8 @@
 """Every simulation interval recomputed with the replication as the unit of clustering (session 6M).
 
     python -m manhattan.sim.cluster_ci            # writes results/manhattan_sim/v2/CLUSTERED_INTERVALS.md and .json
+    python -m manhattan.sim.cluster_ci --current-hb --name PILOT_RERUN3_INTERVALS
+                                                  # only the HB runs of the code now checked out, under another name
 
 **Why.** Tests inside one replication share their simulated paths (one common factor, one calendar, one
 programme), so the only independent units are whole replications. The pre-registered intervals (SIM_PREREG.md
@@ -45,6 +47,10 @@ from . import metrics, metrics_v2, pipeline_v2, run, seeds, world
 
 RATE_METRICS = ("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M11")       # shares between 0 and 1
 PILOT_5M_HB_CODE = "c22815235975c486"       # the HB pilot of record of session 5M (dormancy rule of 3.0): kept beside the rerun
+PILOT_6M_HB_CODE = "630059032fd6e5b8"       # session 6M's rerun (a second condition on Π^max, four review dates): superseded
+HB_SOURCES = {PILOT_5M_HB_CODE: "analytic model, dormancy rule of 3.0, four review dates (PILOT_RERUN_REPORT.md, superseded)",
+              PILOT_6M_HB_CODE: "analytic model, forecast and Π^max, four review dates (PILOT_RERUN2_REPORT.md, superseded)"}
+HB_CURRENT = "analytic model, dormancy rule of 3.1 §9.1 (forward record), quarterly reviews (PILOT_RERUN3_REPORT.md)"
 _COUNT = re.compile(r"\s*\(\d+ [^)]*\)|, of \d+")
 
 
@@ -132,6 +138,25 @@ def hb_codes(scenario: str, out: Path) -> list[str]:
     return seen
 
 
+def collect_hb(out: Path = run.OUT, current_only: bool = False) -> list[dict]:
+    """The HB runs of the analytic model, once per code that was the subject of a report (records of different
+    code are never pooled); with ``current_only``, the code now checked out alone."""
+    runs = []
+    now = run.code_hash("HB", version="v2")
+    for scenario, size in run.development_plan("v1"):
+        if size != "HB":
+            continue
+        for code in hb_codes(scenario, out):
+            if code != now and (current_only or code not in HB_SOURCES):
+                continue                                 # records of abandoned code were never in a report
+            reps = run.load_reps(scenario, "HB", seeds.DEVELOPMENT, out, code, "v2")
+            if not reps:
+                continue
+            runs.append({"run": f"{scenario} HB", "source": HB_CURRENT if code == now else HB_SOURCES[code], "code": code,
+                         "rows": jackknife(lambda x, s=scenario: metrics_v2.summarise_hb(x, s), reps)})
+    return runs
+
+
 def collect(out: Path = run.OUT) -> list[dict]:
     """Every run with intervals on file: version 1's STD and LONG pilots, D11 and the hedged twins, and the HB
     runs of the analytic model, once per code that made them (records of different code are never pooled)."""
@@ -153,37 +178,24 @@ def collect(out: Path = run.OUT) -> list[dict]:
             rows += [r for r in jackknife(lambda x, s=scenario: metrics.summarise(x, s, "STD"), reps)
                      if (r["metric"], r["what"]) not in seen and r["metric"] != "M3"]
         runs.append({"run": f"{scenario} STD", "source": "version 2 pilot (PILOT_RERUN_REPORT.md)", "code": code, "rows": rows})
-    now = run.code_hash("HB", version="v2")
-    for scenario, size in run.development_plan("v1"):
-        if size != "HB":
-            continue
-        for code in hb_codes(scenario, out):
-            if code not in (now, PILOT_5M_HB_CODE):
-                continue                                 # records of abandoned code were never in a report
-            reps = run.load_reps(scenario, "HB", seeds.DEVELOPMENT, out, code, "v2")
-            if not reps:
-                continue
-            label = ("analytic model, dormancy rule of 3.1 §9.1 (PILOT_RERUN2_REPORT.md)" if code == now
-                     else "analytic model, dormancy rule of 3.0 (PILOT_RERUN_REPORT.md, superseded)")
-            runs.append({"run": f"{scenario} HB", "source": label, "code": code,
-                         "rows": jackknife(lambda x, s=scenario: metrics_v2.summarise_hb(x, s), reps)})
-    return runs
+    return runs + collect_hb(out)
 
 
 def _f(x) -> str:
     return "-" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x:.4f}"
 
 
-def build(out: Path = run.OUT) -> tuple[str, dict]:
-    runs = collect(out)
+def build(out: Path = run.OUT, current_hb: bool = False) -> tuple[str, dict]:
+    runs = collect_hb(out, current_only=True) if current_hb else collect(out)
     rows = [dict(r, run=v["run"], source=v["source"], code=v["code"]) for v in runs for r in v["rows"]]
     judged = [r for r in rows if r["old_side"] is not None]
     changed = [r for r in judged if r["changed"]]
     widen = [(r["hi"] - r["lo"]) / (r["old_hi"] - r["old_lo"]) for r in rows
-             if r["lo"] is not None and r["old_hi"] is not None and r["old_hi"] > r["old_lo"]]
-    L = ["# Manhattan simulation: every interval with the replication as the unit of clustering", "",
-         "Written by `python -m manhattan.sim.cluster_ci` (session \"6M Manhattan C: dormancy fix and statistical "
-         "checks\"). **Synthetic data only. Every run here is a "
+             if r["lo"] is not None and r["old_hi"] is not None and r["old_hi"] > r["old_lo"]] or [math.nan]
+    L = ["# Manhattan simulation: every interval with the replication as the unit of clustering"
+         + (": the HB runs of the code now checked out" if current_hb else ""), "",
+         "Written by `python -m manhattan.sim.cluster_ci" + (" --current-hb" if current_hb else "") + "` (the method is "
+         "that of session \"6M Manhattan C: dormancy fix and statistical checks\"). **Synthetic data only. Every run here is a "
          "pilot: nothing is decided, and this file changes no pre-registered interval, threshold or verdict rule.** "
          "It shows what the same numbers look like when the small number of replications is allowed for.", "",
          "## Method", "",
@@ -239,13 +251,15 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m manhattan.sim.cluster_ci")
     ap.add_argument("--out", type=Path, default=run.OUT)
+    ap.add_argument("--current-hb", action="store_true", help="only the HB runs of the code now checked out")
+    ap.add_argument("--name", default="CLUSTERED_INTERVALS", help="base name of the two files written")
     a = ap.parse_args(argv)
-    text, summary = build(a.out)
+    text, summary = build(a.out, a.current_hb)
     (a.out / "v2").mkdir(parents=True, exist_ok=True)
-    (a.out / "v2" / "CLUSTERED_INTERVALS.md").write_text(text, encoding="utf-8")
-    (a.out / "v2" / "clustered_intervals.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=float) + "\n",
-                                                           encoding="utf-8")
-    print(f"wrote {a.out / 'v2' / 'CLUSTERED_INTERVALS.md'}: {summary['intervals']} intervals, {summary['changed']} change side")
+    (a.out / "v2" / f"{a.name}.md").write_text(text, encoding="utf-8")
+    (a.out / "v2" / f"{a.name.lower()}.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=float) + "\n",
+                                                         encoding="utf-8")
+    print(f"wrote {a.out / 'v2' / (a.name + '.md')}: {summary['intervals']} intervals, {summary['changed']} change side")
     return 0
 
 
