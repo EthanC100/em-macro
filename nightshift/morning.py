@@ -7,7 +7,8 @@ v1.0 rules (D004) is read, never written: data/ledger/v1_rules.json on origin/ma
 after each official month-end v1.0 run). A triggered rule appears as a FLAG line, and also in Needs Ethan.
 
 "Failed or empty runs" checks actual output, not the run's own status: a run logged as "merged" must have its
-commits on origin/dev, and an explorer run must have rows in results/exploration/log.csv for the night.
+commits on origin/dev, and an explorer run must have rows in results/exploration/log.csv for the night. A chain stop
+during the night whose reason is not a normal end of night (NORMAL_STOPS) is listed there too (Q011).
 
 Janus is read, never written: the latest daily review and quick check from data/janus/records.jsonl through
 ledger.janus (review_status, budget_status, open positions), against mandate C05.
@@ -121,6 +122,34 @@ def verify_runs(runs: list[dict], dev: str, exploration_rows: list[dict], night_
     return bad
 
 
+# How a night normally ends (Q011): guard.next's stop reasons (after 05:00 / outside the window, run cap reached,
+# nothing left to do; next --for night-worker: no approved items left) and night-start's "nothing to do". A chain stop
+# with any other reason (e.g. dev conflicts with main) is listed under Failed or empty runs.
+NORMAL_STOPS = ("after 05:00", "outside the night window", "run cap reached", "nothing left to do", "nothing to do",
+                "no approved items left")
+
+
+def normal_stop(reason: str) -> bool:
+    return (reason or "").strip().lower().startswith(NORMAL_STOPS)
+
+
+def chain_stop_line(st: dict, night: str) -> str | None:
+    """'chain stopped HH:MM: <reason>' (Singapore time) when the chain was stopped during the reported night for a
+    reason other than a normal end of night; else None. ``state stop`` adds nothing to the run log, so without this
+    a stopped night reads as 'none (outputs verified)'."""
+    cs = st.get("chain_stopped") or {}
+    reason, at = (cs.get("reason") or "").strip(), cs.get("at")
+    if not at or normal_stop(reason):
+        return None
+    try:
+        ts = datetime.fromisoformat(at)
+    except (TypeError, ValueError):
+        return f"chain stopped (time unreadable: {at!r}): {_short(reason) or '(no reason given)'}"
+    if C.night_of(ts).isoformat() != night:
+        return None
+    return f"chain stopped {ts.astimezone(C.SGT):%H:%M}: {_short(reason) or '(no reason given)'}"
+
+
 def janus_section(today: date) -> list[str]:
     from ledger import janus as J
     recs = J.load()
@@ -195,7 +224,8 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     L = [f"# Night shift, {night} -> {day.isoformat()}", "",
          f"**Promoted to main:** {promoted(day)}", "", "**Merged into dev:**"]
     L += [f"- {m}" for m in merged_into_dev(dev, since)] or ["- nothing"]
-    bad = verify_runs(runs, dev, rows, nd)
+    stop = chain_stop_line(st, night)
+    bad = ([stop] if stop else []) + verify_runs(runs, dev, rows, nd)
     L += ["", "**Failed or empty runs:**"] + ([f"- {b}" for b in bad] or ["- none (outputs verified)"])
     L += ["", "**Janus:**"] + [f"- {x}" for x in janus_section(day)]
     v1 = v1_rules_state()
