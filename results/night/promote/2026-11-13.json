@@ -1,0 +1,53 @@
+{
+ "base": "8c1d316",
+ "head": "3badb11",
+ "today": "2026-11-13",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 12
+  },
+  "a_tests": {
+   "ok": true,
+   "summary": "1235 passed, 132 skipped, 10 warnings in 266.53s (0:04:26)"
+  },
+  "b_ledger_rebuild": {
+   "ok": true,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "none (no private store)",
+   "same_snapshot": true,
+   "items_merged": [
+    "Q007",
+    "Q008",
+    "Q009",
+    "Q010"
+   ],
+   "intended_files": [],
+   "differences": [],
+   "unexplained": [],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": true,
+ "dev_commits_ahead": 34,
+ "mode": "promote",
+ "reasons": [],
+ "pr": "https://github.com/EthanC100/em-macro/pull/60"
+}

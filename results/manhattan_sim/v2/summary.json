@@ -7,13 +7,13 @@
    "timed_runs": 1
   },
   "HB": {
-   "cpu_hours": 49.846324074074076,
+   "cpu_hours": 46.86087962962963,
    "replications_left": 1940,
    "runs": 5,
    "timed_runs": 5
   },
-  "six_fits_seconds_mean": 16.353908333333333,
-  "total_cpu_hours": 1743.844196296296,
+  "six_fits_seconds_mean": 15.291779166666666,
+  "total_cpu_hours": 1740.8587518518518,
   "twin": {
    "cpu_hours": 301.2689990740741,
    "replications_left": 3546,
@@ -33,13 +33,160 @@
   "lo": 0.3074889247419513,
   "n": 12
  },
+ "dormancy": {
+  "D01": {
+   "dormant_end": [
+    33.833333333333336,
+    29.218821747941316,
+    38.44784491872536
+   ],
+   "edge_dormant_share": [
+    NaN,
+    NaN,
+    NaN
+   ],
+   "family_reviews": 560.0,
+   "m8": [
+    NaN,
+    NaN,
+    NaN
+   ],
+   "n_edge": 0,
+   "null_dormant_share": [
+    0.14097222222222222,
+    0.12256944444444444,
+    0.159375
+   ],
+   "written": [
+    517.75,
+    511.40747182612773,
+    524.0925281738723
+   ]
+  },
+  "D02": {
+   "dormant_end": [
+    32.583333333333336,
+    28.586442243518857,
+    36.58022442314782
+   ],
+   "edge_dormant_share": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "family_reviews": 560.0,
+   "m8": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "n_edge": 42,
+   "null_dormant_share": [
+    0.13777307963354474,
+    0.12153119224886247,
+    0.1534667410403012
+   ],
+   "written": [
+    518.25,
+    512.389210674734,
+    524.110789325266
+   ]
+  },
+  "D05": {
+   "dormant_end": [
+    31.916666666666668,
+    25.351671417143432,
+    38.4816619161899
+   ],
+   "edge_dormant_share": [
+    0.014285714285714285,
+    0.0,
+    0.03226330121491409
+   ],
+   "family_reviews": 560.0,
+   "m8": [
+    0.014285714285714285,
+    0.0,
+    0.03226330121491409
+   ],
+   "n_edge": 140,
+   "null_dormant_share": [
+    0.13905109489051096,
+    0.11086616514244739,
+    0.16265543335415047
+   ],
+   "written": [
+    520.0,
+    511.74413560130154,
+    528.2558643986985
+   ]
+  },
+  "D08": {
+   "dormant_end": [
+    4.333333333333333,
+    -1.0793416527572326,
+    9.746008319423899
+   ],
+   "edge_dormant_share": [
+    0.00211864406779661,
+    0.0,
+    0.00679520959006479
+   ],
+   "family_reviews": 560.0,
+   "m8": [
+    0.00211864406779661,
+    0.0,
+    0.00679520959006479
+   ],
+   "n_edge": 944,
+   "null_dormant_share": [
+    0.025826446280991736,
+    0.005173238869234131,
+    0.058123513610877336
+   ],
+   "written": [
+    554.1666666666666,
+    546.9820250787045,
+    561.3513082546287
+   ]
+  },
+  "D10": {
+   "dormant_end": [
+    45.333333333333336,
+    42.17538488792793,
+    48.49128177873874
+   ],
+   "edge_dormant_share": [
+    0.008130081300813009,
+    0.0,
+    0.028846153846153848
+   ],
+   "family_reviews": 560.0,
+   "m8": [
+    0.008130081300813009,
+    0.0,
+    0.028846153846153848
+   ],
+   "n_edge": 123,
+   "null_dormant_share": [
+    0.1969532100108814,
+    0.1846967927945101,
+    0.20864907870451843
+   ],
+   "written": [
+    501.3333333333333,
+    496.9884322232313,
+    505.6782344434353
+   ]
+  }
+ },
  "prereg_sha256": "e4bbcc44bebbc601b8bccc0e609131ad5185982f3047108dfaaf2fe2908c21e6",
- "prereg_v2_sha256": "677073309c0914ded0a6d39cc7ee0b8dcbcca855b2de21022a88639a522d7161",
+ "prereg_v2_sha256": "77496b2f4cb785cb8d49258701fdd6f66f4164d3f2394d6af29af92e31754ca4",
  "protocol_sha256": "4fbb5c72ad7214710aea7417fbf2fe131edb56f4eb83bffccac97478472f3a9f",
- "protocol_v31_sha256": "40ad6532b2929a9acdcec0da98dcb0186cd6e0e477a2307e93ac1b5088e9f2dd",
+ "protocol_v31_sha256": "9fdc8b07838c94f139b6dd686eb5189fb250e2de58da7b67ac1f45f19a1f0046",
  "runs": {
   "D01_HB": {
-   "code": "c22815235975c486",
+   "code": "630059032fd6e5b8",
    "replications": 12,
    "rows": [
     {
@@ -715,7 +862,7 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.1 / 0.2 / 0.0 / 87.1",
+     "verdict": "0.1 / 0.2 / 0.0 / 33.8",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
@@ -741,12 +888,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.0 / 0.2 / 0.0 / 87.5",
+     "verdict": "0.0 / 0.2 / 0.0 / 33.8",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 68.15833333333333,
+     "estimate": 65.28333333333335,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -759,7 +906,7 @@
     },
     {
      "criterion": "",
-     "estimate": 19.866833333333336,
+     "estimate": 18.393916666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -798,7 +945,7 @@
     },
     {
      "criterion": "",
-     "estimate": 11.8055,
+     "estimate": 11.040583333333332,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -837,7 +984,7 @@
     },
     {
      "criterion": "",
-     "estimate": 7.4944999999999995,
+     "estimate": 7.182083333333332,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -876,7 +1023,7 @@
     },
     {
      "criterion": "",
-     "estimate": 6.369500000000001,
+     "estimate": 6.247166666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -915,7 +1062,124 @@
     },
     {
      "criterion": "",
-     "estimate": 46.05166666666667,
+     "estimate": 517.75,
+     "hi": 524.0925281738723,
+     "kind": "mean",
+     "lo": 511.40747182612773,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.14097222222222222,
+     "hi": 0.159375,
+     "kind": "ratio",
+     "lo": 0.12256944444444444,
+     "metric": "cost",
+     "n": 2880,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "0.0 / 50.0 / 50.0",
+     "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "8.4 / 100.0 / 100.0",
+     "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "33.8 / 161.6 / 170.0",
+     "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "33.8 / 206.2 / 240.0",
+     "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": 517.6666666666666,
+     "hi": 523.9871697792329,
+     "kind": "mean",
+     "lo": 511.3461635541004,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.140625,
+     "hi": 0.15903645833333327,
+     "kind": "ratio",
+     "lo": 0.12222222222222222,
+     "metric": "cost",
+     "n": 2880,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (ii)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "protocol-3.1-section-9.1-revised",
+     "what": "dormancy rule"
+    },
+    {
+     "criterion": "",
+     "estimate": 43.38750000000001,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -1351,7 +1615,7 @@
    ]
   },
   "D02_HB": {
-   "code": "c22815235975c486",
+   "code": "630059032fd6e5b8",
    "replications": 12,
    "rows": [
     {
@@ -1850,25 +2114,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.2606277100762839,
-     "hi": 0.0003895263108782638,
+     "estimate": -0.21872324257826134,
+     "hi": 0.045093189800462743,
      "kind": "ratio",
-     "lo": -0.5834411403026538,
+     "lo": -0.5624749808923559,
      "metric": "M9",
-     "n": 11,
+     "n": 12,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (11 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (12 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.39355121031925133,
-     "hi": 0.587742184599178,
+     "estimate": 0.396767427475532,
+     "hi": 0.5750008110271853,
      "kind": "ratio",
-     "lo": 0.13829007186632084,
+     "lo": 0.14173704832049494,
      "metric": "M9",
-     "n": 11,
+     "n": 12,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -1902,25 +2166,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.04598947694497753,
-     "hi": 0.11032429449374542,
+     "estimate": 0.002046419195849932,
+     "hi": 0.16053337455942762,
      "kind": "ratio",
-     "lo": -0.40425370913396924,
+     "lo": -0.2222332261664386,
      "metric": "M9",
-     "n": 5,
+     "n": 6,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (5 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (6 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.38740511768288954,
-     "hi": 0.6232485967840269,
+     "estimate": 0.39486190076817795,
+     "hi": 0.588862873567981,
      "kind": "ratio",
-     "lo": 0.03795890220673287,
+     "lo": 0.1281590623282225,
      "metric": "M9",
-     "n": 5,
+     "n": 6,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -1954,15 +2218,15 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.16666666666666666,
-     "hi": 0.260886287625418,
+     "estimate": 0.0,
+     "hi": 0.0,
      "kind": "ratio",
-     "lo": 0.045454545454545456,
+     "lo": 0.0,
      "metric": "M8",
      "n": 42,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (i)"
     },
     {
@@ -1975,20 +2239,20 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "1.0 / 0.9 / 0.0 / 85.6",
+     "verdict": "1.0 / 1.0 / 0.0 / 32.6",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.16666666666666666,
-     "hi": 0.260886287625418,
+     "estimate": 0.0,
+     "hi": 0.0,
      "kind": "ratio",
-     "lo": 0.045454545454545456,
+     "lo": 0.0,
      "metric": "M8",
      "n": 42,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (ii)"
     },
     {
@@ -2001,12 +2265,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "0.1 / 0.4 / 0.0 / 85.8",
+     "verdict": "0.1 / 0.5 / 0.0 / 32.7",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 75.28333333333335,
+     "estimate": 70.17500000000001,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2019,7 +2283,7 @@
     },
     {
      "criterion": "",
-     "estimate": 22.797916666666662,
+     "estimate": 20.27808333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2097,7 +2361,7 @@
     },
     {
      "criterion": "",
-     "estimate": 13.018333333333333,
+     "estimate": 12.232166666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2157,7 +2421,7 @@
      "n": 18,
      "required": false,
      "threshold": "",
-     "verdict": "0.000 / 0.111",
+     "verdict": "0.000 / 0.000",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -2175,7 +2439,7 @@
     },
     {
      "criterion": "",
-     "estimate": 8.158083333333332,
+     "estimate": 7.824833333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2235,7 +2499,7 @@
      "n": 28,
      "required": false,
      "threshold": "",
-     "verdict": "0.000 / 0.250",
+     "verdict": "0.000 / 0.000",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -2253,7 +2517,7 @@
     },
     {
      "criterion": "",
-     "estimate": 6.758583333333334,
+     "estimate": 6.309166666666666,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -2313,7 +2577,7 @@
      "n": 42,
      "required": false,
      "threshold": "",
-     "verdict": "0.000 / 0.167",
+     "verdict": "0.000 / 0.000",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -2331,7 +2595,124 @@
     },
     {
      "criterion": "",
-     "estimate": 51.24083333333332,
+     "estimate": 518.25,
+     "hi": 524.110789325266,
+     "kind": "mean",
+     "lo": 512.389210674734,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.13777307963354474,
+     "hi": 0.1534667410403012,
+     "kind": "ratio",
+     "lo": 0.12153119224886247,
+     "metric": "cost",
+     "n": 2838,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "0.0 / 50.0 / 50.0",
+     "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "9.2 / 100.0 / 100.0",
+     "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "33.0 / 160.8 / 170.0",
+     "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "32.6 / 207.4 / 240.0",
+     "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": 518.1666666666666,
+     "hi": 523.9207562970728,
+     "kind": "mean",
+     "lo": 512.4125770362605,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.13812544045102185,
+     "hi": 0.15352585477529485,
+     "kind": "ratio",
+     "lo": 0.1222683218342664,
+     "metric": "cost",
+     "n": 2838,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (ii)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "protocol-3.1-section-9.1-revised",
+     "what": "dormancy rule"
+    },
+    {
+     "criterion": "",
+     "estimate": 47.166666666666664,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -3585,7 +3966,7 @@
    ]
   },
   "D05_HB": {
-   "code": "c22815235975c486",
+   "code": "630059032fd6e5b8",
    "replications": 12,
    "rows": [
     {
@@ -4084,25 +4465,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.12405712557003798,
-     "hi": 0.036090666106013025,
+     "estimate": -0.12017284568004952,
+     "hi": 0.04225669068791889,
      "kind": "ratio",
-     "lo": -0.3646993932525992,
+     "lo": -0.3626852714456224,
      "metric": "M9",
-     "n": 38,
+     "n": 36,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (38 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (36 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.40918390577848146,
-     "hi": 0.5187884771754834,
+     "estimate": 0.3976614313762415,
+     "hi": 0.5162803407038726,
      "kind": "ratio",
-     "lo": 0.277537123597488,
+     "lo": 0.26536119101707073,
      "metric": "M9",
-     "n": 38,
+     "n": 36,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -4188,15 +4569,15 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.17857142857142858,
-     "hi": 0.21605859590934212,
+     "estimate": 0.014285714285714285,
+     "hi": 0.03226330121491409,
      "kind": "ratio",
-     "lo": 0.1379247876061969,
+     "lo": 0.0,
      "metric": "M8",
      "n": 140,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (i)"
     },
     {
@@ -4209,20 +4590,20 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "3.4 / 3.2 / 0.8 / 86.7",
+     "verdict": "3.4 / 3.0 / 0.8 / 31.9",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.19285714285714287,
-     "hi": 0.22656510416666664,
+     "estimate": 0.014285714285714285,
+     "hi": 0.03226330121491409,
      "kind": "ratio",
-     "lo": 0.15625,
+     "lo": 0.0,
      "metric": "M8",
      "n": 140,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (ii)"
     },
     {
@@ -4235,12 +4616,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "1.0 / 2.1 / 0.8 / 86.4",
+     "verdict": "1.0 / 2.1 / 0.8 / 31.9",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 85.03333333333333,
+     "estimate": 76.60833333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4253,7 +4634,7 @@
     },
     {
      "criterion": "",
-     "estimate": 24.237916666666667,
+     "estimate": 21.37908333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4331,7 +4712,7 @@
     },
     {
      "criterion": "",
-     "estimate": 15.606916666666669,
+     "estimate": 13.813749999999999,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4391,7 +4772,7 @@
      "n": 51,
      "required": false,
      "threshold": "",
-     "verdict": "0.020 / 0.196",
+     "verdict": "0.020 / 0.000",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -4409,7 +4790,7 @@
     },
     {
      "criterion": "",
-     "estimate": 11.01,
+     "estimate": 10.305416666666664,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4469,7 +4850,7 @@
      "n": 93,
      "required": false,
      "threshold": "",
-     "verdict": "0.043 / 0.269",
+     "verdict": "0.043 / 0.022",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -4487,7 +4868,7 @@
     },
     {
      "criterion": "",
-     "estimate": 8.980250000000002,
+     "estimate": 8.094,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -4547,7 +4928,7 @@
      "n": 140,
      "required": false,
      "threshold": "",
-     "verdict": "0.071 / 0.179",
+     "verdict": "0.071 / 0.014",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -4565,7 +4946,124 @@
     },
     {
      "criterion": "",
-     "estimate": 60.344166666666666,
+     "estimate": 520.0,
+     "hi": 528.2558643986985,
+     "kind": "mean",
+     "lo": 511.74413560130154,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.13905109489051096,
+     "hi": 0.16265543335415047,
+     "kind": "ratio",
+     "lo": 0.11086616514244739,
+     "metric": "cost",
+     "n": 2740,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "0.0 / 50.0 / 50.0",
+     "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "8.1 / 100.0 / 100.0",
+     "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "32.0 / 161.9 / 170.0",
+     "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "31.9 / 208.1 / 240.0",
+     "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": 520.0,
+     "hi": 528.2558643986985,
+     "kind": "mean",
+     "lo": 511.74413560130154,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.13905109489051096,
+     "hi": 0.16265543335415047,
+     "kind": "ratio",
+     "lo": 0.11086616514244739,
+     "metric": "cost",
+     "n": 2740,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (ii)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "protocol-3.1-section-9.1-revised",
+     "what": "dormancy rule"
+    },
+    {
+     "criterion": "",
+     "estimate": 54.08833333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -6228,7 +6726,7 @@
    ]
   },
   "D08_HB": {
-   "code": "c22815235975c486",
+   "code": "630059032fd6e5b8",
    "replications": 12,
    "rows": [
     {
@@ -6727,25 +7225,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.1456872417583771,
-     "hi": -0.08447977041899285,
+     "estimate": -0.14588455820688215,
+     "hi": -0.08424684885174936,
      "kind": "ratio",
-     "lo": -0.22742577014124504,
+     "lo": -0.2276468946469529,
      "metric": "M9",
-     "n": 659,
+     "n": 655,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "pilot: not decided",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (659 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (655 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.3920202761544288,
-     "hi": 0.42893428765503994,
+     "estimate": 0.39076894173053045,
+     "hi": 0.4274789391894804,
      "kind": "ratio",
-     "lo": 0.33817322920714354,
+     "lo": 0.3356650851975619,
      "metric": "M9",
-     "n": 659,
+     "n": 655,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6779,25 +7277,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": -0.11623252302964715,
-     "hi": -0.052220229139003545,
+     "estimate": -0.11690415682530088,
+     "hi": -0.052748815494373026,
      "kind": "ratio",
-     "lo": -0.20329987596783214,
+     "lo": -0.2041253622587735,
      "metric": "M9",
-     "n": 574,
+     "n": 573,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "pilot: not decided",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (574 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (ii) (573 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.37961604188946235,
-     "hi": 0.4214374177162605,
+     "estimate": 0.3784439334096108,
+     "hi": 0.4202396887723021,
      "kind": "ratio",
-     "lo": 0.3134660648407997,
+     "lo": 0.31243990079622247,
      "metric": "M9",
-     "n": 574,
+     "n": 573,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -6831,15 +7329,15 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.10805084745762712,
-     "hi": 0.13844515441959532,
+     "estimate": 0.00211864406779661,
+     "hi": 0.00679520959006479,
      "kind": "ratio",
-     "lo": 0.08075772681954138,
+     "lo": 0.0,
      "metric": "M8",
      "n": 944,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (i)"
     },
     {
@@ -6852,20 +7350,20 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "40.8 / 54.9 / 10.0 / 62.9",
+     "verdict": "40.8 / 54.6 / 10.0 / 4.3",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.10805084745762712,
-     "hi": 0.13651069162267368,
+     "estimate": 0.00211864406779661,
+     "hi": 0.00679520959006479,
      "kind": "ratio",
-     "lo": 0.08138259463442726,
+     "lo": 0.0,
      "metric": "M8",
      "n": 944,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (ii)"
     },
     {
@@ -6878,12 +7376,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "10.0 / 47.8 / 9.3 / 62.6",
+     "verdict": "10.0 / 47.8 / 9.3 / 4.3",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 149.40833333333333,
+     "estimate": 143.10833333333332,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -6896,7 +7394,7 @@
     },
     {
      "criterion": "",
-     "estimate": 34.12166666666666,
+     "estimate": 31.499083333333328,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -6974,7 +7472,7 @@
     },
     {
      "criterion": "",
-     "estimate": 27.49866666666667,
+     "estimate": 26.769583333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7034,7 +7532,7 @@
      "n": 379,
      "required": false,
      "threshold": "",
-     "verdict": "0.042 / 0.058",
+     "verdict": "0.042 / 0.000",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7052,7 +7550,7 @@
     },
     {
      "criterion": "",
-     "estimate": 22.986000000000004,
+     "estimate": 22.63383333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7112,7 +7610,7 @@
      "n": 667,
      "required": false,
      "threshold": "",
-     "verdict": "0.084 / 0.153",
+     "verdict": "0.084 / 0.003",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7130,7 +7628,7 @@
     },
     {
      "criterion": "",
-     "estimate": 20.09391666666667,
+     "estimate": 19.846833333333333,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7190,7 +7688,7 @@
      "n": 944,
      "required": false,
      "threshold": "",
-     "verdict": "0.126 / 0.108",
+     "verdict": "0.126 / 0.002",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -7208,7 +7706,124 @@
     },
     {
      "criterion": "",
-     "estimate": 105.18,
+     "estimate": 554.1666666666666,
+     "hi": 561.3513082546287,
+     "kind": "mean",
+     "lo": 546.9820250787045,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.025826446280991736,
+     "hi": 0.058123513610877336,
+     "kind": "ratio",
+     "lo": 0.005173238869234131,
+     "metric": "cost",
+     "n": 1936,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "0.0 / 50.0 / 50.0",
+     "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "1.5 / 100.0 / 100.0",
+     "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "4.5 / 168.5 / 170.0",
+     "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "4.3 / 235.7 / 240.0",
+     "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": 554.1666666666666,
+     "hi": 561.3513082546287,
+     "kind": "mean",
+     "lo": 546.9820250787045,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.025826446280991736,
+     "hi": 0.058123513610877336,
+     "kind": "ratio",
+     "lo": 0.005173238869234131,
+     "metric": "cost",
+     "n": 1936,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (ii)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "protocol-3.1-section-9.1-revised",
+     "what": "dormancy rule"
+    },
+    {
+     "criterion": "",
+     "estimate": 101.2525,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -7644,7 +8259,7 @@
    ]
   },
   "D10_HB": {
-   "code": "c22815235975c486",
+   "code": "630059032fd6e5b8",
    "replications": 12,
    "rows": [
     {
@@ -8000,25 +8615,25 @@
     },
     {
      "criterion": "",
-     "estimate": -0.010474389636550537,
-     "hi": 0.10148622835363592,
+     "estimate": -0.012865460946300469,
+     "hi": 0.10164141488171446,
      "kind": "ratio",
-     "lo": -0.12132236255243904,
+     "lo": -0.1255090353028961,
      "metric": "M9",
-     "n": 86,
+     "n": 84,
      "required": false,
      "threshold": "",
      "verdict": "reported",
-     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (86 obs.)"
+     "what": "year 7: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (84 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 1.0457498248030852,
-     "hi": 1.2042708220964289,
+     "estimate": 1.0460018884247178,
+     "hi": 1.2114091454131035,
      "kind": "ratio",
-     "lo": 0.9065635224418336,
+     "lo": 0.9022468727786828,
      "metric": "M9",
-     "n": 86,
+     "n": 84,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8143,25 +8758,25 @@
     },
     {
      "criterion": "V8",
-     "estimate": 0.08279395013605302,
-     "hi": 0.1705948614083696,
+     "estimate": 0.08285759295195247,
+     "hi": 0.17289024768113906,
      "kind": "ratio",
-     "lo": -0.0066765375570031395,
+     "lo": -0.008249394770372433,
      "metric": "M9",
-     "n": 115,
+     "n": 113,
      "required": true,
      "threshold": "upper bound \u2264 +0.1 and lower bound \u2265 -0.25",
      "verdict": "not evaluated: fewer than 200 observations",
-     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (115 obs.)"
+     "what": "year 10: bias of the model's Sharpe ratio, Promising or higher, candidate (i) (113 obs.)"
     },
     {
      "criterion": "",
-     "estimate": 0.9733601161880807,
-     "hi": 1.0314105820371426,
+     "estimate": 0.9746091288913091,
+     "hi": 1.0340792912660761,
      "kind": "ratio",
-     "lo": 0.9235009683867029,
+     "lo": 0.9235815035131235,
      "metric": "M9",
-     "n": 115,
+     "n": 113,
      "required": false,
      "threshold": "",
      "verdict": "reported",
@@ -8247,15 +8862,15 @@
     },
     {
      "criterion": "V7",
-     "estimate": 0.14634146341463414,
-     "hi": 0.19708029197080293,
+     "estimate": 0.008130081300813009,
+     "hi": 0.028846153846153848,
      "kind": "ratio",
-     "lo": 0.09174120795107034,
+     "lo": 0.0,
      "metric": "M8",
      "n": 123,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (i)"
     },
     {
@@ -8268,20 +8883,20 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "11.8 / 9.6 / 2.0 / 88.2",
+     "verdict": "11.8 / 9.4 / 2.0 / 45.3",
      "what": "at the end, candidate (i): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "V7",
-     "estimate": 0.14634146341463414,
-     "hi": 0.19708029197080293,
+     "estimate": 0.008130081300813009,
+     "hi": 0.028846153846153848,
      "kind": "ratio",
-     "lo": 0.09174120795107034,
+     "lo": 0.0,
      "metric": "M8",
      "n": 123,
      "required": true,
      "threshold": "upper bound \u2264 0.1",
-     "verdict": "pilot: not decided (outside threshold so far)",
+     "verdict": "pilot: not decided (within threshold so far)",
      "what": "premature elimination: families with a true edge that end dormant, candidate (ii)"
     },
     {
@@ -8294,12 +8909,12 @@
      "n": 12,
      "required": false,
      "threshold": "",
-     "verdict": "6.1 / 7.3 / 2.0 / 88.5",
+     "verdict": "6.1 / 7.3 / 2.0 / 45.3",
      "what": "at the end, candidate (ii): passed screening / Promising / supported / dormant (means)"
     },
     {
      "criterion": "",
-     "estimate": 84.60833333333333,
+     "estimate": 79.61666666666667,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8312,7 +8927,7 @@
     },
     {
      "criterion": "",
-     "estimate": 26.18483333333334,
+     "estimate": 24.121749999999995,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8390,7 +9005,7 @@
     },
     {
      "criterion": "",
-     "estimate": 17.35925,
+     "estimate": 16.192166666666665,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8450,7 +9065,7 @@
      "n": 55,
      "required": false,
      "threshold": "",
-     "verdict": "0.073 / 0.127",
+     "verdict": "0.073 / 0.000",
      "what": "year 4: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -8468,7 +9083,7 @@
     },
     {
      "criterion": "",
-     "estimate": 12.317666666666668,
+     "estimate": 11.732833333333334,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8528,7 +9143,7 @@
      "n": 88,
      "required": false,
      "threshold": "",
-     "verdict": "0.148 / 0.205",
+     "verdict": "0.148 / 0.011",
      "what": "year 7: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -8546,7 +9161,7 @@
     },
     {
      "criterion": "",
-     "estimate": 10.411833333333332,
+     "estimate": 9.93925,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -8606,7 +9221,7 @@
      "n": 123,
      "required": false,
      "threshold": "",
-     "verdict": "0.171 / 0.146",
+     "verdict": "0.171 / 0.008",
      "what": "year 10: families with a true edge: share Statistically supported / share dormant, candidate (i)"
     },
     {
@@ -8624,7 +9239,124 @@
     },
     {
      "criterion": "",
-     "estimate": 66.77333333333334,
+     "estimate": 501.3333333333333,
+     "hi": 505.6782344434353,
+     "kind": "mean",
+     "lo": 496.9884322232313,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (i) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.1969532100108814,
+     "hi": 0.20864907870451843,
+     "kind": "ratio",
+     "lo": 0.1846967927945101,
+     "metric": "cost",
+     "n": 2757,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "0.0 / 50.0 / 50.0",
+     "what": "year 2: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "13.3 / 100.0 / 100.0",
+     "what": "year 4: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "45.3 / 156.7 / 170.0",
+     "what": "year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "45.3 / 194.7 / 240.0",
+     "what": "year 10: families dormant after the review / reviews written / families evaluated (means), candidate (i)"
+    },
+    {
+     "criterion": "",
+     "estimate": 501.3333333333333,
+     "hi": 505.6782344434353,
+     "kind": "mean",
+     "lo": 496.9884322232313,
+     "metric": "cost",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: reviews written per replication, candidate (ii) (of 560 family-reviews; a family dormant before and after a date needs none)"
+    },
+    {
+     "criterion": "",
+     "estimate": 0.1969532100108814,
+     "hi": 0.20864907870451843,
+     "kind": "ratio",
+     "lo": 0.1846967927945101,
+     "metric": "cost",
+     "n": 2757,
+     "required": false,
+     "threshold": "",
+     "verdict": "reported",
+     "what": "attention: share of the families with no edge of at least \u03b8_min that are dormant at the end, candidate (ii)"
+    },
+    {
+     "criterion": "",
+     "estimate": null,
+     "hi": null,
+     "kind": "text",
+     "lo": null,
+     "metric": "info",
+     "n": 12,
+     "required": false,
+     "threshold": "",
+     "verdict": "protocol-3.1-section-9.1-revised",
+     "what": "dormancy rule"
+    },
+    {
+     "criterion": "",
+     "estimate": 62.494166666666665,
      "hi": null,
      "kind": "mean",
      "lo": null,
@@ -9463,6 +10195,798 @@
      "what": "families per replication"
     }
    ]
+  }
+ },
+ "tier_power": {
+  "D01": {
+   "0.25 to 0.5": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "0.5 to 0.75": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "0.75 to 1": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "1 to 1.5": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "1.5 and above": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "all with a true edge": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   }
+  },
+  "D02": {
+   "0.25 to 0.5": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     7
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     2
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     3
+    ]
+   },
+   "0.5 to 0.75": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     16
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     2
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     5
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     10
+    ]
+   },
+   "0.75 to 1": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     12
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     4
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     8
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     11
+    ]
+   },
+   "1 to 1.5": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     7
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     3
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     4
+    ]
+   },
+   "1.5 and above": {
+    "10": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "7": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ]
+   },
+   "all with a true edge": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     42
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     8
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     18
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     28
+    ]
+   }
+  },
+  "D05": {
+   "0.25 to 0.5": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     33
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     7
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     13
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     24
+    ]
+   },
+   "0.5 to 0.75": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     48
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     5
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     12
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     31
+    ]
+   },
+   "0.75 to 1": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     32
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     8
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     11
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     19
+    ]
+   },
+   "1 to 1.5": {
+    "10": [
+     0.2727272727272727,
+     0.05555555555555555,
+     0.5200434782608694,
+     22
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     4
+    ],
+    "4": [
+     0.07142857142857142,
+     0.0,
+     0.23076923076923078,
+     14
+    ],
+    "7": [
+     0.125,
+     0.0,
+     0.2777777777777778,
+     16
+    ]
+   },
+   "1.5 and above": {
+    "10": [
+     0.8,
+     0.25,
+     1.0,
+     5
+    ],
+    "2": [
+     NaN,
+     NaN,
+     NaN,
+     0
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "7": [
+     0.6666666666666666,
+     0.0,
+     1.0,
+     3
+    ]
+   },
+   "all with a true edge": {
+    "10": [
+     0.07142857142857142,
+     0.026845637583892617,
+     0.12878787878787878,
+     140
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     24
+    ],
+    "4": [
+     0.0196078431372549,
+     0.0,
+     0.061224489795918366,
+     51
+    ],
+    "7": [
+     0.043010752688172046,
+     0.010638297872340425,
+     0.08235597331716189,
+     93
+    ]
+   }
+  },
+  "D08": {
+   "0.25 to 0.5": {
+    "10": [
+     0.009345794392523364,
+     0.0,
+     0.029133352370074205,
+     107
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     17
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     42
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     75
+    ]
+   },
+   "0.5 to 0.75": {
+    "10": [
+     0.02717391304347826,
+     0.0,
+     0.06289970208540215,
+     184
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     29
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     70
+    ],
+    "7": [
+     0.015873015873015872,
+     0.0,
+     0.037884199134199104,
+     126
+    ]
+   },
+   "0.75 to 1": {
+    "10": [
+     0.06896551724137931,
+     0.01979988843954818,
+     0.1368431058635181,
+     290
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     67
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     125
+    ],
+    "7": [
+     0.031818181818181815,
+     0.004404324490698883,
+     0.06796668137687552,
+     220
+    ]
+   },
+   "1 to 1.5": {
+    "10": [
+     0.24,
+     0.1488618472841774,
+     0.3231342682789379,
+     325
+    ],
+    "2": [
+     0.01694915254237288,
+     0.0,
+     0.05555555555555555,
+     59
+    ],
+    "4": [
+     0.088,
+     0.028532818532818534,
+     0.1439409090909091,
+     125
+    ],
+    "7": [
+     0.16129032258064516,
+     0.06598984771573604,
+     0.2577812971342383,
+     217
+    ]
+   },
+   "1.5 and above": {
+    "10": [
+     0.5789473684210527,
+     0.3666463414634146,
+     0.8158492822966503,
+     38
+    ],
+    "2": [
+     0.1,
+     0.0,
+     0.4,
+     10
+    ],
+    "4": [
+     0.29411764705882354,
+     0.11764705882352941,
+     0.5,
+     17
+    ],
+    "7": [
+     0.41379310344827586,
+     0.25,
+     0.5925925925925926,
+     29
+    ]
+   },
+   "all with a true edge": {
+    "10": [
+     0.13347457627118645,
+     0.07473453479670741,
+     0.19510644312454542,
+     944
+    ],
+    "2": [
+     0.01098901098901099,
+     0.0,
+     0.03030764966740574,
+     182
+    ],
+    "4": [
+     0.04221635883905013,
+     0.021052016724053123,
+     0.06599104491906906,
+     379
+    ],
+    "7": [
+     0.08395802098950525,
+     0.0409665266883358,
+     0.13324055615889893,
+     667
+    ]
+   }
+  },
+  "D10": {
+   "0.25 to 0.5": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     46
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     8
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     19
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     32
+    ]
+   },
+   "0.5 to 0.75": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     2
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ]
+   },
+   "0.75 to 1": {
+    "10": [
+     0.0,
+     0.0,
+     0.0,
+     17
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     3
+    ],
+    "4": [
+     0.0,
+     0.0,
+     0.0,
+     6
+    ],
+    "7": [
+     0.0,
+     0.0,
+     0.0,
+     14
+    ]
+   },
+   "1 to 1.5": {
+    "10": [
+     0.30612244897959184,
+     0.19148936170212766,
+     0.4146341463414634,
+     49
+    ],
+    "2": [
+     0.14285714285714285,
+     0.0,
+     0.35714285714285715,
+     14
+    ],
+    "4": [
+     0.12,
+     0.0,
+     0.3,
+     25
+    ],
+    "7": [
+     0.2222222222222222,
+     0.08333333333333333,
+     0.40625,
+     36
+    ]
+   },
+   "1.5 and above": {
+    "10": [
+     0.8888888888888888,
+     0.5,
+     1.0,
+     9
+    ],
+    "2": [
+     0.0,
+     0.0,
+     0.0,
+     1
+    ],
+    "4": [
+     0.25,
+     0.0,
+     1.0,
+     4
+    ],
+    "7": [
+     1.0,
+     1.0,
+     1.0,
+     5
+    ]
+   },
+   "all with a true edge": {
+    "10": [
+     0.18699186991869918,
+     0.1171875,
+     0.25225225225225223,
+     123
+    ],
+    "2": [
+     0.07407407407407407,
+     0.0,
+     0.21052631578947367,
+     27
+    ],
+    "4": [
+     0.07272727272727272,
+     0.017857142857142856,
+     0.14285714285714285,
+     55
+    ],
+    "7": [
+     0.14772727272727273,
+     0.08602150537634409,
+     0.23076923076923078,
+     88
+    ]
+   }
   }
  }
 }

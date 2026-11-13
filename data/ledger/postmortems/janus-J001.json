@@ -1,0 +1,31 @@
+{
+ "book": "janus",
+ "id": "J001",
+ "model": "claude-fable-5-2",
+ "generated_at": "2026-11-12T23:19:22+00:00",
+ "postmortem": {
+  "thesis_right": "no",
+  "skill_or_luck": "mixed",
+  "what_happened": "The long was decided on 10 November and filled at that day's mark of 4.98%, the day the October CPI came in hot (headline 0.4% and core 0.3% m/m). December hike pricing went to about 100% with roughly 13% for a half-point move, and on 12 November the 10-year rose about another 10bp to 5.10% as Brent jumped about 3% after Trump said the US needs no deal with Iran. The CLI closed the position at 5.10% on 12 November in the move to the C08 mechanical book, for a net loss of 0.22% of the account, just short of the 5.15% stop.",
+  "assessment": "The thesis needed a benign CPI and falling oil, and both went the other way within two sessions. The Opposition named exactly these risks (core at 0.3%, hike pricing with room to rise, repeated failures of US-Iran peace hopes, and a stop inside one month's normal range), and Janus's own probability after reading it was 50%, so the position expressed no view and existed only to meet C06's two-position floor. Taking a coin-flip long into a scheduled CPI release with a 17bp stop was a poor decision whatever the outcome; the size of the oil move on 12 November was bad luck, but the direction of the CPI risk was flagged in advance. The loss was contained because the size was the minimum.",
+  "do_differently": "1. Do not open a position at a 50% probability to satisfy a count rule: C07 and then C08 already removed this, and the forecast record should lean to the side the evidence favours (here, The Opposition's side) rather than sit at even. 2. When The Opposition's case rests on a scheduled release inside the first days of the window, weight it more heavily in p_final. 3. Treat oil-driven rallies in long yields as fragile while Hormuz shipping is still being attacked.",
+  "sources": [
+   {
+    "title": "Bond yields surge most in 19 months as traders brace for Fed rate hikes (CNN)",
+    "url": "https://www.cnn.com/2026/11/10/investing/bond-yields-inflation-fed"
+   },
+   {
+    "title": "10-year Treasury yield jumps back above 5% as oil gains and more Fed rate hikes expected (CNBC)",
+    "url": "https://cnbc.com/2026/11/12/us-treasurys-bonds-yields.html"
+   },
+   {
+    "title": "Oil prices rise after Trump says no Iran deal needed (CNBC)",
+    "url": "https://www.cnbc.com/2026/11/12/oil-prices-jump-after-trump-says-no-iran-deal-needed-weve-got-their-strait.html"
+   },
+   {
+    "title": "Stocks hit on Huang exit and crude jumps on fading US/Iran deal hopes - Newsquawk US Market Wrap",
+    "url": "http://www.zerohedge.com/markets/stocks-hit-huang-exit-and-crude-jumps-fading-usiran-deal-hopes-newsquawk-us-market-wrap"
+   }
+  ]
+ }
+}

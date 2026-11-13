@@ -2,7 +2,9 @@
 
 Version 2.0, written 2026-11-12 by session "5M Manhattan C", **after** the pilot on development scenarios and
 **before** any full run, any held-out world is coded and any confirmation run. A draft for Ethan to adopt
-([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 19).
+([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 19). Revised before adoption by session "6M Manhattan C" to follow
+one more change of the protocol under test, its dormancy rule (section 1, row 4): **no threshold, metric,
+scenario or replication count was touched**, only the description of the method.
 
 **What this file is.** [SIM_PREREG.md](SIM_PREREG.md) (version 1.0) fixed how the methods of Protocol v3.0 are
 tested on synthetic data. The pilot on its development scenarios showed two things that must be repaired before a
@@ -20,8 +22,9 @@ refuses to start if either file no longer matches.
 
 **Method under test.** For the changed parts: PROTOCOL_v3.1.md version 3.1.0, whose SHA-256 is the second line of
 `docs/manhattan/sim_prereg_v2.sha256`, so that one check pins the two files together. For everything else:
-PROTOCOL_v3.md version 3.0.0, as version 1.0 says. Sections 4, 6 and 8 of the protocol, and the rules and
-thresholds of section 9, are identical in the two versions.
+PROTOCOL_v3.md version 3.0.0, as version 1.0 says. Sections 4, 6 and 8 of the protocol and the thresholds of
+section 9 are identical in the two versions; the dormancy rule of section 9.1 has one more condition in 3.1
+(section 1, row 4).
 
 **Why a version 2 and not an amendment.** Version 1.0's section 8.4 lets an amendment add scenarios and tighten
 thresholds, and its header lets a later protocol version be tested under it. Both happen here. But the changed
@@ -43,11 +46,13 @@ evaluated: every run so far is a pilot.
 | 1 | **D11**, the only scenario in which the core hedge is estimated: the SPA test rejects 0.077 (0.061 to 0.094) of families with no edge at the 0.05 level (bound 0.06), 0.269 (0.234 to 0.303) at 0.20 (bound 0.22); Romano-Wolf family-wise rate 0.077 (0.061 to 0.093) (bound 0.06) | §5.1: the hedge is re-estimated in every bootstrap resample by the live rule, and resampled means are centred at the window's least-squares intercept on the core factors | D11 again; nine hedged twins of the other development scenarios; a new held-out scenario H12 (sections 3 and 5) |
 | 2 | **The model-fitting half produced no result.** One replication of D10 at HB, with the sampler at a fifth of its budget, was stopped unfinished after 2 hours 31 minutes of CPU time: of the order of 50,000 CPU-hours for the pre-registered runs | §7: an analytic normal-normal hierarchical model with closed-form posteriors on a fixed grid | every HB scenario, development and held-out, at the unchanged 400 replications (sections 2 and 5) |
 | 3 | **D09b**: after adaptive search on the reserve, the SPA test on the full set rejects 0.344 (0.307 to 0.380) of families with no edge at 0.05 | none: the rule that adaptive-channel families carry zero evidential weight on the reserve was already in v3.0. It now cites this evidence and is enforced in code | a required code property (V14, section 5); V10 stands |
+| 4 | **The pilot rerun of the 3.1 draft** (`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`, 12 replications a scenario, the first measurement of the dormancy rule): families with a true edge that end dormant (M8) are 0.167 (0.045 to 0.261) in D02, 0.179 (0.138 to 0.216) in D05, 0.108 (0.081 to 0.138) in D08 and 0.146 (0.092 to 0.197) in D10, against a bound of 0.10 on the upper end | §9.1: a family becomes dormant when both the forecast `PP^max` and the probability of an edge `Π^max` are below 0.05 at two consecutive reviews with at least 252 forward days each, and is reactivated when either is at least 0.15. Before, the forecast alone decided | V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged), in every scenario run at HB (sections 2 and 5) |
 
 **Why this is not tuning to held-out results.** Version 1.0, section 3: development scenarios "may be run as often
 as needed while the code is written and the methods are revised". D11, D09b and D10 are development scenarios. The
 held-out scenarios of its section 3.2 have not been coded; the runner refuses them and its log shows no held-out
-run. The three held-out parameter sets are untouched and none is burned.
+run. The three held-out parameter sets are untouched and none is burned. D02, D05 and D08, on which row 4 also rests,
+are development scenarios too, and row 4's rerun was a pilot of the draft, made before adoption.
 
 ---
 
@@ -82,6 +87,12 @@ the grid of its Appendix B. Readings fixed here:
 - **Dormancy forecast.** Version 1.0's (`manhattan.stats.tiers.support_probability`: a normal update of each
   model's posterior with simulated future records, not a refit), fed with 200 draws of `θ_f` per family and
   model from the closed-form posterior. Not evaluated at the programme's last date.
+- **Dormancy rule.** PROTOCOL_v3.1.md §9.1 (`manhattan.stats.dormancy`), with version 1.0's evaluation dates
+  standing for consecutive reviews: a family becomes dormant when `PP^max < 0.05` and `Π^max < 0.05` at two
+  consecutive dates with at least 252 forward days at each, and is reactivated when either is at least 0.15.
+  `Π^max` is the largest of the six fits' `Π_f`. At the last date there is no forecast: no family becomes
+  dormant there, and a dormant family is reactivated there if `Π^max ≥ 0.15`. The tiers are stepped by version
+  1.0's code, unchanged.
 - **Truth.** A family has an edge of at least `θ_min` as version 1.0's section 2.4 says: the true forward Sharpe
   ratio of the family portfolio. `θ_f` in the model is now the same quantity.
 - **Channels.** Every family of the HB scenarios is a blind family with a designated evaluation.
@@ -136,6 +147,8 @@ Version 1.0's, with these readings and additions.
 | M7, M8, M9 | calibration, premature elimination, selection bias | from the analytic model; definitions unchanged. M9 compares the posterior mean of `θ_f` with the true forward Sharpe ratio of the family portfolio |
 | M12 | **reviews not computed** | at HB: the number of reviews at which any of the six fits fails the grid gate of (f) |
 | cost | running time | seconds per replication; at HB also seconds for the six fits of a review, and the share of a replication spent on the model |
+| cost | attention | at HB: the reviews written (a family that is dormant before and after a date needs none) and the families dormant after each date, with and without a true edge |
+| info | power of the tier | at HB: the share of families with a true edge that have been Statistically supported by each date, by true Sharpe ratio of the family portfolio |
 
 Confidence intervals are version 1.0's.
 
@@ -157,7 +170,8 @@ or re-read.
 
 The small-groups rule, the resolution statement and the list of what is reported without a threshold are version
 1.0's. Reported without a threshold, added: the v3.0 test's size on the estimated hedge; the oracle's size; the
-paired differences; every cost.
+paired differences; every cost; the reviews written and the families dormant; the power of the tier by true
+Sharpe ratio.
 
 **Consequences, fixed in advance.** If the hedge-aware test fails V3 in D11 or in a twin at its replication
 count, the test is revised again (a new protocol version) and retested: the threshold does not move. If the

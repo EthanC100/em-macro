@@ -4,7 +4,7 @@ Protocol v3.1 section 7 (``manhattan.stats.hier_analytic``) in place of the samp
 Everything around the model is version 1's (``manhattan/sim/hb.py``, imported, not copied): the HB programme
 (24 batches of 10 families), the designated evaluation of every family and both screening candidates, the
 evaluation dates (years 2, 4, 7 and 10), the tier state machine, the dormancy forecast and the counts behind
-metrics M7, M8 and M9.
+metrics M7, M8 and M9. The dormancy rule is Protocol v3.1 section 9.1 (``manhattan.stats.dormancy``).
 
 What differs, each listed in the report:
 
@@ -24,6 +24,14 @@ What differs, each listed in the report:
   six fits, as before.
 - **Dormancy forecast.** ``tiers.support_probability`` as in version 1, fed with 200 draws of ``θ_f`` from
   each model's closed-form posterior.
+- **Dormancy rule.** Protocol v3.1 section 9.1 as revised before adoption: a family becomes dormant when, at
+  two consecutive evaluation dates with at least 252 forward days each, both the forecast ``PP^max`` and
+  ``Π^max`` (the largest of the six models' probabilities of an edge of at least ``θ_min``) are below 0.05; it
+  is reactivated when either is at least 0.15. At the last date there is no forecast, so no family becomes
+  dormant there; a dormant family can still be reactivated there by ``Π^max``.
+- **Kept for the report, not used by any rule:** how many families are dormant after each date and how many
+  reviews are written (a family that is dormant and stays so needs none), and for every family with a true
+  edge its true Sharpe ratio, its freeze day and the first date at which it was Statistically supported.
 - **Channels.** Every family of these scenarios is a blind family with a designated evaluation, so every
   reserve estimate has evidential weight 1. The weight is computed by the model from the channel
   (``hier_analytic.Data.reserve_weight``), never passed in.
@@ -34,7 +42,7 @@ import time
 
 import numpy as np
 
-from manhattan.stats import hier_analytic, screening, tiers
+from manhattan.stats import dormancy, hier_analytic, screening, tiers
 
 from . import hb, pipeline, seeds, world
 
@@ -120,6 +128,7 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
     states = {c: {f.idx: tiers.at_freeze(f.ev.passed[c]) for f in fams} for c in pipeline.CANDIDATES}
     dormant_since = {c: {} for c in pipeline.CANDIDATES}
     dormant_days = {c: {f.idx: 0 for f in fams} for c in pipeline.CANDIDATES}
+    first_supported = {c: {} for c in pipeline.CANDIDATES}            # for the report: the date a family entered the tier
     out: dict = {"scenario": scenario_id, "size": "HB", "rep": rep, "branch": branch, "model": MODEL,
                  "eval_years": list(years), "n_families": len(fams), "reviews": {}}
     for yi, year in enumerate(years):
@@ -135,9 +144,10 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
         ok = all(f.ok for f in fits)
         rec["review_ok"] = ok
         pi_min = np.min([f.pi for f in fits], axis=0) if ok else None
+        pi_max = np.max([f.pi for f in fits], axis=0) if ok else None
         gaps = [b - a for a, b in zip(years[yi:], years[yi + 1 :])]
         for cand in pipeline.CANDIDATES:
-            pp_max = None
+            pp_max, written = None, 0
             if ok and gaps:
                 st = [states[cand][f.idx] for f in live]
                 pp = tiers.support_probability(
@@ -151,15 +161,21 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
             for j, f in enumerate(live):
                 s = states[cand][f.idx]
                 was = s.dormant
-                s = tiers.step(s, tiers.Review(
+                s = dormancy.step(s, tiers.Review(
                     pi_min=None if pi_min is None else float(pi_min[j]), forward_days=t - f.freeze,
                     forward_mean_positive=bool(info["fwd_sharpe_f"][j] > 0),
-                    rw_reserve=bool(f.ev.rw_adm_any.get(cand)), pp_max=None if pp_max is None else float(pp_max[j])))
+                    rw_reserve=bool(f.ev.rw_adm_any.get(cand)), pp_max=None if pp_max is None else float(pp_max[j])),
+                    None if pi_max is None else float(pi_max[j]))
                 states[cand][f.idx] = s
                 if s.dormant and not was:
                     dormant_since[cand][f.idx] = t
                 if was and not s.dormant:
                     dormant_days[cand][f.idx] += t - dormant_since[cand].pop(f.idx)
+                written += not (was and s.dormant)                     # dormant before and after: no review write-up
+                if s.supported:
+                    first_supported[cand].setdefault(f.idx, year)
+            rec[f"written_{cand}"] = int(written)
+            rec[f"dormant_{cand}"] = int(sum(states[cand][f.idx].dormant for f in live))
         if ok:
             rec.update(hb.review_metrics(live, pi_min, fits[0], states, year))
             # for the report only: among families with a true edge, which model is the most cautious, and how
@@ -186,6 +202,15 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
         out[f"end_supported_{cand}"] = sum(s.supported for s in st)
         out[f"end_dormant_{cand}"] = sum(s.dormant for s in st)
         out[f"screened_{cand}"] = sum(f.ev.passed[cand] for f in fams)
+        out[f"null_dormant_{cand}"] = sum(states[cand][f.idx].dormant for f in fams if f.true < world.THETA_MIN)
+        out[f"written_{cand}"] = sum(v[f"written_{cand}"] for v in out["reviews"].values())
+        out[f"edge_first_supported_{cand}"] = [int(first_supported[cand].get(f.idx, 0)) for f in edge]
+        out[f"edge_dormant_end_{cand}"] = [int(states[cand][f.idx].dormant) for f in edge]
+    edge = [f for f in fams if f.true >= world.THETA_MIN]
+    out["edge_true"] = [round(float(f.true), 4) for f in edge]
+    out["edge_freeze"] = [int(f.freeze) for f in edge]
+    out["family_reviews"] = sum(v["n_live"] for v in out["reviews"].values())
+    out["dormancy"] = dormancy.RULE
     out["model_seconds"] = round(time.time() - t_eval, 2)
     out["seconds"] = round(time.time() - t0, 1)
     return out

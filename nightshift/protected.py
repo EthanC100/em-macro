@@ -16,14 +16,25 @@ CODEOWNERS = C.ROOT / ".github/CODEOWNERS"
 # Protected even if a CODEOWNERS copy (e.g. dev's, before it has merged main) lacks them: the night shift's own
 # switches (safe mode, caps, windows) are Ethan's alone, and so are D004's rules monitor, its frozen rule-5
 # threshold and the rule-4 list (docs/ledger/v1_rules.md), and decision D005's managed-currency list and the
-# override that applies it to the booked v1.0 book (docs/ledger/d005_vol_floor.md).
+# override that applies it to the booked v1.0 book (docs/ledger/d005_vol_floor.md). Q019: the exploration loader, the
+# explorer's sandbox, the extract's public manifest (its hashes; the extract itself is in em-macro-data) and the
+# variant log's cutoff check, so that exploration's 2019-12-31 boundary can only change through Ethan's review.
 ALWAYS = ["/config/night.yaml", "/ledger/v1_rules.py", "/results/v1_rules/", "/config/v1_rules_rule4.csv",
-          "/config/v1_managed_fx.csv", "/em_macro/d005.py", "/em_macro/d005_fallback.py"]
+          "/config/v1_managed_fx.csv", "/em_macro/d005.py", "/em_macro/d005_fallback.py",
+          "/nightshift/explore_data.py", "/nightshift/explore_sandbox.py", "/config/exploration_manifest.json",
+          "/nightshift/logs.py"]
 
 
 def patterns(path: Path = CODEOWNERS) -> list[str]:
+    out = block_patterns(path.read_text(encoding="utf-8"))
+    return out + [p for p in ALWAYS if p not in out]
+
+
+def block_patterns(text: str) -> list[str]:
+    """The patterns inside one CODEOWNERS text's protected block only (no ALWAYS list): used to read main's copy
+    through git show (Q019's explorer gate). Raises ValueError if the block is missing or empty."""
     out, on = [], False
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         s = line.strip()
         if s == "# protected:start":
             on = True
@@ -34,7 +45,7 @@ def patterns(path: Path = CODEOWNERS) -> list[str]:
             out.append(s.split()[0])
     if not out:
         raise ValueError("no protected paths found in CODEOWNERS")
-    return out + [p for p in ALWAYS if p not in out]
+    return out
 
 
 def matches(pattern: str, path: str) -> bool:
