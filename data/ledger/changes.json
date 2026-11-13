@@ -1,33 +1,26 @@
 {
- "since": "2026-11-13T06:20:46+00:00",
- "at": "2026-11-13T13:44:01+00:00",
+ "since": "2026-11-13T13:44:01+00:00",
+ "at": "2026-11-13T17:29:32+00:00",
  "items": [
-  {
-   "book": "me",
-   "kind": "pnl",
-   "label": "me",
-   "change": 0.3722,
-   "text": "me: +0.37 index points (to 99.40)"
-  },
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": 0.1939,
-   "text": "algorithm v1.0: +0.19 index points (to 100.05)"
+   "change": -0.2703,
+   "text": "algorithm v1.0: -0.27 index points (to 99.78)"
   },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.0571,
-   "text": "janus: -0.06 index points (to 99.63)"
+   "change": 0.0796,
+   "text": "janus: +0.08 index points (to 99.71)"
   },
   {
    "book": "janus",
    "kind": "trade",
-   "link": "#/position/janus/J006",
-   "text": "Janus J006 filled: short JP10Y"
+   "link": "#/position/janus/J004",
+   "text": "Janus J004 filled: short GB10Y"
   }
  ]
 }
