@@ -139,4 +139,45 @@ Queue: no change to `docs/queue.md` (not touched; night-shift files are dev's).
 
 ## Status
 
-STATUS_PLACEHOLDER
+Session 7M, 2026-11-13. Nothing is in force: no batch, no real hypothesis, no schedule, no dispatch, promotion
+disabled in code.
+
+| id | status | evidence |
+|---|---|---|
+| O-01, O-02, O-03 | **met** | `tests/test_manhattan_ops_blinding.py` (health record refuses floats, free text, unknown keys; fd-level redirect catches print, stderr, `os.write` and a child process; failure is stage and class only; 128-bit nonce) |
+| O-04 | **met** | `test_every_promotion_is_refused_in_this_branch`, `test_promotion_needs_both_the_adopted_hash_and_claims_enabled` |
+| O-05 | **met** | `tests/test_manhattan_ops_e2e.py::test_no_performance_value_in_any_public_channel` (repo tree, every git object, log, step summary, issue body, runner temp outside `private/`, artifacts; a failing run with values in its message) and `test_the_scanner_would_have_caught_a_leak_in_each_channel` |
+| O-05b | **met** | `tests/test_manhattan_ops_workflow.py` |
+| O-06 to O-10 | **met** | `tests/test_manhattan_ops_timing.py` (12 first-observation edge cases and the ineligibility reasons) |
+| O-11, O-12 | **met** | `tests/test_manhattan_ops_isolation.py` (clean sandbox PASS; each of 8 channels opened in turn FAILs; undeclared tools INCOMPLETE). Run in this build session it prints **FAIL on all 8 channels**, as it must (network through the proxy, `git ls-remote` of em-macro succeeds, tokens in the environment, CLAUDE.md and `.claude/`, a past-conversation transcript, tools beyond the allowed set) |
+| O-13 | **met** | `manhattan/ops/templates/blind_v2.md` and its hash; `docs/manhattan/ops/BLIND_GENERATOR.md` |
+| O-14 to O-21 | **met** | `tests/test_manhattan_ops_store.py` (provenance, idempotency and conflicts, chain and tamper detection, journal states, non-fast-forward retry, no force push, locks, mirror; a crash at each of 9 stages with exact recovery) |
+| O-22 | **met** | `docs/manhattan/ops/LEDGER.md` |
+| O-23 to O-26 | **met** | `tests/test_manhattan_ops_compiler.py` (justification, budget, effective count, power loss, streaming) |
+| O-27 to O-29 | **met** | `tests/test_manhattan_ops_compiler.py` (one hand check per kind, sign flip, look-ahead check passes for four kinds, refusals); `tests/test_manhattan_ops_runner.py` (no return on or before the first observation) |
+| O-30 | **met** | `tests/test_manhattan_ops_runner.py` (rerun adds nothing, capture before observation, revision never replaces first-seen, missed then reconstructed, source failure partial, lock, failure releases lock) |
+| O-31 | **met** | `.github/workflows/manhattan-ops-runner.yml`, `tests/test_manhattan_ops_workflow.py`. Not run: it is never dispatched |
+| O-32 | **met** | `docs/manhattan/ops/drafts/manhattan-critic.md` (not installed) |
+| O-33 | **met** | `test_freeze_tooling_prepares_and_refuses` |
+| O-34, O-35 | **met** | `tests/test_manhattan_ops_e2e.py`: 10 SYNTHETIC families, 14 hypotheses, 27 executables; 23 eligible and 4 deliberately late (recorded, weight 0); a missed Friday run; cycle 2 crashed half-way through the chain write and recovered to the same content as an uncrashed reference; cycle-1 records byte-identical afterwards; an overwrite refused as a conflict |
+| O-36 | **met** | `results/manhattan_ops/CAPACITY.md` |
+
+**Capacity (measured, 4 CPUs, 4 workers, synthetic data).** Full backtest over 2005-2019: 1,000 executables 57 s
+wall (203 CPU-s); 10,000 in 582 s (2,211 CPU-s); 100,000 in 6,128 s (23,822 CPU-s); peak RSS 47-48 MiB per
+process. Nightly increment: 1,000 in 1.9 s; 10,000 in 26 s; 100,000 in 265 s (1,019 CPU-s); 44-46 MiB. Ledger write
+of one night: 1,000 records 0.4 s; 10,000 in 2.5 s; 100,000 in 26 s with 951 MiB peak (the whole chain is held in
+memory; fine for the first cycle, the first thing to change before a six-figure night).
+
+**What did not work first time (fixed before any push).** The crash test never fired at first (the torn-write
+point counted duplicates, which write no line); an event strategy crashed when an instrument had no events; the
+generic-reason check ran after the length check; justification failed on the canonical form's decimal strings;
+the isolation kit merged the host environment into its git check; the mirror lagged after a failed run. Test-side
+mistakes: a data cutoff after the registration dates, a stage expectation for the mirror crash, a canary too small to
+render with five significant digits, conflict hashes that legitimately differ by nonce.
+
+**Not done.** No real batch, hypothesis or dispatch (by design); the FRED fetcher has never run against FRED; no
+watchdog for a runner that never starts; no OTS stamping of the head; the iMac runner. Full suite: SUITE_PLACEHOLDER.
+
+**Exact next step.** Ethan: steps 1 to 4 of `docs/manhattan/ops/ETHAN_OPS_ACTIONS.md` (repository, deploy key in a
+main-only environment, App access, mirror), then merge this pull request after `build/manhattan` (it contains
+milestone E), then step 9's single manual run.
