@@ -196,8 +196,8 @@ def flow(root: Path, crash: bool) -> dict:
     out["healths"] = healths
     final = ST.Store(workdir=root / "final", remote=str(remote)).open()
     out["final"] = final
-    out["mirror_before"] = final.verify_mirror(str(mirror), root / "mirror-check0")   # the overwrite attempt is not
-    final.mirror(str(mirror))                                                         # mirrored until the next run
+    out["mirror_before"] = final.verify_mirror(str(mirror), root / "mirror-check0")   # after the failed run
+    final.mirror(str(mirror))
     out["mirror_check"] = final.verify_mirror(str(mirror), root / "mirror-check")
     out["prompt_after"] = mockgen.blind_request(n_families=10, max_hypotheses=2, domains=("syn_daily",)).prompt
     return out
@@ -289,7 +289,7 @@ def test_recovery_is_exact(runs):
     c, ref = runs["crash"]["final"], runs["reference"]["final"]
     assert content(c.records) == content(ref.records)
     assert ST.verify_chain(c.records) == [] and c.unfinished() == []
-    assert runs["crash"]["mirror_before"]["status"] == "behind"         # a prefix: lagging, not tampered
+    assert runs["crash"]["mirror_before"]["status"] == "equal"          # even the failed run mirrored what it had
     assert runs["crash"]["mirror_check"]["status"] == "equal"
     assert len(runs["crash"]["after_crash"]) < len(c.records)          # the crash really cut the cycle short
     keys = [tuple(x["key"]) for x in c.records]
