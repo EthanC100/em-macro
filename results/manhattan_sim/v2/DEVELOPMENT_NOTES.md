@@ -107,3 +107,23 @@ The experiments behind the pre-adoption change of Protocol 3.1 §9.1 (its change
 §7.2(d) are in [DORMANCY_DIAGNOSIS.md](DORMANCY_DIAGNOSIS.md): the replay of the pilot's 48 HB replications
 with per-family values, every variant of the rule that was scored on them, three posteriors on D08's estimates,
 and the same worlds with yearly reviews. Notes `note-6M-01` to `note-6M-04` in the run log.
+
+## 6. The second session of 2026-11-13: a second look at dormancy, the estimand, timing
+
+Session "6M Manhattan C: dormancy fix and statistical checks" worked on the same branch an hour after the
+session of section 5 and edited neither draft. Its development experiments are in [dev_6M_b/](dev_6M_b/README.md)
+and are notes `note-6Mb-01` to `note-6Mb-05` in the run log:
+
+- the 48 HB replications of session 5M's pilot traced family by family under the rule of 3.0, and replayed with
+  one part of the rule changed at a time (`replay_table.txt`, `who.txt`, `calib.txt`);
+- the branch's HB pipeline, imported unchanged, with the tiers stepped four ways on the same fits (the rule on
+  the branch, the rule of 3.0, an alternative that is not adopted, no dormancy), at the four pre-registered
+  review dates and with yearly reviews: [DORMANCY_SECOND_LOOK.md](DORMANCY_SECOND_LOOK.md);
+- single return series under fat tails and jumps, for what the forward test's truncated null means:
+  [ESTIMAND_AND_TAIL_RISK.md](ESTIMAND_AND_TAIL_RISK.md). Not a held-out scenario;
+- a timing slice (one replication of each kind of run, alone and with every core busy), which writes no
+  record: [COMPUTE_OPTIONS.md](COMPUTE_OPTIONS.md);
+- before the overlap between the two sessions was found: a complete alternative revision of §9.1 and a partial
+  pilot of it through the runner from a clean checkout. Neither is on this branch (branch
+  `claude/epic-mayer-kfhpsh`, commit `1124fe7`); the partial pilot's records are counted nowhere.
+

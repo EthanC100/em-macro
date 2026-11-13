@@ -4,7 +4,10 @@ Recorded 2026-11-12; updated the same day by session "4M Manhattan C: simulation
 items 14 to 18 added) and by session "5M Manhattan C: protocol 3.1 and prereg v2" (item 19 added; items 14 and 15
 answered by the draft of Protocol v3.1, which item 19 adopts; item 16 re-estimated; item 20 added and item 10
 updated by milestone E), and on 2026-11-13 by session "6M Manhattan C: dormancy fix before adoption" (item 19
-rewritten for the drafts as revised before adoption; item 21 added). Each item is something no
+rewritten for the drafts as revised before adoption; item 21 added) and by session "6M Manhattan C: dormancy fix
+and statistical checks", which worked on the same branch an hour later and changed no draft (items 22 and 23
+added; item 16 given three ways to run, with their time and cost; two lines added to item 19's reading list).
+Each item is something no
 agent may decide or do under the CLAUDE.md hard rules, or cannot do from a cloud session. For each: the
 conservative default now in force, what it blocks, and what to do. Nothing in this list was created, changed,
 bought or switched on by a session.
@@ -12,7 +15,9 @@ bought or switched on by a session.
 **Order of urgency now:** item 19 (read and adopt Protocol v3.1 and version 2 of the simulation pre-registration:
 one paste into CODEOWNERS), then item 16 (start the simulation on the iMac: it now includes the model-fitting
 half), then items 2, 3 and 7 (they unblock the first real batch). Item 21 (three decisions about the middle
-tiers) can wait for the full run but is worth reading with item 19. Items 10 and 20 decide how far milestone E
+tiers) can wait for the full run but is worth reading with item 19. **Item 22 is best read before item 19 is
+closed**: two sessions arrived at two different second conditions for the dormancy rule, the draft holds one of
+them, and the choice is yours. Item 23 (a tail-risk check) can wait for the first family that nears a claim. Items 10 and 20 decide how far milestone E
 can go. Item 8 has a date (about 5 May 2027).
 
 | # | decision or action | default in force | blocks |
@@ -38,6 +43,8 @@ can go. Item 8 has a date (about 5 May 2027).
 | 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched. **Revised before adoption** (the dormancy rule) and re-hashed | the full run of D11 and of the model-fitting half |
 | 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
 | 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | nothing changed: the tier's bar is 3.0's, the calibration error is a stated limitation, the HB runs have four review dates | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all; how well V7 speaks for quarterly reviews |
+| 22 | which second condition the dormancy rule has: the model's `Π^max` (in the draft) or the family's own forward record (measured beside it) | the draft's: `Π^max` | nothing; how dormancy behaves when reviews are frequent |
+| 23 | a tail-risk check before any profitability claim, and one wording fix for §6.7 | none: proposed, not adopted | nothing yet; what "formally supported" means for a strategy with rare large losses |
 
 ---
 
@@ -341,8 +348,23 @@ a held-out scenario.
 next session then codes the held-out worlds (H01 to H12) and prepares confirmation run 1 (you tag the commit
 `manhattan-sim-confirm-1`).
 
-**If you would rather not use the iMac:** GitHub Actions is possible in principle (synthetic data, public
-results), but at 6 hours per job it needs a few hundred jobs; a workflow is yours to add.
+**Three ways to run it, measured and priced** (session "6M Manhattan C: dormancy fix and statistical checks";
+`results/manhattan_sim/v2/COMPUTE_OPTIONS.md`: a benchmark on the session's machine and estimates from it; nothing
+was bought and no workflow was added or started):
+
+(The table of hours, days and cost follows in the next commit, with the benchmark it is computed from.)
+
+- **(a) the iMac**: as above. Which iMac it is is not recorded in the repository, so the file gives three cases
+  and one command that settles it in five minutes on the machine itself:
+  `python -m manhattan.sim.benchmark --quick --out bench.json`.
+- **(b) GitHub's runners**: standard runners are free and unlimited for this public repository (4 cores and 16 GB
+  each, 6 hours a job, 20 jobs at once on the Free plan; GitHub's documentation, 2026-11-13). It needs a workflow,
+  which is yours to add and to start (hard rules 3 and 16), and a way to bring the records back that is not a job
+  pushing to the repository.
+- **(c) rented cores**: spending, so yours (item 8).
+
+The held-out confirmation run is not in session 5M's estimate above and cannot be measured (its worlds are not
+coded); the file extrapolates it from the development runs of the same size.
 
 ## 17. The simulation's sampler in requirements
 
@@ -395,12 +417,18 @@ already at their final paths and the hash record on the branch matches them as t
    - `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`: why the dormancy rule changed, what the change costs,
      why D08's calibration error is a stated limitation and not a repair, and who reaches Statistically
      supported;
-   - `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md`: the five HB scenarios again under the revised rule.
+   - `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md`: the five HB scenarios again under the revised rule;
+   - `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` (a second session's check): the same diagnosis reached
+     separately, the diagnostics the pilot's records do not hold, and a different second condition for the rule
+     measured beside the draft's on the same fits (item 22);
+   - `results/manhattan_sim/v2/CLUSTERED_INTERVALS.md`, at least its first section: every pilot interval again
+     with the small number of replications allowed for. An interval printed as "0.000 to 0.000" in the reports
+     means "no event in 6 or 12 replications", which bounds very little.
 2. **Decide change 5** (the dormancy rule). It is the one change you have not seen before. If you accept it, do
    nothing. If you want 3.0's rule back, or another level (the diagnosis lists what each costs), say so and a
    session makes the change: the rule is also in code (`manhattan/stats/dormancy.py`), a test compares the code
    with the text of §9.1, and the four scenarios must be rerun. Item 21 holds three further decisions that
-   adoption does not wait for.
+   adoption does not wait for, and item 22 a fourth that is about change 5 itself.
 3. **Merge the pull request** if you accept the drafts. To change anything in the text first, edit the draft on
    the branch and then **re-hash** (the hash record must be rewritten whenever either file changes, even by a
    comma):
@@ -443,7 +471,9 @@ already at their final paths and the hash record on the branch matches them as t
 **What adopting does and does not do.** It makes 3.1.0 the protocol under test and lets the full run include D11
 and the model-fitting half. It enables no claim: `claims.enabled` stays `false` until a confirmation run passes.
 From the first batch frozen afterwards, manifests record the hash of PROTOCOL_v3.1.md (PROTOCOL §10.1-10.2); no
-batch exists yet, so nothing is judged under two versions. It does not settle item 21.
+batch exists yet, so nothing is judged under two versions. It does not settle item 21 or item 22. The second
+session of 2026-11-13 edited neither draft, so the hash record is the first session's and nothing was re-hashed
+after it.
 
 **If you do not adopt.** Version 1 and Protocol 3.0.0 stand as they are. D11 then goes to the full run with a
 test the pilot shows to be oversized, and the model-fitting half stays out of reach (item 15).
@@ -554,3 +584,90 @@ revised rule is close to the bound where edges are rare.
 **Recommendation.** (ii) before `programme.end` is ever set; until then (i) costs nothing. Choose (iii) only on
 the evidence of (ii).
 
+## 22. Which second condition the dormancy rule has
+
+**Why Ethan.** It is the text of Protocol §9.1, in a draft you have not adopted; and two sessions answered it
+differently.
+
+**What happened.** On 2026-11-12 and 13 two sessions were given the dormancy problem on `build/manhattan`. Both
+found the same cause (the forecast of reaching the tier is zero for most families that have an edge, so a rule
+that retires on it retires them) and both kept the forecast and its thresholds and added a second number that
+must also be below 0.05 at the same two reviews. The first session, whose revision is the draft's, added
+`Π^max`, the most hopeful model's probability that the family has an edge. The second had added the one-sided
+p-value of the family's **own forward record** against an edge of `θ_min`, before it found the first session's
+push. It then left the draft alone and measured the two side by side on the same fits
+(`results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md`, section 3).
+
+**The numbers** (12 replications a scenario; D02 / D05 / D08 / D10; development experiments, not runs of record;
+the "draft" rows at four dates reproduce the pilot of record exactly):
+
+| review dates | rule | premature elimination (95% interval) | families retired, of those with an edge | families with no edge dormant at the end | share of family-reviews written |
+|---|---|---|---|---|---|
+| years 2, 4, 7, 10 (pre-registered) | 3.0's rule (the forecast alone) | 0.167 (0.045 to 0.261) / 0.179 (0.138 to 0.216) / 0.108 (0.081 to 0.138) / 0.146 (0.092 to 0.197) | 7 of 42 / 25 of 140 / 102 of 944 / 18 of 123 | 0.36 / 0.37 / 0.34 / 0.38 | 0.78 / 0.78 / 0.85 / 0.77 |
+| years 2, 4, 7, 10 (pre-registered) | **the draft's rule** (forecast and `Π^max`) | 0.000 (0.000 to 0.000) / 0.014 (0.000 to 0.032) / 0.002 (0.000 to 0.007) / 0.008 (0.000 to 0.029) | 0 of 42 / 2 of 140 / 2 of 944 / 1 of 123 | 0.14 / 0.14 / 0.03 / 0.20 | 0.93 / 0.93 / 0.99 / 0.90 |
+| years 2, 4, 7, 10 (pre-registered) | the family's own forward record (forecast and `p^F`) | 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) | 0 of 42 / 0 of 140 / 0 of 944 / 0 of 123 | 0.01 / 0.02 / 0.02 / 0.05 | 0.99 / 0.99 / 0.99 / 0.97 |
+| every year (development experiment) | 3.0's rule (the forecast alone) | 0.714 (0.595 to 0.842) / 0.579 (0.489 to 0.662) / 0.453 (0.407 to 0.502) / 0.431 (0.375 to 0.492) | 30 of 42 / 81 of 140 / 428 of 944 / 53 of 123 | 0.80 / 0.81 / 0.78 / 0.81 | 0.42 / 0.43 / 0.55 / 0.42 |
+| every year (development experiment) | **the draft's rule** (forecast and `Π^max`) | 0.048 (0.000 to 0.129) / 0.071 (0.040 to 0.106) / 0.005 (0.000 to 0.015) / 0.057 (0.018 to 0.097) | 2 of 42 / 10 of 140 / 5 of 944 / 7 of 123 | 0.45 / 0.40 / 0.06 / 0.52 | 0.72 / 0.75 / 0.96 / 0.66 |
+| every year (development experiment) | the family's own forward record (forecast and `p^F`) | 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.016 (0.000 to 0.039) | 0 of 42 / 0 of 140 / 0 of 944 / 2 of 123 | 0.06 / 0.07 / 0.08 / 0.20 | 0.96 / 0.96 / 0.97 / 0.88 |
+
+**The trade.** The draft's rule still retires families, so it still saves attention, and it passes V7 as
+pre-registered (four review dates). But it rests on the model's reading of a family, which leans on what the
+other families are: with more reviews it retires more families with a small edge and an unlucky start, and the
+first session's own yearly experiment puts two of its four upper ends above 0.10 (item 21(c)). The other rule's
+error for a family with an edge does not depend on the other families or, much, on the number of reviews; its
+price is that it retires almost nobody, because ten years of a family's own returns cannot tell an edge of 0
+from one of 0.25.
+
+| option | what it means |
+|---|---|
+| (i) keep the draft's rule | nothing to do. It is what V7 will judge. Read item 21(c) with it: the cadence question stays open |
+| (ii) keep the draft's rule at a stricter level | the first session measured `Π^max < 0.02` and `< 0.01`; a new number in the protocol; a session edits §9.1, re-hashes and reruns the HB pilot |
+| (iii) take the family's own forward record as the second condition | a complete version (text of §9.1, code, tests, re-hashed record) is on branch `claude/epic-mayer-kfhpsh`, commit `1124fe7`, full suite passed, merged nowhere. A session moves it onto `build/manhattan`, re-hashes and reruns the HB pilot. Dormancy then saves almost no attention |
+| (iv) both conditions together (`Π^max` and the own record) | never retires a family either rule keeps; in practice it is (iii) |
+| (v) no dormancy | `programme.end` stays unset (item 9), which is the default now |
+
+**Recommendation.** Decide it with item 21(c), not before the full run: (i) costs nothing while `programme.end`
+is unset. If you add the HB scenarios with yearly or quarterly reviews (item 21(c)(ii)) and the draft's rule is
+outside the bound there, (iii) is the rule that will pass, and (v) is what it amounts to in attention saved.
+
+## 23. A tail-risk check before any profitability claim, and one wording fix for §6.7
+
+**Why Ethan.** Both would change the protocol.
+
+**What was found** (`results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`; synthetic single series, not a
+held-out scenario, no method changed).
+
+- **What a forward rejection proves.** That for at least one component of the family, in at least one week in
+  which it bet, the conditional mean of the week's core-hedged net return, with any loss beyond six ex-ante
+  weekly standard deviations counted as six, was positive. Not that the mean of the return itself is positive,
+  not on average over time, not for the weeks the variance-ratio rule skipped, not after real costs.
+- **How much the truncation hides.** For fat tails without a direction (Student-t with 3 degrees of freedom;
+  Student-t with 5 and volatility clustering) the truncated and untruncated means are 0.003 to 0.013 of a Sharpe
+  ratio apart, and a record shows them with opposite signs at most 2 times in 100. For a strategy that earns a
+  premium and occasionally loses a great deal, the truncation hides 0.02 to 0.45 of a Sharpe ratio on the grid
+  simulated (crashes of 20 to 100 daily standard deviations, 0.5 to 5 a decade): a strategy with a true Sharpe
+  ratio of −0.25 can have a positive truncated mean, and ten-year records show a positive truncated mean beside
+  a non-positive untruncated one up to 72 times in 100.
+- **Skipping weeks by the variance-ratio rule keeps the test valid.** Confirmed, with the argument (a skipped
+  week is a bet of zero, and any bet chosen from the past keeps the wealth a supermartingale) and a check (null
+  series reach a wealth of 20 in about 1% of paths with or without the rule, against a bound of 5%; dropping
+  weeks after seeing them breaks it: 12% to 24%). What skipping changes is what is tested: only the weeks bet on.
+
+**Proposed, not adopted.** Before a family is called profitable or made Live-experiment eligible: the truncated
+record's total gain must cover the tail losses the record cannot rule out at 95% (3 weeks after none observed,
+4.74 after one), each at the stress loss the family's spec declares (floor: 12 weekly standard deviations), and
+the untruncated record must be positive. With the stress loss declared at its true size it passes a zero-mean
+crash strategy in at most 9 records in 100 (crashes of 40) or 2 in 100 (crashes of 100), and an honest strategy
+with a Sharpe ratio of 1 in 39, 88 and 99 records in 100 after 2, 5 and 10 years. With the tail undeclared it
+is defeated, as everything is.
+
+**Decide** whether you want the check, and if so its level, its floor, which claims it gates, and whether a
+family that declares no tail exposure may claim profit at all. It would be a new protocol version with its own
+simulation criterion.
+
+**The wording fix.** §6.6 enters a week 7 days after it ends "using the values stored then", and §6.7 computes
+the variance ratio for a week from "the previous 252 trading days". If the final settlements of the days just
+before a week arrive after the week has begun, a variance ratio computed from them is not a function of the
+past as §6.1 defines it, which is the one condition the validity of skipping needs. Suggested for the next
+version: "the variance ratio for week `t` uses the values on record at the decision cut-off of week `t`". Not
+made: §6 is word for word what it was.
