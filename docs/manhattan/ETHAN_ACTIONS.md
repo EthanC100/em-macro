@@ -42,7 +42,7 @@ can go. Item 8 has a date (about 5 May 2027).
 | 18 | housekeeping: the pre-rename branch | left in place | nothing |
 | 19 | adopt Protocol v3.1 and SIM_PREREG_v2 | drafts, unprotected, not in force; version 1 and Protocol 3.0.0 untouched. **Revised before adoption** (the dormancy rule) and re-hashed | the full run of D11 and of the model-fitting half |
 | 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
-| 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | nothing changed: the tier's bar is 3.0's, the calibration error is a stated limitation, the HB runs have four review dates | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all; how well V7 speaks for quarterly reviews |
+| 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | (a) open: the tier's bar is 3.0's. (b) open: the calibration error is a stated limitation. **(c) decided 2026-11-13: quarterly reviews** (SIM_PREREG_v2 amendment 1) | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all |
 | 22 | which second condition the dormancy rule has: the model's `Π^max` or the family's own forward record | **decided 2026-11-13: the family's own forward record** (option (iii)); in the draft since session 10M | - |
 | 23 | a tail-risk check before any profitability claim, and one wording fix for §6.7 | none: proposed, not adopted | nothing yet; what "formally supported" means for a strategy with rare large losses |
 
@@ -566,6 +566,12 @@ posterior-based tiers stay off** (SIM_PREREG_v2 §5).
 **Recommendation.** (i); ask for (ii) only if D08 fails at full count.
 
 ### (c) The review dates of the HB runs, and the dormancy level
+
+**Decided on 2026-11-13: option (ii) at production's cadence.** Session 10M added amendment 1 to SIM_PREREG_v2:
+every HB run is reviewed every 63 trading days, 40 times; M7 and M9 are read at years 2, 4, 7 and 10 and M12 is
+counted over all 40 reviews (MANHATTAN_PROGRESS.md, "Milestone C: final pre-adoption changes (session 10M)",
+item 2). With item 22 decided as well, the table below is history: its "revised rule" rows are about the
+`Π^max` rule the draft no longer holds. What follows is the item as it was put to you.
 
 The simulation steps the tiers at years 2, 4, 7 and 10 (SIM_PREREG §2.5(c)); production reviews quarterly. At
 four dates the revised dormancy rule retires 0% to 1.4% of the families with an edge. With **yearly** reviews,

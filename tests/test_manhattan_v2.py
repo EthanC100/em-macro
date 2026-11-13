@@ -29,7 +29,9 @@ TINY_HB = world.Size("HB", 4, 5, 5, 2, 3, 5, 10)
 def tiny(monkeypatch):
     monkeypatch.setitem(world.SIZES, "STD", TINY)
     monkeypatch.setitem(world.SIZES, "HB", TINY_HB)
-    monkeypatch.setattr(hier_analytic, "MU_A_GRID", hier_analytic.MU_A_GRID[::6])     # a coarse grid: these tests are about plumbing
+    # a coarse grid: these tests are about plumbing, and an HB replication now has 40 reviews of six fits each
+    monkeypatch.setattr(hier_analytic, "MU_A_GRID", hier_analytic.MU_A_GRID[::12])
+    monkeypatch.setattr(hier_analytic, "TAU_A_GRID", hier_analytic.TAU_A_GRID[::3])
     return TINY
 
 
@@ -135,25 +137,37 @@ def test_common_share_is_version_1s_correlation_without_its_shrinkage():
 def test_hb_replication_with_the_analytic_model(tiny):
     r = hb_v2.run_replication("D02", 0)
     assert r["model"] == hb_v2.MODEL and r["size"] == "HB" and r["n_families"] == 20 and "sampler" not in r
-    assert list(r["reviews"]) == ["2", "4", "7", "10"]
+    # amendment 1 of SIM_PREREG_v2: a review every 63 days, 40 of them; M7 and M9 are read at years 2, 4, 7 and 10
+    assert r["review_step"] == hb_v2.REVIEW_STEP == 63 and r["review_days"] == list(range(63, 2521, 63)) == hb_v2.review_days()
+    assert len(r["review_days"]) == 40 and all(y * world.YEAR in r["review_days"] for y in hb.EVAL_YEARS)
+    assert list(r["reviews"]) == ["2", "4", "7", "10"] and r["eval_years"] == [2, 4, 7, 10] == list(hb.EVAL_YEARS)
+    assert [v["day"] for v in r["reviews"].values()] == [504, 1008, 1764, 2520]
+    q = r["quarterly"]
+    assert all(len(q[k]) == 40 for k in ("ok", "edge_mass", "n_live", "six_fits_seconds", "r_F", "written_i", "written_ii",
+                                         "dormant_i", "dormant_ii"))
+    assert q["n_live"] == [5] * 10 + [10] * 10 + [15] * 10 + [20] * 10             # a batch of five every 2.5 years
+    assert r["reviews_not_computed"] == sum(not x for x in q["ok"]) == 0             # M12 is counted over all 40
+    assert [q["ok"][i] for i in (7, 15, 27, 39)] == [v["review_ok"] for v in r["reviews"].values()]
+    assert [q["n_live"][i] for i in (7, 15, 27, 39)] == [v["n_live"] for v in r["reviews"].values()]
+    assert q["dormant_i"][:4] == [0] * 4 and q["dormant_ii"][:4] == [0] * 4          # p^F needs 252 forward days, at two reviews
     for v in r["reviews"].values():
         assert v["review_ok"] and v["ok"] == [True] * 6 and max(v["edge_mass"]) <= hier_analytic.EDGE_MASS_MAX
         assert 0.0 <= v["r_F"] <= hier_analytic.R_F_MAX and len(v["fit_seconds"]) == 6 and v["six_fits_seconds"] > 0
         assert sum(v["cal_n"]) == v["n_eval"] == v["n_live"] and {"mu_A", "tau_A", "psi", "nu", "rho_0"} <= set(v["hyper"])
     assert all(f"m8_den_{c}" in r and f"end_dormant_{c}" in r for c in pipeline.CANDIDATES)
     # the dormancy rule of Protocol 3.1 section 9.1, and what the report needs about attention and the tier
-    assert r["dormancy"] == dormancy.RULE and r["family_reviews"] == sum(v["n_live"] for v in r["reviews"].values())
+    assert r["dormancy"] == dormancy.RULE and r["family_reviews"] == sum(q["n_live"]) == 500
     assert len(r["edge_true"]) == len(r["edge_freeze"]) == r["m8_den_i"] and all(x >= world.THETA_MIN for x in r["edge_true"])
     for c in pipeline.CANDIDATES:
-        assert len(r[f"edge_first_supported_{c}"]) == len(r[f"edge_dormant_end_{c}"]) == r[f"m8_den_{c}"]
-        assert set(r[f"edge_first_supported_{c}"]) <= {0, 2, 4, 7, 10}
-        assert r[f"written_{c}"] == sum(v[f"written_{c}"] for v in r["reviews"].values()) <= r["family_reviews"]
-        assert all(0 <= v[f"dormant_{c}"] <= v["n_live"] and v[f"written_{c}"] >= v["n_live"] - v[f"dormant_{c}"]
-                   for v in r["reviews"].values())
-        assert r["reviews"]["2"][f"dormant_{c}"] == 0                                # one review cannot retire a family
+        assert len(r[f"edge_first_supported_day_{c}"]) == len(r[f"edge_dormant_end_{c}"]) == r[f"m8_den_{c}"]
+        assert set(r[f"edge_first_supported_day_{c}"]) <= {0, *r["review_days"]}      # the day of a review, or never
+        assert r[f"written_{c}"] == sum(q[f"written_{c}"]) <= r["family_reviews"]
+        assert all(0 <= d <= n and w >= n - d for d, w, n in zip(q[f"dormant_{c}"], q[f"written_{c}"], q["n_live"]))
+        assert [q[f"dormant_{c}"][i] for i in (7, 15, 27, 39)] == [v[f"dormant_{c}"] for v in r["reviews"].values()]
         assert r[f"null_dormant_{c}"] + sum(r[f"edge_dormant_end_{c}"]) == r[f"end_dormant_{c}"]
     again = hb_v2.run_replication("D02", 0)
-    strip = lambda x: {k: ({y: {a: b for a, b in rv.items() if "seconds" not in a} for y, rv in v.items()} if k == "reviews" else v)
+    strip = lambda x: {k: ({y: ({a: b for a, b in rv.items() if "seconds" not in a} if k == "reviews" else rv)
+                            for y, rv in v.items() if "seconds" not in y} if k in ("reviews", "quarterly") else v)
                        for k, v in x.items() if "seconds" not in k}
     assert strip(r) == strip(again)                                                  # nothing in it is random
 
@@ -264,16 +278,19 @@ def hb_rep(ok=True) -> dict:
                     r.update({f"m9_{g}_{c}_n": 6, f"m9_{g}_{c}_model": -0.3, f"m9_{g}_{c}_naive": 3.0})
         return r
 
-    r = {"model": hb_v2.MODEL, "eval_years": [2, 4, 7, 10], "seconds": 80.0, "model_seconds": 30.0,
+    r = {"model": hb_v2.MODEL, "eval_years": [2, 4, 7, 10], "seconds": 80.0, "model_seconds": 30.0, "forecast_seconds": 4.0,
          "reviews": {str(y): review() for y in (2, 4, 7, 10)}, "n_families": 240, "family_reviews": 400,
-         "dormancy": dormancy.RULE,
+         "dormancy": dormancy.RULE, "review_step": hb_v2.REVIEW_STEP, "review_days": hb_v2.review_days(),
+         "quarterly": {"ok": [ok] * 40, "edge_mass": [0.0 if ok else 0.4] * 40, "n_live": [10] * 40,
+                       "six_fits_seconds": [6.0] * 40, "r_F": [0.05] * 40},
+         "reviews_not_computed": 0 if ok else 40,
          # ten families with a true edge: Sharpe ratio, freeze day, and the first date each held the tier (0: never)
          "edge_true": [0.3, 0.3, 0.4, 0.6, 0.6, 0.9, 1.2, 1.2, 1.6, 2.0],
          "edge_freeze": [0, 600, 1300, 0, 1300, 0, 0, 2000, 0, 600]}
     for c in ("i", "ii"):
         r.update({f"m8_den_{c}": 10, f"m8_num_{c}": 1, f"screened_{c}": 2, f"end_promising_{c}": 3,
                   f"end_supported_{c}": 1, f"end_dormant_{c}": 50, f"null_dormant_{c}": 49, f"written_{c}": 330,
-                  f"edge_first_supported_{c}": [0, 0, 0, 0, 0, 10, 7, 0, 4, 4],
+                  f"edge_first_supported_day_{c}": [0, 0, 0, 0, 0, 2520, 1701, 0, 945, 1008],   # the day of the first review in the tier
                   f"edge_dormant_end_{c}": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]})
         for y, v in r["reviews"].items():
             v.update({f"written_{c}": 90, f"dormant_{c}": 0 if y == "2" else 50})
@@ -301,8 +318,13 @@ def test_attention_and_tier_power_are_counted_from_the_records():
                 "and after a date needs none)"].estimate == 330
     assert rows["year 7: families dormant after the review / reviews written / families evaluated (means), candidate (i)"].verdict \
         == "50.0 / 90.0 / 100.0"
+    # records that kept the year of entry instead of the day (four review dates) give the same table
+    by_year = [{**{k: v for k, v in r.items() if "first_supported_day" not in k},
+                **{f"edge_first_supported_{c}": [0, 0, 0, 0, 0, 10, 7, 0, 4, 4] for c in ("i", "ii")}} for r in reps]
+    assert metrics_v2.tier_power(by_year) == pw
     # records made before the fields existed are still summarised: the new rows are simply absent
-    old = [{k: v for k, v in r.items() if not k.startswith(("edge_", "written_", "null_dormant_", "family_reviews", "dormancy"))}
+    old = [{k: v for k, v in r.items() if not k.startswith(("edge_", "written_", "null_dormant_", "family_reviews", "dormancy",
+                                                            "quarterly", "review_", "reviews_not", "forecast_"))}
            for r in reps]
     assert metrics_v2.attention(old) == {} and metrics_v2.tier_power(old) == {}
     assert "dormancy rule" not in {r.what for r in metrics_v2.summarise_hb(old, "D02")}
@@ -311,21 +333,49 @@ def test_attention_and_tier_power_are_counted_from_the_records():
 def test_hb_rows_are_version_1s_verdicts_plus_the_grid_gate(monkeypatch):
     reps = [hb_rep() for _ in range(60)]
     rows = {r.what: r for r in metrics_v2.summarise_hb(reps, "D01")}
-    gate = rows["reviews not computed (a fit fails the grid gate), of 240"]
+    gate = rows["reviews not computed (a fit fails the grid gate), of 2400"]             # 60 replications of 40 reviews each
+    assert rows["review calendar"].verdict == "a review every 63 trading days (40 reviews a replication); M7 and M9 read at years 2, 4, 7, 10"
     assert gate.metric == "M12" and gate.estimate == 0 and gate.criterion == "V12" and gate.verdict.startswith("pilot")
     share = rows["year 4: share with a true edge among families with Π^min ≥ 0.8 (300 family observations)"]
     assert share.estimate == pytest.approx(0.8) and share.threshold == "lower bound ≥ 0.7" and share.verdict.startswith("pilot")
     assert rows["premature elimination: families with a true edge that end dormant, candidate (i)"].threshold == "upper bound ≤ 0.1"
     assert not any("R-hat" in w or "sampler" in w or "converged" in w for w in rows)           # nothing is sampled
     assert rows["year 10: seconds for the six fits of a review (100 families)"].estimate == 6.0
-    assert rows["seconds per replication spent on the model (estimates, six fits at four dates, forecasts)"].estimate == 30.0
+    assert rows["seconds per replication spent on the model (estimates, six fits at every review, forecasts)"].estimate == 30.0
+    assert rows["of which the dormancy forecasts"].estimate == 4.0
+    assert rows["seconds for the six fits of a review, mean over every review"].estimate == 6.0
     assert rows["model"].verdict == hb_v2.MODEL
     monkeypatch.setitem(criteria.REPLICATIONS, "HB", 60)
     full = {r.what: r for r in metrics_v2.summarise_hb(reps, "D01")}
     assert full[gate.what].verdict == "pass" and full[share.what].verdict == "pass"
     broken = [hb_rep() for _ in range(59)] + [hb_rep(ok=False)]
     bad = {r.what: r for r in metrics_v2.summarise_hb(broken, "D01")}
-    assert bad[gate.what].estimate == 4 and bad[gate.what].verdict == "FAIL"                   # one is one too many
+    assert bad[gate.what].estimate == 40 and bad[gate.what].verdict == "FAIL"                  # one is one too many
+    # a single review of the 2,400 that is not computed, between two dates at which M7 is read, fails V12 as well
+    one = [hb_rep() for _ in range(60)]
+    one[17]["quarterly"]["ok"][11] = False
+    late = {r.what: r for r in metrics_v2.summarise_hb(one, "D01")}
+    assert late[gate.what].estimate == 1 and late[gate.what].verdict == "FAIL"
+
+
+def test_records_of_another_review_step_are_refused(tmp_path):
+    """SIM_PREREG_v2 amendment 1: the step is in every record, and records of another calendar are never pooled."""
+    good = hb_rep()
+    hb_v2.require_review_step([good, good])
+    for bad in ({**good, "review_step": 252}, {k: v for k, v in good.items() if k != "review_step"}):
+        with pytest.raises(ValueError, match="not every 63: refused"):
+            hb_v2.require_review_step([good, bad], "D02 at HB")
+    # the report counts only records made at the pre-registered step, whatever code hash they carry
+    path = run.reps_path("D02", "HB", seeds.DEVELOPMENT, tmp_path, "v2")
+    path.parent.mkdir(parents=True)
+    code = run.code_hash("HB", version="v2")
+    rows = [{**hb_rep(), "rep": 0, "code": code}, {**hb_rep(), "rep": 1, "code": code, "review_step": 252},
+            {**{k: v for k, v in hb_rep().items() if k != "review_step"}, "rep": 2, "code": "an-older-code"}]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    found = report_v2.collect(tmp_path)
+    assert [r["rep"] for r in found[("D02", "HB")]["reps"]] == [0] and found[("D02", "HB")]["other_code_reps"] == 2
+    path.write_text(json.dumps(rows[2]) + "\n", encoding="utf-8")                   # only records of another calendar on file
+    assert ("D02", "HB") not in report_v2.collect(tmp_path)
 
 
 # ------------------------------------------------------------------ the text
@@ -371,6 +421,16 @@ def test_v2_adds_requirements_and_loosens_no_threshold():
     assert "`p^F = Φ((y^F_f − θ_min)/s^F_f)`" in text and "at least 252 forward days" in text
     assert (dormancy.DORMANT_BELOW, dormancy.MIN_FORWARD_DAYS, dormancy.REACTIVATE_AT, dormancy.THETA_MIN) == (0.05, 252, 0.15, 0.25)
     assert criteria_v2.V7_ELIM_MAX is criteria.V7_ELIM_MAX or criteria_v2.V7_ELIM_MAX == criteria.V7_ELIM_MAX == 0.10
+    # amendment 1: quarterly reviews in the HB runs; a tightening, written into the text and into the code
+    amend = text[text.index("## 11. Amendment 1, made before adoption (2026-11-13)"):]
+    for needle in ("**Reviews every 63 trading days**", "**40 reviews**", "**M7 and M9 are read at years 2, 4, 7 and 10**",
+                   "**M12 is counted over all 40 reviews**", "**The review step is written into every replication record.**",
+                   "`manhattan/sim/hb.py` and `manhattan/stats/tiers.py`", "**Why it tightens and never loosens.**",
+                   "No threshold moves."):
+        assert needle in amend, needle
+    assert hb_v2.REVIEW_STEP == 63 and len(hb_v2.review_days()) == 40 and world.YEAR % hb_v2.REVIEW_STEP == 0
+    assert "over all 40 reviews of every replication (amendment 1)" in row("V12")
+    assert "**counted over all 40 reviews**" in row("M12") and "Reduction (c)" in text
     assert "for that change **no threshold, metric,\nscenario or replication count was touched**" in text
     assert "Sections 4, 6 and 8 of the protocol, and sections 9.2 and 9.3,\nare identical in the two versions." in text
     assert "V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged)" in text

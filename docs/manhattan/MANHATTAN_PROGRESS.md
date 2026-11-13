@@ -869,6 +869,39 @@ is in the table under item 6.
   42, 140, 944 and 123), 2 of 123 in D10 with yearly reviews; 1% to 5% of the families with no edge dormant at
   the end (6% to 20% with yearly reviews). Its pilot through the runner is item 6.
 
+**Item 2. The HB runs are reviewed quarterly (amendment 1 of SIM_PREREG_v2; Ethan's decision on item 21(c)).**
+
+- *What changed.* `manhattan/sim/hb_v2.py` fits the six models, makes the forecast and steps the tiers and the
+  dormancy rule **every 63 trading days: 40 reviews**, at days 63 to 2,520, in place of version 1's four dates
+  (its declared reduction (c), made for the sampler's cost). **M7 and M9 are read at years 2, 4, 7 and 10** as
+  before (the record's `reviews` block holds those four reviews in full); **M12 is counted over all 40** (the
+  record's `quarterly` block: `ok`, the largest end-of-grid mass, families, seconds, reviews written and families
+  dormant at every review); M8 is the state after the last review. "Two consecutive reviews" are a quarter
+  apart. `manhattan/sim/hb.py` and `manhattan/stats/tiers.py` are untouched (version 1's HB code hash is still
+  `0b8dd1af6db62c9f`).
+- *The step is in every record* (`review_step: 63`, with `review_days`). `hb_v2.require_review_step` refuses
+  records of any other step; the report counts only records made at this step, and the collector of a run made
+  in pieces (item 5) refuses a piece that holds any other.
+- *The text.* SIM_PREREG_v2 section 11, "Amendment 1, made before adoption": what is amended, what is not, why
+  it tightens and never loosens, what it costs, and why it is in the draft itself and not in the amendments
+  file. Sections 2(f), 4 and 5 agree with it. In H09 "the second evaluation date after the edge began" keeps
+  version 1's meaning (the second of years 2, 4, 7, 10). Protocol 3.1 §9.1 "How it fails (5)" now says the
+  simulation reviews quarterly.
+- *Stricter where it has a direction; one reading has none.* V12 must hold over ten times as many reviews, the
+  first with ten families and a quarter of forward record. V7's rule gets 39 chances to retire a family, not 3.
+  V6 reads the same probabilities at the same dates. V8's groups (the tier states at the four reading dates)
+  now come from quarterly stepping: the groups production would have, neither larger nor smaller by
+  construction. That is written in the amendment.
+- *Cost, measured on one replication* (D08, the dearest; one core of the session's machine while other jobs
+  ran): 1,201 seconds against 143 at four dates; the model 1,148 of them; the six fits of a review 18 to 40
+  seconds, dearest at the first reviews (few families, the whole grid); all 78 forecasts 31 seconds; **peak
+  memory 3.3 GB** (1.8 GB at four dates). In it: no review "not computed" in 40; none of 84 families with an edge
+  retired; 16 of 156 families with no edge dormant at the end; 4,885 of 5,080 family-reviews written.
+- *Tests.* `tests/test_manhattan_v2.py`: the 40 dates, the step and the two blocks in a real (tiny) replication;
+  M12 over 2,400 reviews of 60 replications, and one uncomputed review between two reading dates failing V12;
+  records of another step refused; the amendment's text against the code. The tiny world's grid was coarsened
+  further so that the tests that run a whole HB replication stay at a few minutes.
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -1002,6 +1035,9 @@ checked against its frozen source.
 
 | session 10M, `build/manhattan` with main merged in (`31bc66a`), before any change | 1 failed, 1487 passed, 132 skipped, exit code 1 (15 minutes): `test_the_runner_keeps_v2_records_apart_and_logs_the_hashes`. **Caused by the session, not by the branch**: it replaced `manhattan/stats/dormancy.py` while the baseline was still running, so the HB code hash moved between the test's run and its status check. The same test on an untouched checkout of `31bc66a` in a separate work tree: 1 passed. The baseline is therefore 1488 passed, 132 skipped |
 | session 10M, item 1, first run of the ported dormancy tests with the v2 text tests | 40 passed (`test_manhattan_dormancy.py` 11, `test_manhattan_v2.py`, `test_manhattan_prereg_v2.py`, `test_manhattan_tiers.py`) |
+
+| session 10M, item 1, full suite on a clean checkout of its commit (`380a516`), before the push | **1489 passed, 132 skipped, exit code 0** (16 minutes) |
+| session 10M, item 2, first run of `tests/test_manhattan_v2.py` after the change | 17 passed (4 minutes) |
 
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.

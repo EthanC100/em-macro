@@ -23,7 +23,7 @@ from manhattan import prereg_v2
 
 from . import criteria as cr
 from . import criteria_v2 as cr2
-from . import metrics, metrics_v2, pipeline_v2, run, runlog, seeds, world
+from . import hb_v2, metrics, metrics_v2, pipeline_v2, run, runlog, seeds, world
 from .report import fmt, table
 
 READINGS = (
@@ -55,17 +55,19 @@ READINGS = (
                               "family and model from the closed-form posterior; not evaluated at the last date."),
     ("HB: dormancy rule", "Protocol 3.1 §9.1 (the forward-record rule, a pre-adoption change): dormant when the "
                           "forecast PP^max and the one-sided p-value p^F of the family's own forward record against an "
-                          "edge of θ_min are both below 0.05 at two consecutive evaluation dates (p^F is 1 until the "
+                          "edge of θ_min are both below 0.05 at two consecutive reviews (p^F is 1 until the "
                           "family has 252 forward days); reactivated when either is at least 0.15. p^F is computed "
-                          "from the forward Sharpe estimate and standard error handed to the model. At the last date "
+                          "from the forward Sharpe estimate and standard error handed to the model. At the last review "
                           "there is no forecast, so no family becomes dormant there; a dormant family is reactivated "
                           "there if p^F ≥ 0.15. A review is \"written\" for every family that is not dormant both "
-                          "before and after the date."),
-    ("HB: who reaches Statistically supported", "A family counts from the first evaluation date at which it holds "
-        "the tier, whether or not it leaves later. Its true Sharpe ratio is that of the family portfolio over its "
-        "forward life (SIM_PREREG section 2.4). With four evaluation dates a family can only enter at one of them."),
-    ("HB: evaluation dates", "Years 2, 4, 7 and 10 (version 1's reduction (c)), consecutive dates standing for "
-                             "consecutive reviews."),
+                          "before and after the review."),
+    ("HB: who reaches Statistically supported", "A family counts from the first review at which it holds the "
+        "tier, whether or not it leaves later. Its true Sharpe ratio is that of the family portfolio over its "
+        "forward life (SIM_PREREG section 2.4). The table reads the state at years 2, 4, 7 and 10."),
+    ("HB: review dates", "Every 63 trading days, 40 reviews (SIM_PREREG_v2 amendment 1: the cadence production "
+                         "uses, in place of version 1's four dates). M7 and M9 are read at years 2, 4, 7 and 10; "
+                         "M12 is counted over all 40 reviews; M8 is the state after the last. Consecutive reviews "
+                         "are a quarter apart. Records made with any other step are refused."),
     ("HB: naive estimate (M9)", "Version 1's: the largest sample Sharpe ratio among the family's variants, each over "
                                 "all its data up to the evaluation date."),
     ("Timing", "Seconds are wall-clock per replication inside a worker and are inflated whenever more jobs than "
@@ -91,11 +93,19 @@ def collect(out: Path = run.OUT) -> dict:
                     rows += [json.loads(line) for line in f if line.strip()]
         if not rows:
             continue
+        n_all = len(rows)
+        if size == "HB":            # another review calendar answers another question: never pooled, never reported here
+            rows = [r for r in rows if r.get("review_step") == hb_v2.REVIEW_STEP]
+            if not rows:
+                continue
         codes = Counter(r["code"] for r in rows)
         now = run.code_hash(size, version="v2")
         code = now if now in codes else codes.most_common(1)[0][0]
-        reps = run.load_reps(scenario, size, seeds.DEVELOPMENT, out, code, "v2")
-        found[(scenario, size)] = {"reps": reps, "code": code, "other_code_reps": len(rows) - codes[code]}
+        reps = [r for r in run.load_reps(scenario, size, seeds.DEVELOPMENT, out, code, "v2")
+                if size != "HB" or r.get("review_step") == hb_v2.REVIEW_STEP]
+        if size == "HB":
+            hb_v2.require_review_step(reps, f"{scenario} at HB")
+        found[(scenario, size)] = {"reps": reps, "code": code, "other_code_reps": n_all - codes[code]}
     return found
 
 
@@ -179,9 +189,9 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
         L.append(f"| {scenario} | {size} | {what} | {n} | {need} | {max(0, need - n)} | `{v['code']}` | {_secs(v['reps']):.0f} |")
     stale_reps = sum(v["other_code_reps"] for v in found.values())
     if stale_reps:
-        L += ["", f"{stale_reps} replication records on file were made by earlier code (the model, and then the "
-                  "dormancy rule, changed while the draft was revised) and are **not counted** anywhere in this report: "
-                  "records of different code are never pooled."]
+        L += ["", f"{stale_reps} replication records on file were made by earlier code (the model, then the "
+                  "dormancy rule, then the review dates changed while the draft was revised) and are **not counted** "
+                  "anywhere in this report: records of different code, or of another review calendar, are never pooled."]
     # ---------------------------------------------------------------- 1. the SPA test with an estimated hedge
     L += ["", "## 1. The SPA test where the hedge is estimated", "",
           "Share of families with no edge rejected at the 0.05 level (the bound on the upper end is 0.06), by three "
@@ -240,7 +250,7 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
         L += ["", "### Dormancy under Protocol 3.1 §9.1: what it retires and what it leaves to review (candidate (i))", "",
               "Premature elimination is M8 (bound 0.10 on the upper end of the interval). The other columns have no "
               "threshold: they are the attention the rule saves. A review is written for every family that is not "
-              "dormant both before and after an evaluation date.", "",
+              "dormant both before and after a review.", "",
               "| scenario | replications | premature elimination (M8) | families with a true edge dormant at the end | "
               "families with no edge dormant at the end | families dormant at the end, of 240 | reviews written per "
               "replication | family-reviews per replication |", "|---|---|---|---|---|---|---|---|"]
@@ -290,7 +300,8 @@ def build(out: Path = run.OUT) -> tuple[str, dict]:
           "| part | runs | replications still to run | runs with a timing | CPU-hours |", "|---|---|---|---|---|"] + rows
     hb = [v for (s, z), v in found.items() if z == "HB"]
     if hb:
-        fits = [x["six_fits_seconds"] for v in hb for r in v["reps"] for x in r["reviews"].values()]
+        fits = [x for v in hb for r in v["reps"] for x in (r["quarterly"]["six_fits_seconds"] if "quarterly" in r
+                                                       else [y["six_fits_seconds"] for y in r["reviews"].values()])]
         model = [r["model_seconds"] for v in hb for r in v["reps"]]
         summary["cost"]["six_fits_seconds_mean"] = sum(fits) / len(fits)
         L += ["", f"The six fits of one review took {sum(fits) / len(fits):.1f} seconds on average over {len(fits)} reviews "

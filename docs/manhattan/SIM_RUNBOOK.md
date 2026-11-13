@@ -89,8 +89,15 @@ every metric, its interval, its threshold and pass or fail:
 
 ## 6. The model-fitting (HB) runs
 
-Under version 2 they are ordinary runs: a replication is one simulated programme of 240 families, evaluated at
-years 2, 4, 7 and 10 with six closed-form fits each time. On the pilot a replication took 68 to 149 seconds, the model's part of it 46 to 105; the first review of a programme (50 families) is the slowest, about 25 seconds for its six fits, because the grid is widest where there are fewest families to narrow it.
+Under version 2 they are ordinary runs: a replication is one simulated programme of 240 families, **reviewed
+every 63 trading days, 40 times** (SIM_PREREG_v2 amendment 1: production's cadence, in place of version 1's four
+dates), with six closed-form fits at every review. That is ten times the fits of the four-date pilots, which
+took 68 to 149 seconds a replication. One replication of the dearest scenario (D08) with quarterly reviews took
+20 minutes on one core of the session's machine while other jobs ran (1,201 seconds, 1,148 of them the model;
+18 to 40 seconds for the six fits of a review; 31 seconds for all the forecasts) and **3.3 GB of memory at its
+peak**: the first reviews are the dearest, because the grid is widest where there are fewest families to narrow
+it. On a 16 GB machine run the HB scenarios with three or four workers (`WORKERS=3 SIZES=HB`), after
+`SIZES=STD,LONG` with seven.
 
 The sampled model of Protocol 3.0 (`manhattan/stats/hier.py`, `manhattan/sim/hb.py`) is still in the repository
 and is **not** part of this run. It cost well over 10 CPU-hours a replication (of the order of 50,000 CPU-hours

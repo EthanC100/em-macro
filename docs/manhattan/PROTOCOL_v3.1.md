@@ -1256,8 +1256,9 @@ be reactivated there by its forward record.
 > recovered (section 9.3). How soon that is has not been measured: it is what held-out scenario H09 is for.
 > (4) Fat tails and serial correlation make the standard error, and so `p^F`, less exact; the simulation
 > measures it. (5) **The more reviews, the more chances to be retired.** "Two consecutive reviews" are three
-> months with quarterly reviews and two to three years at the simulation's four dates (SIM_PREREG §2.5(c)).
-> The simulation therefore tests a more patient rule than production applies, for this rule as for 3.0's.
+> months apart. Version 1 of the simulation stepped the rule at four dates in ten years (SIM_PREREG §2.5(c)),
+> which tests a more patient rule than production applies; since amendment 1 of SIM_PREREG_v2 the simulation
+> reviews every quarter, 40 times, as production does.
 
 ### 9.2 The cost of continued evaluation, stated explicitly
 

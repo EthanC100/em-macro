@@ -2,11 +2,19 @@
 Protocol v3.1 section 7 (``manhattan.stats.hier_analytic``) in place of the sampled model of v3.0.
 
 Everything around the model is version 1's (``manhattan/sim/hb.py``, imported, not copied): the HB programme
-(24 batches of 10 families), the designated evaluation of every family and both screening candidates, the
-evaluation dates (years 2, 4, 7 and 10), the tier state machine, the dormancy forecast and the counts behind
-metrics M7, M8 and M9. The dormancy rule is Protocol v3.1 section 9.1 (``manhattan.stats.dormancy``).
+(24 batches of 10 families), the designated evaluation of every family and both screening candidates, the tier
+state machine, the dormancy forecast and the counts behind metrics M7, M8 and M9. The dormancy rule is Protocol
+v3.1 section 9.1 (``manhattan.stats.dormancy``).
 
 What differs, each listed in the report:
+
+- **Reviews are quarterly, as in production** (SIM_PREREG_v2, amendment 1). The model is fitted, the forecast
+  made and the tiers and the dormancy rule stepped **every 63 trading days**: 40 reviews, at days 63, 126, ...,
+  2,520. Version 1 reduced this to four dates for the sampler's cost (its section 2.5(c)); the closed form does
+  not need the reduction. M7 and M9 are **read** at years 2, 4, 7 and 10, the reviews version 1 read them at
+  (``reviews`` in the record holds those four in full); M12 is **counted over all 40**; M8 is the state at the
+  end, after 40 reviews. "Two consecutive reviews" are two reviews a quarter apart. The step is written into
+  every record (``review_step``) and ``require_review_step`` refuses a record made with any other.
 
 - **Estimates are of the family portfolio.** ``y^H_f`` and ``y^F_f`` are annualised sample Sharpe ratios of
   ``P_f`` on the reserve window and on the forward record (63 forward days at least). The truth they are judged
@@ -23,7 +31,7 @@ What differs, each listed in the report:
   posterior mass of ``μ_A`` sits on the ends of its grid (``hier_analytic.EDGE_MASS_MAX``); a review needs all
   six fits, as before.
 - **Dormancy forecast.** ``tiers.support_probability`` as in version 1, fed with 200 draws of ``θ_f`` from
-  each model's closed-form posterior.
+  each model's closed-form posterior and with the quarterly reviews still to come.
 - **Dormancy rule.** Protocol v3.1 section 9.1 (the forward-record rule, a pre-adoption change): a family
   becomes dormant when, at two consecutive evaluation dates, both the forecast ``PP^max`` and the one-sided
   p-value ``p^F`` of its own forward record against an edge of ``θ_min`` are below 0.05 (``p^F`` is 1 until the
@@ -31,9 +39,10 @@ What differs, each listed in the report:
   ``y^F_f`` and ``s^F_f`` handed to the model, by ``dormancy.forward_p``: no fit enters it. At the last date
   there is no forecast, so no family becomes dormant there; a dormant family can still be reactivated there by
   ``p^F``.
-- **Kept for the report, not used by any rule:** how many families are dormant after each date and how many
+- **Kept for the report, not used by any rule:** how many families are dormant after each review and how many
   reviews are written (a family that is dormant and stays so needs none), and for every family with a true
-  edge its true Sharpe ratio, its freeze day and the first date at which it was Statistically supported.
+  edge its true Sharpe ratio, its freeze day and the day of the first review at which it was Statistically
+  supported.
 - **Channels.** Every family of these scenarios is a blind family with a designated evaluation, so every
   reserve estimate has evidential weight 1. The weight is computed by the model from the channel
   (``hier_analytic.Data.reserve_weight``), never passed in.
@@ -49,6 +58,21 @@ from manhattan.stats import dormancy, hier_analytic, screening, tiers
 from . import hb, pipeline, seeds, world
 
 MODEL = "analytic-normal-normal-3.1"
+REVIEW_STEP = 63                        # trading days between reviews: one quarter of 252 (SIM_PREREG_v2, amendment 1)
+
+
+def review_days() -> list[int]:
+    """The review dates of an HB run, as programme days: every ``REVIEW_STEP`` days to the end (40 dates)."""
+    return list(range(REVIEW_STEP, world.T_END + 1, REVIEW_STEP))
+
+
+def require_review_step(reps: list[dict], where: str = "") -> None:
+    """Refuse HB records that were not reviewed every ``REVIEW_STEP`` days: records of another review calendar
+    (version 1's four dates, a yearly experiment) answer a different question and are never pooled with these."""
+    bad = sorted({str(r.get("review_step")) for r in reps if r.get("review_step") != REVIEW_STEP})
+    if bad:
+        raise ValueError(f"HB records{' in ' + where if where else ''} were reviewed every {', '.join(bad)} days, "
+                         f"not every {REVIEW_STEP}: refused (SIM_PREREG_v2, amendment 1)")
 
 
 class Fam(hb.Fam):
@@ -113,7 +137,10 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
     scn = scenario or world.SCENARIOS[scenario_id]
     size = world.SIZES["HB"]
     streams = seeds.Streams(sha or seeds.prereg_hash(), branch, scenario_id, "HB", rep)
-    years = hb.eval_years()
+    days = review_days()
+    read_at = {y * world.YEAR: y for y in hb.eval_years()}            # M7 and M9 are read at these reviews
+    if not set(read_at) <= set(days):
+        raise ValueError("every year at which M7 and M9 are read must be a review date")
     mech_rng, est_rng = streams.rng(seeds.MODEL, 0), streams.rng(seeds.ESTIMATE)
     procs = {"i": screening.BatchBH(size.N), "ii": screening.EbhElond(size.N)}
     fams: list[Fam] = []
@@ -130,36 +157,41 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
     states = {c: {f.idx: tiers.at_freeze(f.ev.passed[c]) for f in fams} for c in pipeline.CANDIDATES}
     dormant_since = {c: {} for c in pipeline.CANDIDATES}
     dormant_days = {c: {f.idx: 0 for f in fams} for c in pipeline.CANDIDATES}
-    first_supported = {c: {} for c in pipeline.CANDIDATES}            # for the report: the date a family entered the tier
+    first_supported = {c: {} for c in pipeline.CANDIDATES}            # for the report: the day a family entered the tier
     out: dict = {"scenario": scenario_id, "size": "HB", "rep": rep, "branch": branch, "model": MODEL,
-                 "eval_years": list(years), "n_families": len(fams), "reviews": {}}
-    for yi, year in enumerate(years):
-        t = year * world.YEAR
+                 "review_step": REVIEW_STEP, "review_days": days, "eval_years": list(read_at.values()),
+                 "n_families": len(fams), "reviews": {}}
+    every = {k: [] for k in ("ok", "edge_mass", "n_live", "six_fits_seconds", "r_F")}      # one entry per review, all 40
+    every.update({f"{k}_{c}": [] for k in ("written", "dormant") for c in pipeline.CANDIDATES})
+    forecast_seconds = 0.0
+    for qi, t in enumerate(days):
         data, live, info = build_data(fams, t, se_H, est_rng)
         t_fit = time.time()
         fits = hier_analytic.fit_many(data, draws=hb.PP_DRAWS,
-                                      seed=int(streams.seq(seeds.MODEL, 1 + yi).generate_state(1)[0]))
+                                      seed=int(streams.seq(seeds.MODEL, 1 + qi).generate_state(1)[0]))
         rec = {"ok": [f.ok for f in fits], "edge_mass": [round(f.edge_mass, 6) for f in fits],
                "fit_seconds": [round(f.seconds, 3) for f in fits], "six_fits_seconds": round(time.time() - t_fit, 3),
                "grid_points": [f.grid_points for f in fits], "n_live": len(live), "r_F": round(info["r_F"], 4),
-               "hyper": {k: round(v, 4) for k, v in fits[0].hyper.items()}}
+               "hyper": {k: round(v, 4) for k, v in fits[0].hyper.items()}, "day": t}
         ok = all(f.ok for f in fits)
         rec["review_ok"] = ok
         pi_min = np.min([f.pi for f in fits], axis=0) if ok else None
         p_fwd = dormancy.forward_p(data.y_F, data.s_F, [t - f.freeze for f in live])     # the family's own record: no model
-        gaps = [b - a for a, b in zip(years[yi:], years[yi + 1 :])]
+        gaps = [(b - a) / world.YEAR for a, b in zip(days[qi:], days[qi + 1 :])]         # years between the reviews to come
         for cand in pipeline.CANDIDATES:
             pp_max, written = None, 0
             if ok and gaps:
+                t_pp = time.time()
                 st = [states[cand][f.idx] for f in live]
                 pp = tiers.support_probability(
                     np.stack([f.draws for f in fits]), np.stack([f.mean for f in fits]), np.stack([f.sd for f in fits]),
                     fwd_years=info["fwd_years"], fwd_sum=info["fwd_sharpe_f"] * info["fwd_years"],
                     promising=np.array([s.promising for s in st]),
                     rw_reserve=np.array([bool(f.ev.rw_adm_any.get(cand)) for f in live]), review_gaps=gaps,
-                    rng=streams.rng(seeds.MODEL, 100 + yi, pipeline.CANDIDATES.index(cand)),
+                    rng=streams.rng(seeds.MODEL, 100 + qi, pipeline.CANDIDATES.index(cand)),
                     decay_model=next((k for k, sp in enumerate(hier_analytic.SPECS) if sp.decay), None))
                 pp_max = pp.max(axis=0)
+                forecast_seconds += time.time() - t_pp
             for j, f in enumerate(live):
                 s = states[cand][f.idx]
                 was = s.dormant
@@ -175,9 +207,19 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
                     dormant_days[cand][f.idx] += t - dormant_since[cand].pop(f.idx)
                 written += not (was and s.dormant)                     # dormant before and after: no review write-up
                 if s.supported:
-                    first_supported[cand].setdefault(f.idx, year)
+                    first_supported[cand].setdefault(f.idx, t)
             rec[f"written_{cand}"] = int(written)
             rec[f"dormant_{cand}"] = int(sum(states[cand][f.idx].dormant for f in live))
+        every["ok"].append(bool(ok))
+        every["edge_mass"].append(max(rec["edge_mass"]))
+        for k in ("n_live", "six_fits_seconds", "r_F"):
+            every[k].append(rec[k])
+        for cand in pipeline.CANDIDATES:
+            every[f"written_{cand}"].append(rec[f"written_{cand}"])
+            every[f"dormant_{cand}"].append(rec[f"dormant_{cand}"])
+        if t not in read_at:
+            continue
+        year = read_at[t]
         if ok:
             rec.update(hb.review_metrics(live, pi_min, fits[0], states, year))
             # for the report only: among families with a true edge, which model is the most cautious, and how
@@ -192,6 +234,8 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
                 rec[f"edge_supported_{cand}"] = int(sum(s.supported for s, e in zip(st, edge) if e))
         out["reviews"][str(year)] = rec
     end = world.T_END
+    out["quarterly"] = every
+    out["reviews_not_computed"] = int(sum(not x for x in every["ok"]))        # M12's count, over all the reviews
     for cand in pipeline.CANDIDATES:
         for idx, since in dormant_since[cand].items():
             dormant_days[cand][idx] += end - since
@@ -205,14 +249,15 @@ def run_replication(scenario_id: str, rep: int, *, branch: int = seeds.DEVELOPME
         out[f"end_dormant_{cand}"] = sum(s.dormant for s in st)
         out[f"screened_{cand}"] = sum(f.ev.passed[cand] for f in fams)
         out[f"null_dormant_{cand}"] = sum(states[cand][f.idx].dormant for f in fams if f.true < world.THETA_MIN)
-        out[f"written_{cand}"] = sum(v[f"written_{cand}"] for v in out["reviews"].values())
-        out[f"edge_first_supported_{cand}"] = [int(first_supported[cand].get(f.idx, 0)) for f in edge]
+        out[f"written_{cand}"] = int(sum(every[f"written_{cand}"]))
+        out[f"edge_first_supported_day_{cand}"] = [int(first_supported[cand].get(f.idx, 0)) for f in edge]
         out[f"edge_dormant_end_{cand}"] = [int(states[cand][f.idx].dormant) for f in edge]
     edge = [f for f in fams if f.true >= world.THETA_MIN]
     out["edge_true"] = [round(float(f.true), 4) for f in edge]
     out["edge_freeze"] = [int(f.freeze) for f in edge]
-    out["family_reviews"] = sum(v["n_live"] for v in out["reviews"].values())
+    out["family_reviews"] = int(sum(every["n_live"]))
     out["dormancy"] = dormancy.RULE
+    out["forecast_seconds"] = round(forecast_seconds, 2)
     out["model_seconds"] = round(time.time() - t_eval, 2)
     out["seconds"] = round(time.time() - t0, 1)
     return out
