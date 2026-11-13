@@ -13,7 +13,11 @@ during the night whose reason is not a normal end of night (NORMAL_STOPS) is lis
 Janus is read, never written: the latest daily review and quick check from data/janus/records.jsonl through
 ledger.janus (review_status, budget_status, open positions), against mandate C05.
 
-python -m nightshift.morning [--date YYYY-MM-DD] [--dev origin/dev] [--needs "text => recommendation" ...]
+An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
+unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
+passed), when the report is rewritten. --stdout prints and never writes.
+
+python -m nightshift.morning [--date YYYY-MM-DD] [--dev origin/dev] [--needs "text => recommendation" ...] [--stdout]
 """
 from __future__ import annotations
 
@@ -246,6 +250,9 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     return "\n".join(L) + "\n"
 
 
+PROMOTED_LINE = re.compile(r"^\*\*Promoted to main:\*\* (.*)$", re.M)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--date", default=None, help="the morning's Singapore date (default today)")
@@ -254,11 +261,21 @@ def main(argv=None) -> int:
     ap.add_argument("--stdout", action="store_true")
     a = ap.parse_args(argv)
     day = date.fromisoformat(a.date) if a.date else C.now_utc().astimezone(C.SGT).date()
-    text = build(day, a.dev, a.needs)
     if a.stdout:
-        print(text)
+        print(build(day, a.dev, a.needs))
         return 0
     out = ROOT / f"results/night/morning/{day.isoformat()}.md"
+    if out.exists():                       # Q013: checked before build(), so a refused run assembles nothing
+        old = PROMOTED_LINE.search(out.read_text(encoding="utf-8"))
+        now = promoted(day)
+        if old is None or old.group(1).strip() == now:
+            print(f"refused: {out.relative_to(ROOT)} already exists"
+                  + ("" if old is None else " and its 'Promoted to main' line is unchanged")
+                  + "; nothing written (use --stdout to print a report)", file=sys.stderr)
+            return 3
+        print(f"rewriting {out.relative_to(ROOT)}: Promoted to main changed from {old.group(1).strip()!r} to {now!r}",
+              file=sys.stderr)
+    text = build(day, a.dev, a.needs)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     print(text)
