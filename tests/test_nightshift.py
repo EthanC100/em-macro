@@ -443,11 +443,26 @@ def test_claude_md_keeps_existing_notes_and_adds_hard_rules():
         assert must.lower() in t.lower(), must
 
 
-def test_morning_report_lists_real_merges_and_reads_janus(frozen_repo):
+def test_morning_report_lists_real_merges_and_reads_janus(tmp_path, monkeypatch):
+    from ledger import janus as J
     from nightshift import morning as M
     assert M.MERGE_SUBJECT.match("Merge Q003: todo counts") and M.MERGE_SUBJECT.match("night-start: merge main into dev")
     assert not M.MERGE_SUBJECT.match("night-worker: lock (dry run)")
     long = "(c) protected paths touched: ['.claude/a.md', '.claude/b.md', '.github/CODEOWNERS', 'docs/rulesets/main.json', 'x', 'y']"
     assert M._short(long) == "(c) protected paths touched: .claude/a.md, .claude/b.md (+4 more)"
+    # Q014: janus_section fetches origin main, so it runs on a fixture origin (frozen Janus records), never the
+    # real remote or the live data/janus.
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(work))
+    (work / "data/janus").mkdir(parents=True)
+    (work / "data/janus/records.jsonl").write_bytes(frozen_copy("data/janus/records.jsonl").read_bytes())
+    _git(work, "symbolic-ref", "HEAD", "refs/heads/main")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "janus records")
+    _git(work, "push", "-q", "origin", "main")
+    monkeypatch.setattr(M, "ROOT", work)
+    monkeypatch.setattr(J.load, "__defaults__", (work / "data/janus/records.jsonl",))
     lines = M.janus_section(date(2026, 11, 10))
     assert lines[0].startswith("C05: ") and "at risk (budget 3-10%)" in lines[0]
+    assert "records as of 20" in lines[0]
