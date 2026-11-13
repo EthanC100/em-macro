@@ -1,0 +1,385 @@
+{
+ "alone": [
+  {
+   "cpu": 49.09,
+   "peak_rss_mb": 276.6,
+   "rep": 0,
+   "scenario": "D02",
+   "size": "STD",
+   "version": "v1",
+   "wall": 50.4
+  },
+  {
+   "cpu": 99.96,
+   "peak_rss_mb": 287.4,
+   "rep": 0,
+   "scenario": "D08",
+   "size": "STD",
+   "version": "v1",
+   "wall": 103.34
+  },
+  {
+   "cpu": 67.42,
+   "peak_rss_mb": 282.8,
+   "rep": 0,
+   "scenario": "D02",
+   "size": "LONG",
+   "version": "v1",
+   "wall": 69.3
+  },
+  {
+   "cpu": 372.97,
+   "peak_rss_mb": 370.4,
+   "rep": 0,
+   "scenario": "D11",
+   "size": "STD",
+   "version": "v2",
+   "wall": 379.54
+  },
+  {
+   "cpu": 221.18,
+   "peak_rss_mb": 354.0,
+   "rep": 0,
+   "scenario": "D05h",
+   "size": "STD",
+   "version": "v2",
+   "wall": 225.38
+  },
+  {
+   "cpu": 165.81,
+   "peak_rss_mb": 1822.1,
+   "rep": 0,
+   "scenario": "D08",
+   "size": "HB",
+   "version": "v2",
+   "wall": 169.04
+  }
+ ],
+ "alone_wall_total": 1002.1,
+ "busy": [
+  {
+   "cpu": 51.63,
+   "peak_rss_mb": 276.4,
+   "rep": 0,
+   "scenario": "D02",
+   "size": "STD",
+   "version": "v1",
+   "wall": 53.31
+  },
+  {
+   "cpu": 105.46,
+   "peak_rss_mb": 286.1,
+   "rep": 0,
+   "scenario": "D08",
+   "size": "STD",
+   "version": "v1",
+   "wall": 108.3
+  },
+  {
+   "cpu": 69.96,
+   "peak_rss_mb": 283.0,
+   "rep": 0,
+   "scenario": "D02",
+   "size": "LONG",
+   "version": "v1",
+   "wall": 71.53
+  },
+  {
+   "cpu": 409.76,
+   "peak_rss_mb": 369.1,
+   "rep": 0,
+   "scenario": "D11",
+   "size": "STD",
+   "version": "v2",
+   "wall": 418.15
+  },
+  {
+   "cpu": 248.58,
+   "peak_rss_mb": 353.6,
+   "rep": 0,
+   "scenario": "D05h",
+   "size": "STD",
+   "version": "v2",
+   "wall": 255.64
+  },
+  {
+   "cpu": 174.65,
+   "peak_rss_mb": 1821.8,
+   "rep": 0,
+   "scenario": "D08",
+   "size": "HB",
+   "version": "v2",
+   "wall": 178.68
+  },
+  {
+   "cpu": 37.19,
+   "peak_rss_mb": 277.5,
+   "rep": 1,
+   "scenario": "D02",
+   "size": "STD",
+   "version": "v1",
+   "wall": 37.87
+  },
+  {
+   "cpu": 110.67,
+   "peak_rss_mb": 287.6,
+   "rep": 1,
+   "scenario": "D08",
+   "size": "STD",
+   "version": "v1",
+   "wall": 113.94
+  },
+  {
+   "cpu": 60.54,
+   "peak_rss_mb": 283.9,
+   "rep": 1,
+   "scenario": "D02",
+   "size": "LONG",
+   "version": "v1",
+   "wall": 62.38
+  },
+  {
+   "cpu": 365.14,
+   "peak_rss_mb": 366.6,
+   "rep": 1,
+   "scenario": "D11",
+   "size": "STD",
+   "version": "v2",
+   "wall": 375.02
+  },
+  {
+   "cpu": 241.42,
+   "peak_rss_mb": 353.5,
+   "rep": 1,
+   "scenario": "D05h",
+   "size": "STD",
+   "version": "v2",
+   "wall": 248.51
+  },
+  {
+   "cpu": 171.92,
+   "peak_rss_mb": 1689.7,
+   "rep": 1,
+   "scenario": "D08",
+   "size": "HB",
+   "version": "v2",
+   "wall": 175.51
+  },
+  {
+   "cpu": 47.71,
+   "peak_rss_mb": 276.9,
+   "rep": 2,
+   "scenario": "D02",
+   "size": "STD",
+   "version": "v1",
+   "wall": 48.65
+  },
+  {
+   "cpu": 105.32,
+   "peak_rss_mb": 286.4,
+   "rep": 2,
+   "scenario": "D08",
+   "size": "STD",
+   "version": "v1",
+   "wall": 108.07
+  },
+  {
+   "cpu": 75.17,
+   "peak_rss_mb": 284.1,
+   "rep": 2,
+   "scenario": "D02",
+   "size": "LONG",
+   "version": "v1",
+   "wall": 77.46
+  },
+  {
+   "cpu": 358.12,
+   "peak_rss_mb": 368.8,
+   "rep": 2,
+   "scenario": "D11",
+   "size": "STD",
+   "version": "v2",
+   "wall": 366.48
+  },
+  {
+   "cpu": 335.02,
+   "peak_rss_mb": 353.7,
+   "rep": 2,
+   "scenario": "D05h",
+   "size": "STD",
+   "version": "v2",
+   "wall": 342.84
+  },
+  {
+   "cpu": 127.75,
+   "peak_rss_mb": 1401.7,
+   "rep": 2,
+   "scenario": "D08",
+   "size": "HB",
+   "version": "v2",
+   "wall": 129.74
+  },
+  {
+   "cpu": 51.13,
+   "peak_rss_mb": 280.8,
+   "rep": 3,
+   "scenario": "D02",
+   "size": "STD",
+   "version": "v1",
+   "wall": 52.38
+  },
+  {
+   "cpu": 117.45,
+   "peak_rss_mb": 284.5,
+   "rep": 3,
+   "scenario": "D08",
+   "size": "STD",
+   "version": "v1",
+   "wall": 120.67
+  },
+  {
+   "cpu": 60.9,
+   "peak_rss_mb": 283.6,
+   "rep": 3,
+   "scenario": "D02",
+   "size": "LONG",
+   "version": "v1",
+   "wall": 62.02
+  },
+  {
+   "cpu": 348.67,
+   "peak_rss_mb": 371.1,
+   "rep": 3,
+   "scenario": "D11",
+   "size": "STD",
+   "version": "v2",
+   "wall": 358.64
+  },
+  {
+   "cpu": 410.88,
+   "peak_rss_mb": 354.5,
+   "rep": 3,
+   "scenario": "D05h",
+   "size": "STD",
+   "version": "v2",
+   "wall": 421.29
+  },
+  {
+   "cpu": 180.97,
+   "peak_rss_mb": 1737.4,
+   "rep": 3,
+   "scenario": "D08",
+   "size": "HB",
+   "version": "v2",
+   "wall": 184.5
+  }
+ ],
+ "busy_cpu_hours": 1.185,
+ "busy_cpu_share_of_cores": 0.863,
+ "busy_wall_total": 1235.7,
+ "efficiency": 0.912,
+ "efficiency_same_replication": 0.918,
+ "jobs": [
+  [
+   "D02",
+   "STD",
+   "v1"
+  ],
+  [
+   "D08",
+   "STD",
+   "v1"
+  ],
+  [
+   "D02",
+   "LONG",
+   "v1"
+  ],
+  [
+   "D11",
+   "STD",
+   "v2"
+  ],
+  [
+   "D05h",
+   "STD",
+   "v2"
+  ],
+  [
+   "D08",
+   "HB",
+   "v2"
+  ]
+ ],
+ "kinds": {
+  "D02 LONG": {
+   "alone_cpu": 67.42,
+   "alone_wall": 69.3,
+   "busy_wall_mean": 68.35,
+   "busy_wall_same_replication": 71.53,
+   "efficiency": 1.014,
+   "efficiency_same_replication": 0.969,
+   "peak_rss_mb": 284.1,
+   "version": "v1"
+  },
+  "D02 STD": {
+   "alone_cpu": 49.09,
+   "alone_wall": 50.4,
+   "busy_wall_mean": 48.05,
+   "busy_wall_same_replication": 53.31,
+   "efficiency": 1.049,
+   "efficiency_same_replication": 0.945,
+   "peak_rss_mb": 280.8,
+   "version": "v1"
+  },
+  "D05h STD": {
+   "alone_cpu": 221.18,
+   "alone_wall": 225.38,
+   "busy_wall_mean": 317.07,
+   "busy_wall_same_replication": 255.64,
+   "efficiency": 0.711,
+   "efficiency_same_replication": 0.882,
+   "peak_rss_mb": 354.5,
+   "version": "v2"
+  },
+  "D08 HB": {
+   "alone_cpu": 165.81,
+   "alone_wall": 169.04,
+   "busy_wall_mean": 167.11,
+   "busy_wall_same_replication": 178.68,
+   "efficiency": 1.012,
+   "efficiency_same_replication": 0.946,
+   "peak_rss_mb": 1822.1,
+   "version": "v2"
+  },
+  "D08 STD": {
+   "alone_cpu": 99.96,
+   "alone_wall": 103.34,
+   "busy_wall_mean": 112.75,
+   "busy_wall_same_replication": 108.3,
+   "efficiency": 0.917,
+   "efficiency_same_replication": 0.954,
+   "peak_rss_mb": 287.6,
+   "version": "v1"
+  },
+  "D11 STD": {
+   "alone_cpu": 372.97,
+   "alone_wall": 379.54,
+   "busy_wall_mean": 379.57,
+   "busy_wall_same_replication": 418.15,
+   "efficiency": 1.0,
+   "efficiency_same_replication": 0.908,
+   "peak_rss_mb": 371.1,
+   "version": "v2"
+  }
+ },
+ "machine": {
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "logical_cores": 4,
+  "platform": "Linux-6.18.44-fc-v445-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "peak_rss_mb_all_workers": 7288.4,
+ "peak_rss_mb_per_worker": 1822.1,
+ "workers": 4
+}

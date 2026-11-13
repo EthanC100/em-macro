@@ -1,0 +1,40 @@
+
+===== D02: 7 of 42 families with a true edge retired
+  by true Sharpe: 0.25-0.40: 1/6 (0.17); 0.40-0.70: 2/13 (0.15); 0.70-1.10: 4/20 (0.20); 1.10-9.00: 0/3 (0.00)
+  became dormant at year 4: 2, at year 7: 5
+  at that review (10th/50th/90th percentile): true Sharpe 0.38/0.73/0.85; forward years 3.58/4.50/6.33; forward Sharpe estimate 0.24/0.44/0.67; reserve estimate -0.24/0.46/0.77
+     posterior mean under S0 0.00/0.02/0.08 (sd 0.10/0.13/0.17); Pi S0 0.02/0.03/0.13; Pi max 0.06/0.09/0.21; PP max 0.00/0.00/0.00
+     forecast with the truth in place of the posterior draws (PP): 0.00/0.00/0.00; share with that PP >= 0.05: 0.00; >= 0.15: 0.00
+     share with Pi max < 0.05: 0.00; < 0.10: 0.57; < 0.20: 0.86
+     own forward record against an edge of 0.25 (one-sided p): 0.50/0.67/0.79; share below 0.05: 0.00
+     share whose posterior mean under S0 is below their true Sharpe: 1.00; mean shortfall 0.61
+
+===== D05: 25 of 140 families with a true edge retired
+  by true Sharpe: 0.25-0.40: 7/24 (0.29); 0.40-0.70: 6/45 (0.13); 0.70-1.10: 11/50 (0.22); 1.10-9.00: 1/21 (0.05)
+  became dormant at year 4: 10, at year 7: 15
+  at that review (10th/50th/90th percentile): true Sharpe 0.27/0.56/0.99; forward years 3.20/4.08/6.42; forward Sharpe estimate -0.04/0.51/0.89; reserve estimate -0.02/0.35/0.97
+     posterior mean under S0 -0.01/0.08/0.32 (sd 0.12/0.20/0.32); Pi S0 0.02/0.08/0.43; Pi max 0.05/0.16/0.62; PP max 0.00/0.00/0.01
+     forecast with the truth in place of the posterior draws (PP): 0.00/0.00/0.00; share with that PP >= 0.05: 0.00; >= 0.15: 0.00
+     share with Pi max < 0.05: 0.08; < 0.10: 0.36; < 0.20: 0.60
+     own forward record against an edge of 0.25 (one-sided p): 0.28/0.72/0.91; share below 0.05: 0.04
+     share whose posterior mean under S0 is below their true Sharpe: 0.96; mean shortfall 0.52
+
+===== D08: 102 of 944 families with a true edge retired
+  by true Sharpe: 0.25-0.40: 18/66 (0.27); 0.40-0.70: 32/184 (0.17); 0.70-1.10: 42/431 (0.10); 1.10-9.00: 10/263 (0.04)
+  became dormant at year 4: 22, at year 7: 80
+  at that review (10th/50th/90th percentile): true Sharpe 0.27/0.72/1.06; forward years 3.21/4.92/6.58; forward Sharpe estimate 0.08/0.58/1.12; reserve estimate 0.02/0.55/1.00
+     posterior mean under S0 0.08/0.33/0.58 (sd 0.19/0.22/0.28); Pi S0 0.16/0.61/0.92; Pi max 0.20/0.65/0.95; PP max 0.00/0.00/0.00
+     forecast with the truth in place of the posterior draws (PP): 0.00/0.00/0.00; share with that PP >= 0.05: 0.00; >= 0.15: 0.00
+     share with Pi max < 0.05: 0.04; < 0.10: 0.04; < 0.20: 0.11
+     own forward record against an edge of 0.25 (one-sided p): 0.34/0.75/0.98; share below 0.05: 0.00
+     share whose posterior mean under S0 is below their true Sharpe: 0.96; mean shortfall 0.36
+
+===== D10: 18 of 123 families with a true edge retired
+  by true Sharpe: 0.25-0.40: 15/46 (0.33); 0.40-0.70: 1/1 (1.00); 0.70-1.10: 2/30 (0.07); 1.10-9.00: 0/46 (0.00)
+  became dormant at year 4: 7, at year 7: 11
+  at that review (10th/50th/90th percentile): true Sharpe 0.29/0.32/0.67; forward years 3.04/3.83/6.71; forward Sharpe estimate -0.34/0.28/0.65; reserve estimate 0.09/0.53/0.76
+     posterior mean under S0 -0.12/-0.00/0.16 (sd 0.14/0.21/0.33); Pi S0 0.02/0.09/0.31; Pi max 0.04/0.18/0.48; PP max 0.00/0.00/0.00
+     forecast with the truth in place of the posterior draws (PP): 0.00/0.00/0.00; share with that PP >= 0.05: 0.00; >= 0.15: 0.00
+     share with Pi max < 0.05: 0.11; < 0.10: 0.33; < 0.20: 0.67
+     own forward record against an edge of 0.25 (one-sided p): 0.13/0.52/0.82; share below 0.05: 0.06
+     share whose posterior mean under S0 is below their true Sharpe: 1.00; mean shortfall 0.37

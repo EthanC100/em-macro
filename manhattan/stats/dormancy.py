@@ -1,79 +1,85 @@
-"""Dormancy under Protocol v3.1 section 9.1, as revised before adoption.
+"""Dormancy as revised in Protocol v3.1 section 9.1, before adoption (session 6M).
 
-Version 3.0's rule (``tiers.step``) made a family dormant on one number, ``PP^max``: the largest, over the six
-models, of the probability that the family enters Statistically supported before the programme ends. That tier
-needs ``Π^min ≥ 0.80``, the most cautious of the six, so the forecast is small for most families that have an
-edge: on the pilot rerun the rule retired families the central model gave a 60% chance of an edge, with a
-positive forward record, because none of them could reach that tier in time
-(``results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md``).
+The rule of 3.0 (``manhattan/stats/tiers.py``, unchanged) made a family dormant on a forecast alone:
 
-The revised rule keeps that condition and adds the one section 7.2(e) always named ("dormancy uses ``Π^max``"):
+    PP^max < 0.05 at two consecutive reviews,        PP = Pr(the family enters Statistically supported by T_end)
 
-    become dormant   at two consecutive reviews, each with at least 252 forward days:
-                     PP^max < 0.05   and   Π^max < 0.05
-    reactivate       PP^max ≥ 0.15   or   Π^max ≥ 0.15   at any review, or on Ethan's recorded request
+In the pilot of the 3.1 draft that rule retired 11% to 18% of the families that had an edge (bound: 0.10). The
+forecast is a statement about the tier, drawn from a posterior that leans on what other families did: where edges
+are rare the model is rightly sure that any one family has none, and where the tier is out of reach in the time
+left the forecast is zero whatever the family's edge. Neither says the family has no edge.
 
-``Π^max`` is the largest of the six models' posterior probabilities that the family's edge is at least
-``θ_min``. A family is therefore retired only when even the most hopeful model says it very probably has no
-edge worth having, on a forward record of its own. No number is new: 0.05 and 0.15 are the dormancy levels of
-3.0, and 252 forward days and "two consecutive reviews" are those of the Promising exit (section 8.1), of which
-this rule is the stricter sibling (the most hopeful model instead of the most cautious, 0.05 instead of 0.20).
+Protocol 3.1 keeps the forecast and adds a second condition, on the family's **own forward record**:
 
-The tiers themselves are version 3.0's and are stepped by ``tiers.step``, which this module calls with no
-forecast so that its own dormancy branch is never reached. ``manhattan/stats/tiers.py`` is not edited: it is a
-code file of version 1's records.
+    p^F_f = Φ( (y^F_f − θ_min) / s^F_f )      one-sided p-value of the forward record against "the edge is at
+                                               least θ_min"; defined with at least 252 forward days, else 1
+
+    become dormant   PP^max < 0.05  and  p^F < 0.05,  both at two consecutive reviews
+    reactivate       PP^max ≥ 0.15  or  p^F ≥ 0.15  at any review,  or on Ethan's recorded request
+
+``y^F_f`` and ``s^F_f`` are the forward sample Sharpe ratio of the family portfolio and its standard error
+(Protocol 3.1 section 7.1). ``p^F`` uses nothing but the family's own forward returns: no prior, no other
+family, no history. If the family's edge is exactly ``θ_min`` it is below 0.05 at a given review with
+probability 0.05, and with a larger edge less often, whatever the other families are. It is also the posterior
+probability of ``θ_f ≥ θ_min`` under a flat prior on the family's own forward record, so the rule reads: the
+family is put aside only when both the model that pools all families and the reading that pools nothing say so.
+
+At a review with no forecast (the programme's last date, or ``T_end`` unset) no family becomes dormant; a
+dormant family can still be reactivated there by its forward record.
+
+Everything else about a review (the tiers, their streaks, formal support) is ``tiers.step``, called with its own
+dormancy switched off.
 """
 from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
+from scipy.special import ndtr
+
 from . import tiers
 
-PP_BELOW = tiers.DORMANT_BELOW                  # 0.05: the forecast of reaching Statistically supported
-PI_BELOW = tiers.DORMANT_BELOW                  # 0.05: the probability of an edge of at least θ_min
-REACTIVATE_AT = tiers.REACTIVATE_AT             # 0.15: for either of the two
-MIN_FORWARD_DAYS = tiers.DAYS_PROMISING_EXIT    # 252: the forward record a family needs before a review can count
+DORMANT_BELOW, REACTIVATE_AT = tiers.DORMANT_BELOW, tiers.REACTIVATE_AT       # 0.05 and 0.15: the numbers of 3.0
+MIN_FORWARD_DAYS = tiers.DAYS_PROMISING_EXIT                                  # 252, as for leaving Promising (8.1)
+THETA_MIN = tiers.THETA_MIN
 CONSECUTIVE = 2
-RULE = "protocol-3.1-section-9.1-revised"          # written into every replication record
+RULE = "protocol-3.1-section-9.1-forward-record"                              # written into every replication record
 
 
-def low(r: tiers.Review, pi_max: float | None) -> bool | None:
-    """Whether this review counts towards dormancy. ``None``: the review cannot say (the programme has no end,
-    no forecast could be made, or the model was not computed), and the count of low reviews is left as it is."""
-    if not r.t_end_set or r.pp_max is None or pi_max is None or r.pi_min is None:
-        return None
-    return bool(r.pp_max < PP_BELOW and pi_max < PI_BELOW and r.forward_days >= MIN_FORWARD_DAYS)
+def forward_p(y_F, s_F, forward_days) -> np.ndarray:
+    """``p^F_f`` for every family: 1 where there is no forward estimate yet (NaN), no positive standard error
+    or fewer than 252 forward days."""
+    y, s, d = (np.asarray(x, dtype=float) for x in (y_F, s_F, forward_days))
+    ok = np.isfinite(y) & np.isfinite(s) & (s > 0) & (d >= MIN_FORWARD_DAYS)
+    z = (np.where(ok, y, 0.0) - THETA_MIN) / np.where(ok, s, 1.0)
+    return np.where(ok, ndtr(z), 1.0)
 
 
-def wakes(r: tiers.Review, pi_max: float | None) -> bool:
-    """Whether a dormant family is reactivated at this review."""
-    return bool(r.ethan_reactivates or (r.pp_max is not None and r.pp_max >= REACTIVATE_AT)
-                or (pi_max is not None and r.pi_min is not None and pi_max >= REACTIVATE_AT))
-
-
-def step(s: tiers.State, r: tiers.Review, pi_max: float | None) -> tiers.State:
-    """Apply one review: the tiers of sections 8.1, 8.2 and 8.5 by ``tiers.step``, dormancy by section 9.1 of
-    Protocol v3.1. ``pi_max`` is ``Π^max`` (``None`` when the model was not computed).
-
-    While dormant only the reactivation check is made. A review at which the model was not computed changes no
-    tier, no count and no dormancy, except that Ethan's request and an e-LOND rejection are still recorded.
-    """
+def step(s: tiers.State, r: tiers.Review, p_forward: float | None) -> tiers.State:
+    """Apply one review under Protocol 3.1. ``r.pp_max`` is the forecast (None when there is none);
+    ``p_forward`` is ``p^F_f`` (None is read as 1: no forward evidence against the family)."""
+    p = 1.0 if p_forward is None else float(p_forward)
     ev: list[str] = []
-    if s.dormant and wakes(r, pi_max):
-        s = replace(s, dormant=False, low_pp=0, recording=True)
-        ev.append("reactivated")
-    streak = s.low_pp
-    s = tiers.step(s, replace(r, pp_max=None, ethan_reactivates=False))       # tiers only; no forecast is passed
-    ev += list(s.events)
     if s.dormant:
-        return replace(s, events=tuple(ev))
-    if s.supported:
-        return replace(s, low_pp=0, events=tuple(ev))
-    verdict = low(r, pi_max)
-    if verdict is None:
-        return replace(s, low_pp=streak, events=tuple(ev))
-    streak = streak + 1 if verdict else 0
-    if streak >= CONSECUTIVE:
-        ev.append("dormant")
-        return replace(s, dormant=True, low_pp=0, recording=r.cheap, events=tuple(ev))
-    return replace(s, low_pp=streak, events=tuple(ev))
+        if r.ethan_reactivates or (r.pp_max is not None and r.pp_max >= REACTIVATE_AT) or p >= REACTIVATE_AT:
+            s = replace(s, dormant=False, low_pp=0, recording=True)
+            ev.append("reactivated")
+        else:                                           # still dormant: only formal support is recorded
+            return tiers.step(s, replace(r, pp_max=None, ethan_reactivates=False))
+    low_before = s.low_pp
+    s = tiers.step(s, replace(r, pp_max=None, ethan_reactivates=False))       # the tiers; no dormancy of 3.0
+    ev += list(s.events)
+    if r.pi_min is None:                                # "model not computed": no tier change, no new dormancy
+        return replace(s, low_pp=low_before, events=tuple(ev))
+    if not s.supported and r.t_end_set and r.pp_max is not None:
+        low = low_before + 1 if (r.pp_max < DORMANT_BELOW and p < DORMANT_BELOW) else 0
+        if low >= CONSECUTIVE:
+            s = replace(s, dormant=True, low_pp=0, recording=r.cheap)
+            ev.append("dormant")
+        else:
+            s = replace(s, low_pp=low)
+    elif s.supported:
+        s = replace(s, low_pp=0)
+    else:                                               # no forecast at this review: the streak neither grows nor resets
+        s = replace(s, low_pp=low_before)
+    return replace(s, events=tuple(ev))

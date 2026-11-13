@@ -17,10 +17,10 @@ them** ([ETHAN_ACTIONS.md](ETHAN_ACTIONS.md) item 19). The script runs both by d
 | Development scenarios at **STD and LONG**, except D11 (17 runs × 2,000 replications): screening candidates, SPA, Romano-Wolf, forward e-LOND | version 1, by its unchanged code; the 192 pilot replications on file count | **yes** | 60 to 150 seconds per replication on one idle core (the pilot's 67 to 355 were measured on a busy machine); about **950 to 1,190 CPU-hours** |
 | **D11** (1 run × 2,000): the same pipeline with the hedge re-estimated in every bootstrap resample | version 2 | **yes**, after item 19 | about 370 seconds per replication (the pipeline plus three SPA tests on the same resamples); about **200 CPU-hours** |
 | **Hedged twins** D01h to D08h (9 runs × 400): the SPA test only | version 2 | **yes**, after item 19 | 210 to 600 seconds per replication (measured: 290, 260, 304, 207, 291, 251, 305, 246 and 599); about **300 CPU-hours** |
-| Development scenarios at **HB** (5 runs × 400): the analytic hierarchical model, tiers, dormancy | version 2 | **yes**, after item 19 | 70 to 150 seconds per replication, 16 seconds for the six fits of a review; about **50 CPU-hours** |
+| Development scenarios at **HB** (5 runs × 400): the analytic hierarchical model, tiers, dormancy, reviewed every quarter (amendment 1) | version 2 | **yes**, after item 19 | 650 to 1,500 seconds per replication with four jobs on four cores (session 10M's pilot), 22 seconds for the six fits of a review on average, 40 reviews a replication; about **520 CPU-hours**. Up to 3.3 GB a worker |
 | Held-out scenarios (H01 to H12) and the confirmation run | both | **no**: their worlds are not coded, and they may run only from a tagged commit after the development criteria are met | - |
 
-In all: about **1,500 to 1,750 CPU-hours**: roughly **9 to 10.5 days on 8 cores** with seven workers (the script's default leaves one core free). The measured figures are from pilots on a 4-core machine with four workers, and version 1's share is the uncertain one: its pilot ran on a busier machine. Before Protocol v3.1 the STD and LONG half alone was about 5 days and the HB half could not be run at all.
+In all: about **2,000 to 2,200 CPU-hours** (the first three rows as before, about 1,500 to 1,700 by the pilot timings and about 1,200 on an idle core; the HB row about 520 since the quarterly reviews of amendment 1): roughly **12 to 13 days on 8 cores** with seven workers (the script's default leaves one core free), or a day and a half on GitHub's runners (section 8). The measured figures are from pilots on a 4-core machine with four workers, and version 1's share is the uncertain one: its pilot ran on a busier machine. Before Protocol v3.1 the STD and LONG half alone was about 5 days and the HB half could not be run at all.
 
 ## 2. Set up once
 
@@ -89,8 +89,15 @@ every metric, its interval, its threshold and pass or fail:
 
 ## 6. The model-fitting (HB) runs
 
-Under version 2 they are ordinary runs: a replication is one simulated programme of 240 families, evaluated at
-years 2, 4, 7 and 10 with six closed-form fits each time. On the pilot a replication took 68 to 149 seconds, the model's part of it 46 to 105; the first review of a programme (50 families) is the slowest, about 25 seconds for its six fits, because the grid is widest where there are fewest families to narrow it.
+Under version 2 they are ordinary runs: a replication is one simulated programme of 240 families, **reviewed
+every 63 trading days, 40 times** (SIM_PREREG_v2 amendment 1: production's cadence, in place of version 1's four
+dates), with six closed-form fits at every review. That is ten times the fits of the four-date pilots, which
+took 68 to 149 seconds a replication. One replication of the dearest scenario (D08) with quarterly reviews took
+20 minutes on one core of the session's machine while other jobs ran (1,201 seconds, 1,148 of them the model;
+18 to 40 seconds for the six fits of a review; 31 seconds for all the forecasts) and **3.3 GB of memory at its
+peak**: the first reviews are the dearest, because the grid is widest where there are fewest families to narrow
+it. On a 16 GB machine run the HB scenarios with three or four workers (`WORKERS=3 SIZES=HB`), after
+`SIZES=STD,LONG` with seven.
 
 The sampled model of Protocol 3.0 (`manhattan/stats/hier.py`, `manhattan/sim/hb.py`) is still in the repository
 and is **not** part of this run. It cost well over 10 CPU-hours a replication (of the order of 50,000 CPU-hours
@@ -112,3 +119,71 @@ different code are never pooled. Version 1's code files (`manhattan/stats/` as i
 `pipeline.py`, `seeds.py`) are untouched by version 2, so version 1's records keep counting; a change to any of
 them, or to version 2's files (`spa_hedged.py`, `pipeline_v2.py`, `hier_analytic.py`, `hb_v2.py`), starts the
 counts of the runs that use it again from zero.
+
+## 8. On GitHub's runners instead of the iMac
+
+`.github/workflows/manhattan-sim.yml` makes the same development run on GitHub's public runners (4 cores and 16
+GB each, free for a public repository, six hours a job), in **pieces**: one scenario and a range of replication
+numbers per job. It was written by session 10M and **has never been started**: no session dispatches it. It is
+started by hand only, has no schedule, reads no repository secret, writes nothing to the repository, and every
+job is guarded to `main`. **GitHub offers the "Run workflow" button only for a workflow file that is on the
+default branch, so the pull request that adds the file must be merged to main first.** Item 19 of
+ETHAN_ACTIONS.md (adoption) comes before it, as for the iMac.
+
+**Start it** (after the merge):
+
+1. GitHub, the repository's **Actions** tab, **manhattan-sim** in the list on the left, **Run workflow**, branch
+   **main**, leave the three inputs as they are, **Run workflow**. (From a terminal:
+   `gh workflow run manhattan-sim.yml --ref main`.)
+2. The **plan** job (a few minutes) checks both pre-registrations against their hashes and cuts what is missing
+   into pieces: every replication of the pre-registered counts that is not on file for the code of that commit.
+   The pilot replications already in the repository count and are not run again. Its summary says how many
+   pieces and how many core-hours it expects.
+3. The **piece** jobs run, 20 at a time. A piece stops starting replications after 285 minutes, finishes those in
+   progress and uploads its records, whatever happened, as the artifact `manhattan-sim-piece-<scenario>-<size>-<first>-<last>`.
+4. The **collect** job puts every piece together with `python -m manhattan.sim.collect merge` (it refuses records
+   of other code, of another review step, of a replication outside the count, or that disagree with another
+   record of the same replication), writes a table of what is still missing to the run's summary, and uploads
+   the record files as the artifact `manhattan-sim-results`. It is red while anything is missing.
+
+**If pieces are red** (ran out of time on a slow runner, or failed): on the run's page, **Re-run failed jobs**.
+Each piece first downloads its own earlier artifact and continues from it; then the collect job runs again.
+
+**If the plan said "N pieces left for a later run"** (a workflow run holds at most 256 jobs), or to continue on
+another day: start the workflow again with the input **earlier_runs** set to the id of the earlier run (the
+number in its URL; several ids separated by commas). It downloads those runs' pieces, counts them, and plans
+only what is still missing. Artifacts are kept for 90 days.
+
+**Bring the records home** when the collect job is green. On a checkout of the same commit of main:
+
+```bash
+gh run download <run id> --pattern 'manhattan-sim-piece-*' --dir /tmp/manhattan-pieces
+python scripts/manhattan_sim_collect.py merge /tmp/manhattan-pieces     # checks every record again; appends to results/manhattan_sim
+python scripts/manhattan_sim_collect.py status                          # must print: Every run is at its pre-registered count.
+python -m manhattan.sim.run --v10a
+python -m manhattan.sim.run --compact --prereg v2
+python -m manhattan.sim.report --prereg v2 && python -m manhattan.sim.report_v2
+```
+
+(With several runs, download each run's pieces into its own directory under `/tmp/manhattan-pieces`; a later
+run's `manhattan-sim-piece-earlier-runs` artifact already holds the earlier ones.) Then section 5 above: commit
+`results/manhattan_sim/` on a branch and open a pull request. The workflow itself commits nothing.
+
+**Size.** With the timings on file (`python -m manhattan.sim.collect plan`) the plan is **225 pieces** for about
+2,200 core-hours: one run of the workflow, of the order of 650 runner-hours, so about a day and a half at 20 jobs
+at once. Those are estimates from this repository's pilot timings, most of them measured on a busy machine, and
+from an assumed runner speed; the plan job's summary gives the figure for the commit it runs from. A piece is sized to 60% of what its job could do at
+the timings' speed, so a slower runner still finishes most pieces, and one that does not is continued by
+"Re-run failed jobs". HB pieces use three workers, not four: an HB replication with quarterly reviews peaks at
+3.3 GB.
+
+**The same thing on any machine.** A piece is one command, and pieces made anywhere can be merged:
+
+```bash
+python -m manhattan.sim.run --prereg v2 --scenario D05 --size HB --first 100 --reps 150 --label part \
+    --workers 3 --time-budget-minutes 285 --out /tmp/piece-D05-HB-100      # exit code 75: out of time, run it again
+python -m manhattan.sim.collect plan          # the pieces still missing, as JSON
+```
+
+What the workflow does not do: it runs no held-out scenario (none is coded, and the runner refuses them outside a
+tagged confirmation run), it does not run `--v10a`, and it builds no report.
