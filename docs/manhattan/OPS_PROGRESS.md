@@ -107,8 +107,36 @@ Written before each component's tests. "Met" means a named test asserts it.
 
 ## Requests to the shared code (not edited here)
 
-Filled in as they are found; each has an adapter in `manhattan/ops/` meanwhile.
+Each has an adapter in `manhattan/ops/` meanwhile. None was edited by this session.
+
+| id | shared code | request | adapter |
+|---|---|---|---|
+| R-1 | `manhattan/roles.py` | a "signal input" read for the runner: forward strategies need history before their first observation, but `check_read` allows one role per read and, with the default fence, the dates between the exploration cut-off and a freeze are embargoed | `data.forward_window` opens the window as the runner, labelled forward; returns on or before the first observation are never recorded |
+| R-2 | `manhattan/critic.py` | add `unjustified_dimension` (and the mechanical reasons `budget_exceeded_without_justification`, `missing_timing`, `not_compilable`) to `BLOCK_REASONS` | `critic_rules.OPS_BLOCK_REASONS`; the critic draft lists `unjustified_dimension` |
+| R-3 | `manhattan/generate/`, `manhattan/templates/` | template v2 (variant justification, timing, structured signal) beside v1, and `blind_request` for it | `mockgen.blind_request` with `manhattan/ops/templates/blind_v2.md` and its own hash file |
+| R-4 | `manhattan/freeze.py` | a freeze authorised by Ethan's merge, with timing certified by the API merge time and a witness, as an alternative to the signed tag (which a cloud session cannot check) | `runner.load_batch` checks canonical form, every spec hash and the Merkle root; `timing.assess` certifies timing |
+| R-5 | `manhattan/ledger.py`, ARCHITECTURE §4.1 | the public index may hold `screening_decision` and `tier_change` records, and ARCHITECTURE suggests the full ledger could live in em-macro-data (readable by any session that attaches it, the Janus sessions included). Under this session's blinding, em-macro holds health only and the full ledger lives in `manhattan-ledger`. The two designs should be reconciled before a screening decision is ever published | the ops store is separate; `PublicIndex` is not used |
+| R-6 | `manhattan/engine/backtest.py` | marks are read at the window's end, so a vendor revision would change a past return; an option to mark with first-seen values only | the runner builds its store from first-seen values only; a recomputed day that differs is a `conflict`, the first record stands |
+| R-7 | `manhattan/engine/evaluate.py`, decision 33 | exploration evaluations write their Sharpe ratio to `results/manhattan_engine/exploration_log.csv` in this public repository. Exploration results are open by ARCHITECTURE §6, but if "screening performance never in em-macro" is meant to cover exploration screening too, that log should move to the private ledger | `runner.screen` records privately and does not call `log_variant` (hard rule 6 binds the explorer, which does not run this) |
+
+## Decisions taken in this session
+
+| # | decision | why |
+|---|---|---|
+| O1 | Development on `build/manhattan-ops`, as asked, not on the session's default `claude/...` branch | the brief named the branch |
+| O2 | The public channel accepts no float at all (not just "no outcome key") | an allow-list of kinds is checkable; a deny-list of keys is not |
+| O3 | Registration time is the **later** of merge time and witness time | the spec provably existed by then if either source is honest; a late witness can only make a prediction ineligible |
+| O4 | A provisional registration (no verified witness) has evidential weight 0 | conservative until the second source arrives |
+| O5 | Availability of a first-seen value is the retrieval day, moved to the next day when retrieved after the close | a value seen after the close cannot have informed that close's decision |
+| O6 | An observation is reconstructed when its own marks or its base day's marks were captured after the grace period | a return depends on both ends |
+| O7 | Each private record carries a 128-bit nonce | the head hash is published; without a nonce a small outcome space could be brute-forced |
+| O8 | The deploy keys live in a GitHub Environment restricted to `main` | repository secrets reach a dispatched run on any branch |
+| O9 | Default variant budget 16 per hypothesis | small enough that a typical one- or two-parameter grid fits, large enough not to force justification of every grid; Ethan's to change |
+| O10 | The runner does not call `nightshift.guard` | it never writes em-macro, so it cannot collide with em-macro's writers; the guard's window and cap are the night shift's |
+| O11 | `ETHAN_ACTIONS.md` is not edited; the ops steps are in `docs/manhattan/ops/ETHAN_OPS_ACTIONS.md` | the parallel 6M session works on that file |
+
+Queue: no change to `docs/queue.md` (not touched; night-shift files are dev's).
 
 ## Status
 
-Filled in at the end of the session.
+STATUS_PLACEHOLDER

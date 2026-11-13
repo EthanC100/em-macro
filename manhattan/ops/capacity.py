@@ -171,6 +171,48 @@ def measure_ledger(n: int) -> dict:
             "note": "local bare repository; a real push adds network time"}
 
 
+def report(directory: Path) -> str:
+    """CAPACITY.md from the measurement files in ``directory``: the numbers as measured, nothing extrapolated."""
+    rows = {}
+    for p in sorted(Path(directory).glob("*.json")):
+        r = json.loads(p.read_text())
+        rows[(r["mode"], r.get("n_executables", r.get("n_records")))] = r
+    out = ["# Manhattan ops: capacity measurements", "",
+           "Measured by `python -m manhattan.ops.capacity` (session 7M). Synthetic data: six instruments, sessions",
+           "2005-01-03 to 2019-12-31. Each line is one fresh process. **Measurements only; nothing is extrapolated.**", ""]
+    m = next(iter(rows.values()), {}).get("machine", {})
+    out += [f"Machine: {m.get('cpus')} CPUs, Python {m.get('python')}, {m.get('platform', '')}", "",
+            "## Full backtest and nightly increment (engine)", "",
+            "| mode | executables | workers | wall (s) | CPU (s) | CPU per executable (ms) | peak RSS, largest process (MiB) |",
+            "|---|---|---|---|---|---|---|"]
+    for mode in ("full", "daily"):
+        for n in (1000, 10000, 100000):
+            r = rows.get((mode, n))
+            if r is None:
+                out.append(f"| {mode} | {n:,} | | not measured | | | |")
+                continue
+            out.append(f"| {mode} | {n:,} | {r['workers']} | {r['wall_seconds']:,} | {r['cpu_seconds']:,} | "
+                       f"{1000 * r['cpu_seconds'] / n:.1f} | {r['peak_rss_mib_largest_process']} |")
+    out += ["", "## Private-ledger write of one nightly increment", "",
+            "| observation records | write through the journal (s) | fresh clone, open and verify (s) | chain size (MB) | peak RSS (MiB) |",
+            "|---|---|---|---|---|"]
+    for n in (1000, 10000, 100000):
+        r = rows.get(("ledger", n))
+        if r is None:
+            out.append(f"| {n:,} | not measured | | | |")
+            continue
+        out.append(f"| {n:,} | {r['write_seconds']} | {r['open_and_verify_seconds']} | {r['chain_bytes'] / 1e6:.1f} | "
+                   f"{r['peak_rss_mib_largest_process']} |")
+    out += ["", "Definitions: **full** compiles each executable and backtests it over the whole window, as screening",
+            "would. **daily** compiles each executable and runs it over its forward window (warm-up plus one new",
+            "session), as the runner does each night, and builds the new day's payload. **ledger** writes that many",
+            "observation records to a local bare repository through the write-ahead journal and then opens and",
+            "verifies a fresh clone; a real push adds network time. Executables cycle through every signal kind at",
+            "its natural frequency (daily, weekly, monthly, event) with distinct parameters, both sizing rules and two",
+            "cost models.", ""]
+    return "\n".join(out)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m manhattan.ops.capacity")
     ap.add_argument("--n", type=int, required=True)
