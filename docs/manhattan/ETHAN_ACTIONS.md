@@ -44,7 +44,7 @@ can go. Item 8 has a date (about 5 May 2027).
 | 20 | access to em-macro-data for the futures half of milestone E | none in a build session: the attach was refused | reproducing time-series momentum and carry on futures; every futures core factor |
 | 21 | three decisions the model-fitting pilots leave with you: the bar of Statistically supported, D08's calibration, the review dates of the HB runs | (a) open: the tier's bar is 3.0's. (b) open: the calibration error is a stated limitation. **(c) decided 2026-11-13: quarterly reviews** (SIM_PREREG_v2 amendment 1) | how often the middle tiers are reached; whether the posterior-based tiers can be switched on at all |
 | 22 | which second condition the dormancy rule has: the model's `Π^max` or the family's own forward record | **decided 2026-11-13: the family's own forward record** (option (iii)); in the draft since session 10M | - |
-| 23 | a tail-risk check before any profitability claim, and one wording fix for §6.7 | none: proposed, not adopted | nothing yet; what "formally supported" means for a strategy with rare large losses |
+| 23 | a tail-risk check before any profitability claim, and one wording fix for §6.7 | **the check: decided 2026-11-13, in the draft as §6.11** (95%, floor 12; a rejection is still recorded and counted, only the label is withheld). The wording fix: not made, still open | nothing |
 
 ---
 
@@ -660,6 +660,15 @@ is unset. If you add the HB scenarios with yearly or quarterly reviews (item 21(
 outside the bound there, (iii) is the rule that will pass, and (v) is what it amounts to in attention saved.
 
 ## 23. A tail-risk check before any profitability claim, and one wording fix for §6.7
+
+**The check: decided on 2026-11-13 and written into the draft by session 10M** as Protocol 3.1 §6.11, with the
+formula below at 95% and a floor of 12. It is an entry condition of §8.3 and §8.4, a condition of the label of
+§8.5 and of any profitability claim; an e-LOND rejection is still recorded and counted and only the label is
+withheld (`manhattan/stats/tailrisk.py`, `tests/test_manhattan_tailrisk.py`; SIM_PREREG_v2 criterion V15). One
+question below was not put to a decision and is answered by the formula as you gave it: a family that declares
+no stress loss is charged the floor, and §6.11 says that an undeclared tail defeats the check. **The wording fix
+at the end of this item was not made** (§6.1 to §6.10 are 3.0's word for word) and is still yours. What follows
+is the item as it was put to you.
 
 **Why Ethan.** Both would change the protocol.
 

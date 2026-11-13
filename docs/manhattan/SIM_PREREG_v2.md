@@ -7,7 +7,9 @@ sessions "6M Manhattan C" (2026-11-12) and "10M Manhattan C" (2026-11-13, on Eth
 change of the protocol under test, its dormancy rule (section 1, row 4): for that change **no threshold, metric,
 scenario or replication count was touched**, only the description of the method. Session 10M also made
 **amendment 1** (section 11): the HB runs are reviewed every quarter, as production reviews, in place of version
-1.0's four dates. It tightens the test and loosens nothing.
+1.0's four dates. It tightens the test and loosens nothing. The same session added row 5 of section 1 and
+criterion V15 (the tail-risk check of the protocol's new section 6.11 changes no test) and one paragraph of
+section 9 (a run made in pieces).
 
 **What this file is.** [SIM_PREREG.md](SIM_PREREG.md) (version 1.0) fixed how the methods of Protocol v3.0 are
 tested on synthetic data. The pilot on its development scenarios showed two things that must be repaired before a
@@ -26,9 +28,11 @@ refuses to start if either file no longer matches.
 
 **Method under test.** For the changed parts: PROTOCOL_v3.1.md version 3.1.0, whose SHA-256 is the second line of
 `docs/manhattan/sim_prereg_v2.sha256`, so that one check pins the two files together. For everything else:
-PROTOCOL_v3.md version 3.0.0, as version 1.0 says. Sections 4, 6 and 8 of the protocol, and sections 9.2 and 9.3,
-are identical in the two versions. Section 9.1 keeps its thresholds (0.05 at two consecutive reviews, 0.15) and
-gains a second condition in 3.1 (section 1, row 4).
+PROTOCOL_v3.md version 3.0.0, as version 1.0 says. Sections 4, 6.1 to 6.10, 8.1 and 8.2 of the protocol, and
+sections 9.2 and 9.3, are identical in the two versions. Section 9.1 keeps its thresholds (0.05 at two
+consecutive reviews, 0.15) and gains a second condition in 3.1 (section 1, row 4). Section 6.11 is new in 3.1 and
+sections 8.3, 8.4 and 8.5 name it (section 1, row 5): it adds a condition after the forward test and changes
+nothing the simulation counts.
 
 **Why a version 2 and not an amendment.** Version 1.0's section 8.4 lets an amendment add scenarios and tighten
 thresholds, and its header lets a later protocol version be tested under it. Both happen here. But the changed
@@ -51,6 +55,7 @@ evaluated: every run so far is a pilot.
 | 2 | **The model-fitting half produced no result.** One replication of D10 at HB, with the sampler at a fifth of its budget, was stopped unfinished after 2 hours 31 minutes of CPU time: of the order of 50,000 CPU-hours for the pre-registered runs | §7: an analytic normal-normal hierarchical model with closed-form posteriors on a fixed grid | every HB scenario, development and held-out, at the unchanged 400 replications (sections 2 and 5) |
 | 3 | **D09b**: after adaptive search on the reserve, the SPA test on the full set rejects 0.344 (0.307 to 0.380) of families with no edge at 0.05 | none: the rule that adaptive-channel families carry zero evidential weight on the reserve was already in v3.0. It now cites this evidence and is enforced in code | a required code property (V14, section 5); V10 stands |
 | 4 | **The pilot rerun of the 3.1 draft** (`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`, 12 replications a scenario, the first measurement of the dormancy rule): under 3.0's rule, families with a true edge that end dormant (M8) are 0.167 (0.045 to 0.261) in D02, 0.179 (0.138 to 0.216) in D05, 0.108 (0.081 to 0.138) in D08 and 0.146 (0.092 to 0.197) in D10, against a bound of **0.10** on the upper end | §9.1: a family becomes dormant only if the forecast `PP^max` and the one-sided p-value `p^F` of its own forward record against an edge of `θ_min` are both below 0.05 at two consecutive reviews (`p^F` needs 252 forward days); it is reactivated when either is at or above 0.15. Before, the forecast alone decided. (Until Ethan's decision of 2026-11-13 the draft held the model's `Π^max` in place of `p^F`; `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` has the two side by side) | V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged), in every scenario run at HB (sections 2 and 5) |
+| 5 | **Not a pilot: a study of the forward test's estimand** (`results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`; synthetic single series, no programme, no pipeline, no pre-registered metric): for a strategy with rare large losses the truncated mean the test bets on can be positive while the mean is not (up to 0.45 of a Sharpe ratio hidden on the grid simulated) | §6.11: a tail-risk check required for Live-experiment eligible, Scale eligible, the label "Formally supported" and any profitability claim. It is applied after the test: an e-LOND rejection is still recorded and counted, and only the label is withheld | a required code property (V15, section 5). No scenario and no metric changes: M2, M6 and M10 count e-LOND rejections, as before, whether or not a label would be withheld; H08m and H08x (V9) stay the measure of what truncation lets through |
 
 **Why this is not tuning to held-out results.** Version 1.0, section 3: development scenarios "may be run as often
 as needed while the code is written and the methods are revised". D11, D09b and D10 are development scenarios. The
@@ -120,7 +125,7 @@ review as a check that decides nothing (PROTOCOL_v3.1.md §7.4).
 |---|---|---|---|---|
 | D11 | hedge estimation | as version 1.0 (unhedged return = `β_t · C_t + X_t`; one core factor with annualised Sharpe ratio 0.6 and daily volatility 1; `β_t` a random walk from 0.5 with annual standard deviation 0.3, one path per hypothesis; hedge cost 0); the same seeds, so the same worlds | STD | the full pipeline of version 1.0, with the p-values of (e) as the p-values of record. The v3.0 test on the same hedged returns, and on the true hedged returns `X` (an oracle), are computed from the same block draws and reported beside it |
 | D01h, D02h, D03h, D04h, D05h, D06h, D07ah, D07bh, D08h | **hedged twins** | the version 1.0 scenario of the same name without the `h`, drawn from **that scenario's seeds** (so its true hedged returns are those of the version 1.0 run), with D11's hedge layer on top: the same factor, the same kind of `β` path, the hedge estimated by the live rule | STD | **the three SPA tests and Romano-Wolf only** (the hedge-aware test, the v3.0 test on the estimated hedge, the oracle). No screening and no forward test: those are the version 1.0 scenario's |
-| D01, D02, D05, D08, D10 | as version 1.0 | unchanged worlds and seeds | HB | (f) in place of the sampled model; everything else as version 1.0 |
+| D01, D02, D05, D08, D10 | as version 1.0 | unchanged worlds and seeds | HB | (f) in place of the sampled model, reviewed every quarter (amendment 1, section 11); everything else as version 1.0 |
 
 Every other development run (D01 to D10 and P1 to P4 at STD, D01 and D02 at LONG) is version 1.0's, by version
 1.0's code, whose hash is unchanged; the 204 pilot replications on file continue to count towards it.
@@ -177,6 +182,7 @@ or re-read.
 | V12 | reviews not computed (M12) | **0** | every scenario run at HB, over all 40 reviews of every replication (amendment 1). Version 1.0 let a review whose sampler had not converged drop out of M7 and M9; a closed form has no such excuse |
 | V13 | the 3.1 test is the 3.0 test where no hedge is estimated | **bit-for-bit identical** p-values (consistent, lower, upper) and Romano-Wolf decisions | a property of the code: a test in the suite |
 | V14 | zero evidential weight of the adaptive channel on the reserve | **no** output of the model (no `Π_f`, mean, standard deviation, hyperparameter or draw, of any family) changes when a reserve number of an adaptive-channel family changes | a property of the code: a test in the suite |
+| V15 | the tail-risk check of PROTOCOL_v3.1.md §6.11 withholds a label and nothing else | **no** e-LOND rejection, bar or count changes with the outcome of the check; the check is the formula of §6.11 (95%, floor 12) on hand-made records | a property of the code: a test in the suite |
 
 The small-groups rule, the resolution statement and the list of what is reported without a threshold are version
 1.0's. Reported without a threshold, added: the v3.0 test's size on the estimated hedge; the oracle's size; the
@@ -233,6 +239,13 @@ too.
 - **Run log.** Every run of a changed part appends its records to `results/manhattan_sim/runs.jsonl`, as version
   1.0 requires, with three more fields: the pre-registration version, this file's SHA-256 and PROTOCOL_v3.1.md's
   SHA-256.
+- **A run made in pieces.** A run, of version 1.0's code or of this file's, may be made as ranges of replication
+  numbers on several machines (`python -m manhattan.sim.run --first a --reps b --label part`). Seeds depend on
+  the replication number alone, so the pieces are the replications one machine would have made. A collector
+  (`python -m manhattan.sim.collect`) puts them together and refuses, writing nothing, a piece that holds a
+  record of other code, of another review step (section 11), of a replication outside the pre-registered count,
+  or one that differs from another record of the same replication in anything but its timings. A run is
+  complete, and its criteria are decided, only when every replication of its count is on file.
 - **Replication records** of the changed parts are kept in `results/manhattan_sim/v2/reps/`, apart from version
   1.0's. Each carries the hash of the code that made it; records of different code are never pooled. Version
   1.0's code files are byte-for-byte unchanged, so its records keep their hash.
@@ -257,7 +270,10 @@ Version 1.0's section 10, and:
    §7.2(g)) and the sampled one has never been run to completion at full size.
 4. That the model's independence between families is harmless. Version 1.0's H11, with strong dependence, is the
    held-out measure of it.
-5. That dormancy is worth having. The rule of PROTOCOL_v3.1.md §9.1 is held to V7 (it must not retire families
+5. How often the tail-risk check of PROTOCOL_v3.1.md §6.11 is wrong. Its pass rates come from the estimand study
+   (synthetic single series, one level and one floor), which is not a run of this pre-registration; V15 checks
+   only that it changes no test. With the tail undeclared it is defeated, as every check on returns is.
+6. That dormancy is worth having. The rule of PROTOCOL_v3.1.md §9.1 is held to V7 (it must not retire families
    that have an edge); how much attention it saves is reported and is not a criterion. On the pilot's fits it
    saves little.
 

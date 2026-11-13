@@ -2,7 +2,7 @@
 
 Version **3.1.0**, 2026-11-12, written by session "5M Manhattan C" for Ethan to adopt, and revised before
 adoption by sessions "6M Manhattan C" (2026-11-12) and "10M Manhattan C" (2026-11-13, on Ethan's decisions): the
-pre-adoption changes are marked as such below. It is the whole protocol:
+pre-adoption changes (5 and 6, and a note in §7.2(d)) are marked as such below. It is the whole protocol:
 [PROTOCOL_v3.md](PROTOCOL_v3.md) (3.0.0) with the changes listed below. Version 3.0.0 stays in the repository,
 unchanged and protected. Structure and data roles are in [ARCHITECTURE.md](ARCHITECTURE.md); the state of the work
 is in [MANHATTAN_PROGRESS.md](MANHATTAN_PROGRESS.md).
@@ -26,7 +26,9 @@ at all. It is a **pre-adoption change**: it was made to the draft before Ethan a
 was changed. It was made twice: session 6M added one second condition to the rule (the model's `Π_f^max`), a
 second session measured another beside it on the same fits (the family's own forward record), and on 2026-11-13
 Ethan chose the second (ETHAN_ACTIONS item 22). Row 5 describes the rule as it now stands and says what it
-replaced. SIM_PREREG.md gives development scenarios
+replaced. Change 6 is a second pre-adoption change, also Ethan's decision of 2026-11-13 (ETHAN_ACTIONS item 23): a
+check added **after** the forward test, which alters no test. It comes from a study of what the test's null means,
+not from a pilot of the pipeline. SIM_PREREG.md gives development scenarios
 exactly this use: they "may be run as often as needed while the code is written and the methods are revised"
 (its section 3). The held-out scenarios, which run only in a confirmation run from a tagged commit (its section
 8.1), judge the final methods.
@@ -38,18 +40,22 @@ exactly this use: they "may be run as often as needed while the code is written 
 | 3 | §5.3, §7.3 | **The rule that adaptive-channel families carry zero evidential weight on the reserve now cites its evidence and is enforced in code.** The rule itself is that of 3.0.0 | **D09b**: with three adaptive rounds proposed after looking at the reserve window, the SPA test recomputed on the full set rejects 0.344 (0.307 to 0.380) of families with no edge at the 0.05 level | The rule was written in 3.0.0 before any simulation; the pilot agrees with it. Nothing was changed to fit a result |
 | 4 | §5.1, Appendix C | **Two wording fixes** (ETHAN_ACTIONS item 14) and the stale sentence in Appendix C: what is Hansen's and what is the protocol's own in the p-value; what `g(x) = x` is. **Wording only; no rule changed** | none: found when the formulas were checked against the papers (MANHATTAN_PROGRESS, "Phase C entry criteria") | not a change of method |
 | 5 | §9.1, Appendix B (and one sentence of §7.2(e)) | **Pre-adoption change (Ethan's decision of 2026-11-13). A family becomes dormant only if its own forward record also speaks against it.** Beside the forecast `PP_f^max < 0.05` of 3.0, a one-sided test of the family's **own forward record** against an edge of `θ_min = 0.25` must reject at the same two consecutive reviews: `p^F_f = Φ((y^F_f − θ_min)/s^F_f) < 0.05`, defined once the family has 252 forward days. A dormant family is reactivated when either number is at or above 0.15. The thresholds are those of 3.0 (0.05 twice, 0.15), the edge tested against is the `θ_min` the protocol already had, and the forecast is computed as before. **What it replaces:** in 3.0.0 the forecast alone decided; between 2026-11-12 and this decision the draft held `Π_f^max < 0.05` (the most hopeful of the six models' probabilities of an edge) as the second condition (session 6M) | **The pilot rerun of this draft**, 12 replications a scenario: under 3.0's rule the families with a true edge of at least `θ_min` that ended dormant were 0.167 (0.045 to 0.261) in **D02**, 0.179 (0.138 to 0.216) in **D05**, 0.108 (0.081 to 0.138) in **D08** and 0.146 (0.092 to 0.197) in **D10**, against a bound of 0.10 on the upper end (V7). Of the 152 families with an edge that it retired, the forecast was exactly 0.00 for 139, and it stays 0.00 when the family's **true** edge replaces the posterior draws; their own forward records were not against them (the p-value above had a median of 0.52 to 0.75 and was below 0.05 for 2 of the 152); none would have reached the tier by year 10 (`results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`). **The two second conditions, measured side by side on the same fits** (`results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md`, section 3; D02 / D05 / D08 / D10): with `Π^max` the rule retired 0 of 42, 2 of 140, 2 of 944 and 1 of 123 families with an edge at the simulation's four review dates, and 2, 10, 5 and 7 with a review every year, where two of the four upper ends were above 0.10; with the family's own forward record it retired none at four dates and 0, 0, 0 and 2 with yearly reviews | D02, D05, D08 and D10 are development scenarios (SIM_PREREG §3.1); no held-out scenario has been coded or run. The metric (M8), its bound of 0.10 (0.25 for late starters in H09), the scenarios and every threshold of SIM_PREREG and SIM_PREREG_v2 are unchanged, and no threshold of the rule moved. The second condition was not found by a search over levels: it is the one statistic whose error is controlled **for a family that has an edge**, whatever the other families are, which is what the criterion measures; its level is the 0.05 the rule already had and the edge it tests against is the `θ_min` the protocol already had. It is judged by the held-out scenarios run at HB size, above all H09 (dormancy then reactivation), none of which has been coded |
+| 6 | §6.11 (new), §8.3, §8.4, §8.5 (and one sentence of §3, one row of Appendix B) | **Pre-adoption change (Ethan's decision of 2026-11-13, ETHAN_ACTIONS item 23). A tail-risk check before any profitability claim.** The leading component's forward record must satisfy `Σ Y − U(N_trunc)·(L − c) > 0` and `Σ Z > 0`: what the truncated record earned must cover the tail losses the record cannot rule out at 95% (3.00 weeks after none observed, 4.74 after one), each at the stress loss the family's spec declares, with a floor of 12 ex-ante weekly standard deviations, and the untruncated record must be positive. It is an entry condition of Live-experiment eligible and Scale eligible, a condition of the label "Formally supported", and of any statement that a family is profitable. **It is not part of the test:** an e-LOND rejection is still recorded and counted, and only the label is withheld. Sections 6.1 to 6.10 are 3.0's word for word | **Not a pilot of the pipeline: a study of the test's estimand** (`results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`; single synthetic series, 2,000 paths of ten years a process, run through the protocol's own scale, weekly sums, truncation and variance-ratio rule). A rejection is about the mean with each loss beyond six ex-ante weekly standard deviations counted as six. For fat tails without a direction that is the mean to 0.003 to 0.013 of a Sharpe ratio. For a strategy that earns a premium and occasionally loses a great deal the truncation hides 0.02 to 0.45 of a Sharpe ratio: a strategy with a true Sharpe ratio of −0.25 can have a positive truncated mean, and ten-year records show a positive truncated mean beside a non-positive untruncated one up to 72 times in 100. With the stress loss declared at its true size the check passes a zero-mean crash strategy in at most 9 records in 100 (crashes of 40 daily standard deviations) or 2.5 in 100 (crashes of 100), and a strategy with a Sharpe ratio of 1 and no crash in 39, 88 and 99 records in 100 after 2, 5 and 10 years | The study is not a held-out scenario: no programme, no screening, no e-LOND, no metric of the pre-registration, its own random streams, nothing drawn from the held-out generator. The level (95%) and the floor (twice the truncation point) are the only values the study ran: no grid of levels or floors was scored. The check changes no test: no rejection, no bar, no count and no pre-registered metric moves with it (SIM_PREREG_v2 V15 makes that a required property of the code). The hole it is aimed at is measured by held-out scenarios it has never seen (H08m and H08x, criterion V9), which are not coded |
 
-What 3.1.0 does **not** change: the screening candidates (§4), the forward e-process and e-LOND (§6), the tiers (§8),
-the dormancy levels 0.05 and 0.15 and the forecast they were written for (§9.1: change 5 adds a second quantity
-they apply to), the cost and reactivation rules (§9.2, §9.3), every level and every constant of Appendix B that
-3.0 fixed. The pilot gave no reason to touch them, and none of its other observations (candidate (ii)'s low
+What 3.1.0 does **not** change: the screening candidates (§4), the forward e-process and e-LOND (§6.1 to §6.10:
+change 6 adds §6.11 after them and alters none of them), the tiers' thresholds and exits (§8: change 6 adds one
+entry condition to §8.3 and §8.4 and one condition to the label of §8.5), the dormancy levels 0.05 and 0.15 and
+the forecast they were written for (§9.1: change 5 adds a second quantity they apply to), the cost and
+reactivation rules (§9.2, §9.3), every level and every constant of Appendix B that 3.0 fixed. The pilot gave no reason to touch them, and none of its other observations (candidate (ii)'s low
 power, slow formal support, the variance-ratio rule's cost under serial correlation, how seldom "Statistically
 supported" is reached) is a failure of a rule.
 
 The pilot rerun that tests changes 1 and 2 on the development scenarios is reported in
 `results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`; it is also the evidence for change 5. The rerun of the HB
 scenarios in `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md` was made under the second condition the draft
-held first (`Π_f^max`), not under the rule as it now stands. All are pilots and decide nothing.
+held first (`Π_f^max`), at four review dates. The pilot of the rule as it now stands, with a review every
+quarter, is `results/manhattan_sim/v2/PILOT_RERUN3_REPORT.md`, made by session 10M from the text of this file as
+it now is (MANHATTAN_PROGRESS.md says whether it has been made). All are pilots and decide nothing.
 
 ---
 
@@ -183,12 +189,14 @@ Z_t = P_t / s_t
 |---|---|---|---|---|
 | "family `f` passes screening" | reserve, blind channel, one designated evaluation | section 4 (one of two candidates, chosen by simulation) | FDR 20% | a **filter** on history the model may know; not a guarantee about the future |
 | "variant `v` of a screened family has positive mean on the reserve" | reserve | Hansen SPA with the hedge re-estimated in every resample, Romano-Wolf, linked by Benjamini-Bogomolov (section 5) | the family's own admission level | error control within the family, conditional on the same caveat |
-| "family `f` is formally supported by forward-only evidence" | forward only | betting e-process, combined by e-LOND (section 6) | FDR 5% | holds at every time, under any dependence between families, for the null stated in section 6.3 |
+| "family `f` is formally supported by forward-only evidence" | forward only | betting e-process, combined by e-LOND (section 6) | FDR 5% | holds at every time, under any dependence between families, for the null stated in section 6.3. The **label** also needs the tail-risk check of section 6.11, which is outside the 5% accounting |
 | "the probability that `f` has an edge of at least `θ_min` is `Π_f`" | reserve and forward | one analytic hierarchical Bayesian model (section 7) | none | a posterior probability under a stated model; **never an error rate** |
 | tier labels | all of the above | section 8 | none | operating labels with entry and exit rules |
 
 A raw e-value, a raw p-value, a Sharpe ratio, a PSR, a DSR or a posterior probability is never called a discovery.
-Only two things are: a screening rejection (always with the word "screening") and an e-LOND rejection.
+Only two things are: a screening rejection (always with the word "screening") and an e-LOND rejection. Neither is
+a statement that a family makes money: an e-LOND rejection is about a truncated mean (section 6.3), and calling
+a family profitable needs the tail-risk check of section 6.11 as well.
 
 ---
 
@@ -858,6 +866,83 @@ W_{j,t} ≥ (H_i + 1) / ( α_F · γ^F_i · R(t) ),        R(t) = number of fami
 Then the expected share of formally supported families in which at least one null component is so named is at most
 0.05, under any dependence (Appendix A.3). This is the e-value form of the Benjamini-Bogomolov link.
 
+### 6.11 The tail-risk check: what a profitability claim needs beyond a rejection
+
+Added before adoption (change 6 at the top; Ethan's decision of 2026-11-13). Sections 6.1 to 6.10 are those of
+3.0.0, word for word; this section adds a condition **after** the test and changes nothing in it.
+
+```
+tail-risk check holds at t   ⇔    Σ_{u≤t} Y_u − U( N_trunc ) · ( L − c )  >  0     and     Σ_{u≤t} Z_u  >  0
+
+U(N) = ½ · χ²_{0.95}( 2 (N + 1) )      the one-sided 95% upper bound for the mean of a Poisson count after N events:
+                                       3.00 after none, 4.74 after one, 6.30 after two
+L    = max( the stress loss the family's spec declares ,  the worst week on the family's whole record ,  12 )
+```
+
+for the family's leading component (section 6.3) over **every** test period since enrolment, the weeks the
+variance-ratio rule skipped included. `Y_u`, `Z_u` and `N_trunc` are those of section 6.3: the truncated and the
+untruncated standardised return of each test period, and the number of truncated periods so far. `L` is in
+ex-ante weekly standard deviations. "Declares" is the number given under "tail exposure" in the family spec
+(ARCHITECTURE §3); a spec that gives no number is charged the floor. `L` has a floor of 12, which is twice `c`
+and is for weekly test periods; monthly test periods are not built, and their floor is fixed with them.
+
+**Where it is required** (sections 8.3, 8.4 and 8.5, and every report):
+
+| claim | what the check is |
+|---|---|
+| Live-experiment eligible (section 8.3), Scale eligible (section 8.4) | an entry condition: it must hold at the review |
+| the label "Formally supported by forward-only evidence" (section 8.5) | a condition of the label, at every review |
+| any statement that a family is profitable, has a positive mean return or makes money | not made unless the check holds on the date of the statement |
+
+**An e-LOND rejection is still recorded and counted.** The check is not part of the test. A family whose wealth
+passes its bar with the guard holding is rejected on that date: the rejection is written to the ledger, `R(t)`
+rises, every other family's bar falls, and the 5% accounting of section 6.8 and Appendix A.2 is exactly what it
+was. Whatever the check says, only the label is withheld: the family is reported as "e-LOND rejection on record;
+label withheld (tail-risk check, section 6.11)", with its tail record, until the first review at which the check
+holds, and again at any later review at which it does not.
+
+> **In plain English.** The record has gone `n` weeks with `N` of them beyond the cap. That is compatible, at
+> 95%, with as many as `U(N)` such weeks in a stretch of this length. Charge the record for that many, each at
+> the declared stress loss less the six already counted. If what the capped record earned does not cover the
+> charge, the profit could be the premium for a crash that has merely not arrived, and no claim of profit is
+> made. With no truncated week and the floor, the capped record must have earned 18 weekly standard deviations
+> in total.
+>
+> **Problem it solves.** A rejection is about the mean with every loss beyond six ex-ante weekly standard
+> deviations counted as six (section 6.3). For fat tails without a direction that is the mean, to a hundredth of
+> a Sharpe ratio. For a strategy that earns a small premium and occasionally loses very much it is not: on
+> synthetic series the truncation hid up to 0.45 of a Sharpe ratio, a strategy with a true Sharpe ratio of −0.25
+> could have a positive truncated mean, and ten-year records showed a positive truncated mean beside a
+> non-positive untruncated one up to 72 times in 100 (`results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`).
+> "This family makes money" is a statement about the untruncated mean; a rejection does not give it.
+>
+> **Why this form.** What the truncation hides is (tail weeks per week) × (loss beyond the cap). Returns cannot
+> bound either factor from a record without crashes (section 6.2). The check takes the frequency from the
+> record itself, at the upper end of what the record allows, and the size from outside the record: the spec's
+> declared tail exposure, which the protocol already requires and the critic already reviews. Section 6.3
+> rejected a tail charge **inside** the betting process, because with only a variance bound the charge kills
+> every edge. Here it is a separate, later gate with a declared size, and the test's exactness is untouched.
+>
+> **Assumes.** That the declared stress loss is honest: the declaration is the control, and the check makes it
+> bind. That tail weeks arrive independently enough for a Poisson bound on their count; crashes that cluster
+> make the bound too low.
+>
+> **How it fails.** (1) **An undeclared tail defeats it**, as it defeats everything else: with only the floor
+> declared, zero-mean strategies with crashes of 40 to 100 daily standard deviations passed in up to 35 records
+> in 100, against at most 9 in 100 (crashes of 40) and 2.5 in 100 (crashes of 100) with the stress loss declared
+> at its true size. (2) **It costs an honest strategy time.** With no crash and a Sharpe ratio of 0.5 it passed
+> in 15, 51 and 78 records in 100 after 2, 5 and 10 years; with a Sharpe ratio of 1, in 39, 88 and 99. A formal
+> rejection takes longer than that
+> (section 6.9), so for section 8.5 it is rarely the binding condition; for claims built on the posterior tiers
+> after two to five years it often is. (3) **It is not a test of the mean** and must not be read as one: a
+> strategy with no edge and no crash passes it in about a fifth of ten-year records. It is a condition added to
+> a rejection or a tier, never a substitute for one. (4) **Its level and its floor are fixed here from one study
+> of synthetic single series**, not from a pre-registered run, and no simulation criterion measures how often
+> it is wrong; the simulation checks only that it never changes an e-LOND decision or count (SIM_PREREG_v2,
+> V15), and measures the hole it is aimed at in the held-out scenarios H08m and H08x (SIM_PREREG V9). (5) For
+> crashes inside twice the cap the floor is the stress loss and the check adds little; there the truncation
+> hides at most 0.11 of a Sharpe ratio.
+
 ---
 
 ## 7. One hierarchical model for history and forward data
@@ -1130,7 +1215,7 @@ differ.
 
 | | rule |
 |---|---|
-| **Enter** (all) | Statistically supported at two consecutive reviews; every instrument is one Ethan can trade; paper costs measured from recorded quotes over at least 3 months are at most 1.5 times the modelled costs; estimated capacity is at least 20 times the experiment's size; a critic review of operational and tail risk is logged; `forward.loss_cap_usd > 0`; **Ethan's approval is recorded in the ledger** |
+| **Enter** (all) | Statistically supported at two consecutive reviews; every instrument is one Ethan can trade; paper costs measured from recorded quotes over at least 3 months are at most 1.5 times the modelled costs; estimated capacity is at least 20 times the experiment's size; a critic review of operational and tail risk is logged; the tail-risk check of section 6.11 holds; `forward.loss_cap_usd > 0`; **Ethan's approval is recorded in the ledger** |
 | **Size and cap** | the experiment is sized so that a loss of `c` ex-ante standard deviations in one period costs at most one tenth of the loss cap; the cap is a fixed amount of money per experiment and is not raised |
 | **Exit** | **immediately and for good, for that experiment,** when cumulative loss reaches the cap; when the family leaves Statistically supported; when live returns differ from paper returns by more than twice the expected tracking error for two consecutive reviews |
 
@@ -1152,15 +1237,19 @@ year. `ΔCE` is a certainty-equivalent gain per year from holding the family at 
 
 | | rule |
 |---|---|
-| **Enter** (all) | at least 12 months as a live experiment; posterior mean of `ΔCE(q) > 0` under **every** model S0-S5; posterior probability that `ΔCE(q) > 0` at least 0.80 under S0 and S1 (a posterior probability, not an error rate); `q` at most the capacity estimate |
+| **Enter** (all) | at least 12 months as a live experiment; posterior mean of `ΔCE(q) > 0` under **every** model S0-S5; posterior probability that `ΔCE(q) > 0` at least 0.80 under S0 and S1 (a posterior probability, not an error rate); `q` at most the capacity estimate; the tail-risk check of section 6.11 holds |
 | **Exit** | posterior mean of `ΔCE(q) < 0` under S0 at two consecutive reviews; measured costs above 1.5 times those used at entry; `q` above the capacity estimate; the family leaves Statistically supported |
 
 ### 8.5 Formally supported by forward-only evidence
 
 | | rule |
 |---|---|
-| **Enter** | an e-LOND rejection (section 6.8), which includes the guard |
+| **Enter** | an e-LOND rejection (section 6.8), which includes the guard, **and** the tail-risk check of section 6.11 |
 | **Exit** | never: the rejection is a statement about evidence up to its date, and removing it would break the 5% accounting. A separate status, "decayed since", is set when the family leaves Promising |
+
+The rejection is recorded and counted from its date whatever the tail-risk check says; only the label waits for
+the check. A rejected family that does not meet it is reported as "e-LOND rejection on record; label withheld
+(tail-risk check, section 6.11)", at every review at which that is so.
 
 This tier can be reached from Promising without passing through the live tiers.
 
@@ -1347,6 +1436,7 @@ no minute-frequency or newly purchased data.
 | 3.1.0 | 2026-11-12 | after the pilot on development scenarios, before any full or held-out run: (1) §5.1, §5.2, §5.4: the SPA test re-estimates the core hedge in every resample and centres at the window's least-squares intercept (pilot D11: size 0.077 at 0.05); (2) §7, §9.1, Appendix B: an analytic normal-normal hierarchical model on a fixed grid replaces the sampled model, which stays as an optional check that decides nothing (the sampled model could not be run: of the order of 50,000 CPU-hours); (3) §5.3, §7.3: the zero evidential weight of the adaptive channel on the reserve cites pilot D09b and is enforced in code; (4) §5.1, Appendix C: wording only, no rule changed (ETHAN_ACTIONS item 14). Details and the reasons this is not tuning to held-out results: "What changed from 3.0.0, and why" at the top |
 | 3.1.0, revised before adoption | 2026-11-12 | a pre-adoption change of the draft, after its pilot rerun and before any full or held-out run, **superseded by the next row before adoption**: (5, first form) §9.1: a family becomes dormant when `PP_f^max < 0.05` **and** `Π_f^max < 0.05` at two consecutive reviews with at least 252 forward days each, and is reactivated when either reaches 0.15; before, the forecast `PP_f^max` alone decided. Motivated by the pilot rerun (`results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`): premature elimination 0.167 (0.045 to 0.261) in D02, 0.179 (0.138 to 0.216) in D05, 0.108 (0.081 to 0.138) in D08 and 0.146 (0.092 to 0.197) in D10, against the pre-registered bound of 0.10. Diagnosis: `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`; the rerun under that form: `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md` |
 | 3.1.0, pre-adoption change | 2026-11-13 | made to the draft before Ethan adopted it, and before any full or held-out run, on Ethan's decision (ETHAN_ACTIONS item 22): (5, final form) §9.1, Appendix B (and one sentence of §7.2(e)): a family becomes dormant only if, at the same two consecutive reviews, the forecast `PP_f^max` is below 0.05 **and** a one-sided test of its own forward record against an edge of `θ_min = 0.25` rejects at 0.05 (`p^F_f < 0.05`, with at least 252 forward days); it is reactivated when either is at or above 0.15. The second condition replaces the `Π_f^max` of the row above; §9.2 and §9.3 are 3.0's word for word again. The two were measured side by side on the same fits (`results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md`). No threshold, metric or scenario of the simulation pre-registration is changed: M8, its bound of 0.10 and the HB scenarios are as they were |
+| 3.1.0, pre-adoption change | 2026-11-13 | made to the draft before Ethan adopted it, and before any full or held-out run, on Ethan's decision (ETHAN_ACTIONS item 23): (6) §6.11 (new), §8.3, §8.4, §8.5, one sentence and one cell of §3, one row of Appendix B: a tail-risk check before any profitability claim. The leading component's forward record must satisfy `Σ Y − U(N_trunc)·(L − c) > 0` and `Σ Z > 0`, with `U` the one-sided 95% Poisson bound and `L` the largest of the declared stress loss, the worst week on record and a floor of 12. It is an entry condition of §8.3 and §8.4 and a condition of the label of §8.5. An e-LOND rejection is still recorded and counted; only the label is withheld. §6.1 to §6.10 are 3.0's word for word. Evidence: `results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`, a study of synthetic single series, not a pilot of the pipeline and not a held-out scenario |
 
 ---
 
@@ -1423,6 +1513,7 @@ The grid on which section 7 integrates the hyperparameters, fixed in v3.1 (no no
 | pruning | a `(μ_A, τ_A, ψ)` node whose reserve-only posterior is below `e^−18` of the largest is skipped; a family's posterior is summed over the grid cells that hold at least `10^−10` of the posterior weight in some class | §7.2(c) |
 | `r` | measured, not fixed: at most 0.9 | §7.1 |
 | draws for the dormancy forecast | 200 per family and model | §9.1 |
+| tail-risk check | 95%; floor 12 ex-ante weekly standard deviations (twice `c`): the one-sided Poisson bound on the number of truncated weeks, and the least stress loss a family is charged | §6.11 |
 | dormancy: the family's own forward record | `p^F_f = Φ((y^F_f − θ_min)/s^F_f)` below 0.05 at the same two reviews as the forecast; reactivation at 0.15 (the thresholds of 3.0, applied to both numbers); at least 252 forward days | §9.1 |
 
 ## Appendix C. References

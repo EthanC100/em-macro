@@ -432,7 +432,9 @@ def test_v2_adds_requirements_and_loosens_no_threshold():
     assert "over all 40 reviews of every replication (amendment 1)" in row("V12")
     assert "**counted over all 40 reviews**" in row("M12") and "Reduction (c)" in text
     assert "for that change **no threshold, metric,\nscenario or replication count was touched**" in text
-    assert "Sections 4, 6 and 8 of the protocol, and sections 9.2 and 9.3,\nare identical in the two versions." in text
+    assert "Sections 4, 6.1 to 6.10, 8.1 and 8.2 of the protocol, and\nsections 9.2 and 9.3, are identical in the two versions." in text
+    assert "**no** e-LOND rejection, bar or count changes with the outcome of the check" in row("V15")
+    assert "- **A run made in pieces.**" in text and "`python -m manhattan.sim.collect`" in text
     assert "V7 as it stands (M8 and its bound of 0.10 are version 1.0's, unchanged)" in text
 
 
@@ -450,10 +452,23 @@ def test_protocol_31_keeps_every_constant_of_30_and_says_what_changed():
         a = text.index(start)
         return text[a:text.index(end, a)]
     for start, end in (("## 4. Across-family screening", "## 5. Within a family"),
-                       ("## 6. Forward e-process", "## 7. One hierarchical model"),
-                       ("## 8. Tiers", "## 9. Dormancy"), ("### 9.2 The cost", "## 10. Governance"),
+                       ("## 8. Tiers", "### 8.3 Live-experiment eligible"), ("### 9.2 The cost", "## 10. Governance"),
                        ("## Appendix A. Proofs", "## Appendix B.")):
         assert section(new, start, end) == section(old, start, end), start
+    # section 6: 6.1 to 6.10 are 3.0's word for word; 6.11 (the tail-risk check, change 6) is added after them
+    assert section(new, "## 6. Forward e-process", "### 6.11 The tail-risk check") == \
+        section(old, "## 6. Forward e-process", "---\n\n## 7. One hierarchical model")
+    assert "### 6.11" not in old and new.index("### 6.10 Within") < new.index("### 6.11 The tail-risk check") < new.index("## 7. One")
+    # sections 8.3 to 8.5 are 3.0's with the check named once in each, and nothing else
+    live31, live30 = section(new, "### 8.3 Live-experiment eligible", "## 9. Dormancy"), section(old, "### 8.3 Live-experiment eligible", "## 9. Dormancy")
+    for added in ("the tail-risk check of section 6.11 holds; ", "; the tail-risk check of section 6.11 holds",
+                  ", **and** the tail-risk check of section 6.11",
+                  "The rejection is recorded and counted from its date whatever the tail-risk check says; only the label waits for\n"
+                  "the check. A rejected family that does not meet it is reported as \"e-LOND rejection on record; label withheld\n"
+                  "(tail-risk check, section 6.11)\", at every review at which that is so.\n\n"):
+        assert live31.count(added) == 1, added
+        live31 = live31.replace(added, "")
+    assert live31 == live30
     # section 9.1 is the one rule changed before adoption (change 5): the forecast is kept, with 3.0's levels, and
     # a test of the family's own forward record is added; what 3.0 said about the forecast and about a dormant
     # family still stands, and sections 9.2 and 9.3 are 3.0's word for word (the loop above)

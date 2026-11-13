@@ -939,6 +939,37 @@ is in the table under item 6.
 - Development experiment outside the runner: note `note-10M-01` in the run log; script and outputs in
   `results/manhattan_sim/v2/dev_10M/`.
 
+**Item 4. A tail-risk check before any profitability claim (Protocol 3.1 §6.11, new; Ethan's decision on
+ETHAN_ACTIONS item 23).**
+
+- *The check* is the formula of `ESTIMAND_AND_TAIL_RISK.md` section 3, at 95% with a floor of 12: on the leading
+  component's forward record (every week since enrolment), `Σ Y − U(N_trunc)·(L − 6) > 0` and `Σ Z > 0`, where `U`
+  is the one-sided 95% Poisson bound on the number of truncated weeks (3.00 after none, 4.74 after one) and `L`
+  the largest of the declared stress loss, the worst week on the family's whole record and 12.
+- *Where it is required.* An entry condition of Live-experiment eligible (§8.3) and Scale eligible (§8.4); a
+  condition of the label "Formally supported" (§8.5); and of any statement that a family is profitable.
+- ***An e-LOND rejection is still recorded and counted; only the label is withheld.*** The check is applied
+  after the test. `manhattan/stats/tailrisk.py` does not import the e-LOND rule and the rule takes no input from
+  it; `formal_label` takes the rejection as a fact and returns the label or "e-LOND rejection on record; label
+  withheld". No run of record computes the check, so no simulated count can depend on it.
+- *The text.* §6.11 is added after §6.10; **§6.1 to §6.10 are 3.0's word for word** (a test compares them);
+  §8.3, §8.4 and §8.5 each name the check once and are otherwise 3.0's (a test removes the added words and
+  compares); one sentence and one cell of §3; one row of Appendix B; row 6 of the table at the top and a change
+  log row, both marked as a pre-adoption change. SIM_PREREG_v2: row 5 of section 1, **criterion V15** (a
+  required property of the code: the check changes no e-LOND rejection, bar or count), the sentence on which
+  protocol sections are identical, and item 5 of section 10 (what is not shown: how often the check is wrong).
+  M2, M6 and M10 count e-LOND rejections as before.
+- *Tests* (`tests/test_manhattan_tailrisk.py`, 6): the constants and the rule of three; the stress loss; the
+  check on hand-made records (18 to earn with no truncated week; a declared 30; one week of −40; a worst week
+  before enrolment; a positive capped total beside a negative uncapped one); record for record the formula of
+  the estimand study; a rejection counted whatever the check says (a second family is rejected only because the
+  first one's rejection was counted, with the first one's label withheld); the protocol's text.
+- *What it does not have.* A simulation criterion of its own: its pass rates are the estimand study's (one
+  level, one floor, synthetic single series). The wording fix for §6.6 and §6.7 that item 23 also proposed was
+  **not** made: §6.1 to §6.10 are untouched.
+- *Also in this commit, for item 5:* one paragraph of SIM_PREREG_v2 section 9 ("A run made in pieces"), so
+  that the drafts do not change again after the pilot of item 6 has started.
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -1078,6 +1109,8 @@ checked against its frozen source.
 
 | session 10M, item 3, first runs of `tests/test_manhattan_hier_spike.py` | 1 of 5 failed once: the test compared a sum of weights with exactly 1.0 (it is 1 to rounding); the model's numbers were right. 5 passed after it |
 
+| session 10M, item 4, first runs of `tests/test_manhattan_tailrisk.py` | 3 of 6 failed on the first run: the text test, written before §6.11 was (by design); a random data set in which no record passed (the test's data, not the check); and a hand-chosen wealth of 4,500 that cleared the bar without the other family's rejection (the test's number: the bars are 2,138 and 1,069). 6 passed after the text was written and the two inputs corrected |
+
 Command, as hard rule 15 requires (no pipe, exit code read directly):
 `python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.
 
@@ -1136,6 +1169,8 @@ conservative default and are in ETHAN_ACTIONS.md.
 | 45 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 22):** the second condition of the dormancy rule is a one-sided test of the family's own forward record against an edge of 0.25, not the model's `Π^max`. The session took the code and its tests as they stood on the branch where they were written and did not bring that branch's shadow paths. | PROTOCOL 3.1 §9.1; `manhattan/stats/dormancy.py`; `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` |
 | 46 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 21(c)):** the HB runs are reviewed every quarter, as production reviews. Made as amendment 1 inside the unadopted SIM_PREREG_v2, with the review step written into every record and other steps refused. M7 and M9 keep their four reading dates; M12 is counted over every review. | SIM_PREREG_v2 §11; `manhattan/sim/hb_v2.py` |
 | 47 | A candidate model is checked for identification before it is wired into a pipeline, against a criterion written before the check is run; when the check fails the work stops there and the evidence is recorded. The candidate's code is kept, outside every code list, so the check can be repeated. | `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`; `manhattan/stats/hier_spike.py` |
+| 48 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 23):** a tail-risk check (95%, floor 12) is required for the live tiers, for the label of formal support and for any profitability claim. It is applied after the forward test and never changes it: a rejection is recorded and counted, and only the label is withheld. Its code is in no run's code list. | PROTOCOL 3.1 §6.11; `manhattan/stats/tailrisk.py`; SIM_PREREG_v2 V15 |
+| 49 | Everything the two drafts needed from this session was written into them before the last pilot started, so that the pilot of record names the hashes Ethan adopts. | "Milestone C: final pre-adoption changes (session 10M)", item 6 |
 
 ## Findings to keep in view
 
