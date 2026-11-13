@@ -119,3 +119,71 @@ different code are never pooled. Version 1's code files (`manhattan/stats/` as i
 `pipeline.py`, `seeds.py`) are untouched by version 2, so version 1's records keep counting; a change to any of
 them, or to version 2's files (`spa_hedged.py`, `pipeline_v2.py`, `hier_analytic.py`, `hb_v2.py`), starts the
 counts of the runs that use it again from zero.
+
+## 8. On GitHub's runners instead of the iMac
+
+`.github/workflows/manhattan-sim.yml` makes the same development run on GitHub's public runners (4 cores and 16
+GB each, free for a public repository, six hours a job), in **pieces**: one scenario and a range of replication
+numbers per job. It was written by session 10M and **has never been started**: no session dispatches it. It is
+started by hand only, has no schedule, reads no repository secret, writes nothing to the repository, and every
+job is guarded to `main`. **GitHub offers the "Run workflow" button only for a workflow file that is on the
+default branch, so the pull request that adds the file must be merged to main first.** Item 19 of
+ETHAN_ACTIONS.md (adoption) comes before it, as for the iMac.
+
+**Start it** (after the merge):
+
+1. GitHub, the repository's **Actions** tab, **manhattan-sim** in the list on the left, **Run workflow**, branch
+   **main**, leave the three inputs as they are, **Run workflow**. (From a terminal:
+   `gh workflow run manhattan-sim.yml --ref main`.)
+2. The **plan** job (a few minutes) checks both pre-registrations against their hashes and cuts what is missing
+   into pieces: every replication of the pre-registered counts that is not on file for the code of that commit.
+   The pilot replications already in the repository count and are not run again. Its summary says how many
+   pieces and how many core-hours it expects.
+3. The **piece** jobs run, 20 at a time. A piece stops starting replications after 285 minutes, finishes those in
+   progress and uploads its records, whatever happened, as the artifact `manhattan-sim-piece-<scenario>-<size>-<first>-<last>`.
+4. The **collect** job puts every piece together with `python -m manhattan.sim.collect merge` (it refuses records
+   of other code, of another review step, of a replication outside the count, or that disagree with another
+   record of the same replication), writes a table of what is still missing to the run's summary, and uploads
+   the record files as the artifact `manhattan-sim-results`. It is red while anything is missing.
+
+**If pieces are red** (ran out of time on a slow runner, or failed): on the run's page, **Re-run failed jobs**.
+Each piece first downloads its own earlier artifact and continues from it; then the collect job runs again.
+
+**If the plan said "N pieces left for a later run"** (a workflow run holds at most 256 jobs), or to continue on
+another day: start the workflow again with the input **earlier_runs** set to the id of the earlier run (the
+number in its URL; several ids separated by commas). It downloads those runs' pieces, counts them, and plans
+only what is still missing. Artifacts are kept for 90 days.
+
+**Bring the records home** when the collect job is green. On a checkout of the same commit of main:
+
+```bash
+gh run download <run id> --pattern 'manhattan-sim-piece-*' --dir /tmp/manhattan-pieces
+python scripts/manhattan_sim_collect.py merge /tmp/manhattan-pieces     # checks every record again; appends to results/manhattan_sim
+python scripts/manhattan_sim_collect.py status                          # must print: Every run is at its pre-registered count.
+python -m manhattan.sim.run --v10a
+python -m manhattan.sim.run --compact --prereg v2
+python -m manhattan.sim.report --prereg v2 && python -m manhattan.sim.report_v2
+```
+
+(With several runs, download each run's pieces into its own directory under `/tmp/manhattan-pieces`; a later
+run's `manhattan-sim-piece-earlier-runs` artifact already holds the earlier ones.) Then section 5 above: commit
+`results/manhattan_sim/` on a branch and open a pull request. The workflow itself commits nothing.
+
+**Size.** With the timings on file the plan is a little over 256 pieces and of the order of 800 runner-hours, so
+about two days at 20 jobs at once, and probably a second run for the last pieces. Those are estimates from this
+repository's pilot timings, most of them measured on a busy machine, and from an assumed runner speed; the plan
+job's summary gives the figure for the commit it runs from. A piece is sized to 60% of what its job could do at
+the timings' speed, so a slower runner still finishes most pieces, and one that does not is continued by
+"Re-run failed jobs". HB pieces use three workers, not four: an HB replication with quarterly reviews peaks at
+3.3 GB.
+
+**The same thing on any machine.** A piece is one command, and pieces made anywhere can be merged:
+
+```bash
+python -m manhattan.sim.run --prereg v2 --scenario D05 --size HB --first 100 --reps 150 --label part \
+    --workers 3 --time-budget-minutes 285 --out /tmp/piece-D05-HB-100      # exit code 75: out of time, run it again
+python -m manhattan.sim.collect plan          # the pieces still missing, as JSON
+```
+
+What the workflow does not do: it runs no held-out scenario (none is coded, and the runner refuses them outside a
+tagged confirmation run), it does not run `--v10a`, and it builds no report.

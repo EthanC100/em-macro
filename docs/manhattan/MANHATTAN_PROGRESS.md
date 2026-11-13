@@ -970,6 +970,48 @@ ETHAN_ACTIONS item 23).**
 - *Also in this commit, for item 5:* one paragraph of SIM_PREREG_v2 section 9 ("A run made in pieces"), so
   that the drafts do not change again after the pilot of item 6 has started.
 
+**Item 5. The full development programme on GitHub's runners, in pieces (`.github/workflows/manhattan-sim.yml`;
+written, never started).**
+
+- *The runner* (`manhattan/sim/run.py`, which is in no run's code hash): `--first` runs replications `first` to
+  `reps − 1` only (it used to start at replication 0 always); label `part` for a piece of a run made in pieces;
+  `--time-budget-minutes` starts no new replication once it is spent, finishes and saves those in progress, logs
+  the run as `interrupted` with the reason and what is left, and exits with code 75. Replications are handed to
+  the worker processes **lazily**, at most one in flight per worker, so a budget, a failure or Ctrl-C stops the
+  pool after those, with their records saved (before, every replication was queued at once and a stop had to
+  wait for, or abandon, the whole queue). `runlog.finish`'s three statuses keep their meaning: `completed` (every
+  replication asked for is on file), `failed` (a replication raised: logged with the reason, the others' records
+  kept, then raised), `interrupted` (budget or keyboard).
+- *The collector* (`manhattan/sim/collect.py`; `scripts/manhattan_sim_collect.py` is the same command): `plan`
+  cuts the replications still missing into pieces a job can finish, never planning one that is on file; `merge`
+  appends the pieces' records and run-log lines, all or nothing, and **refuses** records of other code, of a
+  scenario or replication outside the plan and its counts, of a confirmation branch, of an HB review step other
+  than 63 days, or that differ from another record of the same replication in anything but timings; `status`
+  lists what is missing and exits 1 while anything is.
+- *The workflow*: `workflow_dispatch` only, **no schedule, no secret** (the automatic token, read-only:
+  `contents: read`, `actions: read`), every job guarded to `main`, nothing committed or pushed. A **plan** job
+  (pre-registration hashes verified; optional earlier runs' pieces downloaded and counted); a **matrix of piece
+  jobs**, 20 at a time, each under six hours (350-minute limit, 285-minute budget), each restoring its own
+  earlier artifact first and uploading its records whatever happened; a **collect** job that merges, writes the
+  table of what is missing to the run's summary and uploads the record files. Resumable two ways: "Re-run failed
+  jobs" on the same run, or a new run with `earlier_runs`.
+- ***It must be on main before Ethan can start it***: GitHub shows "Run workflow" only for a workflow file on the
+  default branch. No session dispatched it, and none may. How to start it and bring the records home:
+  [SIM_RUNBOOK.md](SIM_RUNBOOK.md) section 8.
+- *Planned from the records now on file*: a little over 256 pieces (so probably a second run for the last few)
+  and of the order of 800 runner-hours, about two days at 20 jobs at once. Estimates: the timings on file were
+  mostly measured on a busy machine and the runners' speed is assumed.
+- *Tests* (`tests/test_manhattan_sim_pieces.py`, 13): the range, the label and the continuation; the budget and
+  the three statuses with one worker; with a pool, that at most one replication per worker is in flight when a
+  budget or a failure ends the run and that every one started is saved; the command line and its exit code 75;
+  the plan (every missing replication exactly once, sized to a job, nothing on file planned again); merge (once
+  only, each refusal, nothing written after a refusal); two pieces made by the real runner on a tiny world
+  merged into the same numbers as one call; the workflow file (dispatch only, no schedule, no secret, read-only
+  token, main-only jobs, time limits, artifacts on failure, inputs through the environment only).
+- *Not done:* the workflow was not run, here or anywhere, so GitHub's own evaluation of the file is untested
+  (the expression syntax, the artifact actions' behaviour on a first attempt, the `gh` call). The first real
+  run is the test; `sizes=LONG` with `only=D02` is a small first run (four pieces).
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -1171,6 +1213,7 @@ conservative default and are in ETHAN_ACTIONS.md.
 | 47 | A candidate model is checked for identification before it is wired into a pipeline, against a criterion written before the check is run; when the check fails the work stops there and the evidence is recorded. The candidate's code is kept, outside every code list, so the check can be repeated. | `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`; `manhattan/stats/hier_spike.py` |
 | 48 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 23):** a tail-risk check (95%, floor 12) is required for the live tiers, for the label of formal support and for any profitability claim. It is applied after the forward test and never changes it: a rejection is recorded and counted, and only the label is withheld. Its code is in no run's code list. | PROTOCOL 3.1 §6.11; `manhattan/stats/tailrisk.py`; SIM_PREREG_v2 V15 |
 | 49 | Everything the two drafts needed from this session was written into them before the last pilot started, so that the pilot of record names the hashes Ethan adopts. | "Milestone C: final pre-adoption changes (session 10M)", item 6 |
+| 50 | A run on rented or borrowed machines is made in pieces (a scenario and a range of replication numbers), merged by a collector that refuses anything that may not be pooled. The workflow that makes one writes nothing to the repository and is started by Ethan only. | `manhattan/sim/collect.py`; `.github/workflows/manhattan-sim.yml`; SIM_PREREG_v2 §9 |
 
 ## Findings to keep in view
 

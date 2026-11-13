@@ -366,9 +366,14 @@ timings on a busy machine; on an idle core the same programme is about 1,250.
   and one command that settles it in five minutes on the machine itself:
   `python -m manhattan.sim.benchmark --quick --out bench.json`.
 - **(b) GitHub's runners**: standard runners are free and unlimited for this public repository (4 cores and 16 GB
-  each, 6 hours a job, 20 jobs at once on the Free plan; GitHub's documentation, 2026-11-13). It needs a workflow,
-  which is yours to add and to start (hard rules 3 and 16), and a way to bring the records back that is not a job
-  pushing to the repository.
+  each, 6 hours a job, 20 jobs at once on the Free plan; GitHub's documentation, 2026-11-13). **The workflow now
+  exists** (session 10M, at your request): `.github/workflows/manhattan-sim.yml`. It is started by hand only, has
+  no schedule, reads no secret, writes nothing to the repository, and every job is guarded to main. It makes the
+  run in pieces (a matrix of jobs under six hours each, checkpointed as artifacts, resumable), and
+  `scripts/manhattan_sim_collect.py` puts the pieces together and refuses anything that may not be pooled. **It
+  has never been started: no session dispatches it. It must be on main before you can start it** (GitHub shows
+  "Run workflow" only for a workflow file on the default branch), so merge the pull request first. How to start
+  it and bring the records home: [SIM_RUNBOOK.md](SIM_RUNBOOK.md) section 8, and item 19's last step.
 - **(c) rented cores**: spending, so yours (item 8).
 
 The held-out confirmation run is not in session 5M's estimate above and cannot be measured (its worlds are not
