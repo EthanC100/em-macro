@@ -176,7 +176,7 @@ mistakes: a data cutoff after the registration dates, a stage expectation for th
 render with five significant digits, conflict hashes that legitimately differ by nonce.
 
 **Not done.** No real batch, hypothesis or dispatch (by design); the FRED fetcher has never run against FRED; no
-watchdog for a runner that never starts; no OTS stamping of the head; the iMac runner. Full suite: SUITE_PLACEHOLDER.
+watchdog for a runner that never starts; no OTS stamping of the head; the iMac runner. Full suite after merging `origin/build/manhattan` at `c914421`: **1477 passed, 132 skipped, pytest exit code 0** (run with `set -o pipefail`, exit code read from `${PIPESTATUS[0]}`); the run before the merge had one failure, a stale e2e assertion about the mirror, fixed before any push.
 
 **Exact next step.** Ethan: steps 1 to 4 of `docs/manhattan/ops/ETHAN_OPS_ACTIONS.md` (repository, deploy key in a
 main-only environment, App access, mirror), then merge this pull request after `build/manhattan` (it contains
