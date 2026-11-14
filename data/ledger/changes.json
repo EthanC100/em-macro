@@ -1,20 +1,19 @@
 {
- "since": "2026-11-14T06:28:45+00:00",
- "at": "2026-11-14T12:37:58+00:00",
+ "since": "2026-11-14T12:37:58+00:00",
+ "at": "2026-11-14T15:57:45+00:00",
  "items": [
-  {
-   "book": "me",
-   "kind": "pnl",
-   "label": "me",
-   "change": 0.079,
-   "text": "me: +0.08 index points (to 99.47)"
-  },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.0583,
-   "text": "janus: -0.06 index points (to 99.64)"
+   "change": -0.0224,
+   "text": "janus: -0.02 index points (to 99.61)"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J002",
+   "text": "Janus J002 closed (C08 rule 5: discretionary position closed): net -0.21%"
   }
  ]
 }

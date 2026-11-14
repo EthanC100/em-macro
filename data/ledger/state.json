@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-14",
- "at": "2026-11-14T12:37:58+00:00",
+ "at": "2026-11-14T15:57:45+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -79,7 +79,7 @@
  "index": {
   "algorithm v1.0": 99.9173,
   "algorithm v1.1": 100.0,
-  "janus": 99.6372,
+  "janus": 99.6148,
   "me": 99.475
  },
  "janus": {
@@ -93,9 +93,9 @@
   "J002": {
    "direction": "long",
    "instrument": "GB10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.2137,
+   "reason": "C08 rule 5: discretionary position closed",
+   "status": "closed"
   },
   "J003": {
    "direction": "short",
