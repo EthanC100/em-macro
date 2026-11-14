@@ -532,13 +532,20 @@ def fetch_instrument(row: dict, by_id: dict[str, dict], results: dict[str, dict]
                 ra, rb = results.get(a), results.get(b)
                 if not ra or not rb or ra.get("value") in (None, "") or rb.get("value") in (None, ""):
                     raise ValueError(f"legs {a}/{b} not marked")
-                d = min(parse_date(ra["date"]), parse_date(rb["date"]))
-                v = round((float(ra["value"]) - float(rb["value"])) * 100, 2)
+                # Q005: both legs on one date. Each leg's series is its recent history plus its latest mark; the
+                # spread is dated at the latest date both legs have and uses both values on that date. With no
+                # common date this source fails (next: the fallback, then the previous mark).
+                ha, hb = dict(ra.get("_history") or []), dict(rb.get("_history") or [])
+                ha[parse_date(ra["date"])], hb[parse_date(rb["date"])] = float(ra["value"]), float(rb["value"])
+                common = sorted(dd for dd in ha if dd in hb and dd is not None)
+                if not common:
+                    raise ValueError(f"legs {a} ({ra['date']}) and {b} ({rb['date']}) have no common date")
+                d = common[-1]
+                v = round((ha[d] - hb[d]) * 100, 2)
                 url = f"{ra.get('source_url', '')} ; {rb.get('source_url', '')}"
                 freq = "monthly" if "monthly" in (ra.get("frequency"), rb.get("frequency")) else "daily"
-                note = f"{a} {ra['value']} ({ra['date']}) minus {b} {rb['value']} ({rb['date']})"
-                ha, hb = dict(ra.get("_history") or []), dict(rb.get("_history") or [])
-                hist = sorted((dd, round((ha[dd] - hb[dd]) * 100, 2)) for dd in ha if dd in hb) if freq == "daily" else []
+                note = f"{a} {ha[d]:.6g} ({d}) minus {b} {hb[d]:.6g} ({d})"
+                hist = [(dd, round((ha[dd] - hb[dd]) * 100, 2)) for dd in common] if freq == "daily" else []
             else:
                 pts: list = []
                 d, v, url = _fetch_one(source, ident, get, today, pts)
