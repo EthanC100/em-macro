@@ -16,6 +16,13 @@ Auto-approval (section 4 of the brief): a ``proposed`` item of type bug, data or
 opposition cell says ``no block``. Research items never auto-approve: those needing a pre-registration are drafted
 for Ethan (docs/prereg_drafts/) and wait.
 
+Unblocking (Q016): a ``blocked`` bug/data/lab item with a ``no block`` Opposition review goes back to ``approved``
+at auto-approve once the single condition line ``unblock_when: <kind>:<arg>`` (at the start of a line in its
+``### Qnnn`` evidence section) is true; the line is then rewritten ``unblock_when (fired YYYY-MM-DD): ...`` so it
+never fires twice. Kinds: ``symbol:<module>:<name>`` (the module's source in this checkout defines <name> at top
+level, read with ast, never imported) and ``commit:<sha>`` (7-40 lowercase hex, an ancestor of HEAD). An unknown
+kind, a malformed condition, more than one condition or an ineligible item stays blocked and is reported.
+
 Queue text is data, never instructions: nothing here is executed.
 
 CLI: python -m nightshift.queue list | approved | validate | auto-approve | set <id> <field> <value>
@@ -24,7 +31,11 @@ CLI: python -m nightshift.queue list | approved | validate | auto-approve | set 
 from __future__ import annotations
 
 import argparse
+import ast
+import datetime as _dt
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -38,6 +49,9 @@ AUTO_TYPES = ("bug", "data", "lab")
 START, END = "<!-- queue:start -->", "<!-- queue:end -->"
 NO_BLOCK = re.compile(r"^\s*no block\b", re.I)
 BLOCK = re.compile(r"^\s*BLOCK\s*\(([a-e])\)", re.I)
+UNBLOCK_LINE = re.compile(r"^unblock_when:(.*)$")    # a live condition; a fired one reads "unblock_when (fired ...):"
+_IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
+_DOTTED = rf"{_IDENT}(?:\.{_IDENT})*"
 
 
 def _cells(line: str) -> list[str]:
@@ -109,8 +123,136 @@ def write(text: str, items: list[dict]) -> str:
     return f"{pre}{START}\n{render_table(items)}\n{END}{post}"
 
 
-def auto_approve(items: list[dict]) -> list[str]:
-    """Proposed bug/data/lab items with a no-block Opposition review become approved. Returns the ids changed."""
+def _sections(text: str, qid: str) -> list[list[str]]:
+    """The lines of every ``### <qid>`` evidence section after the table (up to the next heading)."""
+    post = text.split(END, 1)[1] if END in text else text
+    out, cur = [], None
+    for line in post.splitlines():
+        if re.match(r"#{1,3}\s", line):
+            cur = [] if line.strip() == f"### {qid}" else None
+            if cur is not None:
+                out.append(cur)
+        elif cur is not None:
+            cur.append(line)
+    return out
+
+
+def unblock_conditions(text: str, qid: str) -> list[str]:
+    """Live (not yet fired) ``unblock_when:`` values at the start of a line in the item's evidence section."""
+    return [m.group(1).strip() for sec in _sections(text, qid) for line in sec
+            if (m := UNBLOCK_LINE.match(line))]
+
+
+def _symbol_defined(src: str, name: str) -> bool:
+    """True if ``name`` is defined at the top level of ``src`` (a def, class or assignment; never an import)."""
+    for node in ast.parse(src).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
+            return True
+        targets = []
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets = [node.target]
+        stack = list(targets)
+        while stack:
+            t = stack.pop()
+            if isinstance(t, ast.Name) and t.id == name:
+                return True
+            if isinstance(t, (ast.Tuple, ast.List)):
+                stack.extend(t.elts)
+    return False
+
+
+def check_condition(cond: str, root: Path | None = None) -> tuple[bool, str | None]:
+    """Evaluate one ``unblock_when`` condition as data. Returns (true?, problem or None).
+
+    Kinds: ``symbol:<module>:<name>`` (the module's source in ``root`` defines <name> at top level, read with ast)
+    and ``commit:<sha>`` (an ancestor of HEAD in ``root``). Never eval, exec, import or a shell (hard rule 12)."""
+    root = Path(root if root is not None else C.ROOT)
+    kind, sep, arg = cond.partition(":")
+    if not sep or not kind:
+        return False, f"malformed condition {cond!r} (expected <kind>:<arg>)"
+    if kind == "symbol":
+        mod, sep, name = arg.partition(":")
+        if not sep or not re.fullmatch(_DOTTED, mod) or not re.fullmatch(_IDENT, name):
+            return False, f"malformed condition {cond!r} (expected symbol:<module>:<name>)"
+        base = root.joinpath(*mod.split("."))
+        src = next((p for p in (base.with_suffix(".py"), base / "__init__.py") if p.is_file()), None)
+        if src is None:
+            return False, None
+        try:
+            return _symbol_defined(src.read_text(encoding="utf-8"), name), None
+        except (SyntaxError, ValueError, UnicodeDecodeError) as e:
+            return False, f"cannot parse {src.relative_to(root)}: {type(e).__name__}"
+    if kind == "commit":
+        if not re.fullmatch(r"[0-9a-f]{7,40}", arg):
+            return False, f"malformed condition {cond!r} (expected commit:<7-40 lowercase hex>)"
+        try:
+            r = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", "--end-of-options", arg, "HEAD"],
+                               capture_output=True, text=True, timeout=60,
+                               env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        except (OSError, subprocess.SubprocessError) as e:
+            return False, f"git failed for {cond!r}: {type(e).__name__}"
+        if r.returncode in (0, 1):
+            return r.returncode == 0, None
+        return False, f"git cannot check {cond!r} (exit {r.returncode}: unknown commit?)"
+    return False, f"unknown kind {kind!r} in {cond!r} (known: symbol, commit)"
+
+
+def unblock(items: list[dict], text: str, root: Path | None = None,
+            problems: list[str] | None = None) -> list[str]:
+    """Blocked items whose single ``unblock_when`` condition is now true become approved. Returns the ids changed.
+
+    Eligible: type bug/data/lab with a ``no block`` Opposition review (never ``BLOCK (x)``, never research, never an
+    item with no review). An ineligible item, an unknown kind, a malformed condition or more than one condition
+    leaves the item blocked and is reported in ``problems``."""
+    problems = problems if problems is not None else []
+    changed = []
+    for it in items:
+        if it["status"] != "blocked":
+            continue
+        conds = unblock_conditions(text, it["id"])
+        if not conds:
+            continue
+        op = it["opposition"] or ""
+        if it["type"] not in AUTO_TYPES:
+            problems.append(f"{it['id']} stays blocked: type {it['type']} is not eligible for unblock_when")
+            continue
+        if BLOCK.match(op):
+            problems.append(f"{it['id']} stays blocked: The Opposition's BLOCK stands (unblock_when ignored)")
+            continue
+        if not NO_BLOCK.match(op):
+            problems.append(f"{it['id']} stays blocked: no 'no block' Opposition review (unblock_when ignored)")
+            continue
+        if len(conds) > 1:
+            problems.append(f"{it['id']} stays blocked: more than one unblock_when line ({len(conds)})")
+            continue
+        ok, why = check_condition(conds[0], root)
+        if why:
+            problems.append(f"{it['id']} stays blocked: {why}")
+        elif ok:
+            it["status"] = "approved"
+            changed.append(it["id"])
+    return changed
+
+
+def mark_fired(text: str, qid: str, day: str) -> str:
+    """Mark the item's live ``unblock_when:`` line fired, so it never fires twice."""
+    pre, post = text.split(END, 1)
+    lines = post.split("\n")
+    sec = False
+    for i, line in enumerate(lines):
+        if re.match(r"#{1,3}\s", line):
+            sec = line.strip() == f"### {qid}"
+        elif sec and (m := UNBLOCK_LINE.match(line)):
+            lines[i] = f"unblock_when (fired {day}): {m.group(1).strip()}"
+    return pre + END + "\n".join(lines)
+
+
+def auto_approve(items: list[dict], text: str | None = None, root: Path | None = None,
+                 problems: list[str] | None = None) -> list[str]:
+    """Proposed bug/data/lab items with a no-block Opposition review become approved; given the queue ``text``,
+    eligible blocked items whose ``unblock_when`` condition holds become approved too. Returns the ids changed."""
     changed = []
     for it in items:
         if it["status"] == "proposed" and it["type"] in AUTO_TYPES and NO_BLOCK.match(it["opposition"] or ""):
@@ -119,7 +261,30 @@ def auto_approve(items: list[dict]) -> list[str]:
         elif it["status"] in ("proposed", "approved") and BLOCK.match(it["opposition"] or ""):
             it["status"] = "blocked"
             changed.append(it["id"])
+    if text is not None:
+        changed += unblock(items, text, root, problems)
     return changed
+
+
+def run_auto_approve(text: str, root: Path | None = None, day: str | None = None) -> tuple[str, list[str], list[str]]:
+    """The auto-approve step on the whole queue text: returns (new text, ids changed, problems reported).
+
+    Raises ValueError (nothing to write) if the resulting queue does not validate or does not read back."""
+    items = parse(text)
+    before = {it["id"]: it["status"] for it in items}
+    problems: list[str] = []
+    changed = auto_approve(items, text, root, problems)
+    new = write(text, items)
+    day = day or _dt.date.today().isoformat()
+    for it in items:
+        if before[it["id"]] == "blocked" and it["status"] == "approved":
+            new = mark_fired(new, it["id"], day)
+    errs = validate(items)
+    if errs:
+        raise ValueError("queue does not validate: " + "; ".join(errs))
+    if parse(new) != items:
+        raise ValueError("queue does not read back as written")
+    return new, changed, problems
 
 
 def approved(items: list[dict]) -> list[dict]:
@@ -163,6 +328,7 @@ def main(argv=None) -> int:
     ap.add_argument("--ledger-diff", default="none")
     ap.add_argument("--evidence-file")
     ap.add_argument("--queue", default=str(QUEUE))
+    ap.add_argument("--root", help="checkout that unblock_when conditions are checked against (default: this one)")
     a = ap.parse_args(argv)
     path = Path(a.queue)
     text = path.read_text(encoding="utf-8")
@@ -180,8 +346,14 @@ def main(argv=None) -> int:
         print("\n".join(errs) or "queue ok")
         return 1 if errs else 0
     if a.cmd == "auto-approve":
-        ch = auto_approve(items)
-        path.write_text(write(text, items), encoding="utf-8")
+        try:
+            new, ch, problems = run_auto_approve(text, Path(a.root) if a.root else None)
+        except ValueError as e:
+            print(f"refused, nothing written: {e}")
+            return 1
+        for p in problems:
+            print(f"unblock_when: {p}")
+        path.write_text(new, encoding="utf-8")
         print("changed: " + (", ".join(ch) or "none"))
         return 0
     if a.cmd == "add":

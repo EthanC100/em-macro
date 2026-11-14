@@ -107,14 +107,20 @@ def test_spread_marks_and_fallback(tmp_path):
 
     def get(url, **k):
         if "id=A" in url:
-            return b"d,A\n2026-11-03,4.00\n"
+            return b"d,A\n2026-11-02,4.00\n2026-11-03,4.10\n"
         if "id=B2" in url:
             return b"d,B\n2026-11-02,3.00\n"
         raise RuntimeError("down")
     out = marks.fetch_all(reg, date(2026, 11, 4), get=get)
     by = {m["instrument"]: m for m in out}
     assert by["B10Y"]["value"] == "3" and by["B10Y"]["note"].startswith("fallback fred B2")
+    # Q005: the spread pairs both legs on their latest common date (2 Nov: 4.00 - 3.00), never A's 3 Nov 4.10
     assert by["A-B"]["value"] == "100" and by["A-B"]["date"] == "2026-11-02"
+    # Q005 rule for legs with no common date: the spread source fails (then fallback, previous mark, or no mark)
+    out = marks.fetch_all(reg, date(2026, 11, 4), get=lambda u, **k: (
+        b"d,A\n2026-11-03,4.00\n" if "id=A" in u else get(u)))
+    by = {m["instrument"]: m for m in out}
+    assert by["A-B"]["value"] == "" and "no common date" in by["A-B"]["note"]
     # a source that fails with no fallback keeps the previous mark
     prev = {"A10Y": _mark("A10Y", "2026-11-01", 3.9, "% yield")}
     out = marks.fetch_all(reg[:1], date(2026, 11, 4), get=lambda u, **k: (_ for _ in ()).throw(RuntimeError("x")), previous=prev)

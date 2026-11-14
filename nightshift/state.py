@@ -23,6 +23,11 @@ cap, chain stopped, busy writers, fail safe when either cannot be read), so a lo
 the guard per item and stops at the cap. A night-worker release names at most one item, and exactly one unless the
 outcome is ``empty`` or ``stopped`` (nothing worked); each counted release adds one run. There is no heartbeat: a
 lock held longer than ``lock_stale_hours`` is taken over as before.
+
+Cap applied (Q017): ``acquire`` of a counted routine also refuses when runs_used >= the cap of the config it is given
+(the CLI passes main's, read through C.load_main), and stores that ``cap`` and ``safe_mode`` in the lock, plus
+``explorer_model_config`` (config intent, not the model that ran) for night-explorer only. ``release`` and a stale-lock
+take-over copy them into the log entry; a lock taken before Q017 gives null fields. Older entries stay valid.
   python -m nightshift.state stop --reason TEXT
 """
 from __future__ import annotations
@@ -77,17 +82,35 @@ def lock_is_stale(lock: dict | None, now: datetime, hours: float) -> bool:
     return now - at > timedelta(hours=hours)
 
 
+def _applied(routine: str, src: dict) -> dict:
+    """Q017: the cap fields a counted run's lock and log entry carry (null for a lock taken before Q017)."""
+    if routine not in COUNTED:
+        return {}
+    out = {"cap": src.get("cap"), "safe_mode": src.get("safe_mode")}
+    if routine == "night-explorer":
+        out["explorer_model_config"] = src.get("explorer_model_config")
+    return out
+
+
 def acquire(s: dict, routine: str, now: datetime, cfg: dict, session: str | None = None) -> tuple[bool, str]:
     roll_night(s, now)
     lk = s.get("lock")
     if lk and not lock_is_stale(lk, now, cfg.get("lock_stale_hours", 2)):
         return False, f"lock held by {lk['routine']} since {lk['acquired_at']}"
+    applied = {}
+    if routine in COUNTED:                      # Q017: the cap recorded is the cap this acquire enforced
+        cap, used = C.run_cap(cfg), int(s.get("runs_used") or 0)
+        if used >= cap:
+            return False, f"run cap reached ({used} of {cap})"
+        applied = _applied(routine, {"cap": cap, "safe_mode": bool((cfg.get("safe_mode") or {}).get("enabled")),
+                                     "explorer_model_config": C.explorer_model(cfg)})
     note = ""
     if lk:
         note = f"took over a stale lock of {lk['routine']} from {lk['acquired_at']}"
         s["log"].append({"routine": lk["routine"], "started_at": lk["acquired_at"], "finished_at": _iso(now),
-                         "outcome": "failed", "note": "lock went stale (run never released it)"})
-    s["lock"] = {"routine": routine, "acquired_at": _iso(now), "session": session}
+                         "outcome": "failed", "note": "lock went stale (run never released it)"}
+                        | _applied(lk["routine"], lk))
+    s["lock"] = {"routine": routine, "acquired_at": _iso(now), "session": session} | applied
     return True, note or "acquired"
 
 
@@ -113,6 +136,7 @@ def release(s: dict, routine: str, now: datetime, outcome: str, items=(), commit
     lk = s.get("lock") or {}
     entry = {"routine": routine, "started_at": lk.get("acquired_at"), "finished_at": _iso(now), "outcome": outcome,
              "items": list(items), "commits": list(commits), "note": note, "session": lk.get("session")}
+    entry |= _applied(routine, lk if lk.get("routine") == routine else {})
     if routine in COUNTED:
         s["runs_used"] = int(s.get("runs_used") or 0) + 1
         entry["run"] = s["runs_used"]
@@ -142,7 +166,7 @@ def main(argv=None) -> int:
     if a.cmd in ("status", "acquire"):          # release and stop never need it, so they always record
         try:
             cfg = C.load_main()                 # main's config, fetched now: never dev's copy
-        except C.MainConfigError as e:
+        except Exception as e:                  # MainConfigError or anything else: fail safe, never dev's copy
             print(f"refused: could not read main's config/night.yaml (fail safe): {e}")
             return 3
     if a.cmd == "status":

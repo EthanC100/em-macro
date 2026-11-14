@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-12",
+ "night": "2026-11-14",
  "runs_used": 4,
  "last_kind": "worker",
  "chain_stopped": {
-  "reason": "run cap reached (4 of 4)",
-  "at": "2026-11-13T00:42:49+08:00"
+  "reason": "run cap reached (4 of 4); Q017, Q005, Q006, Q001 merged into dev",
+  "at": "2026-11-15T02:28:21+08:00"
  },
  "log": [
   {
@@ -177,6 +177,136 @@
    "commits": [],
    "note": "checks ok; PR #60 opened for promote-merge",
    "session": "https://claude.ai/code/session_01Ayx8qa8WFs5C99Ff4VuNG8"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-13T22:56:26+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (6d6414f, no auto_resolved; full suite 1477 passed, 132 skipped, exit 0, before push); filed 0, approved 0, blocked 0; 9 approved items wait for the worker. Q025 and Q026 left proposed and unreviewed (Ethan's PRs #47 and #46, both merged to main, so on dev: can be closed). Triage: Q024 is stale (energy spot marks now run to 11 Nov, marks.csv:845, :871: close or narrow to the 2-day lag); Q005 also hits GB-DE and PL-DE (marks.csv:817, :832, :853, :858); Q006's 2026-11-30 CLP row now sets state.json latest_mark; todo.md:31 partly stale (Janus tasks exist; resolver and letters tasks do not), not filed; unverified lead: WTI, HEATOIL, NATGAS, RBOB 11 Nov marks equal 10 Nov (US holiday) while Brent moved; Actions API 403, run reports not audited. night-worker fire exit 6",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-13T23:45:21+08:00",
+   "finished_at": "2026-11-14T00:05:45+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q011"
+   ],
+   "commits": [],
+   "note": "Q011 implemented, PR #62 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qcF6BmFJav6jMxvWbd",
+   "run": 1
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-14T00:07:43+08:00",
+   "finished_at": "2026-11-14T00:25:09+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q013"
+   ],
+   "commits": [],
+   "note": "Q013 implemented, PR #63 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qcF6BmFJav6jMxvWbd",
+   "run": 2
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-14T00:27:31+08:00",
+   "finished_at": "2026-11-14T00:50:14+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q014"
+   ],
+   "commits": [],
+   "note": "Q014 implemented, PR #64 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qcF6BmFJav6jMxvWbd",
+   "run": 3
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-14T00:53:07+08:00",
+   "finished_at": "2026-11-14T01:14:51+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q016"
+   ],
+   "commits": [],
+   "note": "Q016 implemented, PR #65 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qcF6BmFJav6jMxvWbd",
+   "run": 4
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-14T23:41:40+08:00",
+   "finished_at": "2026-11-15T00:00:39+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q017"
+   ],
+   "commits": [],
+   "note": "Q017 implemented, PR #66 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qbSJc8grTrNzTHQdZY",
+   "run": 1
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-15T00:27:17+08:00",
+   "finished_at": "2026-11-15T00:48:18+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q005"
+   ],
+   "commits": [],
+   "note": "Q005 implemented, PR #67 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qbSJc8grTrNzTHQdZY",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 2
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-15T01:07:49+08:00",
+   "finished_at": "2026-11-15T01:30:34+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q006"
+   ],
+   "commits": [],
+   "note": "Q006 implemented, PR #68 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qbSJc8grTrNzTHQdZY",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 3
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-15T01:48:26+08:00",
+   "finished_at": "2026-11-15T02:10:54+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q001"
+   ],
+   "commits": [],
+   "note": "Q001 implemented, PR #69 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qbSJc8grTrNzTHQdZY",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 4
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-15T05:40:21+08:00",
+   "finished_at": "2026-11-15T05:58:31+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "all checks ok; PR #70 opened (Q001, Q005, Q006, Q017)",
+   "session": "https://claude.ai/code/session_01Ayx8qc2FmkKYT94DvYqDXn"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."

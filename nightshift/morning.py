@@ -7,23 +7,32 @@ v1.0 rules (D004) is read, never written: data/ledger/v1_rules.json on origin/ma
 after each official month-end v1.0 run). A triggered rule appears as a FLAG line, and also in Needs Ethan.
 
 "Failed or empty runs" checks actual output, not the run's own status: a run logged as "merged" must have its
-commits on origin/dev, and an explorer run must have rows in results/exploration/log.csv for the night.
+commits on origin/dev, and an explorer run must have rows in results/exploration/log.csv for the night. A chain stop
+during the night whose reason is not a normal end of night (NORMAL_STOPS) is listed there too (Q011).
 
 Janus is read, never written: the latest daily review and quick check from data/janus/records.jsonl through
-ledger.janus (review_status, budget_status, open positions), against mandate C05.
+ledger.janus (review_status, budget_status, open positions), against mandate C05. The records are main's: the
+section fetches origin main itself (Q014; timeout, no prompt, git show, never a checkout) and prints "records as of
+<newest recorded_at>". A failed fetch still reports, every line marked "[main not refreshed (fetch failed)]"; with no
+origin/main copy the working tree's records are read and every line is marked "[dev copy]".
 
-python -m nightshift.morning [--date YYYY-MM-DD] [--dev origin/dev] [--needs "text => recommendation" ...]
+An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
+unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
+passed), when the report is rewritten. --stdout prints and never writes.
+
+python -m nightshift.morning [--date YYYY-MM-DD] [--dev origin/dev] [--needs "text => recommendation" ...] [--stdout]
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import os
 import re
 import tempfile
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config as C
@@ -121,29 +130,102 @@ def verify_runs(runs: list[dict], dev: str, exploration_rows: list[dict], night_
     return bad
 
 
-def janus_section(today: date) -> list[str]:
+# How a night normally ends (Q011): guard.next's stop reasons (after 05:00 / outside the window, run cap reached,
+# nothing left to do; next --for night-worker: no approved items left) and night-start's "nothing to do". A chain stop
+# with any other reason (e.g. dev conflicts with main) is listed under Failed or empty runs.
+NORMAL_STOPS = ("after 05:00", "outside the night window", "run cap reached", "nothing left to do", "nothing to do",
+                "no approved items left")
+
+
+def normal_stop(reason: str) -> bool:
+    return (reason or "").strip().lower().startswith(NORMAL_STOPS)
+
+
+def chain_stop_line(st: dict, night: str) -> str | None:
+    """'chain stopped HH:MM: <reason>' (Singapore time) when the chain was stopped during the reported night for a
+    reason other than a normal end of night; else None. ``state stop`` adds nothing to the run log, so without this
+    a stopped night reads as 'none (outputs verified)'."""
+    cs = st.get("chain_stopped") or {}
+    reason, at = (cs.get("reason") or "").strip(), cs.get("at")
+    if not at or normal_stop(reason):
+        return None
+    try:
+        ts = datetime.fromisoformat(at)
+    except (TypeError, ValueError):
+        return f"chain stopped (time unreadable: {at!r}): {_short(reason) or '(no reason given)'}"
+    if C.night_of(ts).isoformat() != night:
+        return None
+    return f"chain stopped {ts.astimezone(C.SGT):%H:%M}: {_short(reason) or '(no reason given)'}"
+
+
+JANUS_REL = "data/janus/records.jsonl"
+FETCH_TIMEOUT = 90                 # seconds; a hung fetch is a failed fetch, never a hung report
+NOT_REFRESHED = "main not refreshed (fetch failed)"
+
+
+def fetch_main(remote: str = "origin", branch: str = "main") -> str | None:
+    """Refresh refs/remotes/<remote>/<branch> from the remote (Q014: in code, not only in the routine's prose).
+    None when the fetch succeeded, else a short reason. Never raises and never prompts; touches only that ref."""
+    try:
+        r = subprocess.run(["git", "fetch", "--quiet", "--no-tags", remote,
+                            f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}"],
+                           cwd=ROOT, capture_output=True, text=True, timeout=FETCH_TIMEOUT,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"git fetch {remote} {branch}: {type(e).__name__}"
+    return None if r.returncode == 0 else f"git fetch {remote} {branch}: exit {r.returncode}"
+
+
+def janus_records() -> tuple[list[dict], str]:
+    """The Janus records and the label their lines carry ("" when read from a freshly fetched origin/main).
+    The Janus tasks write to main: fetch origin main, then read origin/main with git show (never a checkout). A
+    failed fetch still reads the existing ref, labelled NOT_REFRESHED; with no origin/main copy at all the working
+    tree's records are read, labelled "dev copy"."""
     from ledger import janus as J
-    recs = J.load()
-    live = _git("show", "origin/main:data/janus/records.jsonl")        # the existing Janus tasks write to main
-    if live:
+    stale = fetch_main() is not None
+    if _git("rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}") \
+            and _git("cat-file", "-t", f"origin/main:{JANUS_REL}") == "blob":
+        live = _git("show", f"origin/main:{JANUS_REL}")
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
             f.write(live + "\n")
-        recs = J.load(Path(f.name))
+        try:
+            recs = J.load(Path(f.name))
+        finally:
+            os.unlink(f.name)
+        return recs, NOT_REFRESHED if stale else ""
+    return J.load(ROOT / JANUS_REL), "dev copy" + (f"; {NOT_REFRESHED}" if stale else "")
+
+
+def _as_of(recs: list[dict]) -> str:
+    """The newest recorded_at among the records, as YYYY-MM-DDTHH:MMZ (UTC)."""
+    ts = []
+    for r in recs:
+        try:
+            t = datetime.fromisoformat(str(r.get("recorded_at") or ""))
+        except ValueError:
+            continue
+        ts.append((t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc))
+    return f"{max(ts):%Y-%m-%dT%H:%M}Z" if ts else "no records"
+
+
+def janus_section(today: date) -> list[str]:
+    from ledger import janus as J
+    recs, label = janus_records()
     rs, bs = J.review_status(recs, today), J.budget_status(recs, today)
     pos = J.positions(recs)
     open_pos = [k for k, v in pos.items() if (v.get("status") or "") in ("open", "pending")]
     checks = [r for r in recs if r.get("type") == "check"]
     last_check = checks[-1] if checks else {}
     c05 = "complies" if (rs["status"] == "ok" and not bs["flags"]) else "does NOT comply"
-    lines = [f"C05: {c05}. Last daily review {rs['last_date']} ({rs['status']}, {rs['sources_read']} sources); "
-             f"{len(open_pos)} open/pending, {bs['risk_used_pct']:.2f}% at risk (budget 3-10%)"
-             + (f"; reason: {bs['reason']}" if bs.get("reason") else "")]
+    lines = [f"C05: {c05} (records as of {_as_of(recs)}). Last daily review {rs['last_date']} ({rs['status']}, "
+             f"{rs['sources_read']} sources); {len(open_pos)} open/pending, {bs['risk_used_pct']:.2f}% at risk "
+             "(budget 3-10%)" + (f"; reason: {bs['reason']}" if bs.get("reason") else "")]
     flags = rs["flags"] + bs["flags"]
     if flags:
         lines.append("Flags: " + "; ".join(flags))
     if last_check:
         lines.append(f"Last quick check {last_check.get('recorded_at', '')[:16]}Z: {_clip_words(last_check.get('result') or '')}")
-    return lines
+    return [f"[{label}] {l}" for l in lines] if label else lines
 
 
 def v1_rules_state() -> dict | None:
@@ -195,7 +277,8 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     L = [f"# Night shift, {night} -> {day.isoformat()}", "",
          f"**Promoted to main:** {promoted(day)}", "", "**Merged into dev:**"]
     L += [f"- {m}" for m in merged_into_dev(dev, since)] or ["- nothing"]
-    bad = verify_runs(runs, dev, rows, nd)
+    stop = chain_stop_line(st, night)
+    bad = ([stop] if stop else []) + verify_runs(runs, dev, rows, nd)
     L += ["", "**Failed or empty runs:**"] + ([f"- {b}" for b in bad] or ["- none (outputs verified)"])
     L += ["", "**Janus:**"] + [f"- {x}" for x in janus_section(day)]
     v1 = v1_rules_state()
@@ -216,6 +299,9 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     return "\n".join(L) + "\n"
 
 
+PROMOTED_LINE = re.compile(r"^\*\*Promoted to main:\*\* (.*)$", re.M)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--date", default=None, help="the morning's Singapore date (default today)")
@@ -224,11 +310,21 @@ def main(argv=None) -> int:
     ap.add_argument("--stdout", action="store_true")
     a = ap.parse_args(argv)
     day = date.fromisoformat(a.date) if a.date else C.now_utc().astimezone(C.SGT).date()
-    text = build(day, a.dev, a.needs)
     if a.stdout:
-        print(text)
+        print(build(day, a.dev, a.needs))
         return 0
     out = ROOT / f"results/night/morning/{day.isoformat()}.md"
+    if out.exists():                       # Q013: checked before build(), so a refused run assembles nothing
+        old = PROMOTED_LINE.search(out.read_text(encoding="utf-8"))
+        now = promoted(day)
+        if old is None or old.group(1).strip() == now:
+            print(f"refused: {out.relative_to(ROOT)} already exists"
+                  + ("" if old is None else " and its 'Promoted to main' line is unchanged")
+                  + "; nothing written (use --stdout to print a report)", file=sys.stderr)
+            return 3
+        print(f"rewriting {out.relative_to(ROOT)}: Promoted to main changed from {old.group(1).strip()!r} to {now!r}",
+              file=sys.stderr)
+    text = build(day, a.dev, a.needs)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     print(text)

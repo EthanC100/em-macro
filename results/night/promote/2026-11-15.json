@@ -1,0 +1,98 @@
+{
+ "base": "94e6dda",
+ "head": "5569e3d",
+ "today": "2026-11-15",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 22
+  },
+  "a_tests": {
+   "ok": true,
+   "summary": "1583 passed, 133 skipped, 10 warnings in 919.26s (0:15:19)"
+  },
+  "b_ledger_rebuild": {
+   "ok": true,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "none (no private store)",
+   "same_snapshot": true,
+   "items_merged": [
+    "Q001",
+    "Q005",
+    "Q006",
+    "Q017"
+   ],
+   "intended_files": [
+    "books.json",
+    "marks.json"
+   ],
+   "differences": [
+    {
+     "file": "data/books.json",
+     "paths": [
+      ".algorithm.excess_since_start_pct",
+      ".algorithm.monthly_tbill[1].excess_pct",
+      ".algorithm.monthly_tbill[1].tbill_pct",
+      ".algorithm.monthly_tbill[1].total_pct",
+      ".algorithm.mtd_pct",
+      ".algorithm.series",
+      ".algorithm.total_mtd_pct",
+      ".algorithm.total_series",
+      ".algorithm.total_since_start_pct",
+      ".algorithm.versions[0].attribution.asset_class[0].key",
+      ".algorithm.versions[0].attribution.asset_class[0].pnl_pct",
+      ".algorithm.versions[0].attribution.asset_class[1].key",
+      ".algorithm.versions[0].attribution.asset_class[1].pnl_pct",
+      ".algorithm.versions[0].attribution.country[0].key",
+      ".algorithm.versions[0].attribution.country[0].pnl_pct",
+      ".algorithm.versions[0].attribution.country[1].key",
+      ".algorithm.versions[0].attribution.country[1].pnl_pct",
+      ".algorithm.versions[0].attribution.country[2].key",
+      ".algorithm.versions[0].attribution.country[2].pnl_pct",
+      ".algorithm.versions[0].attribution.country[3].key"
+     ]
+    },
+    {
+     "file": "data/marks.json",
+     "paths": [
+      ".items[8].age_days",
+      ".items[8].date",
+      ".items[8].fetched_at",
+      ".items[8].frequency",
+      ".items[8].note",
+      ".items[8].source",
+      ".items[8].source_url",
+      ".items[8].value",
+      ".summary.daily",
+      ".summary.last_date",
+      ".summary.monthly"
+     ]
+    }
+   ],
+   "unexplained": [],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": true,
+ "dev_commits_ahead": 63,
+ "mode": "promote",
+ "reasons": [],
+ "pr": "https://github.com/EthanC100/em-macro/pull/70"
+}
