@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 6.378,
+    "janus": 5.439,
     "me": 0.526
    },
    "positions": [
@@ -203,15 +203,6 @@
     },
     {
      "book": "janus",
-     "id": "J003",
-     "instrument": "US10Y",
-     "pnl_pct": 0.05,
-     "move": "3.83 -> 4.01 (2008-08-29 to 2008-10-31)",
-     "source": "FRED DGS10",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J004",
      "instrument": "GB10Y",
      "pnl_pct": 0.023,
@@ -262,15 +253,6 @@
      "pnl_pct": 1.249,
      "move": "1.6349 -> 2.123 (2008-08-29 to 2008-10-31)",
      "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J012",
-     "instrument": "MXN",
-     "pnl_pct": 0.889,
-     "move": "10.297 -> 12.705 (2008-08-29 to 2008-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
      "monthly": false
     },
     {
@@ -348,7 +330,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 2.378,
+    "janus": 1.772,
     "me": 0.29
    },
    "positions": [
@@ -561,15 +543,6 @@
     },
     {
      "book": "janus",
-     "id": "J003",
-     "instrument": "US10Y",
-     "pnl_pct": -0.138,
-     "move": "1.13 -> 0.7 (2020-02-28 to 2020-03-31)",
-     "source": "FRED DGS10",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J004",
      "instrument": "GB10Y",
      "pnl_pct": -0.028,
@@ -620,15 +593,6 @@
      "pnl_pct": 0.728,
      "move": "4.4906 -> 5.1855 (2020-02-28 to 2020-03-31)",
      "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J012",
-     "instrument": "MXN",
-     "pnl_pct": 0.744,
-     "move": "19.73 -> 23.448 (2020-02-28 to 2020-03-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
      "monthly": false
     },
     {
@@ -694,7 +658,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": 0.604,
+    "janus": -0.048,
     "me": 0.317
    },
    "positions": [
@@ -907,15 +871,6 @@
     },
     {
      "book": "janus",
-     "id": "J003",
-     "instrument": "US10Y",
-     "pnl_pct": 0.81,
-     "move": "1.52 -> 4.1 (2021-12-31 to 2022-10-31)",
-     "source": "FRED DGS10",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J004",
      "instrument": "GB10Y",
      "pnl_pct": 0.867,
@@ -966,15 +921,6 @@
      "pnl_pct": -0.34,
      "move": "5.5749 -> 5.2464 (2021-12-30 to 2022-10-31)",
      "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J012",
-     "instrument": "MXN",
-     "pnl_pct": -0.157,
-     "move": "20.514 -> 19.848 (2021-12-30 to 2022-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
      "monthly": false
     },
     {
@@ -1034,5 +980,5 @@
   }
  ],
  "method": "Stress tests: each book's current positions replayed through three historical episodes.\n\n    python -m ledger.stress           # fetch any missing history, then write data/ledger/stress.json\n\nEach position is held unchanged from the episode's start to its end, and the instrument moves as it did then:\n  * FX and commodities by the relative price change; yields and spreads by the absolute change in % or bp;\n  * the algorithm: weight x long return (bonds and spreads through the 10-year duration at the start level, no carry);\n  * Janus: notional x position return (filled positions; pending orders at their requested risk);\n  * my decisions: size x level change x direction / |entry - stop| (the P&L formula of ledger/scoring.py), the change\n    applied to the current mark (relative for prices, absolute for yields and spreads).\nInstruments without history over an episode are listed, not guessed. Monthly-average history (marked) is used only\nwhere no daily series exists, and the result says so.",
- "as_of": "2026-11-13"
+ "as_of": "2026-11-14"
 }

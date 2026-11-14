@@ -1,44 +1,44 @@
 {
- "since": "2026-11-13T17:29:32+00:00",
- "at": "2026-11-13T22:20:22+00:00",
+ "since": "2026-11-13T22:20:22+00:00",
+ "at": "2026-11-14T06:28:45+00:00",
  "items": [
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": -0.1363,
-   "text": "algorithm v1.0: -0.14 index points (to 99.64)"
+   "change": 0.2762,
+   "text": "algorithm v1.0: +0.28 index points (to 99.92)"
   },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.0092,
+   "change": -0.0055,
    "text": "janus: -0.01 index points (to 99.70)"
   },
   {
    "book": "janus",
    "kind": "close",
-   "link": "#/position/janus/J008",
-   "text": "Janus J008 closed (C08 rebalance): net +0.00%"
+   "link": "#/position/janus/J003",
+   "text": "Janus J003 closed (C08 rebalance): net +0.01%"
   },
   {
    "book": "janus",
    "kind": "close",
-   "link": "#/position/janus/J009",
-   "text": "Janus J009 closed (C08 rebalance): net -0.01%"
+   "link": "#/position/janus/J012",
+   "text": "Janus J012 closed (C08 rebalance): net -0.02%"
   },
   {
    "book": "janus",
    "kind": "trade",
-   "link": "#/position/janus/J014",
-   "text": "Janus J014 filled: short GBP"
+   "link": "#/position/janus/J013",
+   "text": "Janus J013 filled: short US10Y"
   },
   {
    "book": "janus",
    "kind": "trade",
-   "link": "#/position/janus/J015",
-   "text": "Janus J015 filled: long JPY"
+   "link": "#/position/janus/J016",
+   "text": "Janus J016 filled: short MXN"
   }
  ]
 }
