@@ -1,6 +1,12 @@
 {
  "schema": 1,
- "lock": null,
+ "lock": {
+  "routine": "night-worker",
+  "acquired_at": "2026-11-15T01:07:49+08:00",
+  "session": "https://claude.ai/code/session_01Ayx8qbSJc8grTrNzTHQdZY",
+  "cap": 4,
+  "safe_mode": true
+ },
  "night": "2026-11-14",
  "runs_used": 2,
  "last_kind": "worker",
