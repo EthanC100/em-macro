@@ -550,11 +550,20 @@ def fetch_instrument(row: dict, by_id: dict[str, dict], results: dict[str, dict]
                 pts: list = []
                 d, v, url = _fetch_one(source, ident, get, today, pts)
                 note = ""
+                if tag and d > today:
+                    # Q006: a fallback is never dated after the run's day (a panel month that has not ended is
+                    # dated at its month end): use the source's last observation on or before today
+                    past = sorted((pd_, pv) for pd_, pv in pts if pd_ <= today)
+                    if not past:
+                        raise ValueError(f"fallback {source} {ident} is dated {d}, after today ({today})")
+                    d, v = past[-1]
                 if freq == "daily":
                     hist = sorted({pd_: pv for pd_, pv in pts if (today - pd_).days <= 31}.items())
                 else:
                     hist = []
             if tag:
+                if d > today:
+                    raise ValueError(f"fallback {source} {ident} is dated {d}, after today ({today})")
                 prev = (previous or {}).get(inst)
                 pd_ = parse_date(prev.get("date")) if prev else None
                 if prev and prev.get("value") and pd_ and pd_ >= d and (prev.get("frequency") or "daily") == "daily":
@@ -607,14 +616,27 @@ def read_marks(path: Path = MARKS) -> list[dict]:
         return [dict(r) for r in csv.DictReader(f)]
 
 
+def future_fallback(mark: dict | None) -> bool:
+    """Q006: a monthly fallback row dated after the day it was fetched (a panel month end that had not come yet,
+    e.g. CLP's 2026-11-30 row written on 9 Nov). Monthly *primaries* are not fallbacks and keep their dates."""
+    if not mark or (mark.get("frequency") or "").strip().lower() != "monthly":
+        return False
+    if not (mark.get("note") or "").startswith("fallback "):
+        return False
+    d, f = parse_date(mark.get("date")), parse_date((mark.get("fetched_at") or "")[:10])
+    return bool(d and f and d > f)
+
+
 def latest_marks(path: Path = MARKS, rows: list[dict] | None = None) -> dict[str, dict]:
-    """Latest mark per instrument (by observation date, then fetch time)."""
+    """Latest mark per instrument (by observation date, then fetch time). A future-dated monthly fallback row
+    (``future_fallback``) never wins over another mark of the instrument (Q006)."""
     out: dict[str, dict] = {}
     for r in (rows if rows is not None else read_marks(path)):
         if not r.get("value"):
             continue
         cur = out.get(r["instrument"])
-        if cur is None or (r["date"], r.get("fetched_at", "")) >= (cur["date"], cur.get("fetched_at", "")):
+        if cur is None or (not future_fallback(r), r["date"], r.get("fetched_at", "")) >= \
+                (not future_fallback(cur), cur["date"], cur.get("fetched_at", "")):
             out[r["instrument"]] = r
     return out
 

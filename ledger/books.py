@@ -25,7 +25,8 @@ from . import capacity as CAP
 from . import derivs as DV
 from . import janus as JN
 from . import pricing as PX
-from .marks import latest_marks, live_mark, load_registry, mark_can_act, match_instrument, read_marks
+from .marks import (future_fallback, latest_marks, live_mark, load_registry, mark_can_act, match_instrument,
+                    read_marks)
 from .schema import entry_number, parse_date, parse_number, parse_probability, stop_level
 from .scoring import pnl_at_level, score_decision
 
@@ -65,7 +66,8 @@ class MarkBook:
     def series(self, inst: str, all_marks: bool = False) -> list[tuple[date, float, dict]]:
         key = (inst, all_marks)
         if key not in self._s:
-            self._s[key] = JN.series(self.rows, inst, actable_only=not all_marks)
+            # Q006: a future-dated monthly fallback row (CLP 2026-11-30, written on 9 Nov) is never a mark
+            self._s[key] = [x for x in JN.series(self.rows, inst, actable_only=not all_marks) if not future_fallback(x[2])]
         return self._s[key]
 
     def on(self, inst: str, d: date, all_marks: bool = False):
