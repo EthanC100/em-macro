@@ -32,3 +32,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-12,pr,59,88,advisory,claude-opus-5-5,,,
 2026-11-14,pr,66,75,advisory,claude-opus-5-5,,,
 2026-11-14,pr,67,65,advisory,claude-opus-5-5,,,
+2026-11-14,pr,68,65,advisory,claude-opus-5-5,,,
