@@ -26,7 +26,8 @@ def test_three_books_with_colours_and_live_starts(bk):
     assert "not AI" in bk["algorithm"]["kind"]
     v10, v11 = bk["algorithm"]["versions"]
     assert v10["is_live"] and not v11["is_live"] and v11["mtd_pct"] is None   # v1.1 is pre-live until Dec 2026
-    assert v10["estimate"]["label"] == "estimate, month to date"
+    assert v10["estimate"]["label"] == "estimate from the actual rebalance date"      # Q001: frozen positions carry run_date
+    assert v10["estimate"]["base_date"] == v10["positions_set"] and "frozen full-month convention" in v10["estimate"]["note"]
     assert v10["series"][0][1] == 100.0 and v10["series"][-1][2] == "estimate"
 
 

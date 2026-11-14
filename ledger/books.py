@@ -206,14 +206,45 @@ def _policy_rates() -> tuple[dict[str, float], float | None]:
     return pol, us
 
 
-def algo_estimate(positions: list[dict], mb: MarkBook, month: str, today: date) -> dict:
-    """Estimate, month to date, of a set of positions effective ``month`` (YYYY-MM)."""
+POS_FILES = {"v1.0": "results/systematic/positions.csv", "v1.1": "results/systematic_v1.1/positions.csv"}
+LOG_FILES = {"v1.0": "results/systematic/rebalance_log.csv", "v1.1": "results/systematic_v1.1/rebalance_log.csv"}
+
+
+def rebalance_date(vid: str, effective_from: str | None) -> tuple[str | None, str]:
+    """Q001: the date the positions effective ``effective_from`` were set, and where it comes from.
+
+    v1.0: the run_date column of results/systematic/positions.csv (em_macro.rebalance stamps it on every row).
+    v1.1: the same column of results/systematic_v1.1/positions.csv once its own step (``systematic_v11 rebalance``,
+    from the 3 Dec 2026 rebalance) stamps it, else the run_date of its rebalance_log.csv row for the same effective
+    month; before that neither exists and the estimate keeps the full-month base (month start - 1 day).
+    Only a date recorded for the same effective month counts; git commit dates are never used (a re-commit is not a
+    rebalance). A re-run of the same month restamps run_date (em_macro/rebalance.py keeps no first-run date), so it
+    moves the base forward even with identical positions; the estimate's note says so."""
+    pos_rel, log_rel = POS_FILES[vid], LOG_FILES[vid]
+    rows = _rows(ROOT / pos_rel)
+    if rows and rows[0].get("run_date") and rows[0].get("effective_from") == effective_from:
+        return rows[0]["run_date"], f"run_date of {pos_rel}"
+    for r in reversed(_rows(ROOT / log_rel)):
+        if r.get("effective_from") == effective_from and r.get("run_date"):
+            return r["run_date"], f"run_date of {log_rel}"
+    return None, f"none recorded for {effective_from} in {pos_rel} or {log_rel}: full month (month start - 1 day)"
+
+
+def algo_estimate(positions: list[dict], mb: MarkBook, month: str, today: date, run_date: str | None = None,
+                  base_source: str | None = None) -> dict:
+    """Estimate, month to date, of a set of positions effective ``month`` (YYYY-MM), from the rebalance that set them.
+
+    Q001: base day = max(``run_date``, month start - 1 day); without a run date, month start - 1 day (the frozen
+    full-month convention of the official paper P&L). Each instrument's base mark is its last mark on or before the
+    base day, the first P&L day is the first business day after it, and carry accrues in calendar days from it."""
     y, m = int(month[:4]), int(month[5:7])
     start = date(y, m, 1)
-    base_day = start - timedelta(days=1)
+    month_base = start - timedelta(days=1)
+    run = parse_date(run_date) if run_date else None
+    base_day = max(run, month_base) if run else month_base
     pol, us = _policy_rates()
     per, flagged = [], []
-    days = bdays(start, min(today, date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)))
+    days = bdays(base_day + timedelta(days=1), min(today, date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)))
     daily = {d: 0.0 for d in days}
     for p in positions:
         inst = p["instrument"]
@@ -261,13 +292,26 @@ def algo_estimate(positions: list[dict], mb: MarkBook, month: str, today: date) 
                     "mark_history": [[x[0].isoformat(), x[1], x[2].get("frequency") or ""]
                                      for x in mb.series(inst, all_marks=True) if x[0] >= base_day - timedelta(days=10)]})
     series = [[d.isoformat(), round(100 * v, 4)] for d, v in sorted(daily.items())]
-    return {"month": month, "base_date": base_day.isoformat(), "mtd_pct": series[-1][1] if series else 0.0,
-            "series": series, "positions": per, "carried": sorted(set(flagged)),
-            "label": "estimate, month to date",
-            "note": ("Estimate, month to date: current positions x each instrument's move since the last mark on or before "
-                     f"{base_day.isoformat()}, plus carry at the latest policy rates; costs and the bond model's monthly-average "
-                     "timing are not replicated. Instruments without a free daily source are carried at their last mark and "
-                     "flagged. The official figure from the 3rd-of-month run replaces it.")}
+    common = ("plus carry at the latest policy rates from that day; costs and the bond model's monthly-average timing "
+              "are not replicated. Instruments without a free daily source are carried at their last mark and flagged. ")
+    official = ("The official figure keeps the frozen full-month convention (the paper P&L booked at the next "
+                "3rd-of-month run credits the positions for the whole effective month) and replaces this estimate.")
+    if run:
+        label = "estimate from the actual rebalance date"
+        clamp = " (before the month started: based on the previous month end)" if run < month_base else ""
+        note = (f"Estimate from the actual rebalance date: the positions were set on {run.isoformat()}{clamp}; current "
+                f"positions x each instrument's move since its last mark on or before {base_day.isoformat()}, "
+                + common + official + " A re-run of the rebalance restamps the run date and moves the base to the "
+                "re-run's date, even with identical positions.")
+    else:
+        label = "estimate, month to date (full month: no rebalance date)"
+        note = ("Estimate, month to date, over the full month: no rebalance date is recorded for these positions, so "
+                f"current positions x each instrument's move since its last mark on or before {base_day.isoformat()}, "
+                + common + official)
+    return {"month": month, "base_date": base_day.isoformat(), "rebalance_date": run.isoformat() if run else None,
+            "base_source": base_source or ("run_date given by the caller" if run else "none: full month"),
+            "mtd_pct": series[-1][1] if series else 0.0,
+            "series": series, "positions": per, "carried": sorted(set(flagged)), "label": label, "note": note}
 
 
 def signal_attribution(per: list[dict]) -> list[dict]:
@@ -316,7 +360,8 @@ def algo_book(alg: dict, mb: MarkBook, today: date) -> dict:
             ("v1.0", alg["months"], alg["positions"], alg["rebalance"]["live_start_month"], alg.get("capacity")),
             ("v1.1", alg["v11"]["months"], alg["v11"]["positions"], alg["v11"]["live_start_month"], alg["v11"].get("capacity"))):
         eff = pos[0].get("effective_from") if pos else None
-        est = algo_estimate(pos, mb, eff, today) if eff else None
+        run, run_src = rebalance_date(vid, eff) if eff else (None, "")
+        est = algo_estimate(pos, mb, eff, today, run_date=run, base_source=run_src) if eff else None
         live_months = [m for m in months if m.get("live")]
         # daily index: 100 at the live start, official month ends, then the estimate for the month in progress
         y, mm = int(live_start[:4]), int(live_start[5:7])
