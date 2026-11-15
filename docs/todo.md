@@ -12,7 +12,7 @@ Edit it by hand; the next build picks it up.
 - [ ] 9 of 23 instruments lack daily prices and bond returns use monthly-average yields (the Ledger registry now marks 19 of 23 tradeable instruments daily (24 of 29 with the yield legs), but the algorithm's inputs are unchanged; France is marked daily from the Riksbank since 6 Nov 2026; the Italian, Indonesian, Colombian and Chilean 10-year yields still have no free daily source)
 - [ ] T02 data gaps (Chile CPI after 2023; stale euro-area, Mexican and South African series)
 - [x] Paper capital US$500m from the 3 Dec 2026 rebalance (C03; capacity checks on the Algorithm page)
-- [ ] Election tracker unmerged (`build/election-tracker`; `data/elections/` does not exist on main, the app falls back to `data/events/`)
+- [x] Election tracker merged (`data/elections/` is on main; the app reads `data/elections/calendar.csv` and falls back to `data/events/` only if it is missing)
 - [ ] Background file overstates the election edge
 - [ ] Turkey's lira is crawl-like (eligibility review under Algorithm)
 - [ ] No commodity data for the algorithm (Janus marks five energy markets on official spot prices, an estimate; no free daily futures settlements, metals or grains)
@@ -25,7 +25,7 @@ Edit it by hand; the next build picks it up.
 - [x] Risk Manager (`ledger/risk.py`, on every Decision form; posted as a comment on the issue)
 - [x] Screener (`ledger/screener.py`, after each monthly rebalance; report and app page)
 - [x] No Anthropic API key needed (Janus, the forecast resolver, post-mortems and the letters' narrative run in Claude Code sessions)
-- [ ] Election-tracker jobs inactive until merged
+- [x] Election-tracker jobs active (`elections-daily` every day at 06:41 UTC and `elections-weekly` on Mondays, both from main)
 - [x] The Opposition (automated for every new Janus position; daily briefings still in the Claude app)
 - [x] Janus in Claude Code sessions (quick check every 30 minutes as two hourly scheduled tasks at :15 and :45, daily review after the US close; post-mortems in the daily review)
 - [ ] Create the scheduled tasks (Janus quick check at :15 and :45, Janus daily review, Ledger forecast resolver, Ledger monthly letters)
