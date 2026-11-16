@@ -1,20 +1,20 @@
 {
- "since": "2026-11-15T22:16:50+00:00",
- "at": "2026-11-16T06:16:33+00:00",
+ "since": "2026-11-16T06:16:33+00:00",
+ "at": "2026-11-16T14:08:53+00:00",
  "items": [
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": 0.3263,
-   "text": "algorithm v1.0: +0.33 index points (to 99.57)"
+   "change": 0.1687,
+   "text": "algorithm v1.0: +0.17 index points (to 99.74)"
   },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": 0.0781,
-   "text": "janus: +0.08 index points (to 99.69)"
+   "change": 0.008,
+   "text": "janus: +0.01 index points (to 99.70)"
   }
  ]
 }
