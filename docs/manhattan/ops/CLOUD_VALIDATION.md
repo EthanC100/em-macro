@@ -193,3 +193,47 @@ protected delivery paths**. Whitespace checks passed. Live workflows, owner
 switches, research/protocol files and writer-owned data are unchanged. The
 candidate baseline and workflow patch still await owner approval; no workflow
 was dispatched and no external watcher, private repository or Mac was accessed.
+
+## Final engineering review for owner handoff
+
+Verified clean branch `codex/manhattan-ops-hardening` at source commit `36cc090`;
+fetched main and reviewed the complete PR diff. Independently queried GitHub:
+`tests` run `43972851460` completed successfully for that source head. The final
+review found no additional material code defect, and adds documentation only.
+
+Fresh validation on CPython 3.12.14, Linux 6.18.57 x86_64:
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH \
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider \
+  tests/test_manhattan_ops_*.py tests/test_q019_explorer_data_loader.py \
+  --junitxml=/tmp/manhattan-owner-review.xml \
+  > /tmp/manhattan-owner-review.log 2>&1
+```
+
+**Exit 0; 312 passed, 0 skipped, 0 failed, 0 errors; 83.14 seconds.** This is
+226 ops tests plus 86 Q019 tests, not 312 additional tests beyond those groups.
+The full suite was not rerun locally in this final documentation-only pass;
+its latest source-head GitHub CI result was verified rather than inferred from
+the older local report above. No unresolved test failure was found.
+
+Other fresh checks, each exit 0:
+
+* `git diff origin/main...HEAD --check` and the protected-path check using both
+  branch and main CODEOWNERS: zero protected paths among the 23 delivery files.
+* `git apply --check docs/manhattan/ops/patches/runner-integrity.patch`.
+* `/tmp/manhattan-runner-venv/bin/python -m pip check` and
+  `/tmp/manhattan-runner-venv/bin/python -m manhattan.ops.runner --help`.
+* `python -m manhattan.ops.monitor integrity --approved
+  docs/manhattan/ops/workflow_baseline_candidate.json`: no differences; this
+  verifies consistency only, not owner approval.
+* `python -m manhattan.ops.readiness docs/manhattan/ops/genesis_data_readiness.json`:
+  twenty unverified requirements; research execution unauthorized.
+
+The final approval/activation distinctions, platform limits and three recommended
+next tasks are recorded in `CLOUD_ENGINEERING_HANDOFF.md`. None of those next
+tasks was begun. No deployment, schedule, dispatch, private evidence access,
+scientific change, protected-path edit or merge occurred.

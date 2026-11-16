@@ -251,3 +251,55 @@ synthetic canaries, local bare Git stand-ins and local metadata only. Actual
 production storage, external monitoring/alerts and both Macs remain unverified.
 Owner approvals listed above still apply; no workflow patch was applied and no
 research control was activated. Latest test outcomes are in `CLOUD_VALIDATION.md`.
+
+## Final owner-review handoff for PR #72
+
+Final review covered the complete 23-file diff against fetched main at source
+head `36cc090`, the surrounding runner/store lifecycle, negative tests and
+public/private output boundaries. GitHub CI run `43972851460` passed for that
+head. Fresh local validation passed 312 tests (226 ops and 86 unchanged Q019
+security tests), exit 0. No additional material code defect was identified;
+this final pass changes documentation only. The engineering PR is ready for
+owner review, subject to the normal required checks on its latest commit.
+This supersedes the earlier continuation prompt: stop expanding this PR.
+
+| Boundary | Implemented/tested or decision required |
+|---|---|
+| Engineering delivered | Offline metadata/monitoring and artifact checks; private handled-failure logging; lock cleanup; complete committed-tree mirror comparison; bounded Git calls; strict witness Boolean input. Tests use synthetic inputs and local bare repositories |
+| Before merging | Ethan reviews the code and accepts the explicitly inactive scope and limitations; required GitHub CI/review checks must pass. No approval to operate is implied by merging |
+| Proposed, unapplied | `patches/runner-integrity.patch`, its candidate Linux runner wheel lock, and `workflow_baseline_candidate.json`. The live workflow is unchanged. These proposals may remain unapplied when the engineering PR merges; adoption needs a separate owner decision and provenance/platform review |
+| Before operational activation | Explicit owner authorization; verified private repository/access separation and main-only secret environment; mirror/backup and independent failure-log retention; trustworthy monitoring inputs, baseline and alert delivery; approved deployment/resource limits. No schedule or external monitor was activated here |
+| Known limits | Primary outage/open failure and hard process kill can lose ephemeral logs; no independent sink is provisioned. Watchdog inputs require complete pagination and trusted collection, and Actions success does not prove data freshness. Digest comparison does not authenticate reviews. Artifact verification covers listed files in a stable trusted tree, not hostile filesystem races or backup retention. Git deadlines bound calls, not a whole large run. No million-executable capacity or production-readiness claim is made |
+| Platform/local Macs | Linux/Python 3.12 tested. POSIX no-follow/nonblocking features are required; Windows is unsupported. The lock is Linux x86_64 only. Mac hardware, runtime, permissions, sleep/recovery, telemetry, worker roles, firewall and LAN-denial checks require a separately authorized local session; none was attempted here |
+| Scientific dependency | All F01–F10 specifications remain missing and all twenty provisional dataset requirements unverified. Claude's originals, v0.2 corrections and finalized data/timing definitions are needed before family-specific implementation. Research freezes, evidence access and activation remain owner-controlled |
+
+### Recommended next phase (recommendations only; not started)
+
+Prioritize the research data and execution path over additional dashboards or
+deployment automation. Each task below can be implemented and tested in Codex
+Cloud without either Mac or the missing Genesis specifications. Live integration
+and family-specific scientific choices remain outside that authorization.
+
+1. **Point-in-time capture integrity and replay audit — recommended first.**
+   Extend the existing `ops/data.py` and engine PIT tests with synthetic release,
+   revision, backfill, corruption and interruption fixtures, checking archived
+   input hashes and reproducible as-of reads. Benefit: prevent corrupted or
+   incorrectly dated inputs from silently entering evaluations. Dependencies:
+   existing source/provenance interfaces and role fences. Risk: nominal publication
+   lags must not be represented as verified first-release history; unresolved
+   source semantics go to Claude/owner. No private data or real backtest is needed.
+2. **Bounded, resumable synthetic batch execution.** Build on the existing compiler
+   iterator and engine, proving uninterrupted and resumed runs have equivalent
+   outputs at the declared daily/weekly/monthly frequency. Benefit: advance from
+   individual executables to reliable workloads with explicit CPU/memory limits.
+   Dependencies: existing executable IDs, input/code hashes and synthetic fixtures.
+   Risks: duplicate/missing evaluations, stale caches and altered timing; reject
+   incompatible checkpoints and keep all research/production gates disabled.
+3. **Bounded-memory ledger indexing and verification.** Address the documented
+   approximately 951 MiB peak for a synthetic 100,000-record write before scaling
+   workload sizes. Preserve canonical record bytes and chain/journal semantics;
+   make any index reconstructible and verify equivalence with current crash tests.
+   Benefit: remove a measured capacity bottleneck rather than claiming a million
+   strategies are already supported. Dependencies: existing store format and local
+   bare-repository test harness. Risks: stale indexes, migration errors and loss
+   of tamper detection; use synthetic stores and require restore/rebuild tests.
