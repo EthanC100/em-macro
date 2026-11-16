@@ -12,6 +12,8 @@ import re
 import stat
 from pathlib import Path, PurePosixPath
 
+from .inputs import read_json
+
 MAX_FILES = 10_000
 MAX_TOTAL_BYTES = 1_000_000_000
 
@@ -23,7 +25,8 @@ def verify(root: Path, manifest: dict) -> dict:
     trusted local tree; this is not an isolation boundary against concurrent
     hostile filesystem mutation. Extra files are not read or treated as verified.
     """
-    if set(manifest) != {"schema_version", "files"} or manifest["schema_version"] != 1:
+    if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "files"} \
+            or type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1:
         raise ValueError("unsupported artifact manifest")
     entries = manifest["files"]
     if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_FILES:
@@ -87,9 +90,7 @@ def main(argv=None) -> int:
     parser.add_argument("--manifest", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.manifest.stat().st_size > 2_000_000:
-            raise ValueError("manifest too large")
-        result = verify(args.root, json.loads(args.manifest.read_text()))
+        result = verify(args.root, read_json(args.manifest))
     except (ValueError, KeyError, TypeError, AttributeError, OSError):
         print('{"status":"invalid_input"}')
         return 2

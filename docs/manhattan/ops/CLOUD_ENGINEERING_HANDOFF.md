@@ -55,7 +55,7 @@ has never been an ops run. No workflow was dispatched or rerun here.
 | Requirement | Delivered | Remaining limit |
 |---|---|---|
 | A1 dependency/workflow integrity | Candidate runner-only wheel hash lock; two Action SHAs resolved from official tag refs; owner patch with unchanged triggers, permissions and main/environment gates; patch application/YAML regression test | Existing runner workflow deliberately not edited (ops owner-protection instructions); other workflows and their dependency files remain unpinned. Candidate versions are the fresh environment's resolution, not a recovered production lock. Review before adoption |
-| A2 private failure logs | Nightly handled failures save their log privately without creating a success heartbeat; final log commit is mirrored; persistence errors produce sanitized failed health; synthetic leak tests | Clone/open failure, primary-store outage, hard process kill and registration-path logs need an independent authorized private sink. No such sink is assumed or provisioned |
+| A2 private failure logs | Nightly and registration handled-failure logs are saved privately; registration failures release their lock; logs use mode 0600; mirror verification checks the complete committed tree; persistence/startup errors produce sanitized failed health | Clone/open failure, primary-store outage and hard process kill still need an independent authorized private sink. No such sink is assumed or provisioned |
 | A3 missed-run watchdog | Offline deterministic weekday 23:41 UTC slot checking, default disabled, 12-hour delay allowance, 75-minute runtime limit, missed/failed/pending counts, checks gaps even after a later success | No external invocation, schedule or alert delivery activated. Owner must establish monitoring start and independent caller before relying on it |
 | A4 workflow changes | Exact workflow-byte hash comparison against trusted baseline; additions/removals detected; ordinary code changes ignored; fixed public output | Does not authenticate GitHub reviews. Baseline must come from an independently trusted owner-reviewed revision; the supplied candidate is not evidence of approval |
 
@@ -111,6 +111,11 @@ Limit 10,000 entries and 1 GB total declared data. Extra files are not read or
 certified. Use a stable trusted filesystem: this verifier is not a sandbox
 against an attacker concurrently swapping filesystem components. Do not publish
 private manifests or file paths; public command output contains fixed words/counts.
+Metadata readers bound the actual descriptor read, reject final symlinks and
+non-regular files without blocking on FIFOs, and reject duplicate JSON keys,
+non-finite numbers and excessive nesting. Workflow inventory additionally caps
+directory entries at 1,000 and total bytes at 8 MB. These are POSIX tools and fail
+closed where no-follow/nonblocking opens are unavailable; Windows is unsupported.
 
 ## Owner workflow patch
 
@@ -216,3 +221,33 @@ recorded test/environment issues without weakening Q019. If Claude's finalized
 Genesis specs arrive, audit engineering feasibility against those exact documents;
 otherwise continue independent deterministic operations work. Do not dispatch,
 freeze, merge, trade or change remote access.
+
+## Independent review and follow-up on PR #72
+
+Reviewed all 16 original changed files at `0d53828`, including implementation,
+tests, dependency lock, candidate patch/baseline and inventory/documentation.
+Confirmed that GitHub CI run `43887821034` passed for that head. Fetched main
+advanced to `ab7f29d`; its intervening changes were writer-owned data, which were
+not incorporated or edited. Work remains on the existing PR branch.
+
+The review reproduced a false-success mirror case: matching chains do not prove
+that a log-only commit was mirrored. Missing/changed committed files now produce
+`files_differ`; a rejected final mirror push cannot produce `mirror_ok: true`.
+The final verification also replaces any earlier mirror-head health value.
+
+Other corrections: bound real metadata reads instead of relying on pre-read
+stat size; reject ambiguous/malformed JSON and noninteger schema versions;
+preserve registration attempt logs and release registration failure locks;
+make Git calls noninteractive with a 120-second per-call deadline (configurable
+up to 600 seconds); protect log file permissions independently of umask; sanitize
+exceptions outside the private fd redirect and malformed issue-body input.
+Witness JSON now requires an actual Boolean: the string `"false"` previously
+became true. This is input validation, not external witness authentication;
+the provenance/verification of an owner's witness file remains a separate trust
+requirement. No timing, evidence-weight, freeze or economic rule was changed.
+
+Review found no private evidence in the original delivery. Regression tests use
+synthetic canaries, local bare Git stand-ins and local metadata only. Actual
+production storage, external monitoring/alerts and both Macs remain unverified.
+Owner approvals listed above still apply; no workflow patch was applied and no
+research control was activated. Latest test outcomes are in `CLOUD_VALIDATION.md`.

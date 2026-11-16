@@ -218,3 +218,105 @@ def test_mirror_contains_final_private_log_commit(setup, tmp_path):
     listing = subprocess.run(["git", "--git-dir", str(mirror), "ls-tree", "-r", "--name-only", "main"],
                              check=True, capture_output=True, text=True).stdout
     assert "logs/run-1-1.log" in listing and "heartbeat.json" in listing
+
+
+def test_rejected_final_log_mirror_cannot_report_success(setup, tmp_path, monkeypatch):
+    mirror = tmp_path / "mirror.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(mirror)], check=True)
+    original = ST.Store.mirror
+    calls = 0
+
+    def reject_final(self, url):
+        nonlocal calls
+        calls += 1
+        return original(self, url) if calls == 1 else {"status": "rejected"}
+
+    monkeypatch.setattr(ST.Store, "mirror", reject_final)
+    health = setup["night"](date(2026, 11, 16), "2026-11-16T23:20:00Z", mirror=str(mirror))
+    assert health["status"] == "partial"
+    assert health["mirror_status"] == "rejected" and health["mirror_ok"] is False
+
+
+def test_registration_failure_releases_lock_and_preserves_private_diagnostics(setup, monkeypatch, capfd):
+    def broken(*a, **kw):
+        raise RuntimeError("private_registration_canary_0.918273645")
+
+    monkeypatch.setattr(R, "registration_intents", broken)
+    health = setup["register"]()
+    public = capfd.readouterr()
+    ledger = setup["ledger"]()
+    assert health["status"] == "failed" and health["stage"] == "register"
+    assert ledger.active_locks() == [] and ledger.of_type("registration") == []
+    assert ledger.of_type("heartbeat") == []
+    logs = list((ledger.workdir / "logs").glob("register-*-1.log"))
+    assert len(logs) == 1 and "private_registration_canary" in logs[0].read_text()
+    assert "private_registration_canary" not in public.out + public.err
+
+
+def test_registration_log_storage_failure_is_sanitized(setup, monkeypatch, capfd):
+    def unavailable(*a, **kw):
+        raise OSError("private_storage_canary_0.123456789")
+
+    monkeypatch.setattr(ST.Store, "put_files", unavailable)
+    health = setup["register"]()
+    public = capfd.readouterr()
+    assert health["status"] == "failed" and health["stage"] == "private-log"
+    assert setup["ledger"]().active_locks() == []
+    assert "private_storage_canary" not in public.out + public.err
+
+
+def test_registration_attempt_logs_are_distinct_and_mirrored(setup, tmp_path):
+    mirror = tmp_path / "mirror.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(mirror)], check=True)
+    for attempt in (1, 2):
+        cfg = setup["cfg"](date(2026, 11, 13), run_attempt=attempt, mirror=str(mirror))
+        cfg.run_id = "same-run"
+        setup["clock"].at("2026-11-13T16:45:00Z")
+        health = R.register(cfg, 1, {"merged": True, "merged_at": MERGED, "merge_commit_sha": "d" * 40},
+                            None, clock=setup["clock"])
+        assert health["status"] == "ok" and health["mirror_ok"]
+    tree = subprocess.run(["git", "--git-dir", str(mirror), "ls-tree", "-r", "--name-only", "main"],
+                          check=True, capture_output=True, text=True).stdout
+    assert "logs/register-same-run-1.log" in tree and "logs/register-same-run-2.log" in tree
+
+
+@pytest.mark.parametrize("raw", ["[]", "null", "3", '{"status":"failed","status":"ok"}'])
+def test_issue_body_cli_invalid_shapes_are_sanitized(tmp_path, raw):
+    path = tmp_path / "health.json"
+    path.write_text(raw)
+    result = subprocess.run([sys.executable, "-m", "manhattan.ops.runner", "issue-body", "--health", str(path)],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0 and "| status | failed |" in result.stdout
+    assert not result.stderr
+
+
+def test_cli_sanitizes_failures_outside_the_private_redirect(tmp_path, monkeypatch, capfd):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def broken(*a):
+        raise OSError("private_startup_canary_0.192837465")
+        yield
+
+    monkeypatch.setattr(R.B, "quiet", broken)
+    output = tmp_path / "health.json"
+    status = R.main(["nightly", "--ledger-dir", str(tmp_path / "ledger"), "--remote", "synthetic",
+                     "--batches", str(tmp_path / "batches"), "--health-out", str(output)])
+    public = capfd.readouterr()
+    assert status == 1 and not public.err and "private_startup_canary" not in public.out
+    assert json.loads(public.out)["status"] == "failed"
+    assert json.loads(output.read_text())["error_class"] == "OSError"
+
+
+@pytest.mark.parametrize("verified", ["false", "true", 1, 0, None])
+def test_witness_verification_does_not_coerce_non_booleans(tmp_path, verified):
+    path = tmp_path / "synthetic-witness.json"
+    path.write_text(json.dumps({"kind": "synthetic", "digest": "a" * 64, "verified": verified}))
+    with pytest.raises(ValueError):
+        R._witness(str(path))
+
+
+def test_explicit_false_witness_remains_unverified(tmp_path):
+    path = tmp_path / "synthetic-witness.json"
+    path.write_text(json.dumps({"kind": "synthetic", "digest": "a" * 64, "verified": False}))
+    assert R._witness(str(path)).verified is False

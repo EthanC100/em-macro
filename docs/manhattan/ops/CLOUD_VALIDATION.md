@@ -127,3 +127,69 @@ Use the continuation prompt and owner-only checklist in
 [CLOUD_ENGINEERING_HANDOFF.md](CLOUD_ENGINEERING_HANDOFF.md). Local `/tmp`
 environments/logs may disappear; the committed sources, tests, environment
 snapshot, candidate lock and documents carry the reproducible handoff.
+
+## PR #72 review follow-up (same branch, 2026-11-16)
+
+Independently reviewed the complete original diff at `0d53828` and confirmed
+GitHub CI run `43887821034` completed successfully for that commit. The fixes
+and remaining trust boundaries are described in `CLOUD_ENGINEERING_HANDOFF.md`.
+The Python version, operating system and installed-package snapshot are unchanged;
+`pip freeze` matches `cloud-test-environment.txt` exactly. No dependency was added.
+
+Two added mirror regressions failed against the prior code, reproducing both
+equal-chain/missing-file certification and a rejected final-log mirror push
+reported as success. Both pass with complete committed-tree verification and
+the corrected final health result. Other new regression coverage exercises:
+
+* registration failure cleanup, private diagnostics and distinct attempt logs;
+* per-call Git deadlines and noninteractive Git environment;
+* actual read limits despite an understated stat size; FIFO/symlink refusal;
+* duplicate keys, non-finite numbers, excessive nesting and exact schema types;
+* log permissions under umask 022 and refusal of linked/special log files;
+* sanitized startup/issue-body failures and strict witness Boolean validation.
+
+Final focused command:
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH \
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider tests/test_manhattan_ops_*.py \
+  --junitxml=/tmp/manhattan-review-final-ops.xml \
+  > /tmp/manhattan-review-final-ops.log 2>&1
+```
+
+**Exit 0; 226 passed, 0 skipped, 0 failed, 0 errors; 76.70 seconds.**
+All new tests use synthetic inputs and local bare Git stand-ins. The unchanged
+candidate owner patch still passes `git apply --check`. Metadata validation still
+reports all twenty Genesis requirements unverified and research unauthorized.
+
+A preliminary full run was deliberately interrupted after further CLI defects
+were found, so that the full suite could restart against the completed source.
+It exited 2 (interrupt), with 458 passed and 125 skipped before interruption;
+it is not counted as a successful full run. Final full-suite results follow.
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH \
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider \
+  --junitxml=/tmp/manhattan-review-final-full.xml \
+  > /tmp/manhattan-review-final-full.log 2>&1
+```
+
+**Exit 0; 1,679 passed, 132 skipped, 0 failed, 0 errors; 672.97 seconds;
+10 warnings.** This run collected all final source and regression tests. It
+includes all 86 unchanged Q019 security tests, passing without skips. The 132
+skip reasons match the earlier table: no private snapshots, optional numpyro
+and reportlab, and the three explicit opt-ins. No private integration or research
+evaluation is claimed. The 226-test ops total is included in the full total,
+not additional to it.
+
+Checks against both the branch and freshly fetched main CODEOWNERS found **zero
+protected delivery paths**. Whitespace checks passed. Live workflows, owner
+switches, research/protocol files and writer-owned data are unchanged. The
+candidate baseline and workflow patch still await owner approval; no workflow
+was dispatched and no external watcher, private repository or Mac was accessed.

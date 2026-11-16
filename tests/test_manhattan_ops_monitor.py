@@ -91,6 +91,20 @@ def test_symlink_workflow_refused(tmp_path):
         M.workflow_digests(tmp_path)
 
 
+def test_workflow_total_byte_and_entry_budgets(tmp_path, monkeypatch):
+    directory = tmp_path / ".github/workflows"
+    directory.mkdir(parents=True)
+    (directory / "a.yml").write_bytes(b"synthetic")
+    (directory / "b.yml").write_bytes(b"synthetic")
+    monkeypatch.setattr(M, "MAX_WORKFLOW_BYTES", 10)
+    with pytest.raises(ValueError):
+        M.workflow_digests(tmp_path)
+    monkeypatch.setattr(M, "MAX_WORKFLOW_BYTES", 100)
+    monkeypatch.setattr(M, "MAX_WORKFLOW_FILES", 1)
+    with pytest.raises(ValueError):
+        M.workflow_digests(tmp_path)
+
+
 def test_cli_does_not_echo_untrusted_input(tmp_path):
     snapshot = tmp_path / "runs.json"
     snapshot.write_text(json.dumps([run(created_at="secret_canary_0.123456789")]))

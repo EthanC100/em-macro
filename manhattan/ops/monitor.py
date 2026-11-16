@@ -13,9 +13,13 @@ import re
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
+from .inputs import read_bytes, read_json
+
 WORKFLOW = ".github/workflows/manhattan-ops-runner.yml"
 MAX_RUNS = 1000
 MAX_BYTES = 2_000_000
+MAX_WORKFLOW_BYTES = 8_000_000
+MAX_WORKFLOW_FILES = 1000
 
 
 def utc(value: str) -> datetime:
@@ -92,13 +96,17 @@ def workflow_digests(root: Path) -> dict[str, str]:
     directory = root / ".github/workflows"
     if (root / ".github").is_symlink() or directory.is_symlink() or not directory.is_dir():
         raise ValueError("invalid workflow directory")
-    result = {}
-    for path in sorted(directory.iterdir()):
+    result, total = {}, 0
+    for index, path in enumerate(directory.iterdir()):
+        if index >= MAX_WORKFLOW_FILES:
+            raise ValueError("workflow entry bound exceeded")
         if path.suffix not in (".yml", ".yaml"):
             continue
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_BYTES:
             raise ValueError("invalid workflow file")
-        result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+        raw = read_bytes(path, max_bytes=min(MAX_BYTES, MAX_WORKFLOW_BYTES - total))
+        total += len(raw)
+        result[path.relative_to(root).as_posix()] = hashlib.sha256(raw).hexdigest()
     if not result:
         raise ValueError("empty workflow tree")
     return result
@@ -122,13 +130,6 @@ def integrity(current: dict, approved: dict) -> dict:
     changed = sum(current[p] != approved[p] for p in current.keys() & approved.keys())
     return {"status": "review_required" if added or removed or changed else "ok",
             "added": added, "removed": removed, "changed": changed}
-
-
-def read_json(path: str):
-    p = Path(path)
-    if p.stat().st_size > MAX_BYTES:
-        raise ValueError("input too large")
-    return json.loads(p.read_text())
 
 
 def main(argv=None) -> int:

@@ -45,3 +45,11 @@ def test_oversized_manifest_rejected_before_reading(tmp_path):
     doc["files"][0]["bytes"] = 1_000_000_001
     with pytest.raises(ValueError):
         verify(tmp_path, doc)
+
+
+@pytest.mark.parametrize("version", [True, 1.0, "1", None])
+def test_schema_version_has_an_exact_integer_type(tmp_path, version):
+    doc = fixture(tmp_path)
+    doc["schema_version"] = version
+    with pytest.raises(ValueError):
+        verify(tmp_path, doc)

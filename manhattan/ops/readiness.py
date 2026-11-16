@@ -11,6 +11,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+from .inputs import read_json
+
 STATUSES = {"verified_available", "likely_available", "unavailable", "unverified"}
 FIELDS = {"id", "dataset", "provider", "availability", "status", "release_timestamps",
           "vintages", "coverage_start", "coverage_end", "instrument_ids", "contract_mapping",
@@ -20,7 +22,8 @@ UNRESOLVED = {"", "unverified", "unknown", "pending"}
 
 
 def validate(document: dict) -> dict:
-    if set(document) != {"schema_version", "families"} or document["schema_version"] != 1:
+    if not isinstance(document, dict) or set(document) != {"schema_version", "families"} \
+            or type(document["schema_version"]) is not int or document["schema_version"] != 1:
         raise ValueError("unsupported inventory schema")
     families = document["families"]
     if not isinstance(families, list) or len(families) != 10:
@@ -81,9 +84,7 @@ def main(argv=None) -> int:
     parser.add_argument("inventory", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.inventory.stat().st_size > 1_000_000:
-            raise ValueError("inventory too large")
-        result = validate(json.loads(args.inventory.read_text()))
+        result = validate(read_json(args.inventory, max_bytes=1_000_000))
     except (ValueError, TypeError, KeyError, AttributeError, OSError):
         print('{"status":"invalid_inventory"}')
         return 2

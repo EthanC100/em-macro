@@ -54,3 +54,11 @@ def test_duplicates_missing_families_and_unknown_fields_are_rejected():
         mutate(doc)
         with pytest.raises(ValueError):
             validate(doc)
+
+
+@pytest.mark.parametrize("version", [True, 1.0, "1", None])
+def test_schema_version_has_an_exact_integer_type(version):
+    doc = inventory()
+    doc["schema_version"] = version
+    with pytest.raises(ValueError):
+        validate(doc)
