@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-16",
- "at": "2026-11-16T14:08:53+00:00",
+ "at": "2026-11-16T19:57:52+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -16,9 +16,9 @@
   "D002": {
    "action": "No trade",
    "instrument": "USD/BRL",
-   "note": "",
-   "outcome": "",
-   "status": "open"
+   "note": "Auto-resolved (stop hit) on 2026-11-16: exit 5.7324 BRL per USD marked 2026-11-16 (daily) from bcb_sgs 1 https://api.bcb",
+   "outcome": "wrong",
+   "status": "resolved"
   },
   "D003": {
    "action": "Buy",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 99.7407,
+  "algorithm v1.0": 99.3539,
   "algorithm v1.1": 100.0,
-  "janus": 99.7009,
+  "janus": 99.8555,
   "me": 99.3752
  },
  "janus": {
