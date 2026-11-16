@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "id": "F01",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "cftc",
+          "dataset": "CFTC positioning first-release history",
+          "provider": "CFTC; exact report series unconfirmed",
+          "availability": "public",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F01 and v0.2; confirm post-volatility-scaling neutrality and real-time CFTC availability rules."
+          ]
+        },
+        {
+          "id": "futures",
+          "dataset": "Futures contract reference data and prices",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F01 and v0.2; confirm post-volatility-scaling neutrality and real-time CFTC availability rules."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "index_roll",
+          "dataset": "Index-specific roll calendars and contract-pair mappings",
+          "provider": "Index administrators; exact indices unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F02 and v0.2; specify index-specific contract-pair mapping and calendar versions."
+          ]
+        },
+        {
+          "id": "futures",
+          "dataset": "Contract-level futures reference data and prices",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F02 and v0.2; specify index-specific contract-pair mapping and calendar versions."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F03",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "auctions",
+          "dataset": "Sovereign auction announcements, results and timestamps",
+          "provider": "Debt management offices; sovereign universe unconfirmed",
+          "availability": "public",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F03 and v0.2; specify deliverable-basket mapping and overlapping-auction handling."
+          ]
+        },
+        {
+          "id": "deliverables",
+          "dataset": "Deliverable baskets, conversion factors and futures reference data",
+          "provider": "Exchange/provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F03 and v0.2; specify deliverable-basket mapping and overlapping-auction handling."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F04",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "fx",
+          "dataset": "FX quote definitions, timestamps and reference prices",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F04 and v0.2; specify quote convention and approved exposure proxy with its limitations."
+          ]
+        },
+        {
+          "id": "exposures",
+          "dataset": "Month-end hedge exposure proxies and publication histories",
+          "provider": "Provider and proxy definitions unconfirmed",
+          "availability": "unverified",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F04 and v0.2; specify quote convention and approved exposure proxy with its limitations."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F05",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "duration_supply",
+          "dataset": "Duration supply and issuance histories with vintages",
+          "provider": "Debt management offices; universe unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F05 and v0.2; confirm retained universe after dropping the underpowered cross-country variant."
+          ]
+        },
+        {
+          "id": "rates",
+          "dataset": "Bond instrument identifiers and reference prices",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F05 and v0.2; confirm retained universe after dropping the underpowered cross-country variant."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F06",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "terms_trade",
+          "dataset": "Terms-of-trade inputs with release timestamps and vintages",
+          "provider": "Statistical agencies; inputs unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F06 and v0.2; Claude must settle the change-signal/model inconsistency and theoretical model choice."
+          ]
+        },
+        {
+          "id": "real_fx",
+          "dataset": "Real exchange-rate inputs and vintages",
+          "provider": "Provider and transformation unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F06 and v0.2; Claude must settle the change-signal/model inconsistency and theoretical model choice."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F07",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "options",
+          "dataset": "Options contracts, quotes and event calendars",
+          "provider": "Provider unconfirmed",
+          "availability": "licensed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F07 and v0.2; specify variance-premium covariance sign and exact straddle-P&L interpretation."
+          ]
+        },
+        {
+          "id": "underlying",
+          "dataset": "Underlying prices and contract reference data",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F07 and v0.2; specify variance-premium covariance sign and exact straddle-P&L interpretation."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F08",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "fiscal",
+          "dataset": "Fiscal and macroeconomic first releases with vintages",
+          "provider": "Statistical agencies; series unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F08 and v0.2; specify treatment of common EM and US-rate confounding."
+          ]
+        },
+        {
+          "id": "em_rates",
+          "dataset": "EM and US rate instruments, identifiers and prices",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F08 and v0.2; specify treatment of common EM and US-rate confounding."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F09",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "contracts",
+          "dataset": "Commodity contract units, multipliers and mappings",
+          "provider": "Exchanges; universe unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F09 and v0.2; specify contract-unit mathematics and approved crush-spread ratios."
+          ]
+        },
+        {
+          "id": "margins",
+          "dataset": "Production input/output prices and release histories",
+          "provider": "Provider and inputs unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F09 and v0.2; specify contract-unit mathematics and approved crush-spread ratios."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F10",
+      "specification": "missing",
+      "requirements": [
+        {
+          "id": "announcements",
+          "dataset": "Scheduled announcement calendars, release times and revisions",
+          "provider": "Official release agencies; event universe unconfirmed",
+          "availability": "public",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F10 and v0.2; specify explicit covariance assumption determining the bond-premium direction."
+          ]
+        },
+        {
+          "id": "bonds",
+          "dataset": "Bond contracts, prices and timing metadata",
+          "provider": "Provider unconfirmed",
+          "availability": "mixed",
+          "status": "unverified",
+          "release_timestamps": "unverified",
+          "vintages": "unverified",
+          "coverage_start": null,
+          "coverage_end": null,
+          "instrument_ids": "unverified",
+          "contract_mapping": "unverified",
+          "publication_delay": "unverified",
+          "licensing": "unverified",
+          "missing_data": "pending",
+          "project_support": "No inspected source extract establishes this family requirement; exact requirements await Claude specification.",
+          "evidence": [],
+          "claude_decisions": [
+            "Deliver original F10 and v0.2; specify explicit covariance assumption determining the bond-premium direction."
+          ]
+        }
+      ]
+    }
+  ]
+}

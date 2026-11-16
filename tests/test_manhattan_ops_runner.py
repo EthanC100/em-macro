@@ -177,3 +177,44 @@ def test_issue_body_cli_never_fails(tmp_path):
     out = subprocess.run([sys.executable, "-m", "manhattan.ops.runner", "issue-body", "--health", str(p)], cwd=ROOT,
                          capture_output=True, text=True)
     assert out.returncode == 0 and "1.5" not in out.stdout                 # a bad record is not passed through
+
+
+def test_handled_failure_log_preserved_privately_without_heartbeat(setup, monkeypatch, capfd):
+    s = setup
+    s["register"]()
+    capfd.readouterr()
+
+    def broken(*a, **kw):
+        raise RuntimeError("private_canary_0.192837465")
+
+    monkeypatch.setattr(R, "observation_intents", broken)
+    health = s["night"](date(2026, 11, 16), "2026-11-16T23:20:00Z")
+    public = capfd.readouterr()
+    assert health["status"] == "failed"
+    assert "private_canary" not in public.out + public.err
+    ledger = s["ledger"]()
+    logs = list((ledger.workdir / "logs").glob("*.log"))
+    assert logs and any("private_canary_0.192837465" in p.read_text() for p in logs)
+    assert ledger.of_type("heartbeat") == []
+    assert not (ledger.workdir / "heartbeat.json").exists()
+
+
+def test_log_persistence_failure_stays_private_and_reports_failure(setup, monkeypatch, capfd):
+    def unavailable(*a, **kw):
+        raise OSError("private_storage_canary_0.918273645")
+
+    monkeypatch.setattr(ST.Store, "put_files", unavailable)
+    health = setup["night"](date(2026, 11, 16), "2026-11-16T23:20:00Z")
+    public = capfd.readouterr()
+    assert health["status"] == "failed" and health["stage"] == "private-log"
+    assert "private_storage_canary" not in public.out + public.err
+
+
+def test_mirror_contains_final_private_log_commit(setup, tmp_path):
+    mirror = tmp_path / "mirror.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(mirror)], check=True)
+    health = setup["night"](date(2026, 11, 16), "2026-11-16T23:20:00Z", mirror=str(mirror))
+    assert health["status"] == "ok" and health["mirror_ok"]
+    listing = subprocess.run(["git", "--git-dir", str(mirror), "ls-tree", "-r", "--name-only", "main"],
+                             check=True, capture_output=True, text=True).stdout
+    assert "logs/run-1-1.log" in listing and "heartbeat.json" in listing

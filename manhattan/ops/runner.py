@@ -315,11 +315,26 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                 except Exception:                                    # noqa: BLE001 - it then expires on its own
                     traceback.print_exc()
         finally:
-            if s is not None and health.get("stage") == "done":
-                sys.stdout.flush()
-                s.put_files({f"logs/{log.name}": log.read_bytes(),
-                             "heartbeat.json": json.dumps({"asof": cfg.asof.isoformat()}).encode()},
-                            f"private log {cfg.run_id}.{cfg.run_attempt}")
+            # Handled failures need their diagnostics too. Never publish the log or
+            # turn an unsuccessful run into a heartbeat. Simulated process deaths
+            # and another runner's live lock deliberately skip this path.
+            if s is not None and health.get("status") in ("ok", "partial", "failed"):
+                try:
+                    sys.stdout.flush()
+                    files = {f"logs/{log.name}": log.read_bytes()}
+                    if health.get("stage") == "done":
+                        files["heartbeat.json"] = json.dumps({"asof": cfg.asof.isoformat()}).encode()
+                    s.put_files(files, f"private log {cfg.run_id}.{cfg.run_attempt}")
+                    # The mirror must include the final log commit, not just the
+                    # chain as it stood before diagnostics were saved.
+                    health["mirror_status"] = s.mirror(cfg.mirror)["status"].replace("_", "-")
+                    v = s.verify_mirror(cfg.mirror, private / "mirror-check")
+                    health["mirror_ok"] = v["status"] == "equal"
+                    if cfg.mirror and not health["mirror_ok"] and health["status"] == "ok":
+                        health["status"] = "partial"
+                except Exception as e:                                # private storage may itself be unavailable
+                    traceback.print_exc()                             # still inside the private fd redirect
+                    health.update(B.failure("private-log", e))
     if s is not None:
         health["ledger_records"] = len(s.records)
         health["ledger_head"] = s.head
