@@ -320,3 +320,68 @@ def test_explicit_false_witness_remains_unverified(tmp_path):
     path = tmp_path / "synthetic-witness.json"
     path.write_text(json.dumps({"kind": "synthetic", "digest": "a" * 64, "verified": False}))
     assert R._witness(str(path)).verified is False
+
+
+@pytest.mark.parametrize("kind", ["nightly", "register"])
+@pytest.mark.parametrize("storage_fails", [False, True])
+def test_peer_commit_after_unlock_preserves_records_and_logs(setup, tmp_path, monkeypatch, capfd,
+                                                           kind, storage_fails):
+    original = ST.Store.put_files
+    injected, peer_records, peer_files = [], [], {}
+
+    def interleave(self, files, message):
+        if not injected and self.run_id != "peer":
+            injected.append(True)
+            # The primary operation really released its lock, and a different
+            # clone now commits before the original log transaction starts.
+            assert self.active_locks() == []
+            peer = ST.Store(workdir=tmp_path / "peer", remote=self.remote, run_id="peer",
+                            clock=setup["clock"]).open()
+            peer.acquire()
+            peer.write([ST.Intent("heartbeat", ("heartbeat", "2026-11-17"),
+                                  {"asof": "2026-11-17"})], "synthetic peer heartbeat")
+            peer.release()
+            log_key = next(p for p in files if p.startswith("logs/"))
+            peer_files.update({log_key: b"synthetic peer log must survive",
+                               "logs/peer.log": b"another synthetic peer log",
+                               "heartbeat.json": b'{"asof":"2026-11-17"}'})
+            original(peer, peer_files, "synthetic peer files")
+            peer_records.extend(peer.records)
+            if storage_fails:
+                raise ST.StoreError("private_persistence_canary_0.918273645")
+        return original(self, files, message)
+
+    monkeypatch.setattr(ST.Store, "put_files", interleave)
+    setup["clock"].at("2026-11-17T23:20:00Z")
+    mirror = tmp_path / "mirror.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(mirror)], check=True)
+    cfg = setup["cfg"](date(2026, 11, 16), mirror=str(mirror))
+    if kind == "nightly":
+        result = R.nightly(cfg, {"synthetic": lambda: D.synthetic_csv(cfg.asof)}, clock=setup["clock"])
+    else:
+        result = R.register(cfg, 1, {"merged": True, "merged_at": MERGED, "merge_commit_sha": "d" * 40},
+                            None, clock=setup["clock"])
+    public = capfd.readouterr()
+    assert injected and "private_persistence_canary" not in public.out + public.err
+    final = setup["ledger"]()
+    assert ST.verify_chain(final.records) == [] and final.active_locks() == []
+    # Exact immutable records, including the original operation and peer's
+    # records, survive the real non-fast-forward push and retry.
+    assert final.records[:len(peer_records)] == peer_records
+    if kind == "nightly":
+        assert final.of_type("capture") and final.get(("heartbeat", "2026-11-16"))
+    else:
+        assert final.of_type("registration")
+    for path, expected in peer_files.items():
+        assert (final.workdir / path).read_bytes() == expected
+    if storage_fails:
+        assert result["status"] == "failed" and result["stage"] == "private-log"
+        assert result["mirror_ok"] is False  # pre-finalization verification cannot certify this failed run
+        logs = list(cfg.private_dir.glob("*.log"))
+        assert any("private_persistence_canary" in p.read_text() for p in logs)
+    else:
+        assert result["status"] == "ok" and result["ledger_head"] == final.head
+        assert result["ledger_records"] == len(final.records)
+        assert len(list((final.workdir / "logs").glob("*.log"))) == 3
+        assert result["mirror_ok"] is True
+        assert final.verify_mirror(str(mirror), tmp_path / "final-mirror")["status"] == "equal"
