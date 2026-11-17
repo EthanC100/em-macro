@@ -63,7 +63,9 @@ def executable_at(i: int) -> CP.Executable:
     sizing = "VT10" if (k // len(vals)) % 2 else "EW"
     cost = "C2BP" if (k // (2 * len(vals))) % 2 else "C5BP"
     rep = k // (4 * len(vals))
-    h = S.hypothesis(_FAM, domain="syn_daily", data_sources=[{"name": "synthetic", "publication_lag_days": 0}],
+    h = S.hypothesis(_FAM, domain="syn_daily", data_sources=[{"name": "synthetic", "publication_lag_days": 0, "frequency": "daily",
+                  "period_label": "observation_date", "availability": {"kind": "daily_lag",
+                  "reference": "synthetic fixture only", "day_mapping": "fixture calendar day"}}],
                      signal={"kind": kind, "description": f"capacity {rep}", **FIXED.get(kind, {})},
                      frequency=freq, grid={param: [v]}, timing=TIMING,
                      primary_binding={"universe_id": "U_SYN6", "cost_model_id": cost, "sizing_id": sizing})

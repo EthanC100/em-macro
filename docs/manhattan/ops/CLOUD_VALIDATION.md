@@ -459,3 +459,98 @@ The final approval/activation distinctions, platform limits and three recommende
 next tasks are recorded in `CLOUD_ENGINEERING_HANDOFF.md`. None of those next
 tasks was begun. No deployment, schedule, dispatch, private evidence access,
 scientific change, protected-path edit or merge occurred.
+
+## Phase 3B final PIT corrections
+
+Base: latest main `718c1ab371f4d2b957c4a407e99030e8258f13b0`.
+Branch: `codex/manhattan-phase3b-pit`. Python 3.12.14 / Linux x86_64;
+a fresh `/workspace/em-macro-venv` installed the **unchanged CI requirements**:
+`pip install -r requirements.txt -r requirements-elections.txt pytest`.
+No optional research opt-ins or private data were enabled. The package proxy
+required running the install and full suite outside the command sandbox; no
+sandbox policy, workflow or environment configuration was edited.
+
+```bash
+set -o pipefail
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 \
+/workspace/em-macro-venv/bin/python -m pytest -q -rs -p no:cacheprovider \
+  tests/test_manhattan_pit* tests/test_manhattan_engine.py \
+  tests/test_manhattan_registry.py tests/test_manhattan_ops_compiler.py \
+  tests/test_q019* 2>&1 | tee /tmp/phase3b-targeted-final.log
+```
+
+**Exit 0: 288 passed, zero skipped/failed, 22.18s.** Includes 125 PIT cases
+(56 existing plus 69 new) and all 86 unchanged Q019 security tests. The ten
+warnings are NumPy's generic-unit deprecation in intentional rejection fixtures.
+The initial targeted run had one API allowlist assertion failure (the new
+non-reading methods were absent from the allowlist); fixed without relaxing the
+reader fence. An initial full run was interrupted to add reconstruction marking
+to look-ahead copies: exit 2, 458 passed/125 skipped. It is not a validation result.
+
+Final full-suite command (CI's command/environment plus skip reasons and XML):
+
+```bash
+set -o pipefail
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 PATH=/workspace/em-macro-venv/bin:$PATH \
+python -m pytest -q -rs -p no:cacheprovider \
+  --junitxml=/tmp/phase3b-final-full.xml 2>&1 | tee /tmp/phase3b-final-full.log
+```
+
+**Final full run: exit 0; 1,822 passed, 132 skipped, zero failures/errors,
+686.09s.** All 125 PIT and 86 Q019 cases pass. Twenty warnings: ten intentional
+NumPy generic-unit rejection-fixture deprecations and ten existing synthetic
+numerical warnings. Core versions match PR #76 CI: NumPy 2.5.5, pandas 3.1.1,
+SciPy 1.18.1, pytest 9.2.0. No implementation or test changed during this final run.
+
+Every skip reported by `-rs`:
+
+| Count | Location | Confirmed reason |
+|---:|---|---|
+| 125 | `test_commod_data.py:132,137,145,153,164` (1 + 31 + 31 + 31 + 31) | private Norgate snapshot not available (`EM_MACRO_DATA`) |
+| 3 | `test_manhattan_hier.py:190,203,233` | could not import `numpyro`: No module named `numpyro` |
+| 1 | `test_manhattan_hier.py:237` | slow (compiles all six models twice): set `MANHATTAN_SLOW_TESTS=1` |
+| 1 | `test_nightshift.py:399` | could not import `reportlab`: No module named `reportlab` |
+| 1 | `test_q009_janus_price_check_hash_collision.py:134` | `Q009_FULL_SWEEP=1` runs 6000 real runs (~100 s) |
+| 1 | `test_verify_v1.py:56` | full reproduction: set `EM_MACRO_VERIFY_V1=1` (downloads uncached series) |
+
+`pip check`, `git diff --check` and protection checks against both branch/main
+CODEOWNERS plus `nightshift.protected.ALWAYS` pass. All 15 changed paths are
+unprotected; no `.github/`, `config/`, `data/`, `results/` or `.claude/` path is
+changed. No protected protocol, writer workflow, activation or blinding rule was
+modified. GitHub CI results will be recorded on the draft PR after completion.
+
+### Confirmed explanation of PR #76's two extra CI skips
+
+Read the actual [run 44009157504](https://github.com/EthanC100/em-macro/actions/runs/44009157504)
+job `133791688909`: checkout explicitly used `fetch-depth: 1`, `fetch-tags: false`,
+and merge commit `95b46d4ea5969663698da343042c41b4c0296207`. That workflow did not
+use `-rs`; the aggregate alone could not establish skip causes. Independently
+reproduced both conditions, without changing the workflow or any test:
+
+```bash
+git clone --depth=1 --no-tags file:///workspace/em-macro /workspace/em-macro-shallow
+# Run separately in each checkout with the same CI environment and venv:
+python -m pytest -q -rs -p no:cacheprovider \
+  tests/test_q002_rebalance_kick.py tests/test_verify_v1.py
+```
+
+| Test | Depth-one reason from `-rs` | Full-history result |
+|---|---|---|
+| `test_the_update_job_computes_exactly_as_before` | `commit a5f9dd4 (main before Q002) is not in this checkout` (`test_q002_rebalance_kick.py:54`) | passed |
+| `test_snapshots_from_the_freeze_commit_match_the_record` | `commit 7886867 not in this clone (shallow)` (`test_verify_v1.py:50`) | passed |
+| `test_v1_reproduces_exactly` | `full reproduction: set EM_MACRO_VERIFY_V1=1 (downloads uncached series)` | deliberately skipped in both |
+
+Depth-one: **9 passed, 3 skipped, exit 0, 0.57s**. Full-history run also included
+Q003 and Q016 skip-sensitive tests: **21 passed, 1 skipped, exit 0, 0.65s**; neither
+Q003 nor Q016 skipped. Both additional CI skips really are missing-history checks,
+but this conclusion follows separate reproduction of each, not the aggregate.
+
+PR #76's unchanged 1,751 pass count across local/CI is not evidence of identical
+collection: its local full run contained 54 PIT cases, and two parser cases were
+added afterward (documented above). Those two additional CI passes offset the two
+history checks changing from pass to skip. The final phase 3B suite includes all
+125 PIT cases. No real-data reproduction is needed to resolve this discrepancy.

@@ -33,7 +33,7 @@ def tampered_after(store: PitStore, cutoff, seed: int = 0) -> PitStore:
         p, a, v = store._period[name], store._available[name], store._value[name]
         late = a > _day(cutoff)
         new = np.where(late, v * (1.0 + rng.uniform(0.05, 0.5, v.size)) + rng.uniform(0.01, 1.0, v.size), v)
-        out.add(name, p, new, available=a)
+        out.add(name, p, new, available=a, reconstructed=True)
     return out
 
 
@@ -49,7 +49,7 @@ def shifted(store: PitStore, series: str, steps: int = 1) -> PitStore:
         p, a, v = store._period[name], store._available[name], store._value[name]
         if name == series:
             p, a, v = p[:-steps], a[:-steps], v[steps:]
-        out.add(name, p, v, available=a)
+        out.add(name, p, v, available=a, reconstructed=True)
     return out
 
 

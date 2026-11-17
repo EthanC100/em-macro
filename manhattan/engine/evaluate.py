@@ -48,6 +48,8 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
     ``log_path``: where the exploration variant row goes (required for an exploration-role window)."""
     if window.role == roles.EXPLORATION and log_path is None:
         raise ValueError("an exploration-role evaluation is also logged as a variant: give log_path")
+    if window.role == roles.RESERVE:
+        window.require_historical_evidence()
     result = backtest.run(window, strategy)
     s = result.summary()
     win = {"id": window_id or f"{window.domain}:{window.start}:{window.end}", "start": window.start, "end": window.end,
@@ -58,7 +60,7 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
         designated=designated, spec_hash=spec.spec_hash(executable), data_hash=window.data_hash(),
         code_version=version or code_version(), result_hash=result.result_hash(), n_obs=s["n_obs"],
         summary={k: (round(v, 10) if isinstance(v, float) and v == v else (None if isinstance(v, float) else v))
-                 for k, v in s.items()}, seed=seed)
+                 for k, v in s.items()}, seed=seed, reconstructed=window.reconstructed)
     if window.role == roles.EXPLORATION and rec["type"] == "evaluation":
         from nightshift import logs
         logs.log_variant({"hypothesis_id": spec.spec_id(hypothesis), "variant_id": spec.spec_id(executable),
