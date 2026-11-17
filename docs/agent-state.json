@@ -329,6 +329,16 @@
    "commits": [],
    "note": "check (b) Ledger rebuild differs in data/todo.json; PR #73 opened, not mergeable",
    "session": "https://claude.ai/code/session_01Ayx8qbUzaLZsq6btSat7w1"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-17T22:36:46+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (a1d3185), pushed; filed Q028 (data), Q029 and Q030 (research); approved Q028 and unblocked Q012; none blocked; Janus daily review gap sent to Ethan; worker not fired (exit 6)",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
