@@ -27,7 +27,7 @@ from . import spec as S
 GENESIS = "0" * 64
 TYPES = ("batch_freeze", "critic_review", "evaluation_started", "evaluation", "rerun", "nondeterminism",
          "screening_decision", "eprocess_update", "tier_change", "dormancy", "window_retired", "correction",
-         "run_summary")
+         "run_summary", "attempt_failed", "attempt_aborted")
 FIELDS = ("seq", "ts_utc", "type", "writer", "protocol", "payload", "prev_hash")
 ROLES = ("exploration", "reserve", "forward")
 # keys that carry an outcome: never written to the public index
@@ -161,15 +161,48 @@ class Ledger:
     def _evaluations(self) -> list[dict]:
         return [r for r in self._recs if r["type"] in ("evaluation", "rerun", "nondeterminism")]
 
-    def start_evaluation(self, payload: dict) -> dict:
-        """Written before a designated evaluation runs; a start with no finish is reported by ``unfinished``."""
-        return self.append("evaluation_started", {k: payload[k] for k in
-                                                  ("executable", "family", "batch", "spec_hash", "data_hash", "window")})
+    def start_evaluation(self, payload: dict, *, supersedes: str | None = None) -> dict:
+        """Register an execution; the returned start record's hash is its attempt ID.
+
+        Retries name an unfinished start and preserve it in the denominator.
+        This API does not authorize a PIT read.
+        """
+        fields = ("executable", "family", "batch", "spec_hash", "data_hash", "window")
+        p = {k: payload[k] for k in fields}
+        p.update({k: payload[k] for k in ("variant", "hypothesis", "role", "channel", "code_version") if k in payload})
+        if supersedes is not None:
+            old = self.active_attempt(supersedes)
+            if "code_version" not in p or "code_version" not in old["payload"]:
+                raise LedgerError("retry requires recorded code version")
+            if old["payload"] != p:
+                # Only the retry link itself may differ across repeated interruptions.
+                prior = {k: v for k, v in old["payload"].items() if k != "supersedes"}
+                if prior != p:
+                    raise LedgerError("retry identity differs from interrupted attempt")
+            p["supersedes"] = supersedes
+        return self.append("evaluation_started", p)
+
+    def active_attempt(self, attempt_id: str) -> dict:
+        starts = [r for r in self.records("evaluation_started") if r["hash"] == attempt_id]
+        if len(starts) != 1 or starts[0] not in self.unfinished():
+            raise LedgerError("attempt is not registered and unfinished")
+        if any(r["payload"].get("supersedes") == attempt_id for r in self.records("evaluation_started")):
+            raise LedgerError("attempt has been superseded")
+        return starts[0]
+
+    def end_attempt(self, attempt_id: str, *, status: str, reason: str) -> dict:
+        """Safe classified failure/abortion only; never exception text or outcomes."""
+        if status not in ("failed", "aborted"):
+            raise LedgerError("terminal status must be failed or aborted")
+        if reason not in ("execution_error", "data_unavailable", "interrupted", "cancelled", "validation_error"):
+            raise LedgerError("unknown attempt reason classification")
+        self.active_attempt(attempt_id)
+        return self.append("attempt_" + status, {"attempt_id": attempt_id, "reason": reason})
 
     def record_evaluation(self, *, executable: str, variant: str, hypothesis: str, family: str, batch: str,
                           channel: str, role: str, window: dict, designated: bool, spec_hash: str, data_hash: str,
                           code_version: dict, result_hash: str, n_obs: int, summary: dict, seed: int,
-                          reconstructed: bool = False) -> dict:
+                          reconstructed: bool = False, attempt_id: str | None = None) -> dict:
         """Record one evaluation, deciding by its key whether it is a new look, a rerun or a nondeterminism."""
         if role not in ROLES or channel not in S.CHANNELS:
             raise LedgerError("role must be exploration, reserve or forward; channel blind or adaptive")
@@ -179,6 +212,19 @@ class Ledger:
                    "result_hash": result_hash, "n_obs": n_obs, "summary": summary, "seed": seed,
                    "reconstructed": bool(reconstructed),
                    "evidential_weight": evidential_weight(channel, role, designated, reconstructed)}
+        if attempt_id is None:
+            candidates = [r for r in self.unfinished() if self.key(r["payload"]) == self.key(payload)
+                          and not any(t["payload"].get("supersedes") == r["hash"]
+                                      for t in self.records("evaluation_started"))]
+            if len(candidates) > 1:
+                raise LedgerError("ambiguous attempt: supply attempt_id")
+            if candidates:
+                attempt_id = candidates[0]["hash"]
+        if attempt_id is not None:
+            start = self.active_attempt(attempt_id)
+            if any(payload.get(k) != v for k, v in start["payload"].items() if k != "supersedes"):
+                raise LedgerError("completion identity differs from attempt")
+            payload["attempt_id"] = attempt_id
         same_key = [r for r in self._evaluations() if self.key(r["payload"]) == self.key(payload)]
         if same_key:
             first = same_key[0]
@@ -199,8 +245,14 @@ class Ledger:
         return len({self.key(r["payload"]) for r in self._evaluations()})
 
     def unfinished(self) -> list[dict]:
-        done = {self.key(r["payload"]) for r in self._evaluations()}
-        return [r for r in self.records("evaluation_started") if self.key(r["payload"]) not in done]
+        done = {r["payload"].get("attempt_id") for r in self._evaluations()
+                + self.records("attempt_failed") + self.records("attempt_aborted")}
+        # Compatibility for historic completions without explicit linkage only.
+        legacy = [r for r in self._evaluations() if "attempt_id" not in r["payload"]]
+        superseded = {r["payload"].get("supersedes") for r in self.records("evaluation_started")}
+        return [r for r in self.records("evaluation_started")
+                if r["hash"] not in done and (r["hash"] in superseded or not any(t["seq"] > r["seq"] and
+                    self.key(t["payload"]) == self.key(r["payload"]) for t in legacy))]
 
     def suspended_families(self) -> set[str]:
         """Families with a nondeterminism on record: no tier change until the cause is found."""
