@@ -190,6 +190,40 @@ def test_release_ends_the_lock(tmp_path):
 
 # ---- O-19: mirror and verification
 
+def test_equal_chains_do_not_certify_missing_or_changed_private_files(tmp_path):
+    remote, mirror = bare(tmp_path / "remote.git"), bare(tmp_path / "mirror.git")
+    s = store(tmp_path, remote, "a")
+    s.write(BATCH_A, "observations")
+    s.mirror(mirror)
+    s.put_files({"logs/synthetic.log": b"synthetic private log"}, "private log")
+    assert s.verify_mirror(mirror, tmp_path / "m0")["status"] == "files_differ"
+    s.mirror(mirror)
+    assert s.verify_mirror(mirror, tmp_path / "m1")["status"] == "equal"
+    s.put_files({"logs/synthetic.log": b"different synthetic log"}, "changed private log")
+    assert s.verify_mirror(mirror, tmp_path / "m2")["status"] == "files_differ"
+
+
+def test_git_operations_use_a_deadline_and_noninteractive_environment(tmp_path, monkeypatch):
+    s = ST.Store(workdir=tmp_path, remote="synthetic", git_timeout_seconds=7)
+    seen = []
+
+    def stalled(argv, **kwargs):
+        seen.append((argv, kwargs))
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", stalled)
+    with pytest.raises(subprocess.TimeoutExpired):
+        s._git("fetch", "origin")
+    with pytest.raises(subprocess.TimeoutExpired):
+        s.verify_mirror("synthetic-mirror", tmp_path / "scratch")
+    assert all(k["timeout"] == 7 and k["env"]["GIT_TERMINAL_PROMPT"] == "0" for _, k in seen)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 601, True, float("inf"), float("nan")])
+def test_invalid_git_deadlines_refused(tmp_path, timeout):
+    with pytest.raises(ValueError):
+        ST.Store(workdir=tmp_path, remote="synthetic", git_timeout_seconds=timeout)
+
 def test_mirror_and_verification(tmp_path):
     remote, mirror = bare(tmp_path / "remote.git"), bare(tmp_path / "mirror.git")
     s = store(tmp_path, remote, "a")

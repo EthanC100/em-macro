@@ -46,6 +46,7 @@ from . import data as D
 from . import promotion
 from . import store as ST
 from . import timing as TM
+from .inputs import read_json
 
 RUNNER = "gha-public"
 
@@ -315,11 +316,30 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                 except Exception:                                    # noqa: BLE001 - it then expires on its own
                     traceback.print_exc()
         finally:
-            if s is not None and health.get("stage") == "done":
-                sys.stdout.flush()
-                s.put_files({f"logs/{log.name}": log.read_bytes(),
-                             "heartbeat.json": json.dumps({"asof": cfg.asof.isoformat()}).encode()},
-                            f"private log {cfg.run_id}.{cfg.run_attempt}")
+            # Handled failures need their diagnostics too. Never publish the log or
+            # turn an unsuccessful run into a heartbeat. Simulated process deaths
+            # and another runner's live lock deliberately skip this path.
+            if s is not None and health.get("status") in ("ok", "partial", "failed"):
+                try:
+                    sys.stdout.flush()
+                    files = {f"logs/{log.name}": log.read_bytes()}
+                    if health.get("stage") == "done":
+                        files["heartbeat.json"] = json.dumps({"asof": cfg.asof.isoformat()}).encode()
+                    s.put_files(files, f"private log {cfg.run_id}.{cfg.run_attempt}")
+                    # The mirror must include the final log commit, not just the
+                    # chain as it stood before diagnostics were saved.
+                    mirrored = s.mirror(cfg.mirror)
+                    health["mirror_status"] = mirrored["status"].replace("_", "-")
+                    v = s.verify_mirror(cfg.mirror, private / "mirror-check")
+                    health["mirror_ok"] = mirrored["status"] == "pushed" and v["status"] == "equal"
+                    health.pop("mirror_head", None)
+                    if "mirror_head" in v:
+                        health["mirror_head"] = v["mirror_head"]
+                    if cfg.mirror and not health["mirror_ok"] and health["status"] == "ok":
+                        health["status"] = "partial"
+                except Exception as e:                                # private storage may itself be unavailable
+                    traceback.print_exc()                             # still inside the private fd redirect
+                    health.update(B.failure("private-log", e))
     if s is not None:
         health["ledger_records"] = len(s.records)
         health["ledger_head"] = s.head
@@ -337,8 +357,9 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
 def register(cfg: RunConfig, batch_number: int, pr: dict, witness: TM.Witness | None, *,
              clock: Callable[[], datetime] = ST.utcnow) -> dict:
     private = Path(cfg.private_dir or Path(cfg.ledger_dir).parent / "private")
-    log = private / f"register-{cfg.run_id}.log"
+    log = private / f"register-{cfg.run_id}-{cfg.run_attempt}.log"
     health = {"runner": RUNNER, "stage": "register", "started_utc": TM.iso(clock())}
+    s, acquired = None, False
     with B.quiet(log):
         try:
             manifest, specs = load_batch(cfg.batches_dir, batch_number)
@@ -346,10 +367,12 @@ def register(cfg: RunConfig, batch_number: int, pr: dict, witness: TM.Witness | 
             s = ST.Store(workdir=Path(cfg.ledger_dir), remote=cfg.remote, run_id=str(cfg.run_id),
                          run_attempt=cfg.run_attempt, commit=cfg.commit, clock=clock).open()
             s.acquire(timedelta(minutes=cfg.lock_ttl_minutes))
+            acquired = True
             intents = registration_intents(manifest, specs, merged=merged, merge_commit=commit, witness=witness,
                                            batch_number=batch_number)
             s.write(intents, f"registration AB-{batch_number:04d}")
             s.release()
+            acquired = False
             regs = registrations(s)
             health.update(status="ok", batches=1, predictions_registered=len(regs),
                           predictions_eligible=sum(1 for r in regs.values() if r["eligible"]),
@@ -359,9 +382,37 @@ def register(cfg: RunConfig, batch_number: int, pr: dict, witness: TM.Witness | 
                           ledger_records=len(s.records), ledger_head=s.head)
         except ST.SimulatedCrash:
             raise
+        except ST.Locked:
+            health.update(status="locked")
         except Exception as e:                                       # noqa: BLE001
             traceback.print_exc()
             health.update(B.failure("register", e))
+        finally:
+            if s is not None and health.get("status") in ("ok", "failed"):
+                if acquired:
+                    try:
+                        s.release()
+                    except Exception as e:                           # noqa: BLE001
+                        traceback.print_exc()
+                        health.update(B.failure("unlock", e))
+                try:
+                    sys.stdout.flush()
+                    s.put_files({f"logs/{log.name}": log.read_bytes()},
+                                f"private registration log {cfg.run_id}.{cfg.run_attempt}")
+                    if cfg.mirror:
+                        m = s.mirror(cfg.mirror)
+                        v = s.verify_mirror(cfg.mirror, private / "mirror-check")
+                        health["mirror_status"] = m["status"].replace("_", "-")
+                        health["mirror_ok"] = m["status"] == "pushed" and v["status"] == "equal"
+                        if "mirror_head" in v:
+                            health["mirror_head"] = v["mirror_head"]
+                        if not health["mirror_ok"] and health["status"] == "ok":
+                            health["status"] = "partial"
+                except Exception as e:                               # noqa: BLE001
+                    traceback.print_exc()
+                    health.update(B.failure("private-log", e))
+    if s is not None:
+        health.update(ledger_records=len(s.records), ledger_head=s.head)
     rec = B.health(health)
     print(B.render(rec))
     return rec
@@ -400,9 +451,12 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
 def _witness(path: str | None) -> TM.Witness | None:
     if not path:
         return None
-    w = json.loads(Path(path).read_text())
+    w = read_json(path)
+    verified = w.get("verified", False)
+    if type(verified) is not bool:
+        raise ValueError("witness verification must be a boolean")
     return TM.Witness(w["kind"], w["digest"], TM.parse_time(w["attested_utc"]) if w.get("attested_utc") else None,
-                      bool(w.get("verified")))
+                      verified)
 
 
 def main(argv=None) -> int:
@@ -431,12 +485,28 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "issue-body":
         try:
-            rec = json.loads(Path(a.health).read_text())
+            rec = read_json(a.health)
+            if not isinstance(rec, dict):
+                raise ValueError("invalid health mapping")
             rec.pop("schema_version", None)
             print(B.summary_markdown(rec))
         except (OSError, ValueError, B.BlindingError):
             print(B.summary_markdown({"status": "failed", "stage": "unknown"}))
         return 0
+    try:
+        return _run_cli(a)
+    except Exception as e:                                           # the public boundary includes log I/O failures
+        rec = B.failure("runner", e)
+        print(B.render(rec))                                         # never print the exception or its context
+        if a.health_out:
+            try:
+                Path(a.health_out).write_text(B.render(rec) + "\n")
+            except (OSError, ValueError):
+                pass                                                # stdout still carries sanitized failure health
+        return 1
+
+
+def _run_cli(a) -> int:
     cfg = RunConfig(ledger_dir=Path(a.ledger_dir), remote=a.remote, batches_dir=Path(a.batches),
                     asof=date.fromisoformat(getattr(a, "asof", "2000-01-01")), run_id=a.run_id, run_attempt=a.attempt,
                     commit=a.commit, private_dir=Path(a.private_dir) if a.private_dir else None)
@@ -447,7 +517,7 @@ def main(argv=None) -> int:
                     if D.SOURCES[sid].kind == "fred"}
         rec = nightly(cfg, fetchers)
     else:
-        rec = register(cfg, a.batch, json.loads(Path(a.pr_json).read_text()), _witness(a.witness_json))
+        rec = register(cfg, a.batch, read_json(a.pr_json), _witness(a.witness_json))
     if a.health_out:
         Path(a.health_out).write_text(B.render(rec) + "\n")
     return 0 if rec.get("status") == "ok" else 1

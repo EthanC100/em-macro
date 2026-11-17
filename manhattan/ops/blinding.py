@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import sys
 from pathlib import Path
 
@@ -138,24 +139,33 @@ def quiet(log_path: Path):
     Python-level ``sys.stdout``/``sys.stderr`` are flushed and pointed at the same file, so nothing buffered before
     the redirect leaks after it, and nothing written inside the block reaches the public log."""
     log_path = Path(log_path)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     sys.stdout.flush()
     sys.stderr.flush()
-    saved = os.dup(1), os.dup(2)
-    old_py = sys.stdout, sys.stderr
-    with open(log_path, "a", encoding="utf-8") as f:
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
+        raise ValueError("safe private logs unsupported")
+    fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        info = os.fstat(f.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError("private log must be a regular unshared file")
+        os.fchmod(f.fileno(), 0o600)
+        saved = os.dup(1), os.dup(2)
+        old_py = sys.stdout, sys.stderr
         os.dup2(f.fileno(), 1)
         os.dup2(f.fileno(), 2)
         sys.stdout = sys.stderr = f
         try:
             yield f
         finally:
-            f.flush()
-            sys.stdout, sys.stderr = old_py
-            os.dup2(saved[0], 1)
-            os.dup2(saved[1], 2)
-            os.close(saved[0])
-            os.close(saved[1])
+            try:
+                f.flush()
+            finally:
+                sys.stdout, sys.stderr = old_py
+                os.dup2(saved[0], 1)
+                os.dup2(saved[1], 2)
+                os.close(saved[0])
+                os.close(saved[1])
 
 
 def write_step_summary(record: dict, path: str | os.PathLike | None = None) -> None:

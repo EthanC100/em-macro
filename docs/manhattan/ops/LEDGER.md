@@ -45,6 +45,16 @@ both chains: `equal`, `behind` (a prefix: lagging), or `diverged`/`broken` (tamp
 reported, never forced. Options for Ethan (the workflow reads `vars.MANHATTAN_MIRROR_URL`,
 `vars.MANHATTAN_MIRROR_HOST`, `vars.MANHATTAN_MIRROR_KNOWN_HOSTS` and the secret `MANHATTAN_MIRROR_DEPLOY_KEY`):
 
+`verify_pair` compares chain records only. `Store.verify_mirror` additionally
+compares the complete committed Git trees when the chains match: missing or
+changed logs, captures, journal or heartbeat files produce `files_differ`.
+An equal chain alone never certifies a complete backup. Nightly final verification
+includes the final log commit. Registration attempt logs are saved privately too;
+a handled registration failure releases its lock and does not create a heartbeat.
+Git operations have a 120-second per-call timeout, configurable through
+`Store.git_timeout_seconds` up to 600 seconds. This bounds individual calls, not
+the total number of writes in a large run. Keep the workflow's whole-job timeout.
+
 | option | cost | independence | note |
 |---|---|---|---|
 | **A. a private repository on another provider** (Codeberg, GitLab.com) with its own deploy key | free | different company and infrastructure | **recommended** for the push mirror |

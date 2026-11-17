@@ -68,6 +68,39 @@ def test_failure_says_stage_and_class_only():
     assert B.failure("bad stage!", RuntimeError())["stage"] == "unknown"
 
 
+def test_private_log_mode_does_not_depend_on_process_umask(tmp_path):
+    log = tmp_path / "private" / "run.log"
+    previous = os.umask(0o022)
+    try:
+        with B.quiet(log):
+            print("synthetic diagnostic")
+    finally:
+        os.umask(previous)
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert log.parent.stat().st_mode & 0o777 == 0o700
+    os.chmod(log, 0o644)
+    with B.quiet(log):
+        pass
+    assert log.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
+def test_private_log_refuses_linked_or_special_files(tmp_path, kind):
+    target = tmp_path / "target.log"
+    target.write_text("synthetic existing file")
+    log = tmp_path / "run.log"
+    if kind == "symlink":
+        log.symlink_to(target)
+    elif kind == "hardlink":
+        os.link(target, log)
+    else:
+        os.mkfifo(log)
+    with pytest.raises((OSError, ValueError)):
+        with B.quiet(log):
+            pytest.fail("unsafe log opened")
+    assert target.read_text() == "synthetic existing file"
+
+
 # ---- O-03
 
 def test_nonce_is_128_bits_and_fresh():
