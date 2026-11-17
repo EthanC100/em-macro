@@ -224,6 +224,20 @@ def test_invalid_git_deadlines_refused(tmp_path, timeout):
     with pytest.raises(ValueError):
         ST.Store(workdir=tmp_path, remote="synthetic", git_timeout_seconds=timeout)
 
+
+def test_reused_log_name_preserves_both_versions_idempotently(tmp_path):
+    remote = bare(tmp_path / "remote.git")
+    s = store(tmp_path, remote, "writer")
+    s.write(BATCH_B, "synthetic heartbeat")
+    before = list(s.records)
+    s.put_files({"logs/shared.log": b"first synthetic diagnostic"}, "first log")
+    s.put_files({"logs/shared.log": b"second synthetic diagnostic"}, "second log")
+    s.put_files({"logs/shared.log": b"second synthetic diagnostic"}, "same second log")
+    files = list((s.workdir / "logs").glob("*.log"))
+    assert len(files) == 2
+    assert {p.read_bytes() for p in files} == {b"first synthetic diagnostic", b"second synthetic diagnostic"}
+    assert s.records == before and ST.verify_chain(s.records) == []
+
 def test_mirror_and_verification(tmp_path):
     remote, mirror = bare(tmp_path / "remote.git"), bare(tmp_path / "mirror.git")
     s = store(tmp_path, remote, "a")

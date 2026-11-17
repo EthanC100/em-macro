@@ -1,5 +1,57 @@
 # Cloud engineering handoff — 2026-11-16
 
+## Phase 2 engineering status — 2026-11-17
+
+PR #72 was merged by the owner at `9698b131413f798f9b752321c86b2ee44341aed9`.
+Phase 2 starts from that latest main on `codex/manhattan-phase2-hardening` and
+will use a separate draft PR. The historical PR #72 review/stop notes below
+remain records of the previous phase; they do not authorize operational activation.
+
+**Governance remains unchanged.** Workflow pinning and
+`requirements-manhattan-runner.lock` remain **unadopted candidates**. Testing the
+candidate lock is not adoption. The workflow patch remains unapplied, the workflow
+baseline remains unadopted, and production research schedules remain disabled.
+No owner-controlled activation switch or research protocol is changed.
+
+**Research provenance.** Genesis hypotheses produced outside an approved isolation
+environment belong to the **adaptive research channel**. No historical research
+evidence may be represented as blind evidence without satisfying the isolation
+requirements in `ops/BLIND_GENERATOR.md` and the applicable owner-approved protocol.
+Hashing, timestamping, retrospective relabeling or a later isolation-kit pass
+cannot establish that an earlier generating session was isolated. Until approved
+isolation provenance is demonstrated, treat ordinary-session Genesis proposals as
+adaptive. This engineering session generates no hypothesis, freezes no batch and
+does not promote any historical evidence to the blind channel.
+
+Phase 2 adds a clean-environment lock regression (only the six locked runtime
+packages, plus venv's bootstrap pip) and a synthetic local capture/rerun/mirror
+probe. There is no registered batch, real-source fetch, research evaluation or
+new investment algorithm in that probe. The existing PR test workflow can run
+the regression without being edited. An optional offline wheelhouse supplies
+exact wheels; hashes are still checked. Other platforms skip this Linux x86_64,
+CPython 3.12 candidate-lock check explicitly rather than claiming support.
+
+Concurrent-writer tests use separate local clones and inject a peer commit after
+lock release but before private-log persistence in both nightly and registration.
+They reproduced overwrite of colliding diagnostic names and stale heartbeat-cache
+risk. Diagnostic collisions now retain both byte versions, with content-addressed
+siblings and idempotent repeated writes. Every retry derives `heartbeat.json`
+from the latest durable heartbeat date in the chain. Failure to persist diagnostics
+now invalidates any earlier mirror-success flag. Tests verify record preservation,
+hash-chain integrity, peer logs, monotonic heartbeat cache, mirror contents and
+sanitized failure reporting. The chain/evidence format is unchanged.
+
+Each writer still needs its own clone. Outage/kill cases can retain diagnostics
+only locally until an authorized independent sink is provided; no such sink or
+live private store is accessed here. Actual Mac behavior remains unverified.
+See [BASELINE_INDEPENDENCE.md](BASELINE_INDEPENDENCE.md) for trust-store options
+and the exact **future owner procedure** for regenerating the baseline after
+workflow pins are approved. No baseline was moved, regenerated or activated.
+
+Current phase validation and remaining limitations are recorded in
+`CLOUD_VALIDATION.md`. Original Genesis F01–F10 specifications and v0.2 corrections
+remain required before family-specific implementation; they are not reconstructed.
+
 Source: `EthanC100/em-macro`, fetched `main` at
 `8769803c92ef351bdf22d7503efbfb82f3f58181`. Work branch:
 `codex/manhattan-ops-hardening`. This is a Codex Cloud Linux x86_64 session,

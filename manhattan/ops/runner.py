@@ -340,6 +340,8 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                 except Exception as e:                                # private storage may itself be unavailable
                     traceback.print_exc()                             # still inside the private fd redirect
                     health.update(B.failure("private-log", e))
+                    health["mirror_ok"] = False                      # an earlier check predates these diagnostics
+                    health.pop("mirror_head", None)
     if s is not None:
         health["ledger_records"] = len(s.records)
         health["ledger_head"] = s.head
@@ -411,6 +413,8 @@ def register(cfg: RunConfig, batch_number: int, pr: dict, witness: TM.Witness | 
                 except Exception as e:                               # noqa: BLE001
                     traceback.print_exc()
                     health.update(B.failure("private-log", e))
+                    health["mirror_ok"] = False
+                    health.pop("mirror_head", None)
     if s is not None:
         health.update(ledger_records=len(s.records), ledger_head=s.head)
     rec = B.health(health)

@@ -55,6 +55,14 @@ Git operations have a 120-second per-call timeout, configurable through
 `Store.git_timeout_seconds` up to 600 seconds. This bounds individual calls, not
 the total number of writes in a large run. Keep the workflow's whole-job timeout.
 
+Phase 2 diagnostic finalization also tolerates a peer commit after lock release.
+Non-fast-forward retries retain the peer's immutable records and log files. If
+an existing log name has different bytes, the new log is saved beside it with a
+full content-hash suffix; repeated identical content is a no-op. Logs are not
+overwritten. The convenience heartbeat date is recomputed from the durable chain
+inside each retry, so an older finalizer cannot move it backwards. Shared-clone
+concurrency is unsupported: each writer must use a distinct work directory.
+
 | option | cost | independence | note |
 |---|---|---|---|
 | **A. a private repository on another provider** (Codeberg, GitLab.com) with its own deploy key | free | different company and infrastructure | **recommended** for the push mirror |

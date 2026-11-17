@@ -43,7 +43,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -457,11 +457,32 @@ class Store:
 
     # ------------------------------------------------------------ plain commits of private files
     def put_files(self, files: dict, message: str) -> None:
-        """Commit private files that are not records (the run log, the heartbeat copy)."""
+        """Commit diagnostics without replacing logs or regressing the heartbeat.
+
+        Each retry chooses paths and derives the heartbeat from the reloaded
+        chain. A competing writer's commit can therefore be retained in full.
+        Reused log names with different bytes get a content-addressed sibling;
+        the existing file is never overwritten. Each writer needs its own clone.
+        """
         def put():
             for rel, data in files.items():
+                if rel == "heartbeat.json":
+                    beats = self.of_type("heartbeat")
+                    if not beats:
+                        raise StoreError("heartbeat cache requires a durable heartbeat")
+                    latest = max(date.fromisoformat(r["payload"]["asof"]) for r in beats)
+                    data = json.dumps({"asof": latest.isoformat()}, separators=(",", ":")).encode()
                 p = self.workdir / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
+                if rel.startswith("logs/") and p.exists():
+                    if p.read_bytes() == data:
+                        continue
+                    digest = hashlib.sha256(data).hexdigest()
+                    p = p.with_name(f"{p.stem}-{digest}{p.suffix}")
+                    if p.exists():
+                        if p.read_bytes() != data:
+                            raise StoreError("private log digest collision")
+                        continue
                 p.write_bytes(data)
 
         self._transact(message, put)
