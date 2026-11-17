@@ -1,7 +1,7 @@
-# Janus quick check (every 30 minutes)
+# Janus quick check (hourly)
 
-You are running Janus's quick check, a short session run every 30 minutes by two hourly Claude Code scheduled tasks
-(at :15 and :45 past the hour). Janus is an AI discretionary **paper** book: an experiment in AI judgement.
+You are running Janus's quick check, a short session run hourly by one Claude Code scheduled task
+(at :15 past the hour). Janus is an AI discretionary **paper** book: an experiment in AI judgement.
 It never feeds the algorithm, and no edge is claimed. Keep the check short (aim for under 10 minutes).
 
 **Hard rules for this session**

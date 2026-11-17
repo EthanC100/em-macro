@@ -21,6 +21,7 @@ parameter or result of a frozen strategy, and they do not get a row in `trials.c
 | C11 | 2026-11-11 | C08's first daily review (11 November 2026, 23:07 UTC) | **No mark the review can already see**: a C08 review's forecast base marks (and so its resolution windows) and the fills of its orders, resizes and closes use the first first-hand daily mark dated strictly after the review's UTC date, rolling forward over weekends and holidays. Approved by Ethan on 2026-11-11. | With Q018's 22:07 UTC ledger-daily run, day-D marks are in place before the 23:07 UTC day-D review: a base mark or fill at that close is a price the forecaster already knows, with hours of later moves visible (the ECB fixes at 14:15 CET), which would inflate the Brier scores and the fund rule built on them. Raised by The Opposition's review of Q018. | None on any other book, and none on records before C08. |
 | C12 | 2026-11-11 | the shadows' first live rebalance (positions from the 3 December 2026 settlement), once ledger-daily confirms go-live (expected 4 December 2026) | **Commodities book added**: a fourth Ledger book that runs the T26 shadow at paper size. Returns = the T26 shadow's monthly net returns (decisive costs) × **k = 1.1028**, fixed once so the T22 design-period backtest (2000-01..2019-12) runs at 10% annual volatility (10% ÷ 9.0675%). Paper capital US$100,000,000, for contract counts only; results in % (excess of cash, total return incl. T-bill as in the other books). Outside the Horizons fund. | To see the trend sleeve at a real paper size, with contract counts, alongside the zero-size shadow. | None. The book only reads the shadow's output; no signal, universe, timing, cost or rule changes, and the T25-T26 pre-registration, its amendments, GO_LIVE.json and the prelive files are untouched. The shadow's evaluation (15 Dec 2031) uses the shadow's own returns. The Fund rule (C04) is unchanged. |
 | C13 | 2026-11-12 | every C08 daily review (from 11 November 2026) | **No position-count cap for C08 books**: the cap of 8 open positions does not apply to a C08 book, which holds a position on every watchlist instrument (10). The 2% per-position cap and the 3-10% total band still apply. Approved by Ethan on 2026-11-12. | C08 sets a position on every watchlist instrument (10 after C09), above the cap of 8, which was written for discretionary positions. The first C08 review (11 November, 23:15 UTC) placed 10 orders: C08's code path never applied the cap, so this records what it does. | None on any other book. No record changes: the app and `context` stop showing a cap of 8 once a C08 review exists. |
+| C14 | 2026-11-17 | 17 November 2026 | **Janus quick checks reduced** from every 30 minutes (two tasks, at :15 and :45, Opus 5.5 Medium) to hourly at :15 on Sonnet 5.5 Medium; the :45 task is turned off. The daily review stays on Opus 5.5 High. | The Claude usage limit was reached 13-16 Nov, stopping all Janus tasks; the Janus daily reviews for 13, 14, 15 and 16 Nov are missing and are not backfilled. | None on any other book. C05's mandate is unchanged. No Janus rule, limit or record changes; only how often the quick check runs. |
 
 ## C01 — paper capital US$100,000 → US$10,000,000
 
@@ -1039,3 +1040,19 @@ this change and passes after.
 **Where:** `requirements-site.txt`, `ledger/site_check.py`, `.github/workflows/ledger-pages.yml`, `ledger/marks.py`,
 `ledger/janus.py` (`series`), `ledger/books.py`, `nightshift/promote.py`, `nightshift/morning.py`,
 `docs/agent-system.md`.
+
+## C14 — Janus: quick checks hourly on Sonnet (2026-11-17)
+
+**17 Nov 2026:** Janus quick checks reduced from every 30 minutes (two tasks, at :15 and :45, Opus 5.5 Medium) to
+hourly at :15 on Sonnet 5.5 Medium; the :45 task is turned off. Reason: Claude usage limit reached 13–16 Nov,
+stopping all Janus tasks; Janus daily reviews for 13, 14, 15 and 16 Nov are missing and are not backfilled. The daily
+review stays on Opus 5.5 High. C05's mandate is unchanged.
+
+**Text updated from "every 30 minutes" to "hourly":** the Janus page intro (`ledger/site/app.js`), the runbook
+(`docs/janus/quick_check.md`), the usage estimate and schedule table in `docs/agent-system.md`, and the morning
+report's quick-check line (`nightshift/morning.py`; a check is "LATE" after 2 hours, unchanged). Earlier sections of
+this file describe the cadence at the time and are left as written.
+
+**Where:** `docs/config_changes.md`, `docs/janus/quick_check.md`, `docs/agent-system.md`, `ledger/site/app.js`,
+`ledger/janus.py` (docstring), `nightshift/morning.py`, `tests/test_morning_status_section.py`, `README.md`,
+`docs/todo.md`.

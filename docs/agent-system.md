@@ -37,8 +37,8 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 
 | task (prompt source) | schedule | identity on main | writes | model / effort |
 |---|---|---|---|---|
-| **Janus Quick Check** (trig_01Sxfs75…; `docs/janus/quick_check.md`) | hourly at :15, every day | **Ethan's GitHub user via the Claude GitHub App** (commit author "Claude <noreply@anthropic.com>") | `data/janus/records.jsonl` (+ seals) through `scripts/janus_commit.sh` | model not set (account default); every one of the 151 check records says `claude-sonnet-5-5`. Effort: not shown by the API (default) |
-| **Janus Quick Check 2** (trig_01AqFEVG…) | hourly at :45, every day | same | same | same |
+| **Janus Quick Check** (trig_01Sxfs75…; `docs/janus/quick_check.md`) | hourly at :15, every day (Sonnet 5.5 / medium from 17 Nov 2026, C14) | **Ethan's GitHub user via the Claude GitHub App** (commit author "Claude <noreply@anthropic.com>") | `data/janus/records.jsonl` (+ seals) through `scripts/janus_commit.sh` | model not set (account default); every one of the 151 check records says `claude-sonnet-5-5`. Effort: not shown by the API (default) |
+| **Janus Quick Check 2** (trig_01AqFEVG…) | **turned off 17 Nov 2026 (C14)**; was hourly at :45 | same | same | same |
 | **Janus Daily Review** (trig_01WFz73C…; `docs/janus/daily_review.md`) | 07:07 Singapore daily (23:07 UTC = 18:07 New York) | same | `data/janus/`, `data/ledger/postmortems`, seals | not set; records say `claude-sonnet-5-5` (The Opposition as a subagent of the same model). Effort: default |
 | Horizon Daily Briefing | 09:34 Singapore daily | none: writes a Claude Docs document, no git push | | not set |
 | Horizon Weekly Brief (the "weekly review") | Saturdays 18:00 Singapore | none (Claude Docs) | | not set |
@@ -82,7 +82,7 @@ say what to pick.
 refuses to start while ledger-daily, systematic-monthly, ledger-intake, shadows-setup, private-commitments or
 ledger-screener is queued or running (it also refuses when the API cannot be read), and inside fixed windows: the
 Janus daily review (23:00-23:45 UTC) and the 3rd-of-month rebalance (07:15-09:30 UTC). Night work never touches
-main's files directly, so the Janus quick checks (every 30 minutes, all night) never collide with it.
+main's files directly, so the Janus quick checks (hourly, all night) never collide with it.
 
 ## 3. How a night runs
 
@@ -268,7 +268,7 @@ does, not measurements.
 
 | job | model | runs/week | units/run | units/week | share at cap | share, realistic |
 |---|---|---|---|---|---|---|
-| Janus quick checks (2 tasks, hourly, every day) | Sonnet 5.5 (default) | 336 | 1 | 336 | 16% | 41% |
+| Janus quick checks (1 task, hourly, every day; second task off from 17 Nov 2026, C14) | Sonnet 5.5 (medium) | 168 | 1 | 168 | 8% | 20% |
 | Janus daily review (with C05 research + The Opposition) | Sonnet 5.5 (default) | 7 | 8 | 56 | 3% | 7% |
 | night-start (triage + Opposition on ~4 items) | Sonnet orchestrator, Sonnet triage, Opus Opposition | 7 | 17 | 119 | 6% | 15% |
 | night-worker at the cap (9 a night: implementer + Opposition) | Sonnet orchestrator, Opus high subagents | 63 | 13.5 | 851 | 41% | — |
@@ -279,12 +279,12 @@ does, not measurements.
 | weekly brief | Sonnet 5.5 | 1 | 6 | 6 | 0.3% | 0.7% |
 | other Claude tasks (daily briefing 7, weekly review 1, month-ahead) | default | ~8 | 2-4 | ~20 | 1% | 2% |
 | ledger-daily, intake, systematic, elections, pages | GitHub Actions, no Claude | — | 0 | 0 | 0 | 0 |
-| **total** | | | | **~2,010 at cap / ~820 realistic** | | |
+| **total** | | | | **~1,840 at cap / ~650 realistic** | | |
 
 Checked against Anthropic's documentation (code.claude.com/docs/en/routines): routines "draw down subscription
 usage the same way interactive sessions do"; per-plan daily run counts are not documented; the documented caps are
 hourly: 100 scheduled runs per account, 100 API fires per account, 30 "Run now"+API fires per task, none with
-overage. This system's peak is about 6 runs an hour (2 quick checks, ~3 chain runs, pr-review), far under those.
+overage. This system's peak is about 6 runs an hour (1 quick check, ~3 chain runs, pr-review), far under those.
 **The risk is the plan's usage limits, not run counts**: at the cap the night shift is about 80% of the week's
 usage (about 4x the Janus load). Interactive sessions (like this one) come on top and are not estimated.
 - **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`, set on main): cap 4, explorer and its subagent on
@@ -341,7 +341,7 @@ usage (about 4x the Janus load). Interactive sessions (like this one) come on to
 - The private store is read through the Janus CLI's read-only clone; the promote rebuild uses one path for both
   builds and records its commit before and after, so the 7-day settlement re-request cannot create a difference.
 - The promotion compares main with **main merged with dev** (the tree the PR produces), not dev alone, because
-  main keeps moving all night (Janus checks every 30 minutes).
+  main keeps moving all night (Janus checks hourly).
 - ledger-daily runs late into the night window, so the guard checks the Actions API instead of trusting cron times.
 
 ## Dry run (2026-11-09, 22:52-23:25 Singapore, real time, in the setup session)
