@@ -268,32 +268,44 @@ does, not measurements.
 
 | job | model | runs/week | units/run | units/week | share at cap | share, realistic |
 |---|---|---|---|---|---|---|
-| Janus quick checks (1 task, hourly, every day; second task off from 17 Nov 2026, C14) | Sonnet 5.5 (medium) | 168 | 1 | 168 | 8% | 20% |
-| Janus daily review (with C05 research + The Opposition) | Sonnet 5.5 (default) | 7 | 8 | 56 | 3% | 7% |
-| night-start (triage + Opposition on ~4 items) | Sonnet orchestrator, Sonnet triage, Opus Opposition | 7 | 17 | 119 | 6% | 15% |
-| night-worker at the cap (9 a night: implementer + Opposition) | Sonnet orchestrator, Opus high subagents | 63 | 13.5 | 851 | 41% | — |
-| pr-review (one per worker PR) | Sonnet + Opus Opposition | 63 | 5 | 315 | 15% | — |
-| night-explorer at the cap (3 a night) | Opus 5.5 high + Opposition | 21 | 13 | 273 | 13% | — |
-| night chain, realistic (2 worker PRs, 1 explorer, 1 empty a night) | mixed | 28 | | ~250 | | 30% |
-| promote + morning report | Sonnet 5.5 | 14 | 2.5 | 35 | 2% | 4% |
-| weekly brief | Sonnet 5.5 | 1 | 6 | 6 | 0.3% | 0.7% |
-| other Claude tasks (daily briefing 7, weekly review 1, month-ahead) | default | ~8 | 2-4 | ~20 | 1% | 2% |
-| ledger-daily, intake, systematic, elections, pages | GitHub Actions, no Claude | — | 0 | 0 | 0 | 0 |
-| **total** | | | | **~1,840 at cap / ~650 realistic** | | |
+| night-worker (4 a night at the safe-mode cap; implementer + Opposition) | Sonnet orchestrator, Opus high subagents | 28 | 13.5 | 378 | 37% | |
+| Janus quick checks (1 task, hourly, every day; second task off from 17 Nov 2026, C14) | Sonnet 5.5 medium (1 unit by definition) | 168 | 1 | 168 | 16% | 22% |
+| Janus daily review (with C05 research + The Opposition) | Opus 5.5 high (8 units on Sonnet at default effort, x2 for Opus, x1.5 for high) | 7 | 24 | 168 | 16% | 22% |
+| pr-review (one per worker PR) | Sonnet + Opus Opposition | 28 | 5 | 140 | 14% | |
+| night-start (triage + Opposition on ~4 items) | Sonnet orchestrator, Sonnet triage, Opus Opposition | 7 | 17 | 119 | 12% | 15% |
+| night-explorer | off: `explorer.max_hypotheses_per_night: 0` on main | 0 | 13 | 0 | 0% | 0% |
+| promote + morning report | Sonnet 5.5 | 14 | 2.5 | 35 | 3% | 5% |
+| other Claude tasks (daily briefing 7, weekly review 1, month-ahead) | default | ~8 | 2-4 | ~20 | 2% | 3% |
+| weekly brief | Sonnet 5.5 | 1 | 6 | 6 | 0.6% | 0.8% |
+| night chain, realistic (2 worker PRs a night: 14 workers x 13.5 + 14 pr-reviews x 5) | mixed | 28 | | 259 | | 33% |
+| ledger-daily, intake, systematic, elections, pages | GitHub Actions, no Claude | | 0 | 0 | 0 | 0 |
+| **total** | | | | **1,034 at cap / 775 realistic** | | |
+
+Shares are of each column's own total, and the "realistic" column counts the night chain once (the worker and
+pr-review rows are the cap case only). Ranked by weekly units: night-worker (378 at cap; the realistic chain is 259),
+then the Janus quick checks and the Janus daily review tied at 168, then pr-review (140). Config as on main on 17 Nov
+2026: safe mode on (cap 4) and the explorer off. For reference, without safe mode (cap 12: 9 workers and 3 explorer
+runs a night, explorer on Opus high) the same jobs total about 1,950 units a week.
+
+Before C14 (the week to 13 Nov) the same method gives about 1,540 at cap / 1,280 realistic: the records show quick
+checks ran on Opus 5.5 from 11 Nov (and on Fable 5.2 on 12-13 Nov, whose price is not in this estimate), so they cost
+2 units each, 336 runs = 672 units, not the 336 this section used to show. C14 cuts that to 168: the whole change
+is about a third off at cap and 40% off realistic. The earlier text saying the quick checks "run on Sonnet" described
+the 6-10 Nov records only.
 
 Checked against Anthropic's documentation (code.claude.com/docs/en/routines): routines "draw down subscription
 usage the same way interactive sessions do"; per-plan daily run counts are not documented; the documented caps are
 hourly: 100 scheduled runs per account, 100 API fires per account, 30 "Run now"+API fires per task, none with
 overage. This system's peak is about 6 runs an hour (1 quick check, ~3 chain runs, pr-review), far under those.
-**The risk is the plan's usage limits, not run counts**: at the cap the night shift is about 80% of the week's
-usage (about 4x the Janus load). Interactive sessions (like this one) come on top and are not estimated.
+**The risk is the plan's usage limits, not run counts**: at the cap the night shift (night-start, workers,
+pr-review, promote) is about 65% of the week's usage (about 2x the Janus load of 336 units). Interactive sessions (like this one) come on top and are not estimated.
 - **Safe mode** (`config/night.yaml` `safe_mode.enabled: true`, set on main): cap 4, explorer and its subagent on
   Sonnet 5.5 medium. Roughly 1,000 units a week less at the cap. The guard, promote and state read main's copy,
   fetched fresh on every run, so it applies at the next run without waiting for night-start's merge into dev; if
   main's copy cannot be fetched or parsed, nothing starts (fail safe).
-- Janus's quick checks and reviews run on **Sonnet**, not Opus, so no model change is recommended. They run every
-  hour of every day (336 runs/week), including weekends and nights when no Janus market trades; that is their
-  existing schedule and C05 is not changed here.
+- Janus's quick checks run on **Sonnet 5.5 medium** from 17 Nov 2026 (C14) and the daily review on Opus 5.5 high.
+  The quick checks run every hour of every day (168 runs/week), including weekends and nights when no Janus market
+  trades; that is their schedule and C05 is not changed here.
 
 ## 11. One-time setup (Ethan, in order)
 
