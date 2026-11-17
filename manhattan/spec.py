@@ -27,6 +27,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from manhattan.availability import AvailabilityError, sources_from_spec
+
 PREFIX = {"family": "AF", "hypothesis": "AH", "variant": "AV", "executable": "AX"}
 ID_HEX = 16
 SET_KEYS = frozenset({"universe", "data_sources", "tags"})
@@ -145,12 +147,22 @@ def validate_hypothesis(spec: dict) -> list[str]:
     errs += _need(spec, HYPOTHESIS_REQUIRED, "hypothesis")
     if spec.get("family") is not None and not _HASH.match(str(spec["family"])):
         errs.append("hypothesis: 'family' must be the family's full SHA-256")
-    for i, src in enumerate(spec.get("data_sources") or []):
-        if not isinstance(src, dict) or not src.get("name") or "publication_lag_days" not in src:
-            errs.append(f"hypothesis: data_sources[{i}] needs a name and publication_lag_days")
-        elif isinstance(src["publication_lag_days"], bool) or not isinstance(src["publication_lag_days"], int) \
-                or src["publication_lag_days"] < 0:
-            errs.append(f"hypothesis: data_sources[{i}].publication_lag_days must be a whole number of days, 0 or more")
+    sources = spec.get("data_sources") or []
+    # Read/hash legacy records without upgrading their provenance. The executable
+    # compiler and lags_from_spec always require the full publication contract.
+    if any(isinstance(src, dict) and any(k in src for k in ("frequency", "period_label", "availability"))
+           for src in sources):
+        try:
+            sources_from_spec(spec)
+        except AvailabilityError as exc:
+            errs.append(f"hypothesis: {exc}")
+    else:
+        for i, src in enumerate(sources):
+            if not isinstance(src, dict) or not src.get("name") or "publication_lag_days" not in src:
+                errs.append(f"hypothesis: data_sources[{i}] needs a name and publication_lag_days")
+            elif isinstance(src["publication_lag_days"], bool) or not isinstance(src["publication_lag_days"], int) \
+                    or src["publication_lag_days"] < 0:
+                errs.append(f"hypothesis: data_sources[{i}].publication_lag_days must be a whole number of days, 0 or more")
     b = spec.get("primary_binding")
     if isinstance(b, dict):
         errs += _need(b, BINDING_REQUIRED, "hypothesis.primary_binding")

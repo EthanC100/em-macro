@@ -89,7 +89,10 @@ def test_availability_is_a_date_or_the_specs_publication_lag_and_one_of_them_is_
     fam = spec.family(mechanism="m", mechanism_class="risk_premium", sign="+", counterparty="c", kill_condition="k",
                       tail_exposure="t")
     hyp = spec.hypothesis(fam, domain="test_daily", signal="s", grid={"k": [1]},
-                          data_sources=[{"name": "fx", "publication_lag_days": 1}, {"name": "cpi", "publication_lag_days": 45}],
+                          data_sources=[{"name": name, "publication_lag_days": lag, "frequency": "daily",
+                                         "period_label": "observation_date", "availability": {"kind": "daily_lag",
+                                         "reference": "fabricated daily series", "day_mapping": "fixture day"}}
+                                        for name, lag in (("fx", 1), ("cpi", 45))],
                           primary_binding={"universe_id": "u", "cost_model_id": "c", "sizing_id": "z"})
     lags = pit.lags_from_spec(hyp)
     assert lags == {"fx": 1, "cpi": 45}
@@ -125,7 +128,7 @@ def test_data_come_out_only_through_a_reader_and_the_fence_decides(monkeypatch):
     s = pit.PitStore()
     d = np.arange(np.datetime64("2019-12-23"), np.datetime64("2020-01-11"))
     s.add("x", d, np.arange(d.size, dtype=float), lag_days=0)
-    assert not [n for n in dir(s) if not n.startswith("_") and n not in ("add", "names", "span", "data_hash")]
+    assert not [n for n in dir(s) if not n.startswith("_") and n not in ("add", "add_source", "require_historical_evidence", "names", "span", "data_hash")]
     reader = pit.Reader(s, caller="session", domain="fx_daily", fence=FENCE)
     w = reader.window(date(2019, 12, 23), date(2019, 12, 31))
     assert w.role == roles.EXPLORATION and w.final("x")[0][-1] == np.datetime64("2019-12-31")

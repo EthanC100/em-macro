@@ -201,7 +201,8 @@ class FirstSeen:
             by.setdefault(s, []).append((p, v, self.available[(s, p)]))
         for s, rows in sorted(by.items()):
             rows.sort()
-            st.add(s, [r[0] for r in rows], [r[1] for r in rows], available=[r[2] for r in rows])
+            st.add(s, [r[0] for r in rows], [r[1] for r in rows], available=[r[2] for r in rows],
+                   reconstructed=any((s, r[0]) in self.late or (s, r[0]) in self.backfill for r in rows))
         return st
 
     def complete(self, series: list[str], period: str) -> bool:

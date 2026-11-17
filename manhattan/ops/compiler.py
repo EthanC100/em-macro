@@ -25,6 +25,7 @@ from typing import Iterator
 import numpy as np
 
 from manhattan import spec as S
+from manhattan.availability import AvailabilityError, sources_from_spec
 from manhattan.engine import events as EV
 from manhattan.engine.backtest import Instrument, Strategy, View
 from manhattan.engine.pit import PitError
@@ -246,6 +247,10 @@ class Executable:
 def check_hypothesis(h: dict) -> list[str]:
     """Problems that stop a hypothesis compiling (empty when it compiles)."""
     errs = []
+    try:
+        sources_from_spec(h)
+    except AvailabilityError as exc:
+        errs.append(str(exc))
     if h.get("frequency") not in FREQUENCIES:
         errs.append(f"frequency must be one of {sorted(FREQUENCIES)}")
     b = h.get("primary_binding") or {}

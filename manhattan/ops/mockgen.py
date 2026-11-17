@@ -83,8 +83,12 @@ def mock_reply(request: Request, *, n: int = 10, seed: int = 0, declared: dict |
         for k in range(1 if i % 3 else 2):
             sizing = "VT10" if k else "EW"
             h = {"domain": "syn_daily",
-                 "data_sources": [{"name": "synthetic_prices", "publication_lag_days": 0},
-                                  {"name": "synthetic_carry", "publication_lag_days": 1}],
+                 "data_sources": [{"name": "synthetic_prices", "publication_lag_days": 0, "frequency": "daily",
+                  "period_label": "observation_date", "availability": {"kind": "daily_lag",
+                  "reference": "synthetic fixture only", "day_mapping": "fixture calendar day"}},
+                                  {"name": "synthetic_carry", "publication_lag_days": 1, "frequency": "daily",
+                  "period_label": "observation_date", "availability": {"kind": "daily_lag",
+                  "reference": "synthetic fixture only", "day_mapping": "fixture calendar day"}}],
                  "signal": {"kind": kind, "description": f"{tag}: synthetic {kind} signal", **fixed},
                  "frequency": freq,
                  "primary_binding": {"universe_id": "U_SYN6", "cost_model_id": "C2BP", "sizing_id": sizing},

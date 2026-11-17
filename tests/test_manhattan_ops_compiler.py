@@ -36,7 +36,9 @@ def fam(sign="+"):
 
 def hyp(f, kind, fixed=None, grid=None, freq="D", sizing="EW", just=None, **extra):
     grid = grid or {}
-    return S.hypothesis(f, domain="syn_daily", data_sources=[{"name": "syn", "publication_lag_days": 0}],
+    return S.hypothesis(f, domain="syn_daily", data_sources=[{"name": "syn", "publication_lag_days": 0, "frequency": "daily",
+                  "period_label": "observation_date", "availability": {"kind": "daily_lag",
+                  "reference": "synthetic fixture only", "day_mapping": "fixture calendar day"}}],
                         signal={"kind": kind, "description": "test", **(fixed or {})}, frequency=freq,
                         primary_binding={"universe_id": "U_SYN6", "cost_model_id": "C0", "sizing_id": sizing},
                         grid=grid, timing=TIMING,
