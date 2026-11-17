@@ -1,7 +1,11 @@
 # Manhattan progress
 
 Updated 2026-11-12 (session "6M Manhattan C: dormancy fix before adoption", branch `build/manhattan`, pull
-request #56). A new session starts here:
+request #56) and 2026-11-13 (session "6M Manhattan C: dormancy fix and statistical checks", the same branch an
+hour later: it changed neither draft and added the statistical checks of "Milestone C: statistical checks"; then
+session "10M Manhattan C: final pre-adoption changes", which made the changes Ethan decided on and is described
+in "Milestone C: final pre-adoption changes (session 10M)").
+A new session starts here:
 read this file, then the document for the milestone it is about to work on. Earlier sessions: "2M Manhattan A-B"
 (audit, architecture, Protocol v3, simulation pre-registration), "3M Manhattan rename + PR #45 fixes", "4M
 Manhattan C: simulation lab" (which also did milestone D) and "5M Manhattan C: protocol 3.1 and prereg v2
@@ -10,10 +14,12 @@ Manhattan C: simulation lab" (which also did milestone D) and "5M Manhattan C: p
 **Two protocol versions exist.** [PROTOCOL_v3.md](PROTOCOL_v3.md) 3.0.0 and [SIM_PREREG.md](SIM_PREREG.md) 1.0 are
 frozen and protected. [PROTOCOL_v3.1.md](PROTOCOL_v3.1.md) 3.1.0 and [SIM_PREREG_v2.md](SIM_PREREG_v2.md) 2.0 are
 **drafts written by session 5M for Ethan to adopt** (ETHAN_ACTIONS item 19): they repair the two things the pilot
-showed must be repaired before a full run. **Session 6M revised both drafts before adoption**: the pilot of the
-draft itself showed that the dormancy rule retired too many families that have an edge, and §9.1 now needs a low
-probability of an edge as well as a low forecast ("Milestone C: state (session 6M)"). Until Ethan adopts them
-the drafts are in force for nothing.
+showed must be repaired before a full run. **Sessions 6M and 10M revised both drafts before adoption**: the pilot
+of the draft itself showed that the dormancy rule retired too many families that have an edge. Session 6M added
+a low probability of an edge under the most hopeful model as a second condition; on 2026-11-13 Ethan chose the
+other candidate, a test of the family's own forward record, and session 10M put it in ("Milestone C: final
+pre-adoption changes (session 10M)", which lists every pre-adoption change of that session). Until Ethan adopts
+them the drafts are in force for nothing.
 
 ## Milestones
 
@@ -25,7 +31,7 @@ its acceptance criteria are written here first and its tests then pass, run as h
 |---|---|---|---|---|
 | **A** | Audit of what exists | **done** | [AUDIT.md](AUDIT.md) | A |
 | **B** | Architecture, Protocol v3, simulation pre-registration | **done** (PR #48 merged 2026-11-12). Drafts of the next versions, for Ethan to adopt: Protocol 3.1.0 and pre-registration version 2 (session 5M) | [ARCHITECTURE.md](ARCHITECTURE.md), [PROTOCOL_v3.md](PROTOCOL_v3.md) 3.0.0, [SIM_PREREG.md](SIM_PREREG.md) 1.0; drafts [PROTOCOL_v3.1.md](PROTOCOL_v3.1.md), [SIM_PREREG_v2.md](SIM_PREREG_v2.md) | B |
-| **C** | Simulation lab: both screening candidates, SPA, forward e-process, hierarchical model, dormancy; the pre-registered experiments, with confidence intervals | **code and tests done; pilot run, rerun for the two repaired methods, and rerun again for the dormancy rule revised before adoption; NOT passed** (full run packaged for the iMac and now includes the model-fitting half; needs ETHAN_ACTIONS item 19; held-out worlds not coded): see "Milestone C: state (session 6M)" and "(session 5M)" | `manhattan/stats/`, `manhattan/sim/`, `results/manhattan_sim/` | C, and the reference half of old H |
+| **C** | Simulation lab: both screening candidates, SPA, forward e-process, hierarchical model, dormancy; the pre-registered experiments, with confidence intervals | **code and tests done; pilot run, rerun for the two repaired methods, rerun for a first dormancy revision, and rerun again from the final drafts (forward-record dormancy rule, quarterly reviews); NOT passed** (the full run is packaged for the iMac and for GitHub's runners and includes the model-fitting half; needs ETHAN_ACTIONS item 19; held-out worlds not coded): see "Milestone C: final pre-adoption changes (session 10M)", then "(session 6M)" and "(session 5M)" | `manhattan/stats/`, `manhattan/sim/`, `results/manhattan_sim/` | C, and the reference half of old H |
 | **D** | Registry, freezing workflow, generator templates, critic, ledger | **done against its criteria** (33 tests); not yet usable for a real batch: needs ETHAN_ACTIONS items 2, 3, 7 and a timestamp client: see "Milestone D: state" | `manhattan/spec.py`, `ledger.py`, `roles.py`, `generate/`, `freeze.py` | old D and F |
 | **E** | Point-in-time data layer and daily/event backtester; reproduce time-series momentum and cross-asset carry before anything new | **engine done and tested; reproduction done on public currency data; the futures half is blocked** (ETHAN_ACTIONS item 20); core factors proposed, not adopted (item 10): see "Milestone E: state" | `manhattan/engine/`, `manhattan/factors/`, `results/manhattan_engine/` | old E |
 | **F** | Historical screening and forward evaluation, wired only to methods that passed C | not started; needs a passed C and items 1, 2 | production wiring of `manhattan/stats/` | old H |
@@ -122,14 +128,25 @@ not a copy of it.
 | C-22 | **Version 2 beside version 1.** PROTOCOL_v3.md, SIM_PREREG.md and its record are byte for byte what they were; the version 2 record pins SIM_PREREG_v2.md and PROTOCOL_v3.1.md and a one-character change to either fails; version 1's code files and code hash are unchanged, so its pilot records still count; only D11, the twins and the HB scenarios go to the new code, and only with `--prereg v2`; version 2's records are kept apart and its runs log both hashes; every threshold of version 1 is the object version 2 uses; the numbers in SIM_PREREG_v2.md are the code's; 3.1 keeps every constant and every untouched section of 3.0 word for word and makes the two wording fixes; the CODEOWNERS lines of ETHAN_ACTIONS item 19 protect exactly the five new files | **met**: `tests/test_manhattan_prereg_v2.py` (3), `tests/test_manhattan_v2.py` (15) |
 | C-23 | **Pilot rerun.** D11 and a hedged twin of every other development scenario in which V3 is required, and the five HB scenarios, run as labelled pilots through the runner from a clean checkout of one commit, with every metric, interval and threshold reported and every development experiment noted in the run log. No held-out scenario run | **met as a pilot**: `results/manhattan_sim/v2/PILOT_RERUN_REPORT.md`, `DEVELOPMENT_NOTES.md` |
 
-| C-24 | **Dormancy under Protocol 3.1 §9.1, as revised before adoption.** Dormant only when both `PP^max` and `Π^max` are below 0.05 at two consecutive reviews with at least 252 forward days each; the forecast alone, or the probability alone, is not enough; reactivated when either reaches 0.15, or by Ethan; no dormancy without a programme end, while Statistically supported or at a review the model did not compute; at the last review nobody becomes dormant and a family can wake; while dormant only the reactivation check is made; the tiers are 3.0's whatever the dormancy numbers; the revised rule never retires a family that 3.0's rule keeps; no number is new; version 1's `tiers.py` is not edited and its code hashes are those on its records; the protocol's text is the rule the code applies | **met**: `tests/test_manhattan_dormancy.py` (10), `tests/test_manhattan_v2.py` (the code lists, the text of §9.1 against 3.0's, SIM_PREREG_v2's description) |
+| C-24 | **Dormancy under Protocol 3.1 §9.1 (the forward-record rule; rewritten by session 10M when Ethan chose it, ETHAN_ACTIONS item 22).** `p^F` is the one-sided p-value of the forward record against an edge of 0.25, and 1 with no estimate, no standard error or fewer than 252 forward days; dormant only when both the forecast `PP^max` and `p^F` are below 0.05 at two consecutive reviews; a hopeless forecast alone, or a poor record alone, is not enough; reactivated when either reaches 0.15, or by Ethan, and a reactivated family needs two more reviews; a review with no forecast retires nobody, leaves the count as it is and can still wake a family; while dormant only the reactivation check and formal support; never while Statistically supported; a review the model did not compute changes no tier and no count; the tiers are 3.0's whatever the record says, and with a record that always speaks against the family the rule is exactly 3.0's; a family whose edge is exactly `θ_min` ends dormant less than 5% of the time whatever the forecast says; no number is new; version 1's `tiers.py` is not edited and its code hashes are those on its records; every HB record carries the rule's id; the protocol's text is the rule the code applies | **met**: `tests/test_manhattan_dormancy.py` (11, brought from branch `claude/epic-mayer-kfhpsh` at `1124fe7` with the module), `tests/test_manhattan_v2.py` (the code lists, the text of §9.1 against 3.0's, §9.2 and §9.3 word for word 3.0's, SIM_PREREG_v2's description). Until session 10M this row described the rule with `Π^max` (10 tests), which the draft held from 2026-11-12 to 2026-11-13 |
 | C-25 | **Diagnosis before the change.** The pilot's replications of the four scenarios replayed with the pilot's code, every replay equal to its run record on the counts behind M8; each candidate cause changed alone on the same fits; the result recorded with the variants that were tried and not chosen, and noted in the run log | **met**: `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md`; notes `note-6M-01` to `note-6M-04` in `results/manhattan_sim/runs.jsonl` |
 | C-26 | **Pilot rerun under the revised rule.** The five HB scenarios through the runner from a clean checkout of one commit, 12 replications each, every metric with its interval and threshold; premature elimination, the reviews written and the families dormant reported; who reaches Statistically supported by true Sharpe ratio reported from the records. No held-out scenario run; no threshold, metric or scenario of the pre-registration changed | **met as a pilot**: `results/manhattan_sim/v2/PILOT_RERUN2_REPORT.md` (the first rerun, `PILOT_RERUN_REPORT.md`, and its summary are kept as they were) |
+| C-27 | **Intervals with the replication as the unit.** For every interval in the pilot reports: the same estimate, the delete-one-replication jackknife standard error of the same estimator, a Student-t quantile on `R − 1` degrees of freedom; where no replication had an event, the exact bound over replications. For a mean of per-replication values the jackknife is `sd/√R` exactly and the interval is wider by exactly `t/1.96`; for a pooled ratio it is the linearised cluster-robust error; thresholds and the small-groups rule are those of the reports; the estimate is never touched | **met**: `tests/test_manhattan_cluster_ci.py` (5); `results/manhattan_sim/v2/CLUSTERED_INTERVALS.md` |
+| C-28 | **The forward test's estimand.** The simulated processes have the Sharpe ratio they are given, crashes included; the weekly inputs are `manhattan.stats.eprocess`'s own; the proposed tail check on hand-made records; skipping by a rule that looks back keeps null wealth inside Ville's bound and dropping weeks after the fact breaks it. No held-out scenario, no pipeline, no pre-registered metric | **met**: `tests/test_manhattan_estimand_study.py` (4); `results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md` |
+| C-29 | **Timing.** A slice with one run of each kind of code (version 1 at STD and LONG, D11, a twin, HB), each alone and then with every core busy; wall-clock, CPU time and peak memory per job; it writes no replication record and no run-log record | **met**: `tests/test_manhattan_benchmark.py` (2); `results/manhattan_sim/v2/benchmark.json`, `COMPUTE_OPTIONS.md` |
+| C-30 | **A second look at the dormancy rule that edits nothing.** The branch's HB pipeline imported unchanged and stepped four ways on the same fits; the branch's path equal to the pilot of record, and the 3.0 path to session 5M's pilot, replication by replication; the alternative rule outside the package | **met as development experiments**: 48 of 48 and 48 of 48 (`results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md`); the yearly replay gives the first session's yearly figures to the family |
+
+| C-31 | **Quarterly reviews in the HB runs (SIM_PREREG_v2 amendment 1).** A review every 63 trading days, 40 of them; M7 and M9 read at years 2, 4, 7 and 10; M12 counted over every review, and one uncomputed review anywhere fails V12; the step written into every record; records of another step refused by the report and by the collector; `hb.py` and `tiers.py` unedited (version 1's HB code hash unchanged); the amendment's text is what the code does | **met**: `tests/test_manhattan_v2.py` (the replication, the metric rows, the refusal, the text), `tests/test_manhattan_sim_pieces.py` (the collector's refusal) |
+| C-32 | **A two-group prior for D08, identification first.** With the edge share fixed at 1 the candidate is `hier_analytic` for all six models; with no forward record the share's posterior is its prior; on clean data the share is learned; the identification criterion is written before the check is run; no run of record uses the candidate | **met as a development experiment, with the verdict "not identified, not adopted"**: `tests/test_manhattan_hier_spike.py` (5); `results/manhattan_sim/v2/D08_SPIKE_SLAB.md` |
+| C-33 | **The tail-risk check (Protocol 3.1 §6.11; SIM_PREREG_v2 V15).** The formula at 95% with a floor of 12 on hand-made records; record for record the estimand study's formula; a rejection is counted whatever the check says and only the label is withheld; the check's code cannot reach the e-LOND rule and is in no run's code list; §6.1 to §6.10 are 3.0's word for word, and §8.3 to §8.5 are 3.0's with the check named once in each | **met**: `tests/test_manhattan_tailrisk.py` (6), `tests/test_manhattan_v2.py` (the sections against 3.0) |
+| C-34 | **A run made in pieces.** A replication range and a time budget in the runner; lazy submission (at most one replication in flight per worker when a budget or a failure ends the run; every one started is saved); `runlog.finish`'s three statuses; a plan that covers every missing replication once; a merge that is all or nothing and refuses what may not be pooled; two pieces merged give the numbers of one call; the workflow is dispatch-only, has no schedule and no secret, a read-only token, main-only jobs under six hours, artifacts uploaded on failure, and inputs through the environment only | **met**: `tests/test_manhattan_sim_pieces.py` (13). **Not met and not testable from a session:** a real run of the workflow on GitHub (it was never dispatched) |
+| C-35 | **Pilot rerun of every changed part, from the final text.** The five HB scenarios through the runner from clean checkouts whose hash record is the one to be adopted; every metric with its pre-registered interval and, beside it, the small-sample interval (the replication as the unit); no held-out scenario; no threshold, metric or scenario changed | **met as a pilot**: `results/manhattan_sim/v2/PILOT_RERUN3_REPORT.md`, `PILOT_RERUN3_INTERVALS.md` (the earlier reports and their summaries are kept under their own names); the replications came from two commits with the same HB code and hash record ("Failed or not met", 6) |
 
 C-19 to C-23 were written by session 5M with the work they describe, not before it: the session's brief fixed what
 was to be built, and these rows record what the tests then had to show. C-24 to C-26 were written by session 6M
-in the same way; the dormancy tests were written before the protocol's text was changed, and the one that reads
-the text failed until it was.
+in the same way, and C-27 to C-30 by the second session of 2026-11-13; the dormancy tests were written before the protocol's text was changed, and the one that reads
+the text failed until it was. C-31 to C-35 were written by session 10M with the work they describe; its brief
+fixed what was to be built, and C-24 was rewritten when Ethan's decision replaced the rule it described.
 
 **What "done" means for C.** C is done when C-01 to C-23 hold **and** the confirmation run of SIM_PREREG §8 has been
 made at the full replication counts. A pilot does not finish C and enables no claim.
@@ -611,6 +628,550 @@ same worlds with yearly reviews.
 5. Smaller gaps left from sessions 4M and 5M: monthly test periods; sensitivity p-values at `L/2` and `2L`; the
    review dates of the HB runs (item 21).
 
+## Milestone C: statistical checks (second session of 2026-11-13: "6M Manhattan C: dormancy fix and statistical checks")
+
+**Two sessions, one branch.** This session was started about an hour after "6M Manhattan C: dormancy fix before
+adoption" with a brief that repeated that session's three items (the dormancy rule, D08's calibration, who
+reaches the supported tier) and added four (intervals with the replication as the unit, the forward test's
+estimand, the cost of the full run, the hash log). It found the other's commits when its own first push was
+refused. **It then kept the first session's revision as the branch's and pushed nothing over it**: it did not
+edit PROTOCOL_v3.1.md, SIM_PREREG_v2.md, the hash record, `manhattan/stats/dormancy.py`, the HB pipeline, the
+first session's tests, reports or replication records. Everything below is added beside them. What it had done
+on the three shared items before finding the overlap is kept where it adds something (a second diagnosis that
+agrees; an alternative rule; diagnostics the first session's records do not hold) and is otherwise on the branch
+`claude/epic-mayer-kfhpsh` (commit `1124fe7`: a complete alternative revision of §9.1 with its code, tests and
+re-hash, full suite passed, merged nowhere).
+
+**The hash record: unchanged by this session.** `docs/manhattan/sim_prereg_v2.sha256` is the first session's
+(table above: `77496b2f…` for SIM_PREREG_v2.md and `9fdc8b07…` for PROTOCOL_v3.1.md, from `67707330…` and
+`40ad6532…`). This session edited neither draft on `build/manhattan`, so there is no third pair of hashes on the
+branch; `python -m manhattan.prereg_v2 verify` prints `pre-registrations ok (v1 and v2)`. (On
+`claude/epic-mayer-kfhpsh` the alternative revision has its own record, `925d7a5b71745df137226829b67196f06000c165fc59134667e04783e85b33aa`
+and `43f60398e25355ea0b972abc8f4c624beb80c888c87dd449cc5557bfba6f2474`; it is in force nowhere.)
+
+**1. The dormancy rule: a second diagnosis that agrees, the diagnostics, and an alternative
+(`results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md`).**
+
+- *The same cause, found separately.* This session traced session 5M's 48 pilot replications on its own
+  instrumented runs (all 48 reproduce the recorded counts). Of the 152 families with an edge that the rule of 3.0
+  retired, the forecast was exactly 0.00 for 139 and never above 0.045; the cut-offs, the minimum forward record
+  and the wake-up level are not the cause. Two things it adds to `DORMANCY_DIAGNOSIS.md`: the forecast stays at
+  zero when the family's **true** edge replaces the posterior draws (the forecast updates each model's present
+  posterior as a normal prior without refitting, and a posterior of standard deviation 0.13 to 0.22 weighs as
+  much as 20 to 60 years of forward data); and the retired families' **own forward records were not against
+  them** (the one-sided p-value of "the edge is at least 0.25" had a median of 0.52 to 0.75 and was below 0.05
+  for 2 of the 152).
+- *The diagnostics the brief asked for, for the rule on the branch*, at the four pre-registered dates and with
+  yearly reviews. The four-date replay reproduces the pilot of record's counts in 48 of 48 replications (and
+  session 5M's pilot, for 3.0's rule, in 48 of 48); the yearly replay gives the first session's yearly figures
+  to the family (2 of 42, 10 of 140, 5 of 944, 7 of 123):
+
+| the draft's rule | D02, four dates | D05, four dates | D08, four dates | D10, four dates | D02, yearly | D05, yearly | D08, yearly | D10, yearly |
+|---|---|---|---|---|---|---|---|---|
+| families with a true edge | 42 | 140 | 944 | 123 | 42 | 140 | 944 | 123 |
+| premature elimination (M8) | 0.000 (0.000 to 0.000) | 0.014 (0.000 to 0.032) | 0.002 (0.000 to 0.007) | 0.008 (0.000 to 0.029) | 0.048 (0.000 to 0.129) | 0.071 (0.040 to 0.106) | 0.005 (0.000 to 0.015) | 0.057 (0.018 to 0.097) |
+| share ever made dormant | 0.000 | 0.014 | 0.002 | 0.008 | 0.048 | 0.079 | 0.006 | 0.065 |
+| years dormant, of those ever dormant: mean / longest | - | 3.0 / 3 | 3.0 / 3 | 3.0 / 3 | 2.0 / 3 | 3.4 / 7 | 3.3 / 5 | 3.5 / 6 |
+| reactivated / dormant again at the end | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 1 / 0 | 1 / 0 | 1 / 0 |
+| enter the tier with no dormancy / kept out by dormancy / delayed by it | 0 / 0 / 0 | 10 / 0 / 0 | 126 / 0 / 0 | 23 / 0 / 0 | 0 / 0 / 0 | 10 / 0 / 0 | 152 / 0 / 0 | 22 / 0 / 0 |
+| the same under 3.0's rule | 0 / 0 / 0 | 10 / 0 / 0 | 126 / 0 / 0 | 23 / 0 / 0 | 0 / 0 / 0 | 10 / 0 / 0 | 152 / 1 / 0 | 22 / 0 / 0 |
+| families with no edge dormant at the end (3.0's rule) | 0.14 (0.36) | 0.14 (0.37) | 0.03 (0.34) | 0.20 (0.38) | 0.45 (0.80) | 0.40 (0.81) | 0.06 (0.78) | 0.52 (0.81) |
+| share of family-reviews written (3.0's rule) | 0.93 (0.78) | 0.93 (0.78) | 0.99 (0.85) | 0.90 (0.77) | 0.72 (0.42) | 0.75 (0.43) | 0.96 (0.55) | 0.66 (0.42) |
+
+  Ever dormant and retired are nearly the same families: a family with an edge that is put aside almost never
+  comes back (none of 5 at the four dates, 3 of 27 with yearly reviews), so reactivation does little and what
+  protects such a family is not being put aside. No family that would enter Statistically supported is kept out
+  or delayed by the branch's rule at either calendar; even 3.0's rule kept out one, with yearly reviews. What a
+  premature elimination costs is the attention the family stops getting, not a tier entry. Dormancy saves no
+  computing under any rule (every family's data stay in the model and the forecast is made for every family).
+- *An alternative second condition, measured beside the branch's on the same fits, not adopted*: the one-sided
+  p-value of the family's own forward record against an edge of `θ_min`, below 0.05 at the same two reviews, wake
+  at 0.15 (`dev_6M_b/own_record.py`). Its error for a family with an edge does not depend on the other families;
+  its price is that it retires almost nobody.
+
+| review dates | rule | premature elimination (95% interval) | families retired, of those with an edge | families with no edge dormant at the end | share of family-reviews written |
+|---|---|---|---|---|---|
+| years 2, 4, 7, 10 (pre-registered) | 3.0's rule (the forecast alone) | 0.167 (0.045 to 0.261) / 0.179 (0.138 to 0.216) / 0.108 (0.081 to 0.138) / 0.146 (0.092 to 0.197) | 7 of 42 / 25 of 140 / 102 of 944 / 18 of 123 | 0.36 / 0.37 / 0.34 / 0.38 | 0.78 / 0.78 / 0.85 / 0.77 |
+| years 2, 4, 7, 10 (pre-registered) | **the draft's rule** (forecast and `Π^max`) | 0.000 (0.000 to 0.000) / 0.014 (0.000 to 0.032) / 0.002 (0.000 to 0.007) / 0.008 (0.000 to 0.029) | 0 of 42 / 2 of 140 / 2 of 944 / 1 of 123 | 0.14 / 0.14 / 0.03 / 0.20 | 0.93 / 0.93 / 0.99 / 0.90 |
+| years 2, 4, 7, 10 (pre-registered) | the family's own forward record (forecast and `p^F`) | 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) | 0 of 42 / 0 of 140 / 0 of 944 / 0 of 123 | 0.01 / 0.02 / 0.02 / 0.05 | 0.99 / 0.99 / 0.99 / 0.97 |
+| every year (development experiment) | 3.0's rule (the forecast alone) | 0.714 (0.595 to 0.842) / 0.579 (0.489 to 0.662) / 0.453 (0.407 to 0.502) / 0.431 (0.375 to 0.492) | 30 of 42 / 81 of 140 / 428 of 944 / 53 of 123 | 0.80 / 0.81 / 0.78 / 0.81 | 0.42 / 0.43 / 0.55 / 0.42 |
+| every year (development experiment) | **the draft's rule** (forecast and `Π^max`) | 0.048 (0.000 to 0.129) / 0.071 (0.040 to 0.106) / 0.005 (0.000 to 0.015) / 0.057 (0.018 to 0.097) | 2 of 42 / 10 of 140 / 5 of 944 / 7 of 123 | 0.45 / 0.40 / 0.06 / 0.52 | 0.72 / 0.75 / 0.96 / 0.66 |
+| every year (development experiment) | the family's own forward record (forecast and `p^F`) | 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.000 (0.000 to 0.000) / 0.016 (0.000 to 0.039) | 0 of 42 / 0 of 140 / 0 of 944 / 2 of 123 | 0.06 / 0.07 / 0.08 / 0.20 | 0.96 / 0.96 / 0.97 / 0.88 |
+
+  Which of the two the draft should hold is Ethan's (ETHAN_ACTIONS item 22). The draft holds the first session's.
+
+**2. D08's calibration error: the same verdict.** This session's check agrees with the first's: a known
+limitation, model not changed. Between 69% and 96% of the families in the bins from 0.1 to 0.6 at year 10 have
+an edge of exactly zero; the fitted bell is centred at 0.26 with spread 0.39. A point mass at zero and one bell,
+fitted to each replication on the same estimates, has a calibration error of 0.013 (0.006 to 0.031) in D08
+against 0.101; the first session's version of the check gave 0.009. One thing to add for whoever designs the
+repair: the same crude two-group fit is **worse** than the present model in D02 (0.034 against 0.014), where
+edges are rare and the wide component already does the second group's work (`dev_6M_b/calib.txt`). With the
+replication as the unit the interval of D08's 0.101 is too wide to place (the statistic jumps when a bin crosses
+200 observations): 12 replications do not say whether V6 fails there.
+
+**3. Who reaches Statistically supported: nothing to add to the first session's table** (part 4 of
+`DORMANCY_DIAGNOSIS.md`; ETHAN_ACTIONS item 21(a)), except which model it is that says no
+(`DORMANCY_SECOND_LOOK.md` section 4, year 10, families with a true edge and two forward years):
+
+| true hedged Sharpe ratio | families | mean forward years | `Π^min ≥ 0.80` (the rule) | central model alone `≥ 0.80` | smallest of S0 to S3 (without S4 and S5) | smallest of S0 to S4 (without the decay model S5) | the most cautious model is S4 / S5 |
+|---|---|---|---|---|---|---|---|
+| 0.25 to 0.5 | 160 | 5.9 | 0.01 | 0.13 | 0.09 | 0.03 | 0.15 / 0.82 |
+| 0.5 to 0.75 | 210 | 5.6 | 0.01 | 0.36 | 0.27 | 0.07 | 0.16 / 0.82 |
+| 0.75 to 1 | 294 | 6.2 | 0.03 | 0.67 | 0.59 | 0.17 | 0.22 / 0.77 |
+| 1 to 1.5 | 317 | 6.2 | 0.21 | 0.92 | 0.86 | 0.47 | 0.32 / 0.68 |
+| 1.5 and above | 46 | 5.9 | 0.54 | 1.00 | 0.98 | 0.85 | 0.46 / 0.52 |
+
+**4. Every simulation interval with the replication as the unit of clustering
+(`results/manhattan_sim/v2/CLUSTERED_INTERVALS.md`; `python -m manhattan.sim.cluster_ci`).**
+
+- *What was wrong and what was not.* The pre-registered intervals already take whole replications as the unit
+  (`mean ± 1.96 sd/√R` over per-replication values; a percentile bootstrap of whole replications for ratios), so
+  no interval treated the tests inside a replication as independent. What they do not allow for is how few
+  replications a pilot has: a normal quantile where a Student-t on `R − 1` degrees of freedom is due (2.57 for 6
+  replications, 2.20 for 12, 2.03 for 36), a percentile bootstrap that is too narrow with so few clusters, and
+  "0.000 to 0.000" where no replication had an event.
+- *The corrected interval*: the same estimate, the delete-one-replication jackknife standard error of the same
+  estimator, a Student-t quantile; where no replication had an event, the exact bound over replications,
+  `1 − 0.025^(1/R)` (0.26 for 12 replications, 0.46 for 6, 0.10 for 36).
+- *Result*: 1,070 intervals in 38 runs (version 1's 18 pilots, D11 and the nine twins, the five HB scenarios
+  under each dormancy rule). The corrected interval is 1.30 times as wide on average. 510 have a threshold and
+  enough observations to be placed; **219 change side, all from "within so far" to "outside so far"**:
+  - **204 are intervals that were printed as 0.000 to 0.000**: forward FDR (123), screening FDR (73), four
+    D01 calibration shares, two linked-error rows and the two candidates' rows of D02's premature elimination
+    under the revised rule. None of them was evidence of a rate of zero: with 12 replications and no event the
+    upper end is 0.26, above every bound.
+  - **15 are SPA sizes that sat just inside their bound**: version 1's D02 (0.0456, upper end 0.0589 to
+    0.0606), D03, D06, P2 and P4, and the hedged twins D01h, D03h, D04h and D05h (6 replications each). Of the
+    nine twins, the hedge-aware test's size at 0.05 is within its bound in 3 instead of 6.
+  - **No headline changes**: D11 under the hedge-aware test stays within (0.0468; 0.0399 to 0.0538 becomes
+    0.0396 to 0.0540) and under the 3.0 test stays outside (0.0774; 0.0611 to 0.0937 becomes 0.0591 to 0.0957);
+    premature elimination under the rule of 3.0 stays outside in all four scenarios (0.167: 0.031 to 0.302;
+    0.179: 0.130 to 0.227; 0.108: 0.073 to 0.143; 0.146: 0.084 to 0.209) and under the revised rule stays
+    within in D05, D08 and D10 (upper ends 0.034, 0.007, 0.026) and is not shown in D02 (none of 42 families in
+    12 replications); D08's calibration error stays outside; D09b's 0.344 is 0.303 to 0.384.
+- All of these are pilots: "verdict" means on which side of its threshold the judged end of the interval sits
+  so far. At the pre-registered counts (400 and 2,000) the correction is under 1% of the width.
+
+**5. The forward e-process: what a rejection proves, what truncation hides, a tail-risk check, week-skipping
+(`results/manhattan_sim/v2/ESTIMAND_AND_TAIL_RISK.md`; `manhattan/sim/estimand_study.py`).** Protocol §6 is
+unchanged.
+
+- *What a rejection proves.* For at least one component of the family, in at least one week in which it bet,
+  the conditional mean, given the past, of the week's core-hedged net return with any loss beyond six ex-ante
+  weekly standard deviations counted as six, was positive. Not the mean of the return itself, not an average
+  over time, not the weeks skipped, not after real costs.
+- *Truncated against untruncated mean* (single series, 2,000 paths of ten years a process, the protocol's own
+  transforms; not a held-out scenario: no programme, no pipeline, no metric of the pre-registration). Fat tails
+  without a direction: 0.003 to 0.013 of a Sharpe ratio apart; a record shows opposite signs at most 2 times in
+  100. Crashes: nothing hidden at 10 daily standard deviations (inside the cap); 0.02 to 0.11 of a Sharpe ratio
+  at 20, 0.07 to 0.32 at 40, 0.16 to 0.45 at 100. A strategy with a true Sharpe ratio of −0.25 has a positive
+  truncated mean with five crashes of 40 or two of 100 a decade. Ten-year records show a positive truncated mean
+  beside a non-positive untruncated one up to 72 times in 100.
+- *A tail-risk check, proposed and not adopted* (ETHAN_ACTIONS item 23): the truncated record's total gain must
+  cover the tail losses the record cannot rule out at 95%, each at the declared stress loss, and the
+  untruncated record must be positive.
+- *Week-skipping*: **confirmed valid**, with the argument and a check; what it changes is which weeks are
+  tested. One wording gap in §6.6 and §6.7 for production (item 23).
+
+**6. Time and cost of the full run (`results/manhattan_sim/v2/COMPUTE_OPTIONS.md`;
+`python -m manhattan.sim.benchmark`).**
+
+- *Measured* (one replication of each kind of run: D02 STD, D08 STD, D02 LONG, D11 STD, D05h STD, D08 HB; each
+  alone on the idle machine, then four of each with four workers; Xeon at 2.1 GHz, 4 cores; timing only, no
+  record written): 50, 103, 69, 380, 225 and 169 seconds alone; **parallel efficiency 0.92** with four workers
+  (the same replication alone against busy; 0.88 to 0.97 by kind); 1.19 CPU-hours for the 24 busy replications;
+  **peak memory 0.3 to 0.4 GB a worker, and 1.8 GB for D08 at HB**. Seven workers that are all on an HB scenario
+  need 12.5 GB: on a 16 GB machine run the HB scenarios with four or five.
+- *The whole development programme*: 1,266 hours of one idle core of that machine, 1,252 still to run (version
+  1's STD runs 681, LONG 75, D11 207, the twins 233, the HB scenarios 55). Session 5M's 1,500 to 1,750 came from
+  pilot timings on a busy machine. *One confirmation run*, extrapolated from the development runs of the same
+  size because its worlds are not coded: about 877 more.
+- *Three ways to run it* (estimates only; nothing bought, no workflow added or started):
+
+| | development programme (32 runs, 41,600 replications; the pilot replications on file count) | with one confirmation run (extrapolated: its worlds are not coded) |
+|---|---|---|
+| hours of one idle core of the session's machine | **1,252** | **2,129** |
+| (a) the iMac, seven workers: cores like the session's / a recent Intel desktop (1.5 times as fast) / Apple silicon | 8.1 / 5.4 / 3.8 days | 13.8 / 9.2 / 6.5 days |
+| (b) GitHub's runners, 4 cores each, assumed as fast as the session's: runner-hours; jobs of 5 hours; wall-clock with 20 jobs at once; cost | 341; 69; 17 hours; US$0 | 580; 116; 29 hours; US$0 |
+| (c) rented whole cores (AWS c7a, assumed as fast as the session's): on demand / on spot; wall-clock on one 64-core machine | US$64 / US$20; 20 hours | US$109 / US$34; 33 hours |
+
+  The iMac's and the runners' speeds are assumptions; `python -m manhattan.sim.benchmark --quick --out bench.json`
+  on the machine itself (five minutes) replaces them. GitHub's figures are from its documentation on 2026-11-13
+  (standard runners free and unlimited for a public repository, 4 cores and 16 GB, 6 hours a job, 20 jobs at
+  once on the Free plan); the cloud prices are from a price aggregator the same day. A workflow for (b) is
+  Ethan's to add and to start (hard rules 3 and 16).
+
+**Implemented by this session** (new files only; no file of the pipeline, of version 1 or of the first session
+is edited, and no code hash moves):
+
+| where | what |
+|---|---|
+| `manhattan/sim/cluster_ci.py`, `tests/test_manhattan_cluster_ci.py` (5) | every interval again with the delete-one-replication jackknife and a Student-t quantile; the report and its JSON |
+| `manhattan/sim/estimand_study.py`, `tests/test_manhattan_estimand_study.py` (4) | the study of the forward test's estimand and the document it writes |
+| `manhattan/sim/benchmark.py`, `tests/test_manhattan_benchmark.py` (2) | the timing slice (alone, then every core busy); it writes no record |
+| `results/manhattan_sim/v2/dev_6M_b/` | the development scripts and their outputs: traces, replays, the four-path runs, the alternative rule (outside the package) |
+| `results/manhattan_sim/v2/` | `DORMANCY_SECOND_LOOK.md`, `CLUSTERED_INTERVALS.md` (and `.json`), `ESTIMAND_AND_TAIL_RISK.md` (and `estimand_study.json`), `COMPUTE_OPTIONS.md` (and `benchmark.json`) |
+
+**Failed or not met.**
+
+1. **C is still not passed.** Everything above is from pilots.
+2. **Two sessions did the same three items.** About two hours of this session's work on the dormancy rule, D08
+   and the tier table duplicated the first session's before the overlap was found (at the first push, which was
+   refused because the branch had moved). Nothing of the first session's was overwritten. The duplicated work is
+   kept on `claude/epic-mayer-kfhpsh` and is used here only as a second opinion.
+3. **A pilot of the alternative rule through the runner was stopped part-way** (36 replications of D02, 18 of
+   D10, from a clean checkout of `1c1f648` on the other branch): first by a restart of the session's machine,
+   then for good when the overlap was found. Its records are not on `build/manhattan` and are counted in no
+   report; they retired 2 of 143 families with an edge in D02 and none of 190 in D10.
+4. **The session's machine restarted twice.** At 00:22 UTC, killing that pilot and yearly runs then in progress,
+   and between about 02:21 and 03:57 UTC, killing the first benchmark part-way. Files were intact both times and
+   nothing was lost; the benchmark was run again in two phases that each save their result
+   (`--phase alone`, `--phase busy`).
+5. **Test failures on the way, none pushed to `build/manhattan`.** First runs of this session's new test
+   files: one test used an unhashable object as a dictionary key (the test's mistake); one hand count in a test
+   was wrong (the code was right: 4 and 6, not 5 and 7); one comparison needed a tolerance of one unit in the
+   last place, and the interval module was changed to treat a jackknife of 1e-17 as zero; the report listed rows
+   with no data, which are now left out; one bound in the estimand study's small-size test was tighter than 300
+   paths support (0.097 against 0.10) and was set to the bound that matters. Full suites: see "Tests".
+6. **Not done:** quarterly reviews for either dormancy rule; any run at the pre-registered count; the held-out
+   worlds (still not coded); the benchmark on the iMac or on a GitHub runner (their speeds are assumptions).
+
+## Milestone C: final pre-adoption changes (session 10M, 2026-11-13)
+
+Session "10M Manhattan C: final pre-adoption changes", branch `build/manhattan` (main merged in first: `31bc66a`),
+pull request #56, still a draft. Its brief was six numbered items, each committed and pushed on its own once the
+full suite passed. `manhattan/ops/` and `docs/manhattan/ops/` were not touched. No protected file was edited.
+Both drafts were edited, so the hash record was rewritten at each item that touched them; every pair of hashes
+is in the table under item 6.
+
+**Item 1. The dormancy rule is the forward-record rule (Ethan's decision on ETHAN_ACTIONS item 22).**
+
+- *The rule.* A family becomes dormant only if, at two consecutive reviews, the forecast `PP^max` is below 0.05
+  **and** a one-sided test of its own forward record against an edge of 0.25 rejects at 0.05
+  (`p^F = Φ((y^F − θ_min)/s^F) < 0.05`, defined with 252 forward days, otherwise 1). It is reactivated when either
+  is at or above 0.15, or by Ethan. This replaces the second condition session 6M had put in the draft
+  (`Π^max < 0.05`).
+- *The code.* `manhattan/stats/dormancy.py` is the file of branch `claude/epic-mayer-kfhpsh` at commit `1124fe7`,
+  byte for byte, plus one line: `RULE = "protocol-3.1-section-9.1-forward-record"`, the id written into every HB
+  replication record. `manhattan/sim/hb_v2.py` computes `p^F` from the forward Sharpe estimate and standard error
+  it hands the model (`dormancy.forward_p`) and no longer computes `Π^max` for the rule.
+  `manhattan/stats/tiers.py` and `manhattan/sim/hb.py` are untouched.
+- *The tests.* The 11 tests of the rule from that commit, in `tests/test_manhattan_dormancy.py` (the one that
+  reads the protocol reads this branch's text). **Not brought over:** that branch's shadow paths in the HB
+  pipeline (`hb_v2.Track`: the same fits stepped under three rules) and their test and report rows;
+  `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` already holds that comparison.
+- *The text.* Protocol 3.1 §9.1 is rewritten (the two numbers, the table, a box that says what the second
+  condition guarantees, why the model's own probability was not kept, and how the rule fails); one sentence of
+  §7.2(e); Appendix B's row; the change log, where session 6M's revision is kept and marked superseded; row 5 of
+  the table at the top, marked as a pre-adoption change with what it replaces. **§9.2 and §9.3 are 3.0's word
+  for word again** (session 6M had reworded two paragraphs of §9.3's box for its rule). SIM_PREREG_v2: its
+  header, the sentence on which protocol sections are identical, row 4 of section 1, the reading "Dormancy rule"
+  in section 2(f), one line in section 10.
+- *Unchanged:* M8's definition, its bound of 0.10 (0.25 for late starters in H09), the scenarios, the
+  replication counts, every threshold of SIM_PREREG and SIM_PREREG_v2, the forecast, the tiers, the rule's own
+  levels (0.05 twice, 0.15).
+- *What is known about the rule so far* is session 6M-b's measurement on the pilot's fits, outside the runner
+  (`DORMANCY_SECOND_LOOK.md` section 3): no family with an edge retired at the four pre-registered dates (0 of
+  42, 140, 944 and 123), 2 of 123 in D10 with yearly reviews; 1% to 5% of the families with no edge dormant at
+  the end (6% to 20% with yearly reviews). Its pilot through the runner is item 6.
+
+**Item 2. The HB runs are reviewed quarterly (amendment 1 of SIM_PREREG_v2; Ethan's decision on item 21(c)).**
+
+- *What changed.* `manhattan/sim/hb_v2.py` fits the six models, makes the forecast and steps the tiers and the
+  dormancy rule **every 63 trading days: 40 reviews**, at days 63 to 2,520, in place of version 1's four dates
+  (its declared reduction (c), made for the sampler's cost). **M7 and M9 are read at years 2, 4, 7 and 10** as
+  before (the record's `reviews` block holds those four reviews in full); **M12 is counted over all 40** (the
+  record's `quarterly` block: `ok`, the largest end-of-grid mass, families, seconds, reviews written and families
+  dormant at every review); M8 is the state after the last review. "Two consecutive reviews" are a quarter
+  apart. `manhattan/sim/hb.py` and `manhattan/stats/tiers.py` are untouched (version 1's HB code hash is still
+  `0b8dd1af6db62c9f`).
+- *The step is in every record* (`review_step: 63`, with `review_days`). `hb_v2.require_review_step` refuses
+  records of any other step; the report counts only records made at this step, and the collector of a run made
+  in pieces (item 5) refuses a piece that holds any other.
+- *The text.* SIM_PREREG_v2 section 11, "Amendment 1, made before adoption": what is amended, what is not, why
+  it tightens and never loosens, what it costs, and why it is in the draft itself and not in the amendments
+  file. Sections 2(f), 4 and 5 agree with it. In H09 "the second evaluation date after the edge began" keeps
+  version 1's meaning (the second of years 2, 4, 7, 10). Protocol 3.1 §9.1 "How it fails (5)" now says the
+  simulation reviews quarterly.
+- *Stricter where it has a direction; one reading has none.* V12 must hold over ten times as many reviews, the
+  first with ten families and a quarter of forward record. V7's rule is applied at 39 reviews that have a
+  forecast, not 3, so a family can become dormant at 38 of them, not 2 (the amendment's own sentence says "39
+  chances to retire a family, not 3": the count of reviews with a forecast, loosely put; it is in the hashed
+  text and was left as it is once the pilot had started).
+  V6 reads the same probabilities at the same dates. V8's groups (the tier states at the four reading dates)
+  now come from quarterly stepping: the groups production would have, neither larger nor smaller by
+  construction. That is written in the amendment.
+- *Cost, measured on one replication* (D08, the dearest; one core of the session's machine while other jobs
+  ran): 1,201 seconds against 143 at four dates; the model 1,148 of them; the six fits of a review 18 to 40
+  seconds, dearest at the first reviews (few families, the whole grid); all 78 forecasts 31 seconds; **peak
+  memory 3.3 GB** (1.8 GB at four dates). In it: no review "not computed" in 40; none of 84 families with an edge
+  retired; 16 of 156 families with no edge dormant at the end; 4,885 of 5,080 family-reviews written.
+- *Tests.* `tests/test_manhattan_v2.py`: the 40 dates, the step and the two blocks in a real (tiny) replication;
+  M12 over 2,400 reviews of 60 replications, and one uncomputed review between two reading dates failing V12;
+  records of another step refused; the amendment's text against the code. The tiny world's grid was coarsened
+  further so that the tests that run a whole HB replication stay at a few minutes.
+
+**Item 3. D08 and a two-group ("spike and slab") prior: the share is not identified; not adopted
+(`results/manhattan_sim/v2/D08_SPIKE_SLAB.md`).**
+
+- *The candidate* (`manhattan/stats/hier_spike.py`, a development file in no code list): slab = the model as it
+  is; spike = the slab at retention 0 with the existing 0.02 innovation; edge share uniform on ten grid nodes.
+  **With the share fixed at 1 it reproduces `hier_analytic`** for all six models (log evidence to 1e-9; every
+  family's `Π`, mean and standard deviation to 1e-10; `tests/test_manhattan_hier_spike.py`, 5 tests).
+- *Identification, checked first, against a criterion written into the script before its first run*: in D08 at
+  years 4 and 10 on the pilot's 12 replications, the share's posterior standard deviation at most half the
+  prior's (0.144) and its posterior mean within 0.10 of the true share, on average.
+
+| D08, central model | families | true share with an edge | posterior mean of the share (range over replications) | posterior sd | mean absolute error | verdict |
+|---|---|---|---|---|---|---|
+| year 4 | 100 | 0.316 | **0.777** (0.499 to 0.885) | 0.163 | 0.461 | not identified (both conditions fail) |
+| year 10 | 240 | 0.328 | **0.896** (0.839 to 0.936) | 0.068 | 0.569 | not identified (narrow, and in the wrong place) |
+
+- *It is the earlier attempt's result again* (0.9 against 0.35), now with its cause. A family with no edge in
+  D08 has no apparent edge on the reserve window either: the best-of-20 selection is on the exploration window
+  (where such a family averages 0.7) and its reserve estimate averages about zero (−0.04 to −0.15 on three
+  replications, with the spread sampling error gives). `θ = ρ a` with `a` near zero already describes it, so the
+  spike has nothing to explain: the model gives a family with no edge a probability of 0.88 of being in the
+  slab, against 0.94 for a family with one, and learns the same retention (0.65 to 0.91) with one group or two.
+  **D08's two groups are in the apparent edge `a_f`, not in the retention.**
+- *On data drawn from the candidate itself* (share 0.35; spike families with a high apparent edge and nothing
+  forward) 240 families with up to ten forward years recover the share (0.375, sd 0.083) and the 96 families of
+  year 4 do not (0.546, sd 0.207). So the algebra is right, and even where the candidate is true V6's first
+  decision date comes too early for it.
+- *Calibration, for the record* (the pipeline's estimator; the one-group fit reproduces the pilot of record's
+  bin counts exactly): year 10, 0.101 (0.034 to 0.136) with one group and 0.096 (0.037 to 0.128) with two; year
+  4, 0.034 and 0.007.
+- *Stopped there, as the brief said.* The other four HB scenarios were not run with the candidate, it has no
+  posterior draws for the forecast, and no pipeline imports it. **D08 stays a documented limitation** (Protocol
+  3.1 §7.2(d), which now records the attempt). A repair would be two groups in the prior of `a_f`: another
+  model, not built (ETHAN_ACTIONS item 21(b)).
+- Development experiment outside the runner: note `note-10M-01` in the run log; script and outputs in
+  `results/manhattan_sim/v2/dev_10M/`.
+
+**Item 4. A tail-risk check before any profitability claim (Protocol 3.1 §6.11, new; Ethan's decision on
+ETHAN_ACTIONS item 23).**
+
+- *The check* is the formula of `ESTIMAND_AND_TAIL_RISK.md` section 3, at 95% with a floor of 12: on the leading
+  component's forward record (every week since enrolment), `Σ Y − U(N_trunc)·(L − 6) > 0` and `Σ Z > 0`, where `U`
+  is the one-sided 95% Poisson bound on the number of truncated weeks (3.00 after none, 4.74 after one) and `L`
+  the largest of the declared stress loss, the worst week on the family's whole record and 12.
+- *Where it is required.* An entry condition of Live-experiment eligible (§8.3) and Scale eligible (§8.4); a
+  condition of the label "Formally supported" (§8.5); and of any statement that a family is profitable.
+- ***An e-LOND rejection is still recorded and counted; only the label is withheld.*** The check is applied
+  after the test. `manhattan/stats/tailrisk.py` does not import the e-LOND rule and the rule takes no input from
+  it; `formal_label` takes the rejection as a fact and returns the label or "e-LOND rejection on record; label
+  withheld". No run of record computes the check, so no simulated count can depend on it.
+- *The text.* §6.11 is added after §6.10; **§6.1 to §6.10 are 3.0's word for word** (a test compares them);
+  §8.3, §8.4 and §8.5 each name the check once and are otherwise 3.0's (a test removes the added words and
+  compares); one sentence and one cell of §3; one row of Appendix B; row 6 of the table at the top and a change
+  log row, both marked as a pre-adoption change. SIM_PREREG_v2: row 5 of section 1, **criterion V15** (a
+  required property of the code: the check changes no e-LOND rejection, bar or count), the sentence on which
+  protocol sections are identical, and item 5 of section 10 (what is not shown: how often the check is wrong).
+  M2, M6 and M10 count e-LOND rejections as before.
+- *Tests* (`tests/test_manhattan_tailrisk.py`, 6): the constants and the rule of three; the stress loss; the
+  check on hand-made records (18 to earn with no truncated week; a declared 30; one week of −40; a worst week
+  before enrolment; a positive capped total beside a negative uncapped one); record for record the formula of
+  the estimand study; a rejection counted whatever the check says (a second family is rejected only because the
+  first one's rejection was counted, with the first one's label withheld); the protocol's text.
+- *What it does not have.* A simulation criterion of its own: its pass rates are the estimand study's (one
+  level, one floor, synthetic single series). The wording fix for §6.6 and §6.7 that item 23 also proposed was
+  **not** made: §6.1 to §6.10 are untouched.
+- *Also in this commit, for item 5:* one paragraph of SIM_PREREG_v2 section 9 ("A run made in pieces"), so
+  that the drafts do not change again after the pilot of item 6 has started.
+
+**Item 5. The full development programme on GitHub's runners, in pieces (`.github/workflows/manhattan-sim.yml`;
+written, never started).**
+
+- *The runner* (`manhattan/sim/run.py`, which is in no run's code hash): `--first` runs replications `first` to
+  `reps − 1` only (it used to start at replication 0 always); label `part` for a piece of a run made in pieces;
+  `--time-budget-minutes` starts no new replication once it is spent, finishes and saves those in progress, logs
+  the run as `interrupted` with the reason and what is left, and exits with code 75. Replications are handed to
+  the worker processes **lazily**, at most one in flight per worker, so a budget, a failure or Ctrl-C stops the
+  pool after those, with their records saved (before, every replication was queued at once and a stop had to
+  wait for, or abandon, the whole queue). `runlog.finish`'s three statuses keep their meaning: `completed` (every
+  replication asked for is on file), `failed` (a replication raised: logged with the reason, the others' records
+  kept, then raised), `interrupted` (budget or keyboard).
+- *The collector* (`manhattan/sim/collect.py`; `scripts/manhattan_sim_collect.py` is the same command): `plan`
+  cuts the replications still missing into pieces a job can finish, never planning one that is on file; `merge`
+  appends the pieces' records and run-log lines, all or nothing, and **refuses** records of other code, of a
+  scenario or replication outside the plan and its counts, of a confirmation branch, of an HB review step other
+  than 63 days, or that differ from another record of the same replication in anything but timings; `status`
+  lists what is missing and exits 1 while anything is.
+- *The workflow*: `workflow_dispatch` only, **no schedule, no secret** (the automatic token, read-only:
+  `contents: read`, `actions: read`), every job guarded to `main`, nothing committed or pushed. A **plan** job
+  (pre-registration hashes verified; optional earlier runs' pieces downloaded and counted); a **matrix of piece
+  jobs**, 20 at a time, each under six hours (350-minute limit, 285-minute budget), each restoring its own
+  earlier artifact first and uploading its records whatever happened; a **collect** job that merges, writes the
+  table of what is missing to the run's summary and uploads the record files. Resumable two ways: "Re-run failed
+  jobs" on the same run, or a new run with `earlier_runs`.
+- ***It must be on main before Ethan can start it***: GitHub shows "Run workflow" only for a workflow file on the
+  default branch. No session dispatched it, and none may. How to start it and bring the records home:
+  [SIM_RUNBOOK.md](SIM_RUNBOOK.md) section 8.
+- *Planned from the records now on file*: a little over 256 pieces (so probably a second run for the last few)
+  and of the order of 800 runner-hours, about two days at 20 jobs at once. Estimates: the timings on file were
+  mostly measured on a busy machine and the runners' speed is assumed.
+- *Tests* (`tests/test_manhattan_sim_pieces.py`, 13): the range, the label and the continuation; the budget and
+  the three statuses with one worker; with a pool, that at most one replication per worker is in flight when a
+  budget or a failure ends the run and that every one started is saved; the command line and its exit code 75;
+  the plan (every missing replication exactly once, sized to a job, nothing on file planned again); merge (once
+  only, each refusal, nothing written after a refusal); two pieces made by the real runner on a tiny world
+  merged into the same numbers as one call; the workflow file (dispatch only, no schedule, no secret, read-only
+  token, main-only jobs, time limits, artifacts on failure, inputs through the environment only).
+- *Not done:* the workflow was not run, here or anywhere, so GitHub's own evaluation of the file is untested
+  (the expression syntax, the artifact actions' behaviour on a first attempt, the `gh` call). The first real
+  run is the test; `sizes=LONG` with `only=D02` is a small first run (four pieces).
+
+**Item 6. The pilot of the changed parts, from the final text; the hash log; the adoption steps.**
+
+*What was rerun.* The five HB scenarios (D01, D02, D05, D08, D10), 12 replications each, through the runner: the
+forward-record dormancy rule with a review every 63 days. They are the parts whose code changed (HB code hash
+`4252b971831004e3`). **D11 and the nine hedged twins were not rerun**: their code and their records are unchanged
+(`9d1b680ff7e19ca7`), and the report shows them from the records on file. Report:
+`results/manhattan_sim/v2/PILOT_RERUN3_REPORT.md`; every HB interval again with the replication as the unit:
+`PILOT_RERUN3_INTERVALS.md`. It is a pilot: **no criterion is decided, no method is selected, `claims.enabled`
+stays false.** The pilot was run from clean checkouts whose hash record is the final one (below), so its run-log
+records name the text Ethan is asked to adopt.
+
+| scenario (replications) | families with a true edge | retired by the rule | premature elimination (M8), pre-registered interval | **the same, small-sample interval** (bound 0.10 on the upper end) | families with no edge dormant at the end | share of family-reviews written | reviews not computed (M12; bound 0) |
+|---|---|---|---|---|---|---|---|
+| D01, no edges (12) | 0 | - | - (no family has an edge) | - | 0.180 (0.137 to 0.220) | 0.87 | 0 of 480 |
+| D02, rare edges (12) | 42 | 0 | 0.000 (0.000 to 0.000) | **0.000 (0.000 to 0.265)** | 0.127 (0.106 to 0.153) | 0.92 | 0 of 480 |
+| D05, fat tails (12) | 140 | 2 | 0.014 (0.000 to 0.035) | **0.014 (0.000 to 0.036)** | 0.124 (0.085 to 0.167) | 0.91 | 0 of 480 |
+| D08, selection on history (12) | 944 | 5 | 0.005 (0.001 to 0.010) | **0.005 (0.000 to 0.011)** | 0.141 (0.111 to 0.176) | 0.93 | 0 of 480 |
+| D10, misspecified priors (12) | 123 | 6 | 0.049 (0.016 to 0.086) | **0.049 (0.007 to 0.090)** | 0.301 (0.262 to 0.342) | 0.79 | 0 of 480 |
+
+- **Premature elimination (V7).** With the small number of replications allowed for, the upper end is inside
+  the bound of 0.10 in D05 (0.036), D08 (0.011) and D10 (0.090), and **is not shown in D02**: none of 42 families
+  was retired, and with no event in 12 replications the exact upper bound is 0.265. The same rule on the same
+  worlds retired none of the 1,249 families with an edge at four review dates and 2 with yearly reviews
+  (`DORMANCY_SECOND_LOOK.md`); with quarterly reviews it retires 13. More reviews retire more, which is what
+  amendment 1 was added to see.
+- **D10 is the place to watch.** Its upper end, 0.090, is close to the bound, and it has to be: a third of its
+  families with an edge have a true Sharpe ratio below 0.5, and the five that ended dormant had 0.29, 0.30, 0.30,
+  0.35 and 0.61. A family whose edge is just above `θ_min` is the least favourable case for a test against
+  `θ_min`, and the rule's own arithmetic says what to expect (a development experiment: a forward record that is
+  a random walk around the true edge, the forecast taken as zero at every review, the rule's code, 4,000 paths a
+  cell; `dev_10M/dormancy_cadence.py`, note `note-10M-03`). Share of families retired, as M8 counts:
+
+| true edge of the family (annualised Sharpe ratio) | four dates (years 2, 4, 7, 10) | every year | every quarter (40 reviews) | every quarter, a family frozen in year 5 |
+|---|---|---|---|---|
+| 0.25 (exactly `θ_min`: the least favourable family with an edge) | 0.026 | 0.062 | 0.086 | 0.068 |
+| 0.30 | 0.017 | 0.041 | 0.064 | 0.061 |
+| 0.40 | 0.012 | 0.022 | 0.040 | 0.040 |
+| 0.50 | 0.006 | 0.013 | 0.015 | 0.027 |
+| 0.75 | 0.001 | 0.001 | 0.003 | 0.006 |
+| 0.00 (no edge) | 0.090 | 0.189 | 0.277 | 0.161 |
+| -0.20 (no edge; D10's families with none) | 0.189 | 0.376 | 0.478 | 0.290 |
+
+  So with quarterly reviews a family at exactly `θ_min` is retired about 9 times in 100, under the bound of 10
+  and not far under; at 0.40, 4 in 100; at 0.75, almost never. The pilot's 0.049 in D10 is what that arithmetic
+  gives for D10's mix of edges. **At the pre-registered 400 replications V7 should be met in D10 with little
+  room**; if the forward Sharpe ratio's standard error is too small there, it will not be.
+- **What the rule saves.** With quarterly reviews it leaves 13% to 18% of the families with no edge dormant at
+  the end (30% in D10, whose families with no edge have a mean of −0.2), and 87% to 93% of family-reviews are
+  still written (79% in D10). At four review dates those figures were 1% to 5% and 97% to 99%.
+- **Reviews not computed (V12): none of 2,400**, the first reviews of a programme included (ten families, one
+  quarter of forward record). The largest posterior mass on the ends of the grid of `μ_A` in any fit was 0.00001.
+
+| scenario | calibration error of the central model, year 4 / year 10 (bound 0.10 on the upper end) | the same, small-sample interval, year 10 | families with Π^min ≥ 0.80 at year 10: share with a true edge (families) | bias of the model's Sharpe ratio, Promising or higher, year 10 (observations) | families with a true edge Statistically supported by year 10 | seconds a replication (the model's part) |
+|---|---|---|---|---|---|---|
+| D01 | 0.030 (0.026 to 0.033) / 0.019 (0.018 to 0.020) | 0.017 to 0.020 | - | +1.64 (+1.19 to +2.00) (3) | - | 653 (627) |
+| D02 | 0.023 (0.016 to 0.029) / 0.014 (0.011 to 0.018) | 0.010 to 0.019 | - | -0.17 (-0.49 to +0.08) (10) | 0.00 (0.00 to 0.00) | 721 (691) |
+| D05 | 0.014 (0.006 to 0.022) / 0.005 (0.000 to 0.023) | 0.000 to 0.019 | 1.00 (8) | -0.09 (-0.27 to +0.05) (31) | 0.08 (0.04 to 0.13) | 860 (829) |
+| D08 | 0.032 (0.005 to 0.065) / 0.100 (0.036 to 0.136) | 0.028 to 0.172 | 0.99 (117) | -0.11 (-0.19 to -0.06) (580) | 0.19 (0.11 to 0.26) | 1489 (1428) |
+| D10 | 0.008 (0.001 to 0.014) / 0.003 (0.000 to 0.007) | 0.000 to 0.009 | 0.75 (28) | +0.12 (+0.03 to +0.20) (94) | 0.24 (0.15 to 0.34) | 993 (969) |
+
+- **Calibration (V6).** Inside the bound everywhere except **D08 at year 10: 0.100 (0.036 to 0.136)**, and with
+  the replication as the unit 0.028 to 0.172: the limitation of Protocol 3.1 §7.2(d) stands as it was (item 3).
+  Where the tier rule decides it is right: 116 of the 117 D08 families with `Π^min ≥ 0.80` at year 10 have an
+  edge, 8 of 8 in D05, 21 of 28 in D10 (fewer than 200 observations: not evaluated).
+- **Selection bias (V8).** D08: −0.11 (−0.19 to −0.06) on 580 observations, inside +0.10 and −0.25. D10: +0.12
+  (+0.03 to +0.20) on 94 observations, too few to be evaluated; its upper end is above +0.10, as in the earlier
+  pilots.
+- **Statistically supported** was held by year 10 by none of D02's 42 families with an edge, 8% of D05's, 19% of
+  D08's and 24% of D10's (at four review dates: 0%, 7%, 13% and 17%). ETHAN_ACTIONS item 21(a) is unchanged.
+- **Cost.** 653, 721, 860, 1,489 and 993 seconds a replication for D01, D02, D05, D08 and D10, with four jobs on
+  the machine's four cores (the model is 96% of it; the forecasts about 35 to 40 seconds): **about 520
+  core-hours for the five HB runs at 400 replications**, against about 55 at four review dates. By the timings
+  now on file the whole development programme is about 2,200 core-hours still to run (most of those timings
+  were measured on a busy machine), and `python -m manhattan.sim.collect plan` cuts it into 225 pieces: one run
+  of the workflow, about a day and a half at 20 jobs at once if a runner is as fast as this machine.
+
+*The hash record* (`docs/manhattan/sim_prereg_v2.sha256`), rewritten with every commit that edited a draft;
+`python -m manhattan.prereg_v2 verify` printed `pre-registrations ok (v1 and v2)` on each.
+
+| after | `docs/manhattan/SIM_PREREG_v2.md` | `docs/manhattan/PROTOCOL_v3.1.md` |
+|---|---|---|
+| session 6M (the start of this session) | `77496b2f4cb785cb8d49258701fdd6f66f4164d3f2394d6af29af92e31754ca4` | `9fdc8b07838c94f139b6dd686eb5189fb250e2de58da7b67ac1f45f19a1f0046` |
+| item 1 (`380a516`) | `68dbe196aa4ae595e811c16cf1610b05a77de07f038304895a1ffd20c8bdc55e` | `a84c5b3c210b3b83c6a16c6115cf19ff23480768e7b50a6479f7ad41380d1f90` |
+| item 2 (`02f3c0e`) | `db98049055225c6bfb9615bb8c93cac21a02cba50ea7594c2dd7f9ccebd49ef8` | `4d7b1063acd634b0d6f6b1af5a434f1c4865f50baabeb33e8df7097762e1f329` |
+| item 3 (`27a0b54`) | unchanged | `da9b99745d7caf59f68b68368a027f51078f317f1acb31a713a3e2c5be5d5e46` |
+| **item 4 (`8bcfd72`): final** | **`65c19e68f673e2eb3254e3d4e226ec90e187976645735ea1bde27babfb6cebbf`** | **`c4ce79d25bf1503981ce72071fcb257fe3f268761341fe256db1bf174dfc78a1`** |
+
+- Items 5 and 6 edited neither draft: the record on the branch is item 4's, and it is the one the pilot names.
+- What changed in the two files, in all: PROTOCOL_v3.1.md: its header and the paragraphs above the table of
+  changes; row 5 rewritten and row 6 added; one cell and one sentence of §3; §6.11 (new); a note in §7.2(d); one
+  sentence of §7.2(e); one clause each in §8.3, §8.4 and §8.5 and a paragraph in §8.5; §9.1 rewritten, §9.2 and
+  §9.3 back to 3.0's words; the change log; two rows of Appendix B. SIM_PREREG_v2.md: its header and two
+  sentences under it; rows 4 and 5 of section 1; section 2 (the reductions; the readings "Review dates",
+  "Dormancy forecast" and "Dormancy rule"); one cell of section 3.1; the M7-M9 and M12 rows of section 4; V12 and
+  V15 in section 5; one paragraph of section 9; two items of section 10; section 11 (amendment 1, new). No
+  threshold, no replication count, no scenario's definition.
+- H12's values are drawn from SIM_PREREG_v2.md's hash, so they are different values again. None was ever drawn.
+- Runs made under earlier hashes (sessions 5M and 6M, and this session's stopped start) are named in the report's
+  header. D11's and the twins' records were made under session 5M's hashes and still count: their code is
+  unchanged.
+
+*The adoption steps* are ETHAN_ACTIONS item 19, rewritten for the final drafts; the pull request's description
+has the same steps.
+
+**Development experiments of this session** (outside the runner; notes `note-10M-01` to `note-10M-03` in the run
+log; scripts and outputs in `results/manhattan_sim/v2/dev_10M/`): the identification check of the two-group
+candidate on D08 and on data drawn from it; where D08's two groups are (the apparent edge on the two windows);
+the dormancy rule's arithmetic at three review calendars.
+
+**Failed or not met.**
+
+1. **C is still not passed.** Every number above is from 12 replications against 400. With the replication as
+   the unit, D02's premature elimination is not shown to be within its bound (no event in 12 replications
+   bounds it at 0.265), and D08's calibration error at year 10 sits on its bound with an interval too wide to
+   place.
+2. **D08's calibration error is not repaired.** The two-group prior that was asked for is not identified and was
+   not adopted (item 3). If the full run confirms the error, V6 fails in D08 and the posterior-based tiers stay
+   off.
+3. **V7 has little room in D10 at quarterly reviews** (above). It is inside the bound on the pilot; it is the
+   criterion most likely to be close at full count.
+4. **The baseline suite run of this session had one failure, caused by the session itself**: it replaced
+   `manhattan/stats/dormancy.py` while the baseline was running. The same test passed on an untouched checkout
+   of the starting commit. Every later suite was run in a separate work tree at the commit to be pushed.
+5. **A first start of the pilot was stopped after about three minutes** (from commit `02f3c0e`, before any
+   replication had finished), so that the pilot could be made from the final text. Its start record is in the
+   run log with no end, with a note (`note-10M-02`).
+6. **The pilot's replications come from two clean checkouts**, `8bcfd72` (54 of the 60) and `90bb59f` (D08's
+   6 to 11 and D10's 6 to 11, run by a fourth worker and by the new runner's range option when a core came
+   free). The two commits have the same HB code hash and the same hash record; item 5's commit changes the
+   runner and adds the collector and the workflow.
+7. **Test failures on the way, none pushed**: a rounding assertion in the new model's test; two wrong inputs in
+   the tail-risk tests; the text tests that were written before the text (by design). They are in the table of
+   tests.
+8. **A chained background command reported status 1** because its last line was `tail` on two files. The two
+   suites it had run wrote their own exit codes to their logs (`echo "exit=$?"` on the line after pytest), both
+   0, and those were read before each push; the wrapper's status was never used.
+9. **The workflow was not run.** No session may dispatch it. Its commands were run by hand on one piece of two
+   replications.
+10. **Not done:** the wording fix of ETHAN_ACTIONS item 23 for §6.6 and §6.7; a simulation criterion for the
+    tail-risk check's own error rates; the held-out worlds (still not coded); any run at the pre-registered
+    count; the benchmark on a GitHub runner or on the iMac.
+11. **One loose sentence in the hashed text** was found after the pilot had started and left as it is:
+    amendment 1 says the dormancy rule "now has 39 chances to retire a family, not 3". Exactly, 39 and 3 are the
+    reviews that have a forecast; a family can become dormant at 38 and 2 of them. Ethan can correct it before
+    adopting (item 19, step 3), at the price of a hash the pilot does not name.
+12. **Additions that were this session's and not in its brief word for word**, for Ethan to accept or strike
+    before adoption: criterion V15 and the paragraph "A run made in pieces" in SIM_PREREG_v2; the small-sample
+    interval printed beside M8 in the report; the reading of H09's "second evaluation date" in amendment 1; the
+    plan job's use of earlier runs' artifacts (which needs `actions: read` on the automatic token).
+
 ## Milestone D: state (session 4M, 2026-11-12)
 
 **Implemented and tested against D-01 to D-11** (33 tests in `tests/test_manhattan_registry.py`):
@@ -736,11 +1297,35 @@ checked against its frozen source.
 | session 6M, first run of `tests/test_manhattan_dormancy.py` | 1 of 10 failed, by design: the test that reads §9.1 was written before the text was changed. 10 passed after it |
 | session 6M, first full suite after the code change (uncommitted report and documents on top of `9b1f068`) | **1 failed**, 1345 passed, 132 skipped, exit code 1: `test_the_runner_keeps_v2_records_apart_and_logs_the_hashes` (this session's own assertion on the report's summary; "Milestone C: state (session 6M)", failed or not met, 4). Not pushed; fixed, and the file then passed (16 passed) |
 | session 6M, full suite on the tree that was pushed (the rerun, the reports and the documents on top of `9b1f068`) | run after this file was last edited, so that the tree tested is the tree pushed; its numbers and exit code are in the commit message and in the pull request's description |
+| second session of 2026-11-13 ("6M Manhattan C: dormancy fix and statistical checks"), `build/manhattan` with main merged in, before any change | **1335 passed, 132 skipped, exit code 0** (12 minutes) |
+| the same session, first runs of its new test files | five failures, each in a new test or in the new report code, none pushed: an unhashable object used as a dictionary key; a wrong hand count (4 and 6, not 5 and 7); a floating-point comparison one unit in the last place off; rows with no data listed by the interval report; a bound tighter than 300 simulated paths support. "Milestone C: statistical checks", failed or not met, 5 |
+| the same session, full suite on its alternative revision of §9.1 (branch `claude/epic-mayer-kfhpsh`, commit `1124fe7`; not on `build/manhattan`) | **1356 passed, 132 skipped, exit code 0** (15 minutes, while a pilot ran) |
+| the same session, full suite on its first push to `build/manhattan` (`50b0198`: the statistical checks beside the first session's revision) | **1357 passed, 132 skipped, exit code 0** (14 minutes) |
+| the same session, full suite on the tree of its last push (the benchmark, the compute options and these documents on top of `50b0198`) | run after this file was last edited, so that the tree tested is the tree pushed; its numbers and exit code are in the commit message and in the pull request's description |
+
+| session 10M, `build/manhattan` with main merged in (`31bc66a`), before any change | 1 failed, 1487 passed, 132 skipped, exit code 1 (15 minutes): `test_the_runner_keeps_v2_records_apart_and_logs_the_hashes`. **Caused by the session, not by the branch**: it replaced `manhattan/stats/dormancy.py` while the baseline was still running, so the HB code hash moved between the test's run and its status check. The same test on an untouched checkout of `31bc66a` in a separate work tree: 1 passed. The baseline is therefore 1488 passed, 132 skipped |
+| session 10M, item 1, first run of the ported dormancy tests with the v2 text tests | 40 passed (`test_manhattan_dormancy.py` 11, `test_manhattan_v2.py`, `test_manhattan_prereg_v2.py`, `test_manhattan_tiers.py`) |
+
+| session 10M, item 1, full suite on a clean checkout of its commit (`380a516`), before the push | **1489 passed, 132 skipped, exit code 0** (16 minutes) |
+| session 10M, item 2, first run of `tests/test_manhattan_v2.py` after the change | 17 passed (4 minutes) |
+
+| session 10M, item 3, first runs of `tests/test_manhattan_hier_spike.py` | 1 of 5 failed once: the test compared a sum of weights with exactly 1.0 (it is 1 to rounding); the model's numbers were right. 5 passed after it |
+
+| session 10M, item 4, first runs of `tests/test_manhattan_tailrisk.py` | 3 of 6 failed on the first run: the text test, written before §6.11 was (by design); a random data set in which no record passed (the test's data, not the check); and a hand-chosen wealth of 4,500 that cleared the bar without the other family's rejection (the test's number: the bars are 2,138 and 1,069). 6 passed after the text was written and the two inputs corrected |
+
+| session 10M, item 2, full suite on a clean checkout of its commit (`02f3c0e`), before the push | **1490 passed, 132 skipped, exit code 0** (18 minutes, while a pilot ran) |
+| session 10M, item 3, full suite on a clean checkout of its commit (`27a0b54`), before the push | **1495 passed, 132 skipped, exit code 0** (19 minutes, while a pilot ran) |
+| session 10M, item 4, full suite on a clean checkout of its commit (`8bcfd72`), before the push | **1501 passed, 132 skipped, exit code 0** (20 minutes, while a pilot ran). The pull request's own check (`tests / pytest`, GitHub's runner) passed on this commit in 11 minutes |
+| session 10M, item 5, first run of `tests/test_manhattan_sim_pieces.py` | 13 passed |
+| session 10M, item 5, full suite on a clean checkout of its commit (`90bb59f`), before the push | **1514 passed, 132 skipped, exit code 0** (21 minutes, while a pilot ran) |
 
 Command, as hard rule 15 requires (no pipe, exit code read directly):
-`python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`.
+`python -m pytest -q -p no:cacheprovider -rs tests > <log> 2>&1; echo "exit=$?"`. Session 10M ran each item's
+suite in a separate work tree checked out at that item's commit (`python -m pytest -q -p no:cacheprovider > <log>
+2>&1; echo "exit=$?" >> <log>`), so that the tree tested is the tree pushed and files edited meanwhile cannot
+reach it, and read `exit=0` from the log before each push.
 
-## Decisions taken (sessions 2M to 6M)
+## Decisions taken (sessions 2M to 10M)
 
 Each is written where it applies, with its reason. Those that are Ethan's were made configurable with the
 conservative default and are in ETHAN_ACTIONS.md.
@@ -783,11 +1368,21 @@ conservative default and are in ETHAN_ACTIONS.md.
 | 33 | Manhattan's exploration variant rows go to its own file (`results/manhattan_engine/exploration_log.csv`), written by `nightshift.logs.log_variant` with its cut-off check, not to the night shift's `results/exploration/log.csv`, which is appended to on `dev`. Whether they should be merged is Ethan's question. | "Milestone E: state" |
 | 34 | "Reproduced" has numeric tolerances, written in the code before the first run (`manhattan/factors/reproduce.py`, `TOL`). | `results/manhattan_engine/REPRODUCTION.md` |
 | 35 | Core factors: proposed as the frozen sleeves' monthly rules marked daily by the engine, not as new signals. Proposed only. | [CORE_FACTORS_PROPOSAL.md](CORE_FACTORS_PROPOSAL.md) |
-| 36 | Dormancy needs both a low forecast of reaching the tier and a low probability of an edge under the most hopeful model (`PP^max < 0.05` and `Π^max < 0.05`, twice, with 252 forward days); either at 0.15 reactivates. Chosen because it is the question the criterion asks and what §7.2(e) already said, with numbers the protocol already had; not because it scored best among the variants measured. | PROTOCOL 3.1 §9.1; `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md` §1.4 |
+| 36 | **Superseded by decision 45 (2026-11-13).** Dormancy needs both a low forecast of reaching the tier and a low probability of an edge under the most hopeful model (`PP^max < 0.05` and `Π^max < 0.05`, twice, with 252 forward days); either at 0.15 reactivates. Chosen because it is the question the criterion asks and what §7.2(e) already said, with numbers the protocol already had; not because it scored best among the variants measured. | PROTOCOL 3.1 §9.1; `results/manhattan_sim/v2/DORMANCY_DIAGNOSIS.md` §1.4 |
 | 37 | A change to a draft before adoption is made in the draft itself, marked as a pre-adoption change in its table of changes and its change log, with the hash record rewritten and both hashes logged. The version number stays 3.1.0: nothing adopted was changed. | PROTOCOL 3.1, top and §10; "Milestone C: state (session 6M)" |
 | 38 | The revised rule is a new code file; `manhattan/stats/tiers.py` is not edited, because it is a code file of version 1's records. The HB records of the old rule stay on file and are counted in no current report; the first rerun's report and summary are kept under their own names. | `manhattan/stats/dormancy.py`; `manhattan/sim/run.py` `CODE_FILES_V2_HB` |
 | 39 | A calibration error whose cause is the shape of the prior is stated as a limitation, not repaired by a new prior inside a draft that is about to be adopted: the repair is another model and would be fitted to the development scenarios' convention of exact zeros. | PROTOCOL 3.1 §7.2(d); `DORMANCY_DIAGNOSIS.md` part 2 |
 | 40 | Experiments that change the pipeline's declared reductions (yearly reviews in place of four dates) are development experiments outside the runner, noted in the run log; they decide nothing and are not pooled with any run of record. | `DORMANCY_DIAGNOSIS.md` parts 3 and 4 |
+| 41 | When a second session finds that a first has already revised a draft on the same branch, the first's revision stands: the second edits neither draft, adds its work beside it, and puts what it would have chosen before Ethan as an alternative with the evidence. Its own version stays on its own branch. | "Milestone C: statistical checks"; ETHAN_ACTIONS item 22 |
+| 42 | A corrected interval is reported beside the pre-registered one and replaces nothing: the pre-registered interval is part of a frozen file. The correction is the delete-one-replication jackknife with a Student-t quantile, and the exact bound over replications where no replication had an event. | `manhattan/sim/cluster_ci.py` |
+| 43 | A study of what a test's null means (single series, a grid of parameters written in the code, no programme, no pipeline, no pre-registered metric, its own random streams) is not a run of a held-out scenario, even where its processes resemble one; it changes no method and is not used to choose one. | `manhattan/sim/estimand_study.py` |
+| 44 | Timing is measured by a module that writes no replication record and no run-log record, so that nothing it computes can be pooled into a result. | `manhattan/sim/benchmark.py` |
+| 45 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 22):** the second condition of the dormancy rule is a one-sided test of the family's own forward record against an edge of 0.25, not the model's `Π^max`. The session took the code and its tests as they stood on the branch where they were written and did not bring that branch's shadow paths. | PROTOCOL 3.1 §9.1; `manhattan/stats/dormancy.py`; `results/manhattan_sim/v2/DORMANCY_SECOND_LOOK.md` |
+| 46 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 21(c)):** the HB runs are reviewed every quarter, as production reviews. Made as amendment 1 inside the unadopted SIM_PREREG_v2, with the review step written into every record and other steps refused. M7 and M9 keep their four reading dates; M12 is counted over every review. | SIM_PREREG_v2 §11; `manhattan/sim/hb_v2.py` |
+| 47 | A candidate model is checked for identification before it is wired into a pipeline, against a criterion written before the check is run; when the check fails the work stops there and the evidence is recorded. The candidate's code is kept, outside every code list, so the check can be repeated. | `results/manhattan_sim/v2/D08_SPIKE_SLAB.md`; `manhattan/stats/hier_spike.py` |
+| 48 | **Ethan's (2026-11-13, ETHAN_ACTIONS item 23):** a tail-risk check (95%, floor 12) is required for the live tiers, for the label of formal support and for any profitability claim. It is applied after the forward test and never changes it: a rejection is recorded and counted, and only the label is withheld. Its code is in no run's code list. | PROTOCOL 3.1 §6.11; `manhattan/stats/tailrisk.py`; SIM_PREREG_v2 V15 |
+| 49 | Everything the two drafts needed from this session was written into them before the last pilot started, so that the pilot of record names the hashes Ethan adopts. | "Milestone C: final pre-adoption changes (session 10M)", item 6 |
+| 50 | A run on rented or borrowed machines is made in pieces (a scenario and a range of replication numbers), merged by a collector that refuses anything that may not be pooled. The workflow that makes one writes nothing to the repository and is started by Ethan only. | `manhattan/sim/collect.py`; `.github/workflows/manhattan-sim.yml`; SIM_PREREG_v2 §9 |
 
 ## Findings to keep in view
 
@@ -813,12 +1408,31 @@ conservative default and are in ETHAN_ACTIONS.md.
   7 to 17% of families with an edge are Statistically supported after ten years, and the dormancy rule of 3.0
   retired 11 to 18% of them. The pilot could not have shown this before the model could be run.
 - **A forecast of reaching a tier is not a reason to retire a family.** The tier needs the most cautious of six
-  models, so the forecast is zero for most families that have an edge. Dormancy now also needs the most hopeful
-  model to say the family very probably has no edge. What no rule removes: with edges this small and this rare,
-  a family with a real edge and an unlucky or flat record looks like a family with none, and ten years separate
-  an edge of 0.25 from zero by less than one standard error.
-- **The simulation's four review dates make every "two consecutive reviews" rule look more patient than it is
-  in production.** More reviews mean more chances to be retired (or to leave a tier).
+  models, so the forecast is zero for most families that have an edge. Dormancy now also needs the family's own
+  forward record to speak against an edge of 0.25 (Ethan's decision of 2026-11-13). What no rule removes: with
+  edges this small and this rare, a family with a real edge and an unlucky or flat record looks like a family
+  with none, and ten years separate an edge of 0.25 from zero by less than one standard error.
+- **Four review dates made every "two consecutive reviews" rule look more patient than it is in production.**
+  More reviews mean more chances to be retired (or to leave a tier). Since amendment 1 of SIM_PREREG_v2 the HB
+  runs review every quarter, 40 times, and that is what the last pilot ran.
+- **Two honest second conditions for dormancy exist, and they trade attention against a guarantee.** The model's
+  `Π^max` (in the draft from 2026-11-12 to 2026-11-13) retires more families and so saves more attention, but
+  its error for a family with an edge depends on how rare edges are and grows with the number of reviews. The
+  family's own forward record (the draft's rule now) has an error that depends on neither. Ten years of one
+  family's returns cannot tell an edge of 0 from one of 0.25: any rule that retires many families does it on
+  the model's word about families in general.
+- **D08's two groups are in the apparent edge, not in the retention.** A spike at retention 0 is not
+  identified there (the model puts nine families in ten in the slab, with or without an edge) and leaves the
+  calibration error where it was. A repair has to be a two-group prior on the apparent edge itself.
+- **A rejection is not a profitability claim.** Protocol 3.1 §6.11 now says what the claim needs as well: the
+  truncated record must cover the tail losses it cannot rule out, at the declared stress loss. An undeclared
+  tail defeats it.
+- **"0.000 (0.000 to 0.000)" in a pilot report is not a rate of zero.** With the replication as the unit and no
+  event in 12 replications the upper end is 0.26; in 6, 0.46. Nearly every false-discovery row of the pilots is
+  of that kind.
+- **A forward rejection is about the truncated mean, in weeks that were bet on.** For fat tails without a
+  direction that is the mean, to a hundredth of a Sharpe ratio. For a strategy with rare large losses it can
+  differ by 0.45 and have the opposite sign.
 - **A model that treats families as independent reads shared luck as shared edge.** One common forward shock
   repairs the case found; it is not the full covariance.
 
@@ -837,8 +1451,8 @@ conservative default and are in ETHAN_ACTIONS.md.
   families (V7) and whether its Sharpe ratios are unbiased (V8): seen at 12 replications of 400. Under the
   dormancy rule as revised before adoption V7 sits inside its bound so far; one V6 check (D08, year 10) sits
   outside it and is a stated limitation.
-- The revised dormancy rule at quarterly reviews, which is what production does: the simulation has four dates,
-  and a development experiment has ten.
+- The dormancy rule at quarterly reviews has now been run (session 10M's pilot, 12 replications a scenario);
+  at the pre-registered 400 it has not.
 - How soon a family retired by the revised rule comes back when its edge appears late (held-out H09).
 - The hedge-aware test with several core factors, with a hedge cost, and under held-out dependence: unit tests
   of the arithmetic only.
@@ -852,20 +1466,42 @@ conservative default and are in ETHAN_ACTIONS.md.
   the network is closed; what the private Norgate snapshot contains beyond the 34 exported markets.
 - The blind template's wording has not been tried on a model.
 
+- **The dormancy rule's standard error** (the bootstrap standard error of a forward Sharpe ratio) under serial
+  correlation or tails heavier than the HB scenarios contain. The rule's guarantee is as good as that standard
+  error.
+- **The GitHub workflow.** It was written and never run: no session may dispatch it. Its commands were run by
+  hand on one small piece (plan, run, merge, status); GitHub's own evaluation of the file, the artifact
+  actions on a first attempt and the `gh` download of earlier runs are untested until Ethan starts it.
+- **How fast GitHub's runners are**, and so how many pieces finish inside their time budget on the first
+  attempt. A piece that does not is continued by re-running the failed jobs.
+- **The tail-risk check's error rates** beyond the estimand study's grid (one level, one floor, synthetic single
+  series). No simulation criterion measures them; V15 checks only that the check changes no test.
+- **The speed of the iMac and of GitHub's runners against the session's machine.** COMPUTE_OPTIONS.md states
+  them as assumptions; `python -m manhattan.sim.benchmark --quick` on the machine itself measures it.
+- **The held-out confirmation run's cost.** Extrapolated from the development runs of the same size; its worlds
+  are not coded.
+- **The tail-risk check** (now Protocol 3.1 §6.11) anywhere but on the study's own grid of processes, and with
+  a stress loss that is declared wrongly by less than "not at all".
+- **Cloud prices** in COMPUTE_OPTIONS.md are from a price aggregator on 2026-11-13, not from the provider.
+
 ## Exact next step
 
-**For Ethan** (ETHAN_ACTIONS.md): item 19 (read and adopt Protocol v3.1 and SIM_PREREG_v2, now with the
-dormancy rule revised before adoption: one paste into CODEOWNERS), then item 16 (start the simulation on the
-iMac; it includes the model-fitting half), then items 2, 3 and 7 for the first batch. Item 21 holds the three
-decisions the model-fitting pilots leave with him (the bar of Statistically supported, D08's calibration, the
-review dates of the HB runs); none has to be made before the full run starts.
+**For Ethan** (ETHAN_ACTIONS.md): item 19. The drafts are final as far as any session is concerned: read the six
+rows at the top of PROTOCOL_v3.1.md, SIM_PREREG_v2.md with its amendment 1, and
+`results/manhattan_sim/v2/PILOT_RERUN3_REPORT.md`; merge pull request #56; paste the five lines into CODEOWNERS;
+check the hash record (`65c19e68…` and `c4ce79d2…`). Then item 16: start the full development run, either from
+the Actions tab ("manhattan-sim", "Run workflow", on main; SIM_RUNBOOK.md section 8) or on the iMac
+(`scripts/manhattan_sim_run.sh`). Items 21(a) and 21(b) wait for that run. Items 2, 3 and 7 unblock the first
+batch.
 
 **For Ethan, milestone E:** item 20 (em-macro-data for the futures half of the reproduction) and item 10 (the
 core-factor proposal).
 
 **For the next session:** see "Milestone E: state" for where milestone E stands (engine done; reproduction done
-on public currency data; futures blocked on item 20). If the iMac run has finished
-and its results are on a branch: build both reports (`python -m manhattan.sim.report --prereg v2` and
-`python -m manhattan.sim.report_v2`), then code the held-out worlds H01 to H12 ("Milestone C: state (session
-5M)", remaining, step 2) before anything else. Merge main into `build/manhattan` first if it is behind, and run
+on public currency data; futures blocked on item 20). If the full run has finished (on GitHub's runners or on
+the iMac) and its results are on a branch: check `python -m manhattan.sim.collect status`, build both reports
+(`python -m manhattan.sim.report --prereg v2` and `python -m manhattan.sim.report_v2`), then code the held-out
+worlds H01 to H12 ("Milestone C: state (session 5M)", remaining, step 2) before anything else. Do not edit
+PROTOCOL_v3.1.md or SIM_PREREG_v2.md once they are adopted: they are then protected, and a change is a new
+version or an entry in `docs/manhattan/SIM_PREREG_AMENDMENTS.md`. Merge main into `build/manhattan` first if it is behind, and run
 `python -m manhattan.prereg_v2 verify`.

@@ -1,0 +1,257 @@
+# Manhattan simulation: the full pre-registered DEVELOPMENT programme on GitHub's public runners, made in pieces.
+#
+# What it runs. Every run of the development plan of docs/manhattan/SIM_PREREG.md and SIM_PREREG_v2.md up to its
+# pre-registered replication count (2,000 at STD and LONG, 400 for a hedged twin, 400 at HB): the replications that
+# are not yet on file for the code of the commit it runs from. Synthetic data only. It never runs a held-out
+# scenario: the runner refuses them outside a tagged confirmation run, and none is coded.
+#
+# How. A plan job cuts what is missing into pieces (one scenario, a range of replication numbers); each piece is a
+# matrix job of under six hours that stops starting replications after 285 minutes, finishes those in progress and
+# uploads its records as an artifact; a collect job puts all pieces together, refuses anything that may not be
+# pooled (python -m manhattan.sim.collect) and uploads the record files as one artifact, with a table of what is
+# still missing in the run's summary. Seeds depend on the replication number alone, so the pieces are exactly the
+# replications one machine would have made.
+#
+# Checkpointed and resumable, two ways.
+#   1. A piece that ran out of time or failed is red. "Re-run failed jobs" on the same run continues it: the job
+#      first downloads its own earlier artifact and the runner skips the replications already in it.
+#   2. A new run started with `earlier_runs` set to the ids of earlier runs of this workflow downloads their
+#      pieces, counts them, and plans only what is still missing.
+#
+# What it may touch. Nothing. It is started by hand only (workflow_dispatch): no schedule, no push, no pull_request.
+# It reads no repository secret. Its token is the automatic one, read-only: `contents: read` to check out this
+# public repository, `actions: read` to download artifacts of earlier runs. It commits nothing, pushes nothing,
+# opens no issue and no pull request. Results leave it as artifacts, which Ethan downloads and commits himself
+# (docs/manhattan/SIM_RUNBOOK.md, "On GitHub's runners"). Artifacts and logs of a public repository are public:
+# these are synthetic numbers and no licensed data is read (the private store is pointed at a path that does not
+# exist).
+#
+# Who starts it. Ethan, from main. GitHub lists a workflow_dispatch workflow under Actions only once its file is on
+# the default branch, so this file must be merged to main before it can be started at all. No session dispatches
+# it (CLAUDE.md rule 16 names the writer workflows; this one writes nothing, and the session that wrote it was told
+# never to dispatch it). Every job is guarded to refs/heads/main.
+name: manhattan-sim
+
+on:
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: "Sizes to run: any of STD,LONG,HB (comma-separated)"
+        required: false
+        default: "STD,LONG,HB"
+      only:
+        description: "Only these scenarios (comma-separated ids, e.g. D11,D05h); empty means all"
+        required: false
+        default: ""
+      earlier_runs:
+        description: "Run ids of earlier runs of this workflow whose pieces count (comma-separated); empty means none"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read                       # artifacts of the runs named in earlier_runs; nothing is written anywhere
+
+concurrency:
+  group: manhattan-sim                # one run at a time: two would plan the same pieces
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  OMP_NUM_THREADS: "1"                # one thread per worker: the workers are the parallelism
+  OPENBLAS_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  EM_MACRO_DATA: /nonexistent/em-macro-data
+  DATA_REPO_URL: /nonexistent/em-macro-data.git
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash                   # -eo pipefail
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      pieces: ${{ steps.plan.outputs.pieces }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: The pre-registrations match their recorded hashes
+        run: |
+          python -m manhattan.prereg verify
+          python -m manhattan.prereg_v2 verify
+
+      - name: Records of earlier runs
+        env:
+          EARLIER_RUNS: ${{ inputs.earlier_runs }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/earlier"
+          if [[ ! "$EARLIER_RUNS" =~ ^[0-9,\ ]*$ ]]; then
+            echo "earlier_runs must be run ids separated by commas" >&2
+            exit 1
+          fi
+          for id in ${EARLIER_RUNS//,/ }; do
+            gh run download "$id" --repo "$GITHUB_REPOSITORY" --pattern 'manhattan-sim-piece-*' \
+              --dir "$RUNNER_TEMP/earlier/$id"
+          done
+          python -m manhattan.sim.collect merge "$RUNNER_TEMP/earlier" --out results/manhattan_sim
+
+      - name: Plan the pieces
+        id: plan
+        env:
+          SIZES: ${{ inputs.sizes }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          python -m manhattan.sim.collect plan --out results/manhattan_sim --sizes "$SIZES" --only "$ONLY" \
+            --github-output "$GITHUB_OUTPUT" > "$RUNNER_TEMP/plan.json"
+          {
+            echo "### Pieces planned from ${GITHUB_SHA::7}"
+            echo '```'
+            python -c "import json,sys; p=json.load(open(sys.argv[1])); print(len(p['include']), 'pieces,', p['cpu_hours'], 'core-hours estimated;', p['left_out'], 'pieces left for a later run')" "$RUNNER_TEMP/plan.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Carry the earlier runs' pieces into this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: manhattan-sim-piece-earlier-runs   # named like a piece, so that a later run's earlier_runs picks it up too
+          path: ${{ runner.temp }}/earlier
+          if-no-files-found: ignore
+          retention-days: 90
+
+  piece:
+    needs: plan
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.pieces != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350              # GitHub ends a job at 360; the runner stops starting replications at 285
+    strategy:
+      fail-fast: false                # one piece that fails or runs out of time does not stop the others
+      max-parallel: 20
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash                   # -eo pipefail: the step fails when the runner fails, even through tee
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      # On the first attempt there is nothing to restore and this step reports an error that is ignored. On a
+      # re-run of failed jobs it brings back the records the earlier attempt uploaded, and the runner continues.
+      - name: Records of an earlier attempt of this piece
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: manhattan-sim-piece-${{ matrix.id }}
+          path: ${{ runner.temp }}/piece
+
+      - name: Run the piece
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+          SIZE: ${{ matrix.size }}
+          FIRST: ${{ matrix.first }}
+          REPS: ${{ matrix.reps }}
+          WORKERS: ${{ matrix.workers }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/piece"
+          pip freeze > "$RUNNER_TEMP/piece/pip-freeze.txt"
+          python -m manhattan.sim.run --prereg v2 --scenario "$SCENARIO" --size "$SIZE" --first "$FIRST" --reps "$REPS" \
+            --label part --workers "$WORKERS" --time-budget-minutes 285 --out "$RUNNER_TEMP/piece" 2>&1 \
+            | tee "$RUNNER_TEMP/piece/log.txt"
+
+      - name: Upload the piece's records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manhattan-sim-piece-${{ matrix.id }}
+          path: ${{ runner.temp }}/piece
+          overwrite: true             # a re-run replaces the earlier attempt's artifact with a superset of it
+          if-no-files-found: warn
+          retention-days: 90
+
+  collect:
+    needs: [plan, piece]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash                   # -eo pipefail
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: This run's pieces and the earlier runs' pieces
+        uses: actions/download-artifact@v4
+        with:
+          pattern: manhattan-sim-piece-*       # not this run's own results artifact, should this job be re-run
+          path: ${{ runner.temp }}/pieces
+
+      - name: Put the records together
+        id: merge
+        run: |
+          mkdir -p "$RUNNER_TEMP/pieces"
+          python -m manhattan.sim.collect merge "$RUNNER_TEMP/pieces" --out results/manhattan_sim
+          set +e
+          python -m manhattan.sim.collect status --out results/manhattan_sim > "$RUNNER_TEMP/status.md"
+          echo "missing=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          {
+            echo "### Development programme after this run (${GITHUB_SHA::7})"
+            cat "$RUNNER_TEMP/status.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the record files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manhattan-sim-results
+          path: |
+            results/manhattan_sim/reps
+            results/manhattan_sim/v2/reps
+            results/manhattan_sim/runs.jsonl
+          overwrite: true
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Is anything still missing?
+        env:
+          MISSING: ${{ steps.merge.outputs.missing }}
+        run: |
+          if [ "$MISSING" != "0" ]; then
+            echo "replications are still missing (the table is in the summary): re-run the failed jobs, or start a new run with earlier_runs=${GITHUB_RUN_ID}" >&2
+            exit 1
+          fi

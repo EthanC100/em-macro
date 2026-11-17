@@ -26,12 +26,15 @@ def bin_label(lo: float, hi: float) -> str:
 
 
 def tier_power(reps: list[dict], cand: str = "i") -> dict:
-    """Who reaches Statistically supported, by true Sharpe ratio: for each bin and each evaluation date, among
-    the families with a true edge frozen before that date, the share that entered the tier at that date or an
-    earlier one (pooled over replications, with the interval of a ratio). ``{bin label: {year: (estimate, lo,
-    hi, families)}}``; empty when the records do not carry the per-family fields. Reported, never judged."""
+    """Who reaches Statistically supported, by true Sharpe ratio: for each bin and each year at which the
+    metrics are read, among the families with a true edge frozen before that date, the share that entered the
+    tier at a review on or before it (pooled over replications, with the interval of a ratio). ``{bin label:
+    {year: (estimate, lo, hi, families)}}``; empty when the records do not carry the per-family fields.
+    Reported, never judged. Records with quarterly reviews keep the day of the first review at which a family
+    held the tier; older records kept the year."""
     if not reps or any("edge_true" not in r for r in reps):
         return {}
+    by_day = all(f"edge_first_supported_day_{cand}" in r for r in reps)
     out = {}
     for lo_, hi_ in SHARPE_BINS + ((world.THETA_MIN, math.inf),):
         row = {}
@@ -39,10 +42,11 @@ def tier_power(reps: list[dict], cand: str = "i") -> dict:
             num, den = [], []
             for r in reps:
                 true, frozen = np.asarray(r["edge_true"], dtype=float), np.asarray(r["edge_freeze"], dtype=float)
-                first = np.asarray(r[f"edge_first_supported_{cand}"], dtype=float)
+                first = np.asarray(r[f"edge_first_supported_day_{cand}" if by_day else f"edge_first_supported_{cand}"],
+                                   dtype=float)
                 sel = (true >= lo_) & (true < hi_) & (frozen < y * world.YEAR)
                 den.append(int(sel.sum()))
-                num.append(int((sel & (first > 0) & (first <= y)).sum()))
+                num.append(int((sel & (first > 0) & (first <= (y * world.YEAR if by_day else y))).sum()))
             row[int(y)] = (*ratio_ci(num, den), int(sum(den)))
         out["all with a true edge" if (lo_, hi_) == (world.THETA_MIN, math.inf) else bin_label(lo_, hi_)] = row
     return out
@@ -131,8 +135,10 @@ def summarise_spa(reps: list[dict], scenario: str) -> list[Row]:
 
 def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
     """Every metric of an HB run of the analytic model. M7, M8 and M9 and their verdicts are computed by version
-    1's ``metrics.summarise_hb`` on the same counts; the sampler's diagnostics, which do not exist here, are
-    replaced by the grid gate (M12) and the cost of the closed form."""
+    1's ``metrics.summarise_hb`` on the same counts, read at the years of ``eval_years``; the sampler's
+    diagnostics, which do not exist here, are replaced by the grid gate (M12) and the cost of the closed form.
+    M12 is counted over **every** review of a replication (40 with quarterly reviews: the record's
+    ``quarterly`` block), not only over the reviews at which M7 and M9 are read."""
     shim = copy.deepcopy(reps)
     for r in shim:
         r["sampler"] = [1000, 1000]                      # version 1 calls anything else a pilot; nothing is sampled here
@@ -146,13 +152,22 @@ def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
     pilot = R < cr.REPLICATIONS["HB"]
     years = [str(y) for y in reps[0]["eval_years"]]
     revs = [(y, r["reviews"][y]) for r in reps for y in years if y in r["reviews"]]
-    bad = sum(1 for _, v in revs if not v["review_ok"])
-    head = [Row("M12", f"reviews not computed (a fit fails the grid gate), of {len(revs)}", float(bad), None, None, len(revs),
+    # M12 over all the reviews of every replication; a record without the block has only the reviews it lists
+    oks = [x for r in reps for x in (r["quarterly"]["ok"] if "quarterly" in r else [v["review_ok"] for v in r["reviews"].values()])]
+    masses = [x for r in reps for x in (r["quarterly"]["edge_mass"] if "quarterly" in r
+                                        else [max(v["edge_mass"]) for v in r["reviews"].values()])]
+    bad, n_rev = sum(1 for x in oks if not x), len(oks)
+    head = [Row("M12", f"reviews not computed (a fit fails the grid gate), of {n_rev}", float(bad), None, None, n_rev,
                 "count", "V12", f"exactly {cr2.V12_REVIEWS_NOT_COMPUTED_MAX}", True,
                 ("pilot: not decided (" + ("none so far" if bad == 0 else f"{bad} so far") + ")") if pilot
                 else ("pass" if bad <= cr2.V12_REVIEWS_NOT_COMPUTED_MAX else "FAIL")),
-            Row("fit", "largest posterior mass on the ends of the grid of μ_A, any fit", max(max(v["edge_mass"]) for _, v in revs),
-                None, None, len(revs), "max", threshold=f"gate: at most {cr2.EDGE_MASS_MAX:g}")]
+            Row("fit", "largest posterior mass on the ends of the grid of μ_A, any fit of any review", max(masses),
+                None, None, n_rev, "max", threshold=f"gate: at most {cr2.EDGE_MASS_MAX:g}")]
+    steps = sorted({r["review_step"] for r in reps if "review_step" in r})
+    if steps:
+        head.append(Row("info", "review calendar", None, None, None, R, "text",
+                        verdict=f"a review every {', '.join(str(x) for x in steps)} trading days "
+                                f"({n_rev // R} reviews a replication); M7 and M9 read at years {', '.join(years)}"))
     tail = []
     for y in years:
         v = [x for yy, x in revs if yy == y]
@@ -203,7 +218,12 @@ def summarise_hb(reps: list[dict], scenario: str) -> list[Row]:
     rules = sorted({r["dormancy"] for r in reps if "dormancy" in r})
     if rules:
         tail.append(Row("info", "dormancy rule", None, None, None, R, "text", verdict=", ".join(rules)))
-    tail.append(Row("cost", "seconds per replication spent on the model (estimates, six fits at four dates, forecasts)",
+    tail.append(Row("cost", "seconds per replication spent on the model (estimates, six fits at every review, forecasts)",
                     float(col(reps, "model_seconds").mean()), None, None, R, "mean"))
+    if all("forecast_seconds" in r for r in reps):
+        tail.append(Row("cost", "of which the dormancy forecasts", float(col(reps, "forecast_seconds").mean()), None, None, R, "mean"))
+    if all("quarterly" in r for r in reps):
+        tail.append(Row("cost", "seconds for the six fits of a review, mean over every review",
+                        float(np.mean([x for r in reps for x in r["quarterly"]["six_fits_seconds"]])), None, None, n_rev, "mean"))
     tail.append(Row("info", "model", None, None, None, R, "text", verdict=", ".join(sorted({r["model"] for r in reps}))))
     return head + rows + tail

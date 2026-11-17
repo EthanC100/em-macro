@@ -976,3 +976,66 @@ showed Janus as "10 of 8" open.
 
 **Where:** `ledger/janus.py` (`C13_FROM`, `max_open_for`; the summary's and `context`'s `max_open`),
 `ledger/site/app.js`, `docs/janus/daily_review.md`, `data/janus/README.md`, `tests/test_janus_c13.py`.
+
+## 2026-11-17: the Ledger site stopped publishing; no mark dated after its run's day
+
+Asked by Ethan on 2026-11-17. No book, rule, record or score changes; marks.csv loses one row (below).
+
+**What happened.** From run #299 (11 Nov, the first commit after C09) to run #498 (17 Nov 01:12 UTC) every
+ledger-pages run failed after about 13 seconds, and the published site stayed at run #298 (Janus quick check, 02:48
+UTC 11 Nov). ledger-daily and the other writers kept writing; only the site was stale.
+- **Cause:** C09 made the build compute the fund's clustered calls (`janus.fund_calls`), which reads
+  `janus/watchlist.yaml` with `import yaml`. The pages job built with a bare Python, so the build stopped with
+  `ModuleNotFoundError: No module named 'yaml'`.
+- **Why nothing caught it:** the tests workflow, ledger-daily's tests and the promote check all run with every package
+  of `requirements.txt` installed, so the import worked everywhere except where the site is published.
+- **Why nobody was told:** a failed ledger-pages run opened no issue, and the morning report listed only the night
+  shift's own runs.
+
+**Future-dated marks.** On 11 Nov the site showed "latest mark 30 Nov 2026": the site's latest mark was the latest
+date of any row in `data/ledger/marks.csv`. Two kinds of rows were dated after the day they were fetched:
+- **CLP 2026-11-30 (monthly):** a monthly-panel fallback written from 9 Nov when mindicador.cl failed. The panel,
+  refreshed on 4 Nov, holds an unfinished November, which `fetch_panel_monthly` dates at the month end. Q006
+  (14 Nov) stopped new ones and kept this row from pricing anything, but the row stayed in the file and on the site.
+- **COP, one day ahead (daily):** datos.gov.co publishes Colombia's TRM for tomorrow today. ledger-daily's 22:12 UTC
+  run wrote `2026-11-13` on 12 Nov and `2026-11-14` on 13 Nov. These were first-hand daily marks, so they could have
+  acted on a stop. Each was replaced by the next day's run.
+- **Effect:** no decision, forecast or Janus position uses CLP or COP, so no P&L, stop, close or resolution used
+  either row; the effect was on what the site showed.
+
+**The fixes.**
+1. **The site's requirements:** a new `requirements-site.txt` (pyyaml) lists everything the build needs beyond the
+   standard library. ledger-pages installs exactly that file before it builds.
+2. **The same build everywhere:** `python -m ledger.site_check` builds the site in a child `python -S` that can
+   import only the standard library and those packages, with no private store, as on the pages runner.
+   - It runs in the test suite: `tests/test_site_build.py` builds the frozen copies (Q025), so a data change can
+     never fail it and block a writer. The test also checks that the workflow installs exactly that file.
+   - It is promote check (e) on the live merged tree (`nightshift/promote.py`), so no dev → main promotion merges
+     unless the site builds.
+3. **Alerts:**
+   - **Failure:** a failed ledger-pages run on main opens an issue labelled `ledger-pages-failure`, assigned to
+     EthanC100 with the failed job's last log lines, or updates the open one.
+   - **Recovery:** the next successful deploy on main closes the issue.
+   - **Morning report:** a "Site and writers on main" section, under "Promoted to main", gives:
+     - the latest runs on main of ledger-pages, with the published site's own build time, and of ledger-daily
+       (public Actions API);
+     - the latest Janus quick check (due every 30 minutes) and daily review.
+     A failing, stale or late item also goes to Needs Ethan (`nightshift/morning.py`).
+4. **No mark dated after its run's day:**
+   - **Fetching:** every source, primary or fallback, keeps only observations dated on or before the run's day
+     (recent history too). A panel month that has not ended is skipped, and tomorrow's TRM waits for tomorrow's run.
+     This supersedes Q006 rule 3: a monthly primary (ID10Y, CO10Y, CL10Y, IT10Y, IT-DE) is dated at its last
+     *ended* month. None of them currently has a future row.
+   - **The file:** `write_marks` never writes a row dated after the day it was fetched, and drops any already in the
+     file, naming each on stderr in the run's log. The next ledger-daily run removes CLP 2026-11-30; the row stays
+     in git history.
+   - **Readers:** `read_marks`, `latest_marks`, `marks_on_or_before`, the Janus series and the books skip such rows.
+   - **The site:** its latest mark is never after the build's day.
+
+**Tests:** `tests/test_site_build.py`, `tests/test_no_future_marks.py` and `tests/test_morning_status_section.py`, plus
+`tests/test_q006_fallback_never_future.py` updated for the superseded rule 3. Each new test fails on the code before
+this change and passes after.
+
+**Where:** `requirements-site.txt`, `ledger/site_check.py`, `.github/workflows/ledger-pages.yml`, `ledger/marks.py`,
+`ledger/janus.py` (`series`), `ledger/books.py`, `nightshift/promote.py`, `nightshift/morning.py`,
+`docs/agent-system.md`.

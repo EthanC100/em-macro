@@ -4,6 +4,11 @@
 # "push" runs by themselves).
 #
 # Repository settings needed once: Settings > Pages > Build and deployment > Source = "GitHub Actions".
+#
+# The build installs requirements-site.txt and nothing else; tests/test_site_build.py and the promote check build the
+# site the same way (ledger/site_check.py), so a new import cannot stop the site unseen again (11-17 Nov 2026: C09
+# added `import yaml` to the build path and every run failed for six days). If a run on main fails, the alert job opens
+# an issue assigned to EthanC100 (or updates the open one); the next successful deploy on main closes it.
 name: ledger-pages
 
 on:
@@ -33,6 +38,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install the site's requirements
+        run: pip install -r requirements-site.txt
       - name: Build the site
         run: python -m ledger.build
       - name: Ledger tests
@@ -54,3 +61,76 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  alert:
+    needs: [build, deploy]
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write               # open, edit or label the alert issue
+      actions: read               # read the failed job's log tail
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_NUMBER: ${{ github.run_number }}
+      EVENT: ${{ github.event_name }}
+      SHA: ${{ github.sha }}
+      LABEL: ledger-pages-failure
+    steps:
+      - name: Open or update the alert issue
+        shell: bash
+        run: |
+          set -eo pipefail
+          repo="$GITHUB_REPOSITORY"
+          url="$GITHUB_SERVER_URL/$repo/actions/runs/$RUN_ID"
+          job=$(gh api "repos/$repo/actions/runs/$RUN_ID/jobs" --jq '[.jobs[] | select(.conclusion == "failure")][0].id' || true)
+          tail=""
+          if [ -n "$job" ] && [ "$job" != "null" ]; then
+            tail=$(gh api "repos/$repo/actions/jobs/$job/logs" 2>/dev/null | grep -v -E '^\S+Z ##\[(group|endgroup)' \
+                   | sed -E 's/^[0-9T:.-]+Z //' | grep -B2 -A25 -E 'Traceback|Error|error' | tail -n 30 || true)
+          fi
+          body=$(printf '%s\n' \
+            "The ledger-pages workflow failed on main, so the published Ledger site (https://ethanc100.github.io/em-macro/) is not being updated." \
+            "" \
+            "- Latest failed run: [#$RUN_NUMBER]($url) ($EVENT, commit ${SHA::7}, $(date -u +'%Y-%m-%d %H:%M UTC'))" \
+            "- Reproduce locally: \`python -m ledger.site_check\` (builds with only requirements-site.txt installed, as the workflow does)" \
+            "" \
+            "This issue is updated on each further failure and closed by the next successful deploy on main." \
+            "" \
+            "Last lines of the failed job's log:" \
+            '```' \
+            "${tail:-(log not available; open the run)}" \
+            '```')
+          gh label create "$LABEL" --repo "$repo" --color B60205 \
+            --description "ledger-pages failed on main (opened and closed by the workflow)" 2>/dev/null || true
+          n=$(gh issue list --repo "$repo" --state open --label "$LABEL" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --repo "$repo" --body "$body"
+            echo "updated issue #$n"
+          else
+            gh issue create --repo "$repo" --title "ledger-pages is failing on main: the published site is stale" \
+              --label "$LABEL" --assignee EthanC100 --body "$body"
+          fi
+
+  recover:
+    needs: [build, deploy]
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write               # close the alert issue
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Close the alert issue
+        shell: bash
+        run: |
+          set -eo pipefail
+          repo="$GITHUB_REPOSITORY"
+          for n in $(gh issue list --repo "$repo" --state open --label ledger-pages-failure --json number --jq '.[].number' || true); do
+            gh issue close "$n" --repo "$repo" --reason completed \
+              --comment "Fixed: run [#$RUN_NUMBER]($GITHUB_SERVER_URL/$repo/actions/runs/$RUN_ID) built and deployed the site."
+          done

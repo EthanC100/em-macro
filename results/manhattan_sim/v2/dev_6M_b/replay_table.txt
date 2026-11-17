@@ -1,0 +1,108 @@
+
+===== D02: 12 replications; recorded M8 7/42
+rule as written (0.05 twice / 0.15)            M8 0.167 (0.045 to 0.261)   7/  42   null dormant at end 0.359   family-reviews written 0.783
+cut-off 0.02                                   M8 0.143 (0.034 to 0.246)   6/  42   null dormant at end 0.320   family-reviews written 0.816
+cut-off 0.01                                   M8 0.119 (0.000 to 0.237)   5/  42   null dormant at end 0.290   family-reviews written 0.840
+cut-off 0.005 (no draw of 200 enters)          M8 0.119 (0.000 to 0.237)   5/  42   null dormant at end 0.254   family-reviews written 0.868
+reactivate at 0.05                             M8 0.167 (0.045 to 0.261)   7/  42   null dormant at end 0.359   family-reviews written 0.783
+three low reviews, not two                     M8 0.048 (0.000 to 0.140)   2/  42   null dormant at end 0.152   family-reviews written 0.936
+at least 3 forward years                       M8 0.095 (0.000 to 0.171)   4/  42   null dormant at end 0.121   family-reviews written 0.948
+at least 5 forward years                       M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.000   family-reviews written 1.000
+tier bar on S0 alone                           M8 0.143 (0.034 to 0.246)   6/  42   null dormant at end 0.341   family-reviews written 0.797
+tier bar without S5                            M8 0.143 (0.034 to 0.246)   6/  42   null dormant at end 0.352   family-reviews written 0.789
+tier bar without S4 and S5                     M8 0.143 (0.034 to 0.246)   6/  42   null dormant at end 0.344   family-reviews written 0.793
+ten more years of reviews                      M8 0.119 (0.000 to 0.237)   5/  42   null dormant at end 0.312   family-reviews written 0.816
+ten more years and S0 bar                      M8 0.119 (0.000 to 0.237)   5/  42   null dormant at end 0.276   family-reviews written 0.838
+and Pi^max < 0.20 (wake at 0.20)               M8 0.119 (0.034 to 0.185)   5/  42   null dormant at end 0.340   family-reviews written 0.794
+and Pi^max < 0.10 (wake at 0.20)               M8 0.071 (0.000 to 0.163)   3/  42   null dormant at end 0.279   family-reviews written 0.834
+and Pi^max < 0.05 (wake at 0.15)               M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.154   family-reviews written 0.915
+and Pi^max < 0.05 (wake at 0.20)               M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.154   family-reviews written 0.915
+and Pi^max < 0.02 (wake at 0.15)               M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.036   family-reviews written 0.983
+and p^F < 0.05 (wake at p^F >= 0.15)           M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.012   family-reviews written 0.993
+same, no wake at the last review               M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.013   family-reviews written 0.993
+and p^F < 0.05 (wake at p^F >= 0.05)           M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.009   family-reviews written 0.995
+and p^F < 0.10 (wake at p^F >= 0.20)           M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.025   family-reviews written 0.987
+and p^F < 0.025 (wake at p^F >= 0.15)          M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.006   family-reviews written 0.997
+p^F < 0.05 alone, no forecast                  M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.013   family-reviews written 0.993
+no dormancy                                    M8 0.000 (0.000 to 0.000)   0/  42   null dormant at end 0.000   family-reviews written 1.000
+
+===== D05: 12 replications; recorded M8 25/140
+rule as written (0.05 twice / 0.15)            M8 0.179 (0.138 to 0.216)  25/ 140   null dormant at end 0.370   family-reviews written 0.780
+cut-off 0.02                                   M8 0.157 (0.102 to 0.206)  22/ 140   null dormant at end 0.329   family-reviews written 0.815
+cut-off 0.01                                   M8 0.121 (0.083 to 0.156)  17/ 140   null dormant at end 0.296   family-reviews written 0.843
+cut-off 0.005 (no draw of 200 enters)          M8 0.086 (0.047 to 0.125)  12/ 140   null dormant at end 0.264   family-reviews written 0.869
+reactivate at 0.05                             M8 0.179 (0.138 to 0.216)  25/ 140   null dormant at end 0.370   family-reviews written 0.780
+three low reviews, not two                     M8 0.071 (0.044 to 0.103)  10/ 140   null dormant at end 0.156   family-reviews written 0.935
+at least 3 forward years                       M8 0.093 (0.058 to 0.123)  13/ 140   null dormant at end 0.123   family-reviews written 0.948
+at least 5 forward years                       M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.000   family-reviews written 1.000
+tier bar on S0 alone                           M8 0.114 (0.077 to 0.149)  16/ 140   null dormant at end 0.355   family-reviews written 0.793
+tier bar without S5                            M8 0.129 (0.096 to 0.160)  18/ 140   null dormant at end 0.364   family-reviews written 0.786
+tier bar without S4 and S5                     M8 0.121 (0.079 to 0.163)  17/ 140   null dormant at end 0.360   family-reviews written 0.789
+ten more years of reviews                      M8 0.100 (0.062 to 0.139)  14/ 140   null dormant at end 0.318   family-reviews written 0.819
+ten more years and S0 bar                      M8 0.071 (0.035 to 0.115)  10/ 140   null dormant at end 0.289   family-reviews written 0.839
+and Pi^max < 0.20 (wake at 0.20)               M8 0.086 (0.051 to 0.122)  12/ 140   null dormant at end 0.351   family-reviews written 0.796
+and Pi^max < 0.10 (wake at 0.20)               M8 0.057 (0.032 to 0.085)   8/ 140   null dormant at end 0.276   family-reviews written 0.842
+and Pi^max < 0.05 (wake at 0.15)               M8 0.014 (0.000 to 0.032)   2/ 140   null dormant at end 0.152   family-reviews written 0.918
+and Pi^max < 0.05 (wake at 0.20)               M8 0.014 (0.000 to 0.032)   2/ 140   null dormant at end 0.152   family-reviews written 0.918
+and Pi^max < 0.02 (wake at 0.15)               M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.045   family-reviews written 0.979
+and p^F < 0.05 (wake at p^F >= 0.15)           M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.017   family-reviews written 0.992
+same, no wake at the last review               M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.019   family-reviews written 0.991
+and p^F < 0.05 (wake at p^F >= 0.05)           M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.012   family-reviews written 0.994
+and p^F < 0.10 (wake at p^F >= 0.20)           M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.033   family-reviews written 0.983
+and p^F < 0.025 (wake at p^F >= 0.15)          M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.008   family-reviews written 0.996
+p^F < 0.05 alone, no forecast                  M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.017   family-reviews written 0.992
+no dormancy                                    M8 0.000 (0.000 to 0.000)   0/ 140   null dormant at end 0.000   family-reviews written 1.000
+
+===== D08: 12 replications; recorded M8 102/944
+rule as written (0.05 twice / 0.15)            M8 0.108 (0.081 to 0.138) 102/ 944   null dormant at end 0.337   family-reviews written 0.846
+cut-off 0.02                                   M8 0.074 (0.054 to 0.098)  70/ 944   null dormant at end 0.287   family-reviews written 0.878
+cut-off 0.01                                   M8 0.057 (0.043 to 0.074)  54/ 944   null dormant at end 0.253   family-reviews written 0.901
+cut-off 0.005 (no draw of 200 enters)          M8 0.044 (0.031 to 0.060)  42/ 944   null dormant at end 0.212   family-reviews written 0.922
+reactivate at 0.05                             M8 0.108 (0.081 to 0.138) 102/ 944   null dormant at end 0.337   family-reviews written 0.846
+three low reviews, not two                     M8 0.023 (0.014 to 0.033)  22/ 944   null dormant at end 0.135   family-reviews written 0.958
+at least 3 forward years                       M8 0.046 (0.035 to 0.056)  43/ 944   null dormant at end 0.124   family-reviews written 0.958
+at least 5 forward years                       M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.000   family-reviews written 1.000
+tier bar on S0 alone                           M8 0.036 (0.018 to 0.057)  34/ 944   null dormant at end 0.274   family-reviews written 0.883
+tier bar without S5                            M8 0.050 (0.027 to 0.078)  47/ 944   null dormant at end 0.303   family-reviews written 0.868
+tier bar without S4 and S5                     M8 0.039 (0.021 to 0.060)  37/ 944   null dormant at end 0.292   family-reviews written 0.874
+ten more years of reviews                      M8 0.048 (0.028 to 0.073)  45/ 944   null dormant at end 0.259   family-reviews written 0.890
+ten more years and S0 bar                      M8 0.014 (0.005 to 0.026)  13/ 944   null dormant at end 0.175   family-reviews written 0.928
+and Pi^max < 0.20 (wake at 0.20)               M8 0.008 (0.001 to 0.021)   8/ 944   null dormant at end 0.155   family-reviews written 0.932
+and Pi^max < 0.10 (wake at 0.20)               M8 0.003 (0.000 to 0.008)   3/ 944   null dormant at end 0.083   family-reviews written 0.964
+and Pi^max < 0.05 (wake at 0.15)               M8 0.002 (0.000 to 0.007)   2/ 944   null dormant at end 0.027   family-reviews written 0.989
+and Pi^max < 0.05 (wake at 0.20)               M8 0.002 (0.000 to 0.007)   2/ 944   null dormant at end 0.027   family-reviews written 0.989
+and Pi^max < 0.02 (wake at 0.15)               M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.009   family-reviews written 0.997
+and p^F < 0.05 (wake at p^F >= 0.15)           M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.019   family-reviews written 0.994
+same, no wake at the last review               M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.019   family-reviews written 0.993
+and p^F < 0.05 (wake at p^F >= 0.05)           M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.013   family-reviews written 0.996
+and p^F < 0.10 (wake at p^F >= 0.20)           M8 0.002 (0.000 to 0.005)   2/ 944   null dormant at end 0.038   family-reviews written 0.986
+and p^F < 0.025 (wake at p^F >= 0.15)          M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.007   family-reviews written 0.998
+p^F < 0.05 alone, no forecast                  M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.019   family-reviews written 0.993
+no dormancy                                    M8 0.000 (0.000 to 0.000)   0/ 944   null dormant at end 0.000   family-reviews written 1.000
+
+===== D10: 12 replications; recorded M8 18/123
+rule as written (0.05 twice / 0.15)            M8 0.146 (0.092 to 0.197)  18/ 123   null dormant at end 0.378   family-reviews written 0.772
+cut-off 0.02                                   M8 0.130 (0.075 to 0.181)  16/ 123   null dormant at end 0.342   family-reviews written 0.803
+cut-off 0.01                                   M8 0.098 (0.040 to 0.159)  12/ 123   null dormant at end 0.312   family-reviews written 0.829
+cut-off 0.005 (no draw of 200 enters)          M8 0.081 (0.037 to 0.131)  10/ 123   null dormant at end 0.281   family-reviews written 0.855
+reactivate at 0.05                             M8 0.146 (0.092 to 0.197)  18/ 123   null dormant at end 0.377   family-reviews written 0.773
+three low reviews, not two                     M8 0.057 (0.027 to 0.088)   7/ 123   null dormant at end 0.168   family-reviews written 0.930
+at least 3 forward years                       M8 0.065 (0.028 to 0.102)   8/ 123   null dormant at end 0.121   family-reviews written 0.949
+at least 5 forward years                       M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.000   family-reviews written 1.000
+tier bar on S0 alone                           M8 0.106 (0.057 to 0.155)  13/ 123   null dormant at end 0.364   family-reviews written 0.782
+tier bar without S5                            M8 0.138 (0.076 to 0.194)  17/ 123   null dormant at end 0.370   family-reviews written 0.778
+tier bar without S4 and S5                     M8 0.114 (0.063 to 0.168)  14/ 123   null dormant at end 0.367   family-reviews written 0.781
+ten more years of reviews                      M8 0.098 (0.049 to 0.144)  12/ 123   null dormant at end 0.339   family-reviews written 0.800
+ten more years and S0 bar                      M8 0.081 (0.035 to 0.130)  10/ 123   null dormant at end 0.318   family-reviews written 0.815
+and Pi^max < 0.20 (wake at 0.20)               M8 0.089 (0.044 to 0.139)  11/ 123   null dormant at end 0.358   family-reviews written 0.784
+and Pi^max < 0.10 (wake at 0.20)               M8 0.033 (0.008 to 0.060)   4/ 123   null dormant at end 0.313   family-reviews written 0.814
+and Pi^max < 0.05 (wake at 0.15)               M8 0.016 (0.000 to 0.043)   2/ 123   null dormant at end 0.216   family-reviews written 0.879
+and Pi^max < 0.05 (wake at 0.20)               M8 0.016 (0.000 to 0.043)   2/ 123   null dormant at end 0.216   family-reviews written 0.879
+and Pi^max < 0.02 (wake at 0.15)               M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.098   family-reviews written 0.950
+and p^F < 0.05 (wake at p^F >= 0.15)           M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.054   family-reviews written 0.973
+same, no wake at the last review               M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.056   family-reviews written 0.972
+and p^F < 0.05 (wake at p^F >= 0.05)           M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.046   family-reviews written 0.977
+and p^F < 0.10 (wake at p^F >= 0.20)           M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.092   family-reviews written 0.952
+and p^F < 0.025 (wake at p^F >= 0.15)          M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.032   family-reviews written 0.985
+p^F < 0.05 alone, no forecast                  M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.054   family-reviews written 0.973
+no dormancy                                    M8 0.000 (0.000 to 0.000)   0/ 123   null dormant at end 0.000   family-reviews written 1.000

@@ -63,7 +63,7 @@ def evidential_weight(channel: str, role: str, designated: bool = False, reconst
     if role == "exploration":
         return 0
     if role == "reserve":
-        return 1 if (channel == "blind" and designated) else 0
+        return 1 if (channel == "blind" and designated and not reconstructed) else 0
     if role == "forward":
         return 0 if reconstructed else 1
     raise LedgerError(f"unknown role {role}")
@@ -177,6 +177,7 @@ class Ledger:
                    "batch": batch, "channel": channel, "role": role, "window": window, "designated": bool(designated),
                    "spec_hash": spec_hash, "data_hash": data_hash, "code_version": code_version,
                    "result_hash": result_hash, "n_obs": n_obs, "summary": summary, "seed": seed,
+                   "reconstructed": bool(reconstructed),
                    "evidential_weight": evidential_weight(channel, role, designated, reconstructed)}
         same_key = [r for r in self._evaluations() if self.key(r["payload"]) == self.key(payload)]
         if same_key:

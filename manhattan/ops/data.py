@@ -26,13 +26,15 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-from dataclasses import dataclass
+import re
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import numpy as np
 
 from manhattan.engine.pit import PitStore, Window
+from manhattan.availability import AvailabilityError, sources_from_spec, validate_source
 
 from . import store as ST
 from . import timing as TM
@@ -48,28 +50,90 @@ class Source:
     fred_id: str | None = None
     series: str | None = None       # for a FRED source: the series name it fills (the dollar value of the currency)
 
+    frequency: str | None = None
+    period_label: str | None = None
+    availability_kind: str | None = None
+    source_reference: str = ""
+    day_mapping: str = ""
+
+    def publication_contract(self) -> dict:
+        return {"name": self.id, "frequency": self.frequency, "period_label": self.period_label,
+                "publication_lag_days": self.lag_days,
+                "availability": {"kind": self.availability_kind,
+                                 "reference": self.source_reference, "day_mapping": self.day_mapping}}
+
+
+def validate_capture_source(source: Source) -> None:
+    validate_source(source.publication_contract())
+    # Current CSV adapters carry no per-vintage release field. Fail closed until
+    # an adapter supplies explicit availability; never infer it from period labels.
+    if source.availability_kind != "daily_lag":
+        raise AvailabilityError("capture adapter requires explicit per-vintage availability")
+
+
+def capture_registry(sources) -> dict[str, Source]:
+    sources = list(sources)
+    for source in sources:
+        validate_capture_source(source)
+    sources_from_spec({"data_sources": [s.publication_contract() for s in sources]})
+    out = {}
+    for source in sources:
+        if source.id in out and out[source.id] != source:
+            raise AvailabilityError("conflicting capture source declarations")
+        out[source.id] = source
+    return out
+
 
 SOURCES = {
-    "synthetic": Source("synthetic", "synthetic", "synthetic", 0, 3),
+    "synthetic": Source("synthetic", "synthetic", "synthetic", 0, 3,
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="deterministic synthetic fixture"),
     # H.10 noon buying rates, local currency per dollar; the series filled is 1 / rate (the dollar value of one unit).
     # FRED posts the H.10 dailies weekly, so the grace is ten days.
-    "fred_DEXBZUS": Source("fred_DEXBZUS", "fred", "us_fed_fx", 1, 10, "DEXBZUS", "fx_BRL"),
-    "fred_DEXMXUS": Source("fred_DEXMXUS", "fred", "us_fed_fx", 1, 10, "DEXMXUS", "fx_MXN"),
-    "fred_DEXSFUS": Source("fred_DEXSFUS", "fred", "us_fed_fx", 1, 10, "DEXSFUS", "fx_ZAR"),
+    "fred_DEXBZUS": Source("fred_DEXBZUS", "fred", "us_fed_fx", 1, 10, "DEXBZUS", "fx_BRL",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
+    "fred_DEXMXUS": Source("fred_DEXMXUS", "fred", "us_fed_fx", 1, 10, "DEXMXUS", "fx_MXN",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
+    "fred_DEXSFUS": Source("fred_DEXSFUS", "fred", "us_fed_fx", 1, 10, "DEXSFUS", "fx_ZAR",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
 }
+SOURCES = capture_registry(SOURCES.values())
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 
 
 # ---------------------------------------------------------------- parsing
 
+def _checked_rows(rows):
+    """A capture cannot contain two different values for the same release key."""
+    seen, out = {}, []
+    for series, period, value in rows:
+        if not isinstance(series, str) or not series or not np.isfinite(value):
+            raise ValueError("capture has an invalid series or nonfinite value")
+        period = date.fromisoformat(period).isoformat()
+        key = (series, period)
+        if key in seen and float(seen[key]).hex() != float(value).hex():
+            raise ValueError("capture contains conflicting values for one observation")
+        seen[key] = value
+        out.append((series, period, value))
+    return out
+
+
 def parse(source: Source, raw: bytes) -> list[tuple[str, str, float]]:
     """(series, period, value) rows of a capture. Missing values are skipped (a gap is not a value)."""
+    validate_capture_source(source)
     text = raw.decode("utf-8")
     rows = []
     if source.kind == "synthetic":
         for r in csv.DictReader(io.StringIO(text)):
             rows.append((r["series"], r["period"], float(r["value"])))
-        return rows
+        return _checked_rows(rows)
     if source.kind == "fred":
         rd = csv.reader(io.StringIO(text))
         header = next(rd)
@@ -79,9 +143,11 @@ def parse(source: Source, raw: bytes) -> list[tuple[str, str, float]]:
             if len(r) < 2 or r[1].strip() in ("", "."):
                 continue
             v = float(r[1])
+            if not np.isfinite(v):
+                raise ValueError("capture has a nonfinite quote")
             if v > 0:
                 rows.append((source.series, date.fromisoformat(r[0].strip()).isoformat(), 1.0 / v))
-        return rows
+        return _checked_rows(rows)
     raise ValueError(f"unknown source kind {source.kind}")
 
 
@@ -137,13 +203,26 @@ def synthetic_csv(asof: date, seed: int = 0, **kw) -> bytes:
 
 # ---------------------------------------------------------------- capture
 
+def source_definition(source: Source) -> dict:
+    """Declared replay configuration, not proof of provider release history."""
+    validate_capture_source(source)
+    cal = TM.calendar(source.calendar)
+    return {"schema_version": 1, "source": asdict(source),
+            "calendar": {"name": cal.name, "tz": cal.tz, "close": cal.close.isoformat(),
+                         "publish_sessions": cal.publish_sessions,
+                         "publish_time": cal.publish_time.isoformat() if cal.publish_time else None}}
+
+
 def capture_intent(source: Source, raw: bytes, retrieved: datetime) -> tuple[ST.Intent, dict]:
+    if not isinstance(retrieved, datetime) or retrieved.tzinfo is None or retrieved.utcoffset() is None:
+        raise ValueError("capture observation time requires an explicit time zone")
     sha = hashlib.sha256(raw).hexdigest()
     rows = parse(source, raw)                                # a capture that cannot be parsed is refused here
     periods = sorted(p for _, p, _ in rows)
     it = ST.Intent("capture", ("capture", source.id, sha),
                    {"source": source.id, "sha256": sha, "bytes": len(raw), "rows": len(rows),
-                    "first_period": periods[0] if periods else None, "last_period": periods[-1] if periods else None},
+                    "first_period": periods[0] if periods else None, "last_period": periods[-1] if periods else None,
+                    "source_definition": source_definition(source)},
                    source=source.id, retrieved_utc=TM.iso(retrieved))
     return it, {f"raw/{sha}.bin": raw}
 
@@ -171,7 +250,8 @@ class FirstSeen:
             by.setdefault(s, []).append((p, v, self.available[(s, p)]))
         for s, rows in sorted(by.items()):
             rows.sort()
-            st.add(s, [r[0] for r in rows], [r[1] for r in rows], available=[r[2] for r in rows])
+            st.add(s, [r[0] for r in rows], [r[1] for r in rows], available=[r[2] for r in rows],
+                   reconstructed=any((s, r[0]) in self.late or (s, r[0]) in self.backfill for r in rows))
         return st
 
     def complete(self, series: list[str], period: str) -> bool:
@@ -182,21 +262,43 @@ class FirstSeen:
 
 
 def first_seen(ledger: ST.Store, source_ids) -> FirstSeen:
-    values, avail, late, back, firstcap = {}, {}, set(), set(), {}
+    source_ids = frozenset(source_ids)
+    if not source_ids <= SOURCES.keys():
+        raise ST.StoreError("unknown source requested for capture replay")
+    values, avail, late, back, firstcap, first_observed_day = {}, {}, set(), set(), {}, {}
     revisions, n = 0, 0
     for rec in ledger.of_type("capture"):
         src = SOURCES.get(rec["payload"]["source"])
         if src is None or src.id not in source_ids:
+            if (len(rec["key"]) > 1 and rec["key"][1] in source_ids) \
+                    or rec["provenance"].get("source") in source_ids:
+                raise ST.StoreError("capture source identities conflict")
             continue
+        payload = rec["payload"]
+        if not isinstance(payload["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", payload["sha256"]):
+            raise ST.StoreError("capture has an invalid raw version hash")
+        if tuple(rec["key"]) != ("capture", src.id, payload["sha256"]) \
+                or rec["provenance"].get("source") != src.id:
+            raise ST.StoreError("capture source identities conflict")
+        if "source_definition" in payload and payload["source_definition"] != source_definition(src):
+            raise ST.StoreError("capture source definition differs from replay configuration")
         n += 1
         cal = TM.calendar(src.calendar)
         retrieved = TM.parse_time(rec["provenance"]["retrieved_utc"])
         seen = _seen_day(cal, retrieved)
         start = firstcap.setdefault(src.id, seen)
+        first_day = first_observed_day.setdefault(src.id, retrieved.astimezone(ZoneInfo(cal.tz)).date())
         raw = ledger.raw_path(rec["payload"]["sha256"]).read_bytes()
         if hashlib.sha256(raw).hexdigest() != rec["payload"]["sha256"]:
             raise ST.StoreError("a raw capture does not match its recorded hash")
-        for s, p, v in parse(src, raw):
+        if len(raw) != payload["bytes"]:
+            raise ST.StoreError("a raw capture does not match its recorded byte count")
+        rows = parse(src, raw)
+        periods = sorted(p for _, p, _ in rows)
+        if len(rows) != payload["rows"] or payload["first_period"] != (periods[0] if periods else None) \
+                or payload["last_period"] != (periods[-1] if periods else None):
+            raise ST.StoreError("capture contents conflict with recorded coverage metadata")
+        for s, p, v in rows:
             k = (s, p)
             if k in values:
                 if values[k] != v:
@@ -205,7 +307,9 @@ def first_seen(ledger: ST.Store, source_ids) -> FirstSeen:
             nominal = date.fromisoformat(p) + timedelta(days=src.lag_days)
             values[k] = v
             if nominal < start:
-                avail[k] = nominal
+                # Keep the existing reconstructed/warm-up classification, but
+                # do not backdate a current-day value seen at/after that close.
+                avail[k] = nominal if nominal < first_day else max(nominal, seen)
                 back.add(k)
             else:
                 avail[k] = max(nominal, seen)

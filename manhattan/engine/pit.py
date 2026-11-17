@@ -9,8 +9,9 @@
 ``available`` is the first day at whose close the value may be used for a decision. A value is never returned by
 a read as of an earlier day. A **revision** is a second value for the same period with a later ``available``: it
 shows from that day on, and a read as of an earlier day still returns the earlier value. Availability is given
-explicitly, or as the period plus a publication lag in calendar days (the hypothesis spec's
-``data_sources[*].publication_lag_days``); a value with neither is refused.
+explicitly, or by the low-level daily lag API. Source-aware ingestion uses ``add_source``;
+``lags_from_spec`` accepts only explicit daily observation-date lag contracts. Non-daily
+releases need availability per vintage; a value with neither is refused.
 
 **One door.** A ``PitStore`` gives no data away. Data come out through a ``Reader``, which is bound to a caller,
 a domain and the fence of ``config/manhattan.yaml``, and every window it opens is first put to
@@ -26,12 +27,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time
 
 import numpy as np
 
 from manhattan import roles
+from manhattan.availability import AvailabilityError, sources_from_spec, validate_source
 
 DAY = np.timedelta64(1, "D")
 
@@ -41,11 +44,64 @@ class PitError(ValueError):
 
 
 def _days(x) -> np.ndarray:
-    return np.asarray(x, dtype="datetime64[D]")
+    """Daily dates only: never silently round a release/query timestamp down."""
+    def check_unit(dtype):
+        unit, step = np.datetime_data(dtype)
+        units = {"D": 1, "h": 24, "m": 1440, "s": 86400, "ms": 86400000,
+                 "us": 86400000000, "ns": 86400000000000, "ps": 86400000000000000,
+                 "fs": 86400000000000000000, "as": 86400000000000000000000}
+        if unit not in units or step > units[unit]:
+            raise PitError("numpy dates require day precision or finer, not period or generic units")
+
+    try:
+        # Check elements before NumPy can promote mixed month/day scalars to days.
+        for value in np.asarray(x, dtype=object).flat:
+            if isinstance(value, np.datetime64):
+                check_unit(value.dtype)
+        raw = np.asarray(x)
+        if raw.dtype.kind == "M":
+            check_unit(raw.dtype)
+            if np.isnat(raw).any():
+                raise PitError("a daily date is missing")
+            result = raw.astype("datetime64[D]")
+            if (raw != result).any():
+                raise PitError("a daily date is missing or contains intraday precision")
+            return result
+        for value in raw.flat:
+            if isinstance(value, np.datetime64):
+                if np.isnat(value) or value != value.astype("datetime64[D]"):
+                    raise PitError("a daily date is missing or contains intraday precision")
+            elif isinstance(value, datetime):
+                if value.tzinfo is not None or value.time() != time.min:
+                    raise PitError("map timestamps to availability days explicitly")
+            elif isinstance(value, date):
+                pass
+            elif not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                raise PitError("a daily date is missing or requires explicit timestamp mapping")
+        result = np.asarray(x, dtype="datetime64[D]")
+        if np.isnat(result).any():
+            raise PitError("a daily date is missing")
+        return result
+    except (TypeError, ValueError, OverflowError) as exc:
+        if isinstance(exc, PitError):
+            raise
+        raise PitError("invalid daily date") from None
 
 
 def _day(x) -> np.datetime64:
-    return np.datetime64(x, "D")
+    result = _days(x)
+    if result.ndim != 0:
+        raise PitError("a query needs one daily date")
+    return result[()]
+
+
+def _lag(value) -> int:
+    try:
+        if isinstance(value, (bool, np.bool_, str)) or int(value) != value or value < 0:
+            raise ValueError
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        raise PitError("a publication lag is a whole number of days, 0 or more") from None
 
 
 class PitStore:
@@ -57,10 +113,14 @@ class PitStore:
         self._available: dict[str, np.ndarray] = {}
         self._value: dict[str, np.ndarray] = {}
         self._simple: dict[str, bool] = {}
+        self._reconstructed = False
 
-    def add(self, series: str, periods, values, *, available=None, lag_days: int | None = None) -> None:
+    def add(self, series: str, periods, values, *, available=None, lag_days: int | None = None,
+            reconstructed: bool = False) -> None:
         """Add values of ``series``. Give ``available`` (one day per value) or ``lag_days`` (calendar days after
         the period; 0 means usable at that day's close)."""
+        if not isinstance(reconstructed, bool):
+            raise PitError("reconstructed must be a boolean")
         p = np.atleast_1d(_days(periods))
         v = np.atleast_1d(np.asarray(values, dtype=float))
         if p.shape != v.shape or p.ndim != 1:
@@ -68,9 +128,7 @@ class PitStore:
         if (available is None) == (lag_days is None):
             raise PitError(f"{series}: give either an availability day for each value or a publication lag, not both or neither")
         if lag_days is not None:
-            if isinstance(lag_days, bool) or int(lag_days) != lag_days or lag_days < 0:
-                raise PitError(f"{series}: a publication lag is a whole number of days, 0 or more")
-            a = p + int(lag_days) * DAY
+            a = p + _lag(lag_days) * DAY
         else:
             a = np.atleast_1d(_days(available))
             if a.shape != p.shape:
@@ -85,11 +143,47 @@ class PitStore:
             p, a, v = (np.concatenate([old[series], new]) for old, new in
                        ((self._period, p), (self._available, a), (self._value, v)))
         order = np.lexsort((np.arange(p.size), a, p))           # by period, then availability, then arrival
-        self._period[series], self._available[series], self._value[series] = p[order], a[order], v[order]
+        p, a, v = p[order], a[order], v[order]
+        same = (p[1:] == p[:-1]) & (a[1:] == a[:-1])
+        if (same & (v[1:].view(np.uint64) != v[:-1].view(np.uint64))).any():
+            raise PitError(f"{series}: conflicting values share one period and availability day")
+        unique = np.r_[True, ~same] if p.size else np.array([], dtype=bool)
+        self._period[series], self._available[series], self._value[series] = p[unique], a[unique], v[unique]
+        self._reconstructed |= reconstructed
         p, a = self._period[series], self._available[series]
         # the fast path: one value per period, and availability never runs backwards
         self._simple[series] = bool(p.size == 0 or ((np.diff(p) > np.timedelta64(0, "D")).all()
                                                     and (np.diff(a) >= np.timedelta64(0, "D")).all()))
+
+    def require_historical_evidence(self) -> None:
+        """Reject reconstructed inputs, including warm-up dependencies.
+
+        This necessary check does not authenticate release history or certify data.
+        Conservative store-wide taint cannot be removed by adding later rows.
+        """
+        if self._reconstructed:
+            raise PitError("reconstructed/backfilled data cannot be confirmatory historical evidence")
+
+    def add_source(self, source: dict, periods, values, *, available=None) -> None:
+        """Ingest an explicit source contract; non-daily availability is per vintage.
+
+        Release calendars must be resolved externally, including revisions and
+        irregular schedules. Conservative assumptions require an owner reference;
+        their rows are reconstructed, never authenticated historical evidence.
+        """
+        try:
+            validate_source(source)
+        except AvailabilityError as exc:
+            raise PitError(str(exc)) from None
+        kind = source["availability"]["kind"]
+        if kind == "daily_lag":
+            if available is not None:
+                raise PitError("explicit availability conflicts with daily_lag")
+            self.add(source["name"], periods, values, lag_days=source["publication_lag_days"])
+        else:
+            if available is None:
+                raise PitError("per-vintage availability days are required; period labels are not release dates")
+            self.add(source["name"], periods, values, available=available, reconstructed=kind == "conservative")
 
     def names(self) -> list[str]:
         return sorted(self._period)
@@ -108,8 +202,8 @@ class PitStore:
             p, a, v = self._period[name], self._available[name], self._value[name]
             order = np.lexsort((v, a, p))                       # insertion order does not matter
             h.update(json.dumps(name).encode("utf-8"))
-            h.update(p[order].astype("int64").tobytes())
-            h.update(a[order].astype("int64").tobytes())
+            h.update(p[order].astype("<i8").tobytes())
+            h.update(a[order].astype("<i8").tobytes())
             h.update(np.ascontiguousarray(v[order], dtype="<f8").tobytes())
         return h.hexdigest()
 
@@ -122,7 +216,7 @@ class PitStore:
         lo = int(np.searchsorted(p, start, "left"))
         if self._simple[series]:
             hi = min(int(np.searchsorted(p, end, "right")), int(np.searchsorted(a, t, "right")))
-            return p[lo:hi], v[lo:hi], a[lo:hi]
+            return p[lo:hi].copy(), v[lo:hi].copy(), a[lo:hi].copy()
         hi = int(np.searchsorted(p, end, "right"))
         p, a, v = p[lo:hi], a[lo:hi], v[lo:hi]
         known = a <= t
@@ -147,7 +241,11 @@ class Window:
     def as_of(self, series: str, t, n: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         """(periods, values) of ``series`` as known at the close of day ``t``: for each period in the window, the
         latest value available on or before ``t``. ``n`` keeps the last ``n`` periods."""
+        if n is not None and (isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < 0):
+            raise PitError("n must be a nonnegative whole number of periods")
         p, v, _ = self._known(series, t)
+        if n == 0:
+            return p[:0], v[:0]
         return (p, v) if n is None else (p[-n:], v[-n:])
 
     def as_of_with_availability(self, series: str, t) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -163,6 +261,13 @@ class Window:
     def _known(self, series: str, t):
         t = min(_day(t), _day(self.end))                       # nothing after the window's end is ever known here
         return self._store._as_of(series, t, _day(self.start), _day(self.end))
+
+    @property
+    def reconstructed(self) -> bool:
+        return self._store._reconstructed
+
+    def require_historical_evidence(self) -> None:
+        self._store.require_historical_evidence()
 
     def data_hash(self) -> str:
         return self._store.data_hash()
@@ -186,10 +291,15 @@ class Reader:
 
 
 def lags_from_spec(hypothesis_spec: dict) -> dict[str, int]:
-    """Publication lags by source name, from a hypothesis spec's ``data_sources``."""
-    out = {}
-    for src in hypothesis_spec.get("data_sources", []):
-        if not isinstance(src, dict) or "name" not in src or "publication_lag_days" not in src:
-            raise PitError("every data source needs a name and publication_lag_days")
-        out[src["name"]] = int(src["publication_lag_days"])
-    return out
+    """Only explicit daily lag contracts can be represented by this legacy API.
+
+    Non-daily releases/calendars/assumptions require add_source with per-vintage
+    availability; never silently substitute period-start plus a constant lag.
+    """
+    try:
+        sources = sources_from_spec(hypothesis_spec)
+    except AvailabilityError as exc:
+        raise PitError(str(exc)) from None
+    if any(src["availability"]["kind"] != "daily_lag" for src in sources.values()):
+        raise PitError("source requires per-vintage availability, not a fixed lag")
+    return {name: src["publication_lag_days"] for name, src in sources.items()}

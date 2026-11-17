@@ -49,6 +49,8 @@ def _failed_section(monkeypatch, tmp_path, st: dict) -> list[str]:
     monkeypatch.setattr(M, "promoted", lambda *a, **k: "no - fixture")
     monkeypatch.setattr(M, "merged_into_dev", lambda *a, **k: [])
     monkeypatch.setattr(M, "janus_section", lambda *a, **k: ["fixture"])
+    monkeypatch.setattr(M, "janus_records", lambda *a, **k: ([], ""))
+    monkeypatch.setattr(M, "status_section", lambda *a, **k: (["fixture"], []))   # no network
     monkeypatch.setattr(M, "v1_rules_state", lambda *a, **k: None)
     monkeypatch.setattr(M, "v1_rules_section", lambda *a, **k: ["fixture"])
     monkeypatch.setattr(M, "lab_section", lambda *a, **k: ["fixture"])

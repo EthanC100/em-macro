@@ -43,7 +43,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -165,14 +165,21 @@ class Store:
     crash_at: str | None = None
     before_push: Callable[["Store", str], None] | None = None      # tests: race another writer here
     max_retries: int = 6
+    git_timeout_seconds: float = 120
     pushes: list = field(default_factory=list)
     _records: list = field(default_factory=list)
     _by_key: dict = field(default_factory=dict)
 
+    def __post_init__(self):
+        if not isinstance(self.git_timeout_seconds, (int, float)) or isinstance(self.git_timeout_seconds, bool) \
+                or not 0 < self.git_timeout_seconds <= 600:
+            raise ValueError("invalid git timeout")
+
     # ------------------------------------------------------------ git
     def _git(self, *args, cwd: Path | None = None, check=True, env=None) -> subprocess.CompletedProcess:
         e = {**os.environ, "GIT_TERMINAL_PROMPT": "0", **(env or {})}
-        return subprocess.run(["git", *args], cwd=cwd or self.workdir, capture_output=True, text=True, check=check, env=e)
+        return subprocess.run(["git", *args], cwd=cwd or self.workdir, capture_output=True, text=True, check=check,
+                              env=e, timeout=self.git_timeout_seconds)
 
     def open(self) -> "Store":
         """Clone the ledger (or bring an existing clone to the remote's state), load and verify the chain."""
@@ -450,11 +457,32 @@ class Store:
 
     # ------------------------------------------------------------ plain commits of private files
     def put_files(self, files: dict, message: str) -> None:
-        """Commit private files that are not records (the run log, the heartbeat copy)."""
+        """Commit diagnostics without replacing logs or regressing the heartbeat.
+
+        Each retry chooses paths and derives the heartbeat from the reloaded
+        chain. A competing writer's commit can therefore be retained in full.
+        Reused log names with different bytes get a content-addressed sibling;
+        the existing file is never overwritten. Each writer needs its own clone.
+        """
         def put():
             for rel, data in files.items():
+                if rel == "heartbeat.json":
+                    beats = self.of_type("heartbeat")
+                    if not beats:
+                        raise StoreError("heartbeat cache requires a durable heartbeat")
+                    latest = max(date.fromisoformat(r["payload"]["asof"]) for r in beats)
+                    data = json.dumps({"asof": latest.isoformat()}, separators=(",", ":")).encode()
                 p = self.workdir / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
+                if rel.startswith("logs/") and p.exists():
+                    if p.read_bytes() == data:
+                        continue
+                    digest = hashlib.sha256(data).hexdigest()
+                    p = p.with_name(f"{p.stem}-{digest}{p.suffix}")
+                    if p.exists():
+                        if p.read_bytes() != data:
+                            raise StoreError("private log digest collision")
+                        continue
                 p.write_bytes(data)
 
         self._transact(message, put)
@@ -476,7 +504,15 @@ class Store:
         scratch = Path(scratch)
         if scratch.exists():
             subprocess.run(["rm", "-rf", str(scratch)], check=True)
-        r = subprocess.run(["git", "clone", "-q", "--branch", BRANCH, url, str(scratch)], capture_output=True, text=True)
+        r = self._git("clone", "-q", "--branch", BRANCH, url, str(scratch), check=False)
         if r.returncode != 0:
             return {"status": "unreachable"}
-        return verify_pair(self._records, read_lines(scratch / CHAIN))
+        result = verify_pair(self._records, read_lines(scratch / CHAIN))
+        if result["status"] == "equal":
+            # Logs, raw captures and journal/heartbeat files are not all bound
+            # by the chain head. Certify the complete committed tree too.
+            primary_tree = self._git("rev-parse", "HEAD^{tree}").stdout.strip()
+            mirror_tree = self._git("rev-parse", "HEAD^{tree}", cwd=scratch).stdout.strip()
+            if primary_tree != mirror_tree:
+                result["status"] = "files_differ"
+        return result

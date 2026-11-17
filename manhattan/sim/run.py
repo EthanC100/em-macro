@@ -4,6 +4,8 @@
     python -m manhattan.sim.run --plan development --reps-std 16 --reps-hb 4 --label pilot
     python -m manhattan.sim.run --scenario H01 --size STD --reps 2000 --confirm 1     # needs the tag
     python -m manhattan.sim.run --prereg v2 --plan development                        # v1, with v2 for what v2 changed
+    python -m manhattan.sim.run --prereg v2 --scenario D05 --size HB --first 100 --reps 150 --label part \
+        --time-budget-minutes 300                                                     # one piece of a run made in pieces
 
 Every replication's record is appended to ``results/manhattan_sim/reps/<scenario>_<size>_<branch>.jsonl`` as soon
 as it finishes, with the hash of the simulation code that produced it. A later call **continues** from the
@@ -12,6 +14,19 @@ made by different code are never pooled. Every call adds a start and an end reco
 
 ``--reps`` is the total wanted. Fewer than the pre-registered count (2,000 at STD and LONG, 400 at HB) is a
 pilot and is labelled as one everywhere.
+
+**A run made in pieces** (``--first``, ``--label part``): replications ``first`` to ``reps − 1`` only. Seeds
+depend on the replication number alone, so pieces made on different machines are the replications one machine
+would have made; ``manhattan.sim.collect`` puts them together and says what is missing. A piece is not a pilot
+and not a full run, and is labelled ``part``.
+
+**A time budget** (``--time-budget-minutes``): no new replication is started once it is spent; those in progress
+are finished and saved, the run is logged as ``interrupted`` with the reason, and the exit code is 75 ("try
+again": the next call continues). Replications are handed to the worker processes one at a time as workers
+come free, never all at once, so a stop, a failure or Ctrl-C leaves at most one replication per worker to
+finish. The run log's three end statuses keep their meaning: ``completed`` (every replication asked for is on
+file), ``failed`` (a replication raised; logged with the reason, then raised) and ``interrupted`` (stopped
+before the end by the budget or by the keyboard).
 
 ``--prereg v2`` runs the parts that docs/manhattan/SIM_PREREG_v2.md changed with Protocol v3.1's code: D11 (the
 hedge-aware SPA test), its hedged twins ``D01h`` ... ``D08h`` and every scenario at HB (the analytic hierarchical
@@ -29,7 +44,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
 
 from manhattan import prereg, prereg_v2
@@ -49,6 +64,8 @@ CODE_FILES_V2_HB = CODE_FILES + ("manhattan/stats/tiers.py", "manhattan/sim/hb.p
                                  "manhattan/stats/hier_analytic.py", "manhattan/stats/dormancy.py",
                                  "manhattan/sim/hb_v2.py")
 PREREGS = ("v1", "v2")
+SHORT_OF_COUNT = ("pilot", "test", "part")      # labels under which fewer replications than pre-registered may be run
+EXIT_BUDGET = 75                                # EX_TEMPFAIL: the time budget ended the call; call again to continue
 
 
 def route(scenario: str, size: str, prereg_version: str = "v1") -> str:
@@ -97,9 +114,13 @@ def load_reps(scenario: str, size: str, branch: int = seeds.DEVELOPMENT, out: Pa
     return [seen[k] for k in sorted(seen)]
 
 
+def _ignore_sigint():
+    """Worker start-up: Ctrl-C goes to the parent alone, which stops handing out replications."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
 def _one(args):
     scenario, size, rep, branch, sha, version = args
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
     if version == "v2":
         if size == "HB":
             from . import hb_v2
@@ -117,8 +138,14 @@ def _one(args):
 
 def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = None, confirm: int | None = None,
                  workers: int = 1, out: Path = OUT, log: Path | None = None, quiet: bool = False,
-                 pooled_rerun: bool = False, prereg_version: str = "v1") -> list[dict]:
-    """Bring a scenario run up to ``reps`` replications. Returns all of this code's replication records."""
+                 pooled_rerun: bool = False, prereg_version: str = "v1", first: int = 0,
+                 deadline: float | None = None, outcome: dict | None = None) -> list[dict]:
+    """Bring a scenario run up to ``reps`` replications. Returns all of this code's replication records.
+
+    ``first``: run replications ``first`` to ``reps − 1`` only (a piece of a run made in pieces; label ``part``).
+    ``deadline``: a ``time.time()`` value after which no new replication is started (a time budget).
+    ``outcome``: a dictionary that receives ``status`` (the run log's end status), ``reason``, ``completed`` and
+    ``left`` (replications asked for and not on file when the call returns)."""
     twin = criteria_v2.is_twin(scenario)
     if twin and prereg_version != "v2":
         raise SystemExit(f"{scenario} is a scenario of SIM_PREREG_v2: pass --prereg v2")
@@ -129,18 +156,27 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
     held = world.is_heldout(scenario)
     if not held and not twin and size not in world.SCENARIOS[scenario].sizes:
         raise SystemExit(f"{scenario} is not pre-registered at size {size} (SIM_PREREG section 3.1)")
+    if not 0 <= first <= reps:
+        raise SystemExit(f"--first {first} must lie between 0 and --reps {reps}")
     version = route(scenario, size, prereg_version)
     branch = seeds.confirmation_branch(confirm, pooled_rerun) if confirm is not None else seeds.DEVELOPMENT
     need = criteria_v2.replications(scenario, size)
-    label = label or ("pilot" if reps < need else ("confirmation" if confirm else "full"))
-    if reps < need and label not in ("pilot", "test"):
-        raise SystemExit(f"{reps} replications is fewer than the pre-registered {need}: label it pilot")
+    whole = first == 0 and reps >= need
+    label = label or ("part" if first else ("pilot" if reps < need else ("confirmation" if confirm else "full")))
+    if not whole and label not in SHORT_OF_COUNT:
+        raise SystemExit(f"{reps - first} replications is fewer than the pre-registered {need}: label it pilot"
+                         + (" (or part, for a piece of a run made in pieces)" if first else ""))
     code = code_hash(size, version=version)
     log = log or out / "runs.jsonl"
     done = load_reps(scenario, size, branch, out, code, version)
-    todo = [r for r in range(reps) if r not in {d["rep"] for d in done}]
+    have = {d["rep"] for d in done}
+    todo = [r for r in range(first, reps) if r not in have]
     options = {"code": code, "already_on_file": len(done), "to_run": len(todo), "workers": workers,
                "required_replications": need}
+    if first:
+        options["first"] = first
+    if deadline is not None:
+        options["time_budget_seconds"] = round(max(0.0, deadline - time.time()), 1)
     if version == "v2":             # refuses to start if SIM_PREREG_v2.md no longer matches its recorded hash
         options.update(prereg_version="v2", prereg_v2_sha256=prereg_v2.prereg_v2_hash(),
                        protocol_v31_sha256=prereg_v2.protocol_v31_hash())
@@ -152,7 +188,9 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
     path = reps_path(scenario, size, branch, out, version)
     path.parent.mkdir(parents=True, exist_ok=True)
     sha = seeds.prereg_hash()
-    completed, status, t0 = 0, "completed", time.time()
+    completed, status, reason, t0 = 0, "completed", "", time.time()
+    spent = lambda: deadline is not None and time.time() >= deadline
+    jobs = [(scenario, size, r, branch, sha, version) for r in todo]
     try:
         with path.open("a", encoding="utf-8") as f:
             def save(r):
@@ -165,25 +203,68 @@ def run_scenario(scenario: str, size: str, reps: int, *, label: str | None = Non
                 heartbeat(out, scenario=scenario, size=size, on_file=len(done), wanted=reps, run_id=rec["run_id"])
                 if not quiet:
                     print(f"{scenario} {size} rep {r['rep']} done ({len(done)}/{reps}, {time.time() - t0:.0f}s)", flush=True)
-            jobs = [(scenario, size, r, branch, sha, version) for r in todo]
+
             if workers <= 1:
                 for j in jobs:
+                    if spent():
+                        status, reason = "interrupted", "time budget reached"
+                        break
                     save(_one(j))
             else:
-                with ProcessPoolExecutor(max_workers=workers) as pool:
-                    for fut in as_completed([pool.submit(_one, j) for j in jobs]):
-                        save(fut.result())
+                # lazy submission: at most one replication per worker is ever in flight, so a budget, a failure or
+                # Ctrl-C stops the pool after those, with their records saved
+                pool = ProcessPoolExecutor(max_workers=workers, initializer=_ignore_sigint)
+                pending, nxt, failure = set(), 0, None
+                try:
+                    while True:
+                        while failure is None and status == "completed" and len(pending) < workers and nxt < len(jobs):
+                            if spent():
+                                status, reason = "interrupted", "time budget reached"
+                                break
+                            pending.add(pool.submit(_one, jobs[nxt]))
+                            nxt += 1
+                        if not pending:
+                            break
+                        try:
+                            finished, pending = wait(pending, return_when=FIRST_COMPLETED)
+                        except KeyboardInterrupt:           # stop handing out work; finish and save what is in flight
+                            if status == "interrupted" and reason == "keyboard":
+                                raise                       # a second Ctrl-C: abandon them
+                            status, reason = "interrupted", "keyboard"
+                            print("stopping: finishing the replications in progress (Ctrl-C again to abandon them)",
+                                  file=sys.stderr, flush=True)
+                            continue
+                        for fut in finished:
+                            try:
+                                save(fut.result())
+                            except Exception as e:          # keep the others' records, then fail
+                                failure = failure or e
+                    if failure is not None:
+                        raise failure
+                except BaseException:
+                    for proc in list(getattr(pool, "_processes", {}).values()):       # nothing left worth waiting for
+                        proc.terminate()
+                    raise
+                finally:
+                    pool.shutdown(wait=True, cancel_futures=True)
+            if reason == "keyboard":
+                raise KeyboardInterrupt
     except KeyboardInterrupt:
-        status = "interrupted"
+        status, reason = "interrupted", "keyboard"
         raise
     except Exception as e:                                   # logged, then raised: a failed run stays on record
-        status = f"failed"
-        runlog.finish(rec, "failed", completed, path=log, extra={"reason": repr(e)[:300]})
+        status = "failed"
+        runlog.finish(rec, "failed", completed, path=log, extra={"reason": repr(e)[:300], "on_file": len(done)})
         raise
     finally:
+        left = len([r for r in range(first, reps) if r not in {d["rep"] for d in done}])
         if status != "failed":
-            runlog.finish(rec, status, completed, path=log,
-                          extra={"seconds": round(time.time() - t0, 1), "on_file": len(done)})
+            extra = {"seconds": round(time.time() - t0, 1), "on_file": len(done)}
+            if status == "interrupted":
+                extra.update(reason=reason, left=left)
+            runlog.finish(rec, status, completed, path=log, extra=extra)
+        if outcome is not None:
+            outcome.update(status=status, reason=reason, completed=completed, left=left)
     return sorted(done, key=lambda r: r["rep"])
 
 
@@ -280,6 +361,11 @@ def main(argv=None) -> int:
     ap.add_argument("--scenario")
     ap.add_argument("--size", choices=list(world.SIZES))
     ap.add_argument("--reps", type=int)
+    ap.add_argument("--first", type=int, default=0,
+                    help="run replications --first to --reps − 1 only: a piece of a run made in pieces (label: part)")
+    ap.add_argument("--time-budget-minutes", type=float, default=None,
+                    help="start no new replication after this many minutes; those in progress are finished and "
+                         f"saved, the run is logged as interrupted and the exit code is {EXIT_BUDGET}")
     ap.add_argument("--plan", choices=["development"])
     ap.add_argument("--sizes", default="STD,LONG,HB", help="with --plan: which sizes to run")
     ap.add_argument("--only", default="", help="with --plan: comma-separated scenario ids")
@@ -313,20 +399,33 @@ def main(argv=None) -> int:
             res = v10a_check(out=a.out)
             print(json.dumps(res))
             return 0 if all(v["identical"] for v in res["scenarios"].values()) else 1
+        deadline = None if a.time_budget_minutes is None else time.time() + 60.0 * a.time_budget_minutes
+        outcome: dict = {}
+
+        def out_of_time() -> int:
+            print(f"time budget reached with {outcome.get('left', 'some')} replications of this run left: "
+                  "run the same command again to continue", file=sys.stderr)
+            return EXIT_BUDGET
+
         if a.plan:
+            if a.first:
+                ap.error("--first goes with --scenario, not with --plan")
             sizes, only = a.sizes.split(","), [s for s in a.only.split(",") if s]
             count = {"STD": a.reps_std, "LONG": a.reps_long or a.reps_std, "HB": a.reps_hb}
             for scenario, size in development_plan(a.prereg):
                 if size in sizes and (not only or scenario in only):
                     n = a.reps_twin if criteria_v2.is_twin(scenario) else count[size]
                     run_scenario(scenario, size, n, label=a.label, workers=a.workers, out=a.out,
-                                 prereg_version=a.prereg)
+                                 prereg_version=a.prereg, deadline=deadline, outcome=outcome)
+                    if outcome.get("status") == "interrupted":
+                        return out_of_time()
             return 0
         if not (a.scenario and a.size and a.reps):
             ap.error("give --scenario, --size and --reps, or --plan")
         run_scenario(a.scenario, a.size, a.reps, label=a.label, confirm=a.confirm, workers=a.workers, out=a.out,
-                     pooled_rerun=a.pooled_rerun, prereg_version=a.prereg)
-        return 0
+                     pooled_rerun=a.pooled_rerun, prereg_version=a.prereg, first=a.first, deadline=deadline,
+                     outcome=outcome)
+        return out_of_time() if outcome.get("status") == "interrupted" else 0
     except runlog.HeldOutRefused as e:
         print(f"refused: {e}", file=sys.stderr)
         return 3

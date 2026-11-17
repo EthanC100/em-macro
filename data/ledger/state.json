@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-13",
- "at": "2026-11-13T13:44:01+00:00",
+ "as_of": "2026-11-17",
+ "at": "2026-11-17T06:15:59+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -16,9 +16,9 @@
   "D002": {
    "action": "No trade",
    "instrument": "USD/BRL",
-   "note": "",
-   "outcome": "",
-   "status": "open"
+   "note": "Auto-resolved (stop hit) on 2026-11-16: exit 5.7324 BRL per USD marked 2026-11-16 (daily) from bcb_sgs 1 https://api.bcb",
+   "outcome": "wrong",
+   "status": "resolved"
   },
   "D003": {
    "action": "Buy",
@@ -77,10 +77,10 @@
   }
  },
  "index": {
-  "algorithm v1.0": 100.0477,
+  "algorithm v1.0": 99.6704,
   "algorithm v1.1": 100.0,
-  "janus": 99.6306,
-  "me": 99.396
+  "janus": 99.8783,
+  "me": 99.3752
  },
  "janus": {
   "J001": {
@@ -93,23 +93,23 @@
   "J002": {
    "direction": "long",
    "instrument": "GB10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.2137,
+   "reason": "C08 rule 5: discretionary position closed",
+   "status": "closed"
   },
   "J003": {
    "direction": "short",
    "instrument": "US10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0097,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J004": {
    "direction": "short",
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J005": {
    "direction": "short",
@@ -135,16 +135,16 @@
   "J008": {
    "direction": "short",
    "instrument": "GBP",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0042,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J009": {
    "direction": "long",
    "instrument": "JPY",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0115,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J010": {
    "direction": "short",
@@ -163,39 +163,39 @@
   "J012": {
    "direction": "short",
    "instrument": "MXN",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0246,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J013": {
    "direction": "short",
    "instrument": "US10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J014": {
    "direction": "short",
    "instrument": "GBP",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J015": {
    "direction": "long",
    "instrument": "JPY",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J016": {
    "direction": "short",
    "instrument": "MXN",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   }
  },
  "janus_no_trades": 8,
- "latest_mark": "2026-11-30"
+ "latest_mark": "2026-11-17"
 }

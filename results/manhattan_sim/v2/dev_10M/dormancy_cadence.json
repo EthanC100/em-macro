@@ -1,0 +1,389 @@
+{
+ "paths": 4000,
+ "rows": [
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": -0.2,
+   "retired": 0.1885,
+   "ever_dormant": 0.1935,
+   "dormant_at_end": 0.1865
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.0,
+   "retired": 0.08975,
+   "ever_dormant": 0.0975,
+   "dormant_at_end": 0.085
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.25,
+   "retired": 0.026,
+   "ever_dormant": 0.03225,
+   "dormant_at_end": 0.02225
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.3,
+   "retired": 0.017,
+   "ever_dormant": 0.0215,
+   "dormant_at_end": 0.0135
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.4,
+   "retired": 0.012,
+   "ever_dormant": 0.01525,
+   "dormant_at_end": 0.00975
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.5,
+   "retired": 0.00625,
+   "ever_dormant": 0.009,
+   "dormant_at_end": 0.00375
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 0.75,
+   "retired": 0.00075,
+   "ever_dormant": 0.00275,
+   "dormant_at_end": 0.0005
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 0,
+   "edge": 1.0,
+   "retired": 0.0,
+   "ever_dormant": 0.0005,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": -0.2,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.0,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.25,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.3,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.4,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.5,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 0.75,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "four dates (years 2, 4, 7, 10)",
+   "freeze_year": 5,
+   "edge": 1.0,
+   "retired": 0.0,
+   "ever_dormant": 0.0,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": -0.2,
+   "retired": 0.37625,
+   "ever_dormant": 0.41225,
+   "dormant_at_end": 0.37025
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.0,
+   "retired": 0.1885,
+   "ever_dormant": 0.2235,
+   "dormant_at_end": 0.183
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.25,
+   "retired": 0.0625,
+   "ever_dormant": 0.09575,
+   "dormant_at_end": 0.0595
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.3,
+   "retired": 0.041,
+   "ever_dormant": 0.0735,
+   "dormant_at_end": 0.0385
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.4,
+   "retired": 0.022,
+   "ever_dormant": 0.04325,
+   "dormant_at_end": 0.01825
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.5,
+   "retired": 0.0135,
+   "ever_dormant": 0.02975,
+   "dormant_at_end": 0.01275
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 0.75,
+   "retired": 0.0005,
+   "ever_dormant": 0.0065,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 0,
+   "edge": 1.0,
+   "retired": 0.0,
+   "ever_dormant": 0.00175,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": -0.2,
+   "retired": 0.17325,
+   "ever_dormant": 0.18625,
+   "dormant_at_end": 0.171
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.0,
+   "retired": 0.10125,
+   "ever_dormant": 0.1125,
+   "dormant_at_end": 0.097
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.25,
+   "retired": 0.0395,
+   "ever_dormant": 0.04725,
+   "dormant_at_end": 0.03775
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.3,
+   "retired": 0.029,
+   "ever_dormant": 0.037,
+   "dormant_at_end": 0.02675
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.4,
+   "retired": 0.01725,
+   "ever_dormant": 0.02425,
+   "dormant_at_end": 0.0155
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.5,
+   "retired": 0.01225,
+   "ever_dormant": 0.01775,
+   "dormant_at_end": 0.0105
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 0.75,
+   "retired": 0.00275,
+   "ever_dormant": 0.00575,
+   "dormant_at_end": 0.002
+  },
+  {
+   "calendar": "every year",
+   "freeze_year": 5,
+   "edge": 1.0,
+   "retired": 0.00125,
+   "ever_dormant": 0.002,
+   "dormant_at_end": 0.0005
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": -0.2,
+   "retired": 0.478,
+   "ever_dormant": 0.561,
+   "dormant_at_end": 0.46225
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.0,
+   "retired": 0.27725,
+   "ever_dormant": 0.362,
+   "dormant_at_end": 0.26075
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.25,
+   "retired": 0.086,
+   "ever_dormant": 0.1615,
+   "dormant_at_end": 0.07725
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.3,
+   "retired": 0.064,
+   "ever_dormant": 0.13075,
+   "dormant_at_end": 0.0525
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.4,
+   "retired": 0.0395,
+   "ever_dormant": 0.097,
+   "dormant_at_end": 0.03075
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.5,
+   "retired": 0.01475,
+   "ever_dormant": 0.05675,
+   "dormant_at_end": 0.0115
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 0.75,
+   "retired": 0.00325,
+   "ever_dormant": 0.01925,
+   "dormant_at_end": 0.002
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 0,
+   "edge": 1.0,
+   "retired": 0.00025,
+   "ever_dormant": 0.008,
+   "dormant_at_end": 0.0
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": -0.2,
+   "retired": 0.29,
+   "ever_dormant": 0.3485,
+   "dormant_at_end": 0.27875
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.0,
+   "retired": 0.161,
+   "ever_dormant": 0.2105,
+   "dormant_at_end": 0.15225
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.25,
+   "retired": 0.068,
+   "ever_dormant": 0.11075,
+   "dormant_at_end": 0.06225
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.3,
+   "retired": 0.06125,
+   "ever_dormant": 0.0995,
+   "dormant_at_end": 0.05575
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.4,
+   "retired": 0.0395,
+   "ever_dormant": 0.06825,
+   "dormant_at_end": 0.03675
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.5,
+   "retired": 0.02675,
+   "ever_dormant": 0.052,
+   "dormant_at_end": 0.024
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 0.75,
+   "retired": 0.00625,
+   "ever_dormant": 0.01875,
+   "dormant_at_end": 0.00425
+  },
+  {
+   "calendar": "every quarter (40 reviews)",
+   "freeze_year": 5,
+   "edge": 1.0,
+   "retired": 0.00225,
+   "ever_dormant": 0.008,
+   "dormant_at_end": 0.002
+  }
+ ]
+}
