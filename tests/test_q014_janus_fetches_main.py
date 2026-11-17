@@ -114,6 +114,7 @@ def test_q014_failed_fetch_still_writes_the_report_and_exits_0(env, monkeypatch)
     monkeypatch.setattr(M, "v1_rules_state", lambda *a, **k: None)
     monkeypatch.setattr(M, "v1_rules_section", lambda *a, **k: ["fixture"])
     monkeypatch.setattr(M, "lab_section", lambda *a, **k: ["fixture"])
+    monkeypatch.setattr(M, "status_section", lambda *a, **k: (["fixture"], []))   # no network
     assert M.main(["--date", TODAY.isoformat()]) == 0
     text = (work / f"results/night/morning/{TODAY.isoformat()}.md").read_text(encoding="utf-8")
     c05 = [l for l in text.splitlines() if "C05: " in l]

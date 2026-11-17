@@ -19,6 +19,12 @@ mof_jgb (Japan Ministry of Finance JGB curve), mindicador, datos_gov_co, em_macr
 repository), panel_daily, panel_monthly (the project's own panels, refreshed monthly) and spread (leg
 minus leg, in bp).
 
+No mark is dated after its run's day (2026-11-17, after the site showed CLP "latest mark 30 Nov 2026" from 11 Nov):
+every source, primary or fallback, keeps only observations dated on or before the day of the run (a panel month that
+has not ended is dated at its month end and is skipped; datos.gov.co's TRM for tomorrow waits for tomorrow's run), and
+the marks file never holds a row dated after the day it was fetched (``future_dated``: ``read_marks`` leaves such rows
+out, so every reader skips them and the next ``write_marks`` drops them from the file).
+
 Which marks may act on a position (2026-11-06, after D001 was shown at a 30 Sep monthly average):
 only a ``daily`` mark that is not stale and is not a carried-forward previous mark can trigger a stop
 or a horizon close (``mark_can_act``). A monthly mark is a monthly *average* dated at the month end;
@@ -550,15 +556,16 @@ def fetch_instrument(row: dict, by_id: dict[str, dict], results: dict[str, dict]
                 pts: list = []
                 d, v, url = _fetch_one(source, ident, get, today, pts)
                 note = ""
-                if tag and d > today:
-                    # Q006: a fallback is never dated after the run's day (a panel month that has not ended is
-                    # dated at its month end): use the source's last observation on or before today
+                if d > today:
+                    # no mark after the run's day, from any source (Q006 for fallbacks; every source since
+                    # 2026-11-17): a panel month that has not ended is dated at its month end, and datos.gov.co
+                    # publishes tomorrow's TRM today. Use the source's last observation on or before today.
                     past = sorted((pd_, pv) for pd_, pv in pts if pd_ <= today)
                     if not past:
-                        raise ValueError(f"fallback {source} {ident} is dated {d}, after today ({today})")
+                        raise ValueError(f"{'fallback ' if tag else ''}{source} {ident} is dated {d}, after today ({today})")
                     d, v = past[-1]
                 if freq == "daily":
-                    hist = sorted({pd_: pv for pd_, pv in pts if (today - pd_).days <= 31}.items())
+                    hist = sorted({pd_: pv for pd_, pv in pts if 0 <= (today - pd_).days <= 31}.items())
                 else:
                     hist = []
             if tag:
@@ -609,34 +616,39 @@ def fetch_all(registry: list[dict], today: date | None = None, get=http_get, onl
 
 
 # ----------------------------------------------------------------------------- marks file
-def read_marks(path: Path = MARKS) -> list[dict]:
+def future_dated(mark: dict | None) -> bool:
+    """A row dated after the day it was fetched (UTC): an observation from the future, which no reader may use and
+    the file never keeps (e.g. CLP 2026-11-30 from a November panel row fetched on 9-13 Nov 2026, COP 2026-11-14 from
+    datos.gov.co fetched on 13 Nov)."""
+    if not mark:
+        return False
+    d, f = parse_date(mark.get("date")), parse_date((mark.get("fetched_at") or "")[:10])
+    return bool(d and f and d > f)
+
+
+def _read_all(path: Path) -> list[dict]:
     if not path.exists():
         return []
     with path.open(newline="", encoding="utf-8") as f:
         return [dict(r) for r in csv.DictReader(f)]
 
 
-def future_fallback(mark: dict | None) -> bool:
-    """Q006: a monthly fallback row dated after the day it was fetched (a panel month end that had not come yet,
-    e.g. CLP's 2026-11-30 row written on 9 Nov). Monthly *primaries* are not fallbacks and keep their dates."""
-    if not mark or (mark.get("frequency") or "").strip().lower() != "monthly":
-        return False
-    if not (mark.get("note") or "").startswith("fallback "):
-        return False
-    d, f = parse_date(mark.get("date")), parse_date((mark.get("fetched_at") or "")[:10])
-    return bool(d and f and d > f)
+def read_marks(path: Path = MARKS, include_future: bool = False) -> list[dict]:
+    """The marks file's rows, without rows dated after the day they were fetched (``future_dated``) unless
+    ``include_future``."""
+    rows = _read_all(path)
+    return rows if include_future else [r for r in rows if not future_dated(r)]
 
 
 def latest_marks(path: Path = MARKS, rows: list[dict] | None = None) -> dict[str, dict]:
-    """Latest mark per instrument (by observation date, then fetch time). A future-dated monthly fallback row
-    (``future_fallback``) never wins over another mark of the instrument (Q006)."""
+    """Latest mark per instrument (by observation date, then fetch time). A row dated after the day it was fetched
+    (``future_dated``, which includes Q006's future monthly fallbacks) is never a mark."""
     out: dict[str, dict] = {}
     for r in (rows if rows is not None else read_marks(path)):
-        if not r.get("value"):
+        if not r.get("value") or future_dated(r):
             continue
         cur = out.get(r["instrument"])
-        if cur is None or (not future_fallback(r), r["date"], r.get("fetched_at", "")) >= \
-                (not future_fallback(cur), cur["date"], cur.get("fetched_at", "")):
+        if cur is None or (r["date"], r.get("fetched_at", "")) >= (cur["date"], cur.get("fetched_at", "")):
             out[r["instrument"]] = r
     return out
 
@@ -645,7 +657,7 @@ def marks_on_or_before(instrument: str, day: date, rows: list[dict]) -> dict | N
     """The latest mark of ``instrument`` dated on or before ``day``."""
     best = None
     for r in rows:
-        if r.get("instrument") != instrument or not r.get("value"):
+        if r.get("instrument") != instrument or not r.get("value") or future_dated(r):
             continue
         d = parse_date(r.get("date"))
         if d and d <= day and (best is None or d >= parse_date(best["date"])):
@@ -656,12 +668,23 @@ def marks_on_or_before(instrument: str, day: date, rows: list[dict]) -> dict | N
 def write_marks(new: list[dict], path: Path = MARKS) -> int:
     """Merge the new marks into the file: one row per (instrument, date), newest fetch wins, except that a row
     which cannot act (``mark_can_act``: a "kept previous mark" copy or a stale re-fetch) never replaces an existing
-    first-hand row for the same instrument and date (Q021). The run's printed log still shows the new note."""
-    rows = read_marks(path)
+    first-hand row for the same instrument and date (Q021). The run's printed log still shows the new note.
+    No row dated after the day it was fetched (``future_dated``) is written, and any already in the file is dropped
+    (named on stderr): the run's own log keeps the record."""
+    everything = _read_all(path)
+    rows = [r for r in everything if not future_dated(r)]
+    for r in everything:
+        if future_dated(r):
+            print(f"marks: dropped {r.get('instrument')} {r.get('date')} (fetched {r.get('fetched_at')}): "
+                  "dated after the day it was fetched", file=sys.stderr)
     keyed = {(r["instrument"], r["date"]): r for r in rows}
-    n = 0
+    n = len(everything) - len(rows)
     for m in new:
         if not m.get("value") or not m.get("date"):
+            continue
+        if future_dated(m):
+            print(f"marks: not written {m.get('instrument')} {m.get('date')} (fetched {m.get('fetched_at')}): "
+                  "dated after the day it was fetched", file=sys.stderr)
             continue
         k = (m["instrument"], m["date"])
         if k in keyed and mark_can_act(keyed[k]) and not mark_can_act(m):
