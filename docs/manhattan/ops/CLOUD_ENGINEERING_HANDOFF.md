@@ -1,5 +1,52 @@
 # Cloud engineering handoff — 2026-11-16
 
+## Phase 3 PIT engineering status — 2026-11-17
+
+This section supersedes earlier next-session/branch instructions below. PRs #72
+and #74 are merged. Phase 3 starts from main
+`e7f6272b2acd5ffdcc01e37a7a27cb221f9077ca` on
+`codex/manhattan-pit-integrity`, for a separate draft PR. The complete audit and
+real-data dependencies are in [PIT_INTEGRITY_AUDIT.md](PIT_INTEGRITY_AUDIT.md);
+reproducible fresh test results are in [CLOUD_VALIDATION.md](CLOUD_VALIDATION.md).
+
+Minimal fixes reject ambiguous same-day vintages and implicit timestamp/lag
+coercion, prevent mutation through returned query arrays, and make daily capture
+replay check source identity, declared configuration and coverage metadata as
+well as the existing raw-byte hash. Current-day first captures received at/after
+close cannot be backdated by warm-up handling. Identical legacy recaptures remain
+unchanged, without claiming their missing configuration provenance is verified.
+New data-only regressions exercise fixed insertion permutations, delayed values,
+revisions, market-close/DST boundaries, corrupt metadata/bytes and legacy replay.
+No source, calendar definition, accounting rule or scientific algorithm changed.
+
+**Engineering consistency is not historical provenance.** Synthetic tests cannot
+establish authentic first-release history. First captured is not first released;
+modeled warm-up/backfill remains reconstructed. The daily engine rejects subday
+inputs until explicitly mapped to approved availability days. Its content hash
+identifies normalized values/dates, not provider truth. New configuration binding
+does not authenticate provider timestamps, holiday code or the timezone database.
+Existing end-of-window accounting marks are a separate revision-policy limitation
+(R-6); as-of query correctness does not certify an entire historical evaluation.
+No real dataset is declared PIT-safe and no real/private data was accessed.
+
+**Governance remains unchanged.** Workflow pinning, the dependency lock and the
+workflow baseline remain unadopted candidates; production schedules remain
+disabled. No protected path, protocol, activation switch or live workflow is
+changed. Genesis proposals made outside approved isolation remain adaptive;
+verified data timing, hashing or later isolation cannot retroactively establish
+blind research. The eventual screening threshold and scientific evaluation
+remain owner/Claude decisions under the applicable protected protocols.
+
+Before real integration: obtain approved source/release/vintage manifests,
+calendar/timestamp and revision policies, licences/access, and Claude's finalized
+F01–F10 data dictionaries and contract mappings. Actual Mac behavior remains
+unverified. Independent code review/merge approval is separate from any data,
+scientific or operational activation approval. No activation is requested here.
+
+Next session: reverify main/PR head and CI, read CLAUDE.md and this audit, review
+these bounded corrections without certifying historical data or changing research
+rules. Preserve candidate/unadopted status and all disabled operational gates.
+
 ## Phase 2 engineering status — 2026-11-17
 
 PR #72 was merged by the owner at `9698b131413f798f9b752321c86b2ee44341aed9`.

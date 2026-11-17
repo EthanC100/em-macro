@@ -246,6 +246,14 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                     s.write([ST.Intent("capture_failed", ("capture_failed", sid, cfg.asof.isoformat()),
                                        {"source": sid, "asof": cfg.asof.isoformat()})], f"capture failed {sid}")
                     continue
+                have = s.get(it.key)
+                if have is not None and "source_definition" not in have["payload"]:
+                    legacy_payload = {k: v for k, v in it.payload.items() if k != "source_definition"}
+                    if have["payload"] == legacy_payload:
+                        # Preserve an identical legacy capture without claiming
+                        # that its source definition has now been verified.
+                        ok.append(sid)
+                        continue
                 res = s.write([it], f"capture {sid}", files=files)
                 new_caps += res["appended"]
                 ok.append(sid)

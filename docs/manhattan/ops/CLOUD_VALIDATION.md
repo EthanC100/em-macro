@@ -1,5 +1,101 @@
 # Cloud validation — 2026-11-16
 
+## Phase 3 PIT validation — 2026-11-17
+
+Branch: `codex/manhattan-pit-integrity`. Base main:
+`e7f6272b2acd5ffdcc01e37a7a27cb221f9077ca` (owner's merged PR #74).
+Fresh environment: **CPython 3.12.14, Linux 6.18.57 x86_64**. No dependency,
+workflow, lock or platform support change. Older phase results below are retained
+as history, not substituted for these fresh runs. The audit and real-data
+limitations are in [PIT_INTEGRITY_AUDIT.md](PIT_INTEGRITY_AUDIT.md).
+
+### Regression evidence and focused suites
+
+The initial data-only regression run against unchanged source returned **27
+failed, 11 passed** (exit 1). It reproduced ambiguous same-vintage values,
+missing/intraday cutoff acceptance, mutation through returned arrays, coerced
+lags, naive capture times and missing replay metadata validation. Existing hash
+checks and ordinary revision handling passed. Subsequent boundary/compatibility
+cases caught current-day after-close backdating and identical legacy recapture
+conflicts. These are corrected without changing accounting or source definitions.
+
+Final broad focused run:
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH \
+MANHATTAN_RUNNER_WHEELHOUSE=/tmp/manhattan-runner-wheels \
+PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider \
+  tests/test_manhattan_pit_integrity.py tests/test_manhattan_engine.py \
+  tests/test_manhattan_factors.py tests/test_manhattan_ops_*.py \
+  --junitxml=/tmp/manhattan-pit-final-targeted.xml \
+  > /tmp/manhattan-pit-final-targeted.log 2>&1
+```
+
+**Exit 0; 324 passed, 0 failed/skipped/errors; 112.43 seconds; 1 warning.**
+This includes 54 PIT regressions and all 232 existing ops tests, including the
+clean, hash-locked runner installation and synthetic probe. The existing engine
+and factor tests remain intact. No private snapshots or new strategies were used.
+
+Two additional fabricated FRED-format tests (nonfinite/conflicting quotes and
+missing-marker preservation) were added after broad/full-suite collection,
+without changing implementation. The final PIT file was then run in full:
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider tests/test_manhattan_pit_integrity.py \
+  --junitxml=/tmp/manhattan-pit-final-unit.xml \
+  > /tmp/manhattan-pit-final-unit.log 2>&1
+```
+
+**Exit 0; 56 passed, 0 failed/skipped/errors; 1.83 seconds; 1 warning.**
+The warning is NumPy's generic-NaT unit-comparison deprecation in a negative-test
+fixture. It is not a failure or a skipped integrity case. These overlapping totals
+must not be added as though they were distinct tests.
+
+### Complete suite and unchanged security controls
+
+```bash
+PATH=/tmp/manhattan-venv/bin:$PATH \
+MANHATTAN_RUNNER_WHEELHOUSE=/tmp/manhattan-runner-wheels \
+EM_MACRO_DATA=/nonexistent/em-macro-data \
+DATA_REPO_URL=/nonexistent/em-macro-data.git \
+PYTHONDONTWRITEBYTECODE=1 \
+python -m pytest -q -p no:cacheprovider \
+  --junitxml=/tmp/manhattan-pit-final-full.xml \
+  > /tmp/manhattan-pit-final-full.log 2>&1
+```
+
+**Exit 0; 1,751 passed, 132 skipped, 0 failed, 0 errors; 720.84 seconds;
+11 warnings.** All **86 unchanged Q019 security tests passed**, with no skips.
+Skip categories: 125 unavailable private Norgate snapshots, 3 unavailable optional
+numpyro imports, 1 unavailable optional reportlab import, and 3 explicit opt-ins
+(slow model compilation, full sweep, full real-data reproduction). None was
+silently treated as passing. Warnings comprise the one negative-NaT fixture
+warning and existing synthetic numerical warnings; no security guarantee was
+weakened or platform failure reclassified.
+
+The earlier full attempt was deliberately interrupted to include the final
+legacy-recapture correction (exit 2); it is not counted as a successful run.
+No implementation changed after the final full run started. Its collection
+includes 54 PIT regressions; the two later parser-only cases passed in the final
+56-case file above. No full-reproduction/research opt-in was enabled, no actual
+source fetched, and all new cases use bounded fabricated data/local stores.
+
+Additional checks: `python -m pip check` and
+`git apply --check docs/manhattan/ops/patches/runner-integrity.patch` both exit 0.
+The owner patch remains **unapplied**. Protected-path checking against branch and
+main CODEOWNERS plus `nightshift.protected.ALWAYS` found zero protected delivery
+paths; live workflows/configuration/protocol/data/results paths are unchanged.
+`git diff --check` passes. The dependency lock, candidate baseline, owner switches,
+research protocols and existing security tests are unchanged. No private evidence,
+licensed data, Mac, dispatch, schedule, deployment, freeze or merge was accessed
+or initiated.
+
+GitHub CI is checked read-only after opening the new draft PR; its exact head,
+run URL and completed result belong in the PR status/final handoff. Local success
+above is not evidence of GitHub completion. No manual dispatch or rerun is used.
+
 ## Phase 2 validation — 2026-11-17
 
 Base: `9698b131413f798f9b752321c86b2ee44341aed9` (owner's merge of PR #72,
