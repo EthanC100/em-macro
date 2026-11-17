@@ -4,7 +4,10 @@
  "night": "2026-11-17",
  "runs_used": 2,
  "last_kind": "worker",
- "chain_stopped": null,
+ "chain_stopped": {
+  "reason": "nothing left to do: approved queue empty",
+  "at": "2026-11-18T01:11:41+08:00"
+ },
  "log": [
   {
    "routine": "night-start",
