@@ -82,6 +82,7 @@ def test_report_puts_the_section_on_top_and_failures_in_needs(monkeypatch, tmp_p
     monkeypatch.setattr(M, "ROOT", tmp_path)
     monkeypatch.setattr(M.S, "load", lambda *a, **k: {"log": []})
     monkeypatch.setattr(M.C, "load", lambda *a, **k: cfg)
+    monkeypatch.setattr(M.C, "load_main", lambda *a, **k: cfg)   # Q012: the Usage line reads main's config; no remote
     monkeypatch.setattr(M.C, "now_utc", lambda: NOW)
     for name, val in (("promoted", "no - fixture"), ("merged_into_dev", []), ("v1_rules_state", None),
                       ("v1_rules_section", ["fixture"]), ("lab_section", ["fixture"]), ("janus_section", ["fixture"])):
