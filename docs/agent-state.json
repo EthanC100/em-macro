@@ -1,15 +1,9 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "night-worker",
-  "acquired_at": "2026-11-17T23:35:45+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qdJ44YwAYqv38najuF",
-  "cap": 4,
-  "safe_mode": true
- },
+ "lock": null,
  "night": "2026-11-17",
- "runs_used": 0,
- "last_kind": null,
+ "runs_used": 1,
+ "last_kind": "worker",
  "chain_stopped": null,
  "log": [
   {
@@ -345,6 +339,21 @@
    "commits": [],
    "note": "dev merged main (a1d3185), pushed; filed Q028 (data), Q029 and Q030 (research); approved Q028 and unblocked Q012; none blocked; Janus daily review gap sent to Ethan; worker not fired (exit 6)",
    "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-17T23:35:45+08:00",
+   "finished_at": "2026-11-18T00:07:22+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q012"
+   ],
+   "commits": [],
+   "note": "Q012 implemented, PR #81 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdJ44YwAYqv38najuF",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
