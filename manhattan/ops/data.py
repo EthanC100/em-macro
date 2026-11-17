@@ -34,6 +34,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from manhattan.engine.pit import PitStore, Window
+from manhattan.availability import AvailabilityError, sources_from_spec, validate_source
 
 from . import store as ST
 from . import timing as TM
@@ -49,15 +50,61 @@ class Source:
     fred_id: str | None = None
     series: str | None = None       # for a FRED source: the series name it fills (the dollar value of the currency)
 
+    frequency: str | None = None
+    period_label: str | None = None
+    availability_kind: str | None = None
+    source_reference: str = ""
+    day_mapping: str = ""
+
+    def publication_contract(self) -> dict:
+        return {"name": self.id, "frequency": self.frequency, "period_label": self.period_label,
+                "publication_lag_days": self.lag_days,
+                "availability": {"kind": self.availability_kind,
+                                 "reference": self.source_reference, "day_mapping": self.day_mapping}}
+
+
+def validate_capture_source(source: Source) -> None:
+    validate_source(source.publication_contract())
+    # Current CSV adapters carry no per-vintage release field. Fail closed until
+    # an adapter supplies explicit availability; never infer it from period labels.
+    if source.availability_kind != "daily_lag":
+        raise AvailabilityError("capture adapter requires explicit per-vintage availability")
+
+
+def capture_registry(sources) -> dict[str, Source]:
+    sources = list(sources)
+    for source in sources:
+        validate_capture_source(source)
+    sources_from_spec({"data_sources": [s.publication_contract() for s in sources]})
+    out = {}
+    for source in sources:
+        if source.id in out and out[source.id] != source:
+            raise AvailabilityError("conflicting capture source declarations")
+        out[source.id] = source
+    return out
+
 
 SOURCES = {
-    "synthetic": Source("synthetic", "synthetic", "synthetic", 0, 3),
+    "synthetic": Source("synthetic", "synthetic", "synthetic", 0, 3,
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="deterministic synthetic fixture"),
     # H.10 noon buying rates, local currency per dollar; the series filled is 1 / rate (the dollar value of one unit).
     # FRED posts the H.10 dailies weekly, so the grace is ten days.
-    "fred_DEXBZUS": Source("fred_DEXBZUS", "fred", "us_fed_fx", 1, 10, "DEXBZUS", "fx_BRL"),
-    "fred_DEXMXUS": Source("fred_DEXMXUS", "fred", "us_fed_fx", 1, 10, "DEXMXUS", "fx_MXN"),
-    "fred_DEXSFUS": Source("fred_DEXSFUS", "fred", "us_fed_fx", 1, 10, "DEXSFUS", "fx_ZAR"),
+    "fred_DEXBZUS": Source("fred_DEXBZUS", "fred", "us_fed_fx", 1, 10, "DEXBZUS", "fx_BRL",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
+    "fred_DEXMXUS": Source("fred_DEXMXUS", "fred", "us_fed_fx", 1, 10, "DEXMXUS", "fx_MXN",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
+    "fred_DEXSFUS": Source("fred_DEXSFUS", "fred", "us_fed_fx", 1, 10, "DEXSFUS", "fx_ZAR",
+                           frequency="daily", period_label="observation_date", availability_kind="daily_lag",
+                           day_mapping="calendar-day lag; retrieval mapped by source calendar close",
+                           source_reference="https://www.federalreserve.gov/releases/h10/"),
 }
+SOURCES = capture_registry(SOURCES.values())
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 
 
@@ -80,6 +127,7 @@ def _checked_rows(rows):
 
 def parse(source: Source, raw: bytes) -> list[tuple[str, str, float]]:
     """(series, period, value) rows of a capture. Missing values are skipped (a gap is not a value)."""
+    validate_capture_source(source)
     text = raw.decode("utf-8")
     rows = []
     if source.kind == "synthetic":
@@ -157,6 +205,7 @@ def synthetic_csv(asof: date, seed: int = 0, **kw) -> bytes:
 
 def source_definition(source: Source) -> dict:
     """Declared replay configuration, not proof of provider release history."""
+    validate_capture_source(source)
     cal = TM.calendar(source.calendar)
     return {"schema_version": 1, "source": asdict(source),
             "calendar": {"name": cal.name, "tz": cal.tz, "close": cal.close.isoformat(),

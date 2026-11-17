@@ -20,7 +20,7 @@ from manhattan import ledger as L
 from manhattan import roles, spec
 
 from . import backtest
-from .pit import Window
+from .pit import PitError, Window
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,6 +50,9 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
         raise ValueError("an exploration-role evaluation is also logged as a variant: give log_path")
     if window.role == roles.RESERVE:
         window.require_historical_evidence()
+    if window.role == roles.FORWARD and window.reconstructed:
+        raise PitError("forward evaluation requires per-observation provenance; "
+                       "store-wide reconstructed status cannot attribute forward evidence")
     result = backtest.run(window, strategy)
     s = result.summary()
     win = {"id": window_id or f"{window.domain}:{window.start}:{window.end}", "start": window.start, "end": window.end,

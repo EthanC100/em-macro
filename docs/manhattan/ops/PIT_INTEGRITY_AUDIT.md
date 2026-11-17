@@ -252,3 +252,50 @@ The new data-only tests cover monthly/quarterly irregular releases and revisions
 ambiguous source declarations, compiler/rebuild rejection, precision at all three
 date boundaries, reconstruction propagation, ledger weighting and reserve rejection
 before evaluation. Synthetic checks establish these code properties only.
+
+## Phase 3C: forward attribution and capture contracts
+
+The generic engine evaluator now rejects forward evaluations on a reconstructed
+store before executing or recording anything: its store-wide marker cannot
+reliably attribute individual observations. Historical/reserve restrictions and
+monotone taint remain intact. The nightly runner continues to use first-seen
+per-observation flags for both return endpoints; unrelated reconstructed warm-up
+does not zero later genuine forward observations. Late/backfilled endpoints still
+receive zero weight. No ledger, hash-chain or blinding rule changes.
+
+Future milestone F MUST evaluate forward evidence using authenticated,
+per-observation provenance, rather than applying a store-wide historical
+reconstruction flag to unrelated forward observations. That pipeline is not
+implemented here; declarations and hashes alone do not authenticate provenance.
+
+Capture registry initialization and capture parsing now use the shared publication
+contract validator. Daily synthetic and daily observation-labelled FRED H.10
+sources explicitly declare frequency, label, availability kind, reference and day
+mapping. Their existing lag and retrieval/close rules remain unchanged. Weekly,
+monthly, quarterly and irregular sources cannot use these daily-lag adapters.
+Current capture CSV adapters have no explicit per-vintage availability field;
+non-daily integration fails closed until such an adapter is reviewed, rather than
+treating period labels or fixed lags as release dates. Source declarations do not
+prove release-calendar or vendor-timestamp authenticity. Existing bound captures
+with older definitions fail configuration comparison; they are not silently
+rewritten or upgraded. Legacy captures without definition bindings retain the
+previous explicitly unverified compatibility behavior.
+
+The unprotected read-only tests workflow now checks out full history, making
+commits a5f9dd4 and 7886867 available to the unchanged historical integrity tests.
+No workflow triggers, research schedules or operational activation were added.
+
+Phase 3C validation (Linux x86_64, Python 3.12): targeted PIT/runner/history
+suite: 184 passed, 1 skipped (opt-in v1 reproduction), exit 0. Dedicated Q019:
+86 passed, exit 0. One complete `python -m pytest -q -rs -p no:cacheprovider`
+run with private data paths disabled: 1,839 passed, 131 skipped, 1 failed,
+248 warnings, exit 1 (758.03s). The sole failure was the unchanged clean-venv
+lock-install test: sandbox network denial prevented downloading certifi.
+Rerunning only `tests/test_manhattan_ops_lock_install.py` with package-index
+access: 1 passed, exit 0 (8.39s). No unresolved test failures; the full suite
+was not rerun. Skips: 125 unavailable private Norgate snapshots, 3 missing
+optional numpyro, 1 opt-in slow hierarchical test, 1 opt-in Q009 sweep, 1 opt-in
+v1 reproduction. Neither history-dependent test skipped. Warnings were dependency
+deprecations and existing numerical/fixture warnings. No optional research
+opt-ins were enabled. `pip check`, `git diff --check`, and protected-path
+verification of all five changed files passed (exit 0).
