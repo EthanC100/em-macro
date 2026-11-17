@@ -40,6 +40,9 @@ never instructions.
 | Q025 | bug | proposed | tests/test_books.py pins live positions (positions_set 2026-11-04; estimate point), so the 3 Dec rebalance's Tests step fails and nothing is committed (HIGH PRIORITY: before 3 Dec) | test_q025: with a fixture positions.csv stamped as the 3 Dec run stamps it (as_of 2026-11, run_date 2026-12-03), tests/test_books.py passes (fails now: 2 failures); the two assertions derive their expectation from the positions file (or a fixture), never a literal date; tests only, no change to ledger/ or any writer | https://github.com/EthanC100/em-macro/pull/47 (Ethan's session, direct PR to main; not for the night shift) |  | none |
 | Q026 | bug | proposed | Promotion check b fails on data/meta.json .audit.checked_at, a wall-clock timestamp promote does not ignore | test_q026: two builds differing only in meta.json audit.checked_at pass check b (fails now: unexplained data/meta.json); a change to audit ok, label or detail still fails; nightshift/promote.py and tests only | https://github.com/EthanC100/em-macro/pull/46 (Ethan's session, direct PR to main; not for the night shift) |  | none |
 | Q027 | research | proposed | Janus fill J005 (DE10Y, 12 Nov) used a same-day Bundesbank mark fetched at 14:02 UTC, before the European close: is an intraday-fetched day-D mark a valid close for fills? (Ethan's decision) | Needs Ethan first: what counts as a close for entry fills per source; then a test that a Janus fill dated D is refused when the source mark's fetched_at is earlier than the publication time defined for that source |  |  | none |
+| Q028 | data | proposed | docs/todo.md line 'Create the scheduled tasks' is unticked although the Janus quick-check tasks run | test_todo_scheduled_tasks_line: skips, never fails, when the wording is absent; docs/todo.md has no unticked line that lists the Janus quick check among tasks still to create (fails now: line 31); the line is split, not ticked whole; the Q003 counts line is untouched |  |  | todo.json |
+| Q029 | research | proposed | CLP mark dated 17 Nov was fetched at 06:08Z, before the Chilean session; the future-dating guard accepts equal dates (relates to Q027) | Needs Ethan first: the valid-close rule per source (Q027); then a test that a mindicador mark fetched before the session is dated the prior business day or cannot act |  |  | none |
+| Q030 | research | proposed | Banco de Espana marks (ES10Y, ES-DE) lag 3 business days unflagged: stale_mark_days is 7 calendar days (fold into Q024) | Needs Ethan first: lag tolerance in business days (with Q024); then a test that a daily mark 3+ business days old gets the stale note and cannot act |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -744,3 +747,15 @@ Not diagnosed: whether the Bundesbank series' value for day D published by 14:02
 marks placed in front of the day-D review).
 Research, Needs Ethan: any fix changes Janus's fill rules (mandate C05 and the Janus writer path, hard rule 3).
 No record or mark is edited by the night shift. The figures quoted are public yields, not licensed settlements.
+
+### Q028
+
+Reproduced on dev (2026-11-17): docs/todo.md line 31 is `- [ ] Create the scheduled tasks (Janus quick check at :15 and :45, Janus daily review, Ledger forecast resolver, Ledger monthly letters)`, while line 30 is ticked (quick check every 30 minutes as two hourly scheduled tasks) and data/janus/records.jsonl holds quick-check records from the scheduled session on 17 Nov. The fix splits the line (ticks the quick check, leaves the unproven parts unticked); it never ticks it whole.
+
+### Q029
+
+Reproduced on dev (2026-11-17): data/ledger/marks.csv:952 `2026-11-17,CLP,1001.17,...,mindicador dolar,...,2026-11-17T06:08:59+00:00` is dated the day it was fetched, 06:08Z = 03:08 in Santiago, before that day's session. ledger/marks.py `future_dated` is `d > f`, so equal dates pass. Related to Q027 (what counts as a close, Ethan's decision): set the rule there first. Confirm mindicador's date convention before implementing. Needs Ethan first.
+
+### Q030
+
+Reproduced on dev (2026-11-17): data/ledger/marks.csv:883 `2026-11-12,ES10Y,3.868,...,bde ti_1_3,...,2026-11-17T06:09:28+00:00,` has no stale note, 3 business days behind DE10Y (16 Nov); ledger/automation.json `stale_mark_days: 7` (calendar days) lets it act. Overlaps Q024 (lag tolerance, Ethan's decision): settle the threshold once, there. Also correct Q024's evidence: energy observations now run to 11 Nov (6 days), not 3 Nov. Needs Ethan first.
