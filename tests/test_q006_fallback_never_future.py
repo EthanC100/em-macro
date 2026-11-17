@@ -8,7 +8,9 @@ negative age was never flagged stale. The rules:
    month end on or before the day is, and the usual "never replace a newer daily mark" guard then applies);
 2. a monthly fallback row already in the file dated after the day it was fetched (the existing 30 Nov CLP row)
    never wins over another mark of the instrument: latest marks, marks.json and the books show the newest daily;
-3. a monthly *primary* (an instrument with no daily source) keeps its month-end date, as documented.
+3. (superseded on 2026-11-17: no mark from any source is dated after its run's day) a monthly *primary* (an
+   instrument with no daily source) is dated at the month end of its last *ended* panel month; a month that has not
+   ended is skipped, and a row already in the file dated after the day it was fetched is never a mark.
 Made-up panel and marks in a temporary directory, stubbed sources; never data/ledger or data/processed."""
 import csv
 from datetime import date
@@ -113,18 +115,18 @@ def test_q006_existing_future_fallback_row_never_wins(tmp_path, monkeypatch):
     assert all(h[0] <= "2026-11-06" for h in p["mark_history"]), p["mark_history"]
 
 
-def test_q006_monthly_primaries_keep_month_end_dates(tmp_path, monkeypatch):
-    """An instrument with no daily source is still dated at the month end of its panel value (documented)."""
+def test_q006_monthly_primaries_never_dated_after_today(tmp_path, monkeypatch):
+    """An instrument with no daily source is dated at the month end of its last ended panel month: on 9 Nov the
+    November row (dated 30 Nov) is skipped for October's (2026-11-17, superseding Q006 rule 3)."""
     _use_panel(monkeypatch, _panel(tmp_path))
     out = M.fetch_instrument(ID10Y_ROW, {}, {}, TODAY, mindicador_down, previous={})
-    assert (out["date"], out["value"], out["frequency"], out["note"]) == ("2026-11-30", "6.45", "monthly", ""), out
-    _use_panel(monkeypatch, _panel(tmp_path / "oct", months=("2026-09", "2026-10")))
-    out = M.fetch_instrument(ID10Y_ROW, {}, {}, TODAY, mindicador_down, previous={})
-    assert (out["date"], out["value"], out["frequency"]) == ("2026-10-31", "6.55", "monthly"), out
-    # its rows are not treated as future fallbacks: the 30 Nov primary row stays the latest mark
+    assert (out["date"], out["value"], out["frequency"], out["note"]) == ("2026-10-31", "6.55", "monthly", ""), out
+    # on or after the month end, the month is used
+    out = M.fetch_instrument(ID10Y_ROW, {}, {}, date(2026, 11, 30), mindicador_down, previous={})
+    assert (out["date"], out["value"]) == ("2026-11-30", "6.45"), out
+    # a 30 Nov primary row fetched on 9 Nov (written before the rule) is never the latest mark nor in the series
     prim = {"date": "2026-11-30", "instrument": "ID10Y", "value": "6.45", "unit": "% yield", "frequency": "monthly",
             "source": "panel_monthly y10:IDN", "source_url": "", "fetched_at": "2026-11-09T14:29:14+00:00", "note": ""}
     older = {**prim, "date": "2026-10-31", "value": "6.55"}
-    assert M.latest_marks(rows=[older, prim])["ID10Y"]["date"] == "2026-11-30"
-    assert [x[0].isoformat() for x in BK.MarkBook(rows=[older, prim]).series("ID10Y", all_marks=True)] == \
-        ["2026-10-31", "2026-11-30"]
+    assert M.latest_marks(rows=[older, prim])["ID10Y"]["date"] == "2026-10-31"
+    assert [x[0].isoformat() for x in BK.MarkBook(rows=[older, prim]).series("ID10Y", all_marks=True)] == ["2026-10-31"]

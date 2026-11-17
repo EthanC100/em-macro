@@ -1,6 +1,6 @@
 """The morning report: one phone screen, written after promote (results/night/morning/<Singapore date>.md).
 
-Sections, in order: Promoted to main, Merged into dev, Failed or empty runs, Janus, v1.0 rules (D004), Lab sleeves,
+Sections, in order: Promoted to main, Site and writers on main, Merged into dev, Failed or empty runs, Janus, v1.0 rules (D004), Lab sleeves,
 Explorer findings, Pre-registrations awaiting me, Usage, Needs Ethan (at most 3, each with a recommendation).
 
 v1.0 rules (D004) is read, never written: data/ledger/v1_rules.json on origin/main (ledger/v1_rules.py, written
@@ -15,6 +15,12 @@ ledger.janus (review_status, budget_status, open positions), against mandate C05
 section fetches origin main itself (Q014; timeout, no prompt, git show, never a checkout) and prints "records as of
 <newest recorded_at>". A failed fetch still reports, every line marked "[main not refreshed (fetch failed)]"; with no
 origin/main copy the working tree's records are read and every line is marked "[dev copy]".
+
+Site and writers on main (2026-11-17, after ledger-pages failed for six days with nobody told): the latest run on main
+of ledger-pages (with the published site's own build time, read from its data/meta.json) and of ledger-daily, from
+the public GitHub Actions API (read only, no token, as nightshift.guard), and the Janus checks (latest quick check,
+due every 30 minutes, and the latest daily review) from the same records the Janus section reads. A failing or late
+one is marked FAILING / STALE / LATE and also goes to Needs Ethan; an unreadable source is said, never skipped.
 
 An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
 unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
@@ -36,6 +42,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config as C
+from . import guard as G
 from . import queue as Q
 from . import state as S
 
@@ -208,9 +215,9 @@ def _as_of(recs: list[dict]) -> str:
     return f"{max(ts):%Y-%m-%dT%H:%M}Z" if ts else "no records"
 
 
-def janus_section(today: date) -> list[str]:
+def janus_section(today: date, records: tuple[list[dict], str] | None = None) -> list[str]:
     from ledger import janus as J
-    recs, label = janus_records()
+    recs, label = records if records is not None else janus_records()
     rs, bs = J.review_status(recs, today), J.budget_status(recs, today)
     pos = J.positions(recs)
     open_pos = [k for k, v in pos.items() if (v.get("status") or "") in ("open", "pending")]
@@ -226,6 +233,106 @@ def janus_section(today: date) -> list[str]:
     if last_check:
         lines.append(f"Last quick check {last_check.get('recorded_at', '')[:16]}Z: {_clip_words(last_check.get('result') or '')}")
     return [f"[{label}] {l}" for l in lines] if label else lines
+
+
+# ----------------------------------------------------------------------------- site and writers on main
+ACTIONS_API = f"https://api.github.com/repos/{G.REPO}/actions/workflows"
+SITE_META = "https://ethanc100.github.io/em-macro/data/meta.json"
+WATCHED_WORKFLOWS = (("ledger-pages", "ledger-pages.yml"), ("ledger-daily", "ledger-daily.yml"))
+STALE_HOURS = 30            # both workflows succeed several times a day; a day and a bit with none is stale
+QUICK_CHECK_LATE_HOURS = 2  # quick checks are due every 30 minutes (:15 and :45)
+CONCLUSIVE = ("success", "failure", "timed_out", "startup_failure", "action_required")
+
+
+def _ts(s: str | None) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def _when(t: datetime | None) -> str:
+    return f"{t.astimezone(timezone.utc):%d %b %H:%M}Z" if t else "?"
+
+
+def _ago(t: datetime | None, now: datetime) -> str:
+    if not t:
+        return "?"
+    h = (now - t).total_seconds() / 3600
+    return f"{h:.0f} h ago" if h < 48 else f"{h / 24:.1f} days ago"
+
+
+def workflow_line(name: str, wf: str, now: datetime, fetch=None) -> tuple[str, bool]:
+    """'<name>: ok|FAILING|STALE ...' for the latest completed runs on main, and whether it needs attention."""
+    d = (fetch or G._fetch)(f"{ACTIONS_API}/{wf}/runs?branch=main&per_page=50")
+    if d is None:
+        return f"{name}: status unknown (GitHub Actions API unreadable)", True
+    runs = [r for r in d.get("workflow_runs") or [] if r.get("status") == "completed" and r.get("conclusion") in CONCLUSIVE]
+    if not runs:
+        return f"{name}: no completed run on main among the last 50", True
+    last = runs[0]
+    t = _ts(last.get("run_started_at") or last.get("created_at"))
+    ok = next((r for r in runs if r.get("conclusion") == "success"), None)
+    ok_t = _ts(ok.get("run_started_at") or ok.get("created_at")) if ok else None
+    if last.get("conclusion") == "success":
+        if t and (now - t).total_seconds() > STALE_HOURS * 3600:
+            return f"{name}: STALE - no run on main since #{last.get('run_number')} {_when(t)} ({_ago(t, now)})", True
+        return f"{name}: ok - #{last.get('run_number')} {_when(t)} succeeded", False
+    streak = next((i for i, r in enumerate(runs) if r.get("conclusion") == "success"), len(runs))
+    since = (f"last success #{ok.get('run_number')} {_when(ok_t)} ({_ago(ok_t, now)})" if ok
+             else f"no success in the last {len(runs)} runs")
+    return (f"{name}: FAILING - {streak}{'' if ok else '+'} run(s) in a row ({last.get('conclusion')}, latest #{last.get('run_number')} "
+            f"{_when(t)}); {since}"), True
+
+
+def site_built(now: datetime, fetch=None) -> tuple[str, bool]:
+    """When the published site was built (its data/meta.json built_at), and whether that is stale. An unreadable
+    site is said but not escalated on its own: the ledger-pages line already says whether deploys fail."""
+    m = (fetch or G._fetch)(SITE_META)
+    t = _ts((m or {}).get("built_at"))
+    if not t:
+        return "published site: build time unreadable", False
+    stale = (now - t).total_seconds() > STALE_HOURS * 3600
+    return f"published site built {_when(t)} ({_ago(t, now)}){' STALE' if stale else ''}", stale
+
+
+def janus_checks_line(records: list[dict], label: str, today: date, now: datetime) -> tuple[str, bool]:
+    """The latest quick check (a check record, or a quick-check run) and the latest daily review."""
+    from ledger import janus as J
+    qc = [_ts(r.get("recorded_at")) for r in records
+          if r.get("type") == "check" or (r.get("type") == "run" and r.get("session") == "quick_check")]
+    last = max((t for t in qc if t), default=None)
+    late = not last or (now - last).total_seconds() > QUICK_CHECK_LATE_HOURS * 3600
+    rs = J.review_status(records, today)
+    line = (f"Janus checks: last quick check {_when(last)} ({_ago(last, now)}"
+            + (", LATE: due every 30 min" if late else "") + f"); last daily review {rs['last_date'] or 'none'} "
+            f"({rs['status'].upper() if rs['status'] != 'ok' else 'ok'})")
+    return (f"[{label}] {line}" if label else line), late or rs["status"] != "ok"
+
+
+def status_section(today: date, now: datetime, records: tuple[list[dict], str] | None, fetch=None) \
+        -> tuple[list[str], list[str]]:
+    """The section's lines, and the Needs Ethan lines for what is failing or late."""
+    lines, needs = [], []
+    for name, wf in WATCHED_WORKFLOWS:
+        line, bad = workflow_line(name, wf, now, fetch)
+        if name == "ledger-pages":
+            site, stale = site_built(now, fetch)
+            line, bad = f"{line}; {site}", bad or stale
+        lines.append(line)
+        if bad:
+            needs.append(f"{line.split(':', 1)[0]} not healthy => open its latest failed run on main and fix the cause "
+                         "(ledger-pages: the open ledger-pages-failure issue has the error)")
+    if records is None:
+        lines.append("Janus checks: records unreadable")
+        needs.append("Janus records unreadable => check data/janus/records.jsonl on main")
+    else:
+        line, bad = janus_checks_line(records[0], records[1], today, now)
+        lines.append(line)
+        if bad:
+            needs.append("Janus checks late or failing => check the Janus scheduled tasks ran and committed to main")
+    return lines, needs
 
 
 def v1_rules_state() -> dict | None:
@@ -274,13 +381,20 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     items = Q.parse((ROOT / "docs/queue.md").read_text(encoding="utf-8"))
     used = sum(1 for e in runs if e.get("routine") in S.COUNTED)
     sm = (cfg.get("safe_mode") or {}).get("enabled")
+    try:
+        jr = janus_records()
+    except Exception:  # noqa: BLE001 - an unreadable record file is reported, never a crash
+        jr = None
+    status, status_needs = status_section(day, C.now_utc(), jr)
     L = [f"# Night shift, {night} -> {day.isoformat()}", "",
-         f"**Promoted to main:** {promoted(day)}", "", "**Merged into dev:**"]
+         f"**Promoted to main:** {promoted(day)}", "", "**Site and writers on main:**"]
+    L += [f"- {x}" for x in status]
+    L += ["", "**Merged into dev:**"]
     L += [f"- {m}" for m in merged_into_dev(dev, since)] or ["- nothing"]
     stop = chain_stop_line(st, night)
     bad = ([stop] if stop else []) + verify_runs(runs, dev, rows, nd)
     L += ["", "**Failed or empty runs:**"] + ([f"- {b}" for b in bad] or ["- none (outputs verified)"])
-    L += ["", "**Janus:**"] + [f"- {x}" for x in janus_section(day)]
+    L += ["", "**Janus:**"] + [f"- {x}" for x in janus_section(day, jr)]
     v1 = v1_rules_state()
     L += ["", "**v1.0 rules (D004):**"] + [f"- {x}" for x in v1_rules_section(v1)]
     L += ["", "**Lab sleeves:**"] + [f"- {x}" for x in lab_section(day)]
@@ -292,7 +406,8 @@ def build(day: date, dev: str, needs: list[str]) -> str:
           + f"; queue: {len(Q.approved(items))} approved, {sum(1 for i in items if i['status'] == 'blocked')} blocked"]
     v1_needs = [f"{f} => act on it at the next rebalance (docs/ledger/v1_rules.md); the monitor changes nothing"
                 for f in ((v1 or {}).get("flags") or [])]
-    needs = v1_needs + [n for n in needs if n not in v1_needs]
+    auto = v1_needs + status_needs
+    needs = auto + [n for n in needs if n not in auto]
     L += ["", "**Needs Ethan:**"] + ([f"- {n}" for n in needs[:3]] or ["- nothing"])
     if len(L) > MAX_LINES:
         L = L[:MAX_LINES - 1] + ["(truncated to one screen)"]

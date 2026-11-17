@@ -30,7 +30,7 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | **shadows-setup** (`shadows-setup.yml`) | by hand (run #3 used; Amendment 2 record mode remains) | `GITHUB_TOKEN` | `results/shadows/` (GO_LIVE.json, prelive files) | em-macro-data with `EM_MACRO_DATA_TOKEN` |
 | **private-commitments** (`private-commitments.yml`) | by hand | `GITHUB_TOKEN` | `data/ledger/derivatives.csv`, `data/ledger/seals.jsonl` (K003) | em-macro-data `ledger/commitments.jsonl` (salts) |
 | **v1-rules-monitor** (`v1-rules-monitor.yml`, D004) | after a systematic-monthly run whose `update` job ran and succeeded (`workflow_run`; a run whose due gate skipped the update, and keep-cache runs, do nothing), and by hand | `GITHUB_TOKEN` (retries on a rejected push) | `data/ledger/v1_rules.json`, `data/ledger/v1_rules_history.csv` only (flags; never exposure, never frozen v1.0 files) | dispatches ledger-pages |
-| **ledger-pages** (`ledger-pages.yml`) | every push to main, 06:41 UTC, by hand, dispatched by the others | none (no commit) | deploys GitHub Pages only | |
+| **ledger-pages** (`ledger-pages.yml`) | every push to main, 06:41 UTC, by hand, dispatched by the others | none (no commit) | deploys GitHub Pages only (installs only `requirements-site.txt`) | a failed run on main opens or updates the `ledger-pages-failure` issue, assigned to EthanC100; the next good deploy closes it |
 | ledger-watchdog (`ledger-watchdog.yml`) | 12:17 UTC | none (read only) | alert issues only | |
 
 ### Claude Code scheduled tasks (routines) on this account (list read 2026-11-09)
@@ -104,7 +104,9 @@ main's files directly, so the Janus quick checks (every 30 minutes, all night) n
 4. **05:30 promote**: `python -m nightshift.promote` on the exact tree the PR would produce (main merged with dev):
    (d) conflict-free, (c) no protected path changed on dev, (a) the full suite passes, (b) the Ledger rebuilt from
    scratch on main and on that tree with the same `--today` and the same em-macro-data snapshot matches exactly
-   except for app files the night's merged items list under "ledger diff", and both audit chains verify. Promote
+   except for app files the night's merged items list under "ledger diff", and both audit chains verify, and (e)
+   the site builds on that tree as ledger-pages builds it (`python -m ledger.site_check`: only the standard library
+   and `requirements-site.txt`, no private store; added 2026-11-17 after six days of failed ledger-pages runs). Promote
    opens (or reuses) one PR dev -> main either way and records the checks, naming the PR, on dev. The
    **promote-merge** workflow (`.github/workflows/promote-merge.yml`, main's `nightshift/promote_merge.py`; added
    2026-11-12 because branch rules, and so auto-merge, are not applied) runs when the tests workflow completes on

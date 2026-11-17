@@ -1,0 +1,5 @@
+# Everything `python -m ledger.build` (the Ledger site) needs beyond the standard library. The ledger-pages workflow
+# installs exactly this file before it builds, and ledger/site_check.py builds the site with only these packages
+# importable (tests/test_site_build.py, and check (e) of nightshift/promote.py), so a new import in the build path
+# fails a test before it can stop the published site. Add a package here, not to the workflow.
+pyyaml>=6.0

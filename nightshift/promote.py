@@ -11,6 +11,10 @@ Checks, all on the exact tree the PR would produce (current origin/main merged w
       em-macro-data snapshot (one path, its commit recorded before and after both builds, so the 7-day settlement
       re-request cannot show as a difference), matches exactly, except for app data files that a queue item merged
       tonight lists under "ledger diff". Both audit chains must verify on the merged tree.
+  (e) the site builds on the merged tree as the ledger-pages workflow builds it: ``python -m ledger.site_check``, with
+      only the standard library and requirements-site.txt importable and no private store (2026-11-17: C09's
+      ``import yaml`` stopped every ledger-pages run for six days while (a) and (b), run with every package installed,
+      passed). Its output is the build's own error tail, never data.
 Build stamps (built_at, commit, the audit's checked_at, build id, the service worker's id) are ignored. Differences are reported as file
 names and JSON key paths only, never values: the builds may read licensed settlements, and nothing derived from
 them is printed or written by this module.
@@ -184,6 +188,10 @@ def run(repo: Path, base: str, head: str, today: str, data_store: Path | None, r
             res["checks"]["a_tests"] = {"ok": t.returncode == 0, "summary": tail[0] if tail else t.stderr[-300:]}
         else:
             res["checks"]["a_tests"] = {"ok": False, "skipped": True, "summary": "not run (--skip-tests)"}
+        pg = sh([sys.executable, "-m", "ledger.site_check", "--root", str(wt_merge), "--out", str(work / "app-pages"),
+                 "--today", today], wt_merge, timeout=900)
+        res["checks"]["e_site_build"] = {"ok": pg.returncode == 0,
+                                         "detail": "" if pg.returncode == 0 else _site_error(pg)}
         git(repo, "worktree", "add", "-q", "--detach", str(wt_main), base)
         snap_before = store_head(data_store)
         b1 = build_ledger(wt_main, work / "app-main", today, data_store)
@@ -212,11 +220,22 @@ def run(repo: Path, base: str, head: str, today: str, data_store: Path | None, r
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _site_error(r: subprocess.CompletedProcess) -> str:
+    """The last line of the failed build's error (site_check prints JSON with a "detail" tail), else stderr's."""
+    try:
+        detail = json.loads(r.stdout).get("detail") or ""
+    except ValueError:
+        detail = r.stderr or r.stdout or f"exit {r.returncode}"
+    lines = [l for l in detail.strip().splitlines() if l.strip()]
+    return lines[-1].strip()[:300] if lines else f"exit {r.returncode}"
+
+
 def reasons(res: dict) -> list[str]:
     out = []
     names = {"nothing": "nothing to promote", "d_conflict_free": "(d) merge conflicts",
              "c_protected_paths": "(c) protected paths touched", "a_tests": "(a) test suite",
-             "b_ledger_rebuild": "(b) Ledger rebuild differs", "window": "time or busy writer",
+             "b_ledger_rebuild": "(b) Ledger rebuild differs",
+             "e_site_build": "(e) site does not build as ledger-pages builds it", "window": "time or busy writer",
              "config": "main's config/night.yaml unreadable (fail safe)"}
     for k, v in res.get("checks", {}).items():
         if not v.get("ok"):

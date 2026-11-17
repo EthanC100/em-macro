@@ -101,7 +101,7 @@ from . import capacity as CAP
 from . import janus_fut as JF
 from . import pricing as PX
 from . import settlements as ST
-from .marks import load_registry, mark_can_act, read_marks
+from .marks import future_dated, load_registry, mark_can_act, read_marks
 from .schema import parse_date
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -310,6 +310,8 @@ def series(marks_rows: list[dict], inst: str, actable_only: bool = True) -> list
         if m.get("instrument") != inst or not m.get("value"):
             continue
         if actable_only and not mark_can_act(m):
+            continue
+        if future_dated(m):         # dated after the day it was fetched: never a mark (2026-11-17)
             continue
         d = parse_date(m.get("date"))
         if d:
