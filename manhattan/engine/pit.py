@@ -26,8 +26,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time
 
 import numpy as np
 
@@ -41,11 +42,51 @@ class PitError(ValueError):
 
 
 def _days(x) -> np.ndarray:
-    return np.asarray(x, dtype="datetime64[D]")
+    """Daily dates only: never silently round a release/query timestamp down."""
+    try:
+        raw = np.asarray(x)
+        if raw.dtype.kind == "M":
+            if np.isnat(raw).any():
+                raise PitError("a daily date is missing")
+            result = raw.astype("datetime64[D]")
+            if (raw != result).any():
+                raise PitError("a daily date is missing or contains intraday precision")
+            return result
+        for value in raw.flat:
+            if isinstance(value, np.datetime64):
+                if np.isnat(value) or value != value.astype("datetime64[D]"):
+                    raise PitError("a daily date is missing or contains intraday precision")
+            elif isinstance(value, datetime):
+                if value.tzinfo is not None or value.time() != time.min:
+                    raise PitError("map timestamps to availability days explicitly")
+            elif isinstance(value, date):
+                pass
+            elif not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                raise PitError("a daily date is missing or requires explicit timestamp mapping")
+        result = np.asarray(x, dtype="datetime64[D]")
+        if np.isnat(result).any():
+            raise PitError("a daily date is missing")
+        return result
+    except (TypeError, ValueError, OverflowError) as exc:
+        if isinstance(exc, PitError):
+            raise
+        raise PitError("invalid daily date") from None
 
 
 def _day(x) -> np.datetime64:
-    return np.datetime64(x, "D")
+    result = _days(x)
+    if result.ndim != 0:
+        raise PitError("a query needs one daily date")
+    return result[()]
+
+
+def _lag(value) -> int:
+    try:
+        if isinstance(value, (bool, np.bool_, str)) or int(value) != value or value < 0:
+            raise ValueError
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        raise PitError("a publication lag is a whole number of days, 0 or more") from None
 
 
 class PitStore:
@@ -68,9 +109,7 @@ class PitStore:
         if (available is None) == (lag_days is None):
             raise PitError(f"{series}: give either an availability day for each value or a publication lag, not both or neither")
         if lag_days is not None:
-            if isinstance(lag_days, bool) or int(lag_days) != lag_days or lag_days < 0:
-                raise PitError(f"{series}: a publication lag is a whole number of days, 0 or more")
-            a = p + int(lag_days) * DAY
+            a = p + _lag(lag_days) * DAY
         else:
             a = np.atleast_1d(_days(available))
             if a.shape != p.shape:
@@ -85,7 +124,12 @@ class PitStore:
             p, a, v = (np.concatenate([old[series], new]) for old, new in
                        ((self._period, p), (self._available, a), (self._value, v)))
         order = np.lexsort((np.arange(p.size), a, p))           # by period, then availability, then arrival
-        self._period[series], self._available[series], self._value[series] = p[order], a[order], v[order]
+        p, a, v = p[order], a[order], v[order]
+        same = (p[1:] == p[:-1]) & (a[1:] == a[:-1])
+        if (same & (v[1:].view(np.uint64) != v[:-1].view(np.uint64))).any():
+            raise PitError(f"{series}: conflicting values share one period and availability day")
+        unique = np.r_[True, ~same] if p.size else np.array([], dtype=bool)
+        self._period[series], self._available[series], self._value[series] = p[unique], a[unique], v[unique]
         p, a = self._period[series], self._available[series]
         # the fast path: one value per period, and availability never runs backwards
         self._simple[series] = bool(p.size == 0 or ((np.diff(p) > np.timedelta64(0, "D")).all()
@@ -108,8 +152,8 @@ class PitStore:
             p, a, v = self._period[name], self._available[name], self._value[name]
             order = np.lexsort((v, a, p))                       # insertion order does not matter
             h.update(json.dumps(name).encode("utf-8"))
-            h.update(p[order].astype("int64").tobytes())
-            h.update(a[order].astype("int64").tobytes())
+            h.update(p[order].astype("<i8").tobytes())
+            h.update(a[order].astype("<i8").tobytes())
             h.update(np.ascontiguousarray(v[order], dtype="<f8").tobytes())
         return h.hexdigest()
 
@@ -122,7 +166,7 @@ class PitStore:
         lo = int(np.searchsorted(p, start, "left"))
         if self._simple[series]:
             hi = min(int(np.searchsorted(p, end, "right")), int(np.searchsorted(a, t, "right")))
-            return p[lo:hi], v[lo:hi], a[lo:hi]
+            return p[lo:hi].copy(), v[lo:hi].copy(), a[lo:hi].copy()
         hi = int(np.searchsorted(p, end, "right"))
         p, a, v = p[lo:hi], a[lo:hi], v[lo:hi]
         known = a <= t
@@ -147,7 +191,11 @@ class Window:
     def as_of(self, series: str, t, n: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         """(periods, values) of ``series`` as known at the close of day ``t``: for each period in the window, the
         latest value available on or before ``t``. ``n`` keeps the last ``n`` periods."""
+        if n is not None and (isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < 0):
+            raise PitError("n must be a nonnegative whole number of periods")
         p, v, _ = self._known(series, t)
+        if n == 0:
+            return p[:0], v[:0]
         return (p, v) if n is None else (p[-n:], v[-n:])
 
     def as_of_with_availability(self, series: str, t) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -191,5 +239,8 @@ def lags_from_spec(hypothesis_spec: dict) -> dict[str, int]:
     for src in hypothesis_spec.get("data_sources", []):
         if not isinstance(src, dict) or "name" not in src or "publication_lag_days" not in src:
             raise PitError("every data source needs a name and publication_lag_days")
-        out[src["name"]] = int(src["publication_lag_days"])
+        lag = _lag(src["publication_lag_days"])
+        if src["name"] in out and out[src["name"]] != lag:
+            raise PitError("conflicting publication lags for one source")
+        out[src["name"]] = lag
     return out
