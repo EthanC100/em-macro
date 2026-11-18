@@ -410,6 +410,19 @@ That CI failure was a **genuine regression** (S7 H1), separate from the local Q0
 | local full suite | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,108 passed, 131 skipped, **1 error**, 1,464 s | **1** |
 | remote CI (`pytest` workflow, PR #86) | `python -m pytest -q -p no:cacheprovider` under `bash -eo pipefail` | 2,108 passed, 132 skipped, 0 failed; conclusion **success** | 0 |
 
+**S7 re-review round (`24d3ff9` code, `9b514ce` with the lock-hardening test update).**
+
+| run | command | result | exit |
+|---|---|---|---|
+| N1 counterexample, before / after | scratch script (5 non-designated reserve reads, then designated) | before at `8615c69`: 5 reads, weight 1, reconciled true; after: refused at the first registration, 0 reads | n/a |
+| the 11 original counterexamples, after | `repro_s7.py` | all 11 still blocked | n/a |
+| new defect tests on the old code | copied into an `8615c69` worktree | every N8, N1, N2 and D-12 test fails (22); the clean-history control, the N3 scan self-test and the N4 coverage tests pass (13) | 1 |
+| Phase 4B tests | `test_manhattan_binding_access.py` + `test_manhattan_ops_attempts.py` | 163 collected, all passed (in the next run) | 0 |
+| targeted, crash-injection, access-control and integration | the 19 files of section 16 plus `ops_workflow`, `ops_inputs` | 667 passed, **1 failed**: `test_lock_has_only_exact_versions_and_wheel_hashes` asserted six lock entries; D-12 adds a seventh. The test now expects seven and the exact PyYAML pin (2 passed) | 1 → fixed |
+| exact locked-runner test, CPython 3.12.3, with the PyYAML pin | `python3.12 -m pytest tests/test_manhattan_ops_lock_install.py` | 1 passed; the probe checks the verified fence, a matching pin and a wrong pin | 0 |
+| local full suite, `9b514ce` | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,142 passed, 131 skipped, **1 error** (the Q019 `E2BIG` case below), 1,626 s | **1** |
+| remote CI, `9b514ce` | `pytest` workflow | reported on the PR | |
+
 **The local error is pre-existing, environmental and local-only.** The test is
 `test_q019_collect_refuses_late_dated_oversized_or_binary_tables[big.csv-...]`, which fails at setup with
 `OSError: [Errno 7] Argument list too long: 'git'`. Its 2.2 MB parameter is part of the test ID, which pytest exports
