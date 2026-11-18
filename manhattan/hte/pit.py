@@ -115,4 +115,3 @@ def _probe(template: str, panel: D.FencedPanel | None = None) -> dict:
                         if len(failures) >= 5:
                             return {"passed": False, "checks": checks, "failures": failures}
     return {"passed": not failures, "checks": checks, "failures": failures}
-

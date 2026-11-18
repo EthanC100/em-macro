@@ -14,7 +14,7 @@ This page says why, what is missing, and what to build next.
    pre-registration is attached. `CONFIRMATORY` is a constant `False`. Packages carry
    `evidence_class: synthetic_screening_descriptive` and never a count of discoveries.
 3. **A candidate is not a hypothesis.** One million candidates here are 5 families, 15 hypotheses and 30 strategy
-   specs; the 10^6 run has 249,624 variants. Behavioural classes are fewer than candidates: about 24% of the 10^5
+   specs; the 10^6 run has 256,068 variants. Behavioural classes are fewer than candidates: about 24% of the 10^5
    workload are aliases. M_eff, which is descriptive only, is far smaller again. The engine never turns any of these
    counts into a multiple-testing denominator: `independent_statistical_tests` is `null` (PR #86 owner decision D-1).
 4. **Selection after a look is recorded, not corrected.** The engine logs every run, every policy and every post-look

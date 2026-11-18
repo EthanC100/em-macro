@@ -1,0 +1,147 @@
+{
+ "cache": {
+  "compute_s": 9.492554185010704,
+  "corrupt": 0,
+  "disk_hits": 7,
+  "mem_hits": 4222905,
+  "misses": 1496
+ },
+ "chunk": 512,
+ "cpu_hours": {
+  "per_100k": 0.04797885826334324,
+  "per_1k": 0.00047978858263343237,
+  "per_1m_linear_extrapolation": 0.4797885826334324
+ },
+ "feature_cache": true,
+ "hardware": {
+  "blas": "scipy-openblas 0.3.34.106.0",
+  "blas_threads_env": "1",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags": "avx2,avx512f,fma",
+  "logical_cpus": 4,
+  "mem_gib": 15.7,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v595-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "memory": {
+  "peak_rss_largest_child_mib": 1386.0546875,
+  "peak_rss_parent_mib": 1978.08203125
+ },
+ "panel": {
+  "assets": {
+   "commodity": 12,
+   "fx": 10,
+   "rates": 8
+  },
+  "data_hash": "435bbc92b04d5c4beaad96ec199467480c0c84e2502d28aab86e4a70579f615e",
+  "evaluated_days": 2220
+ },
+ "reconciliation": {
+  "attempts": {
+   "completed": 3208,
+   "failed": 0,
+   "interrupted": 0,
+   "started": 3208,
+   "unfinished": 0,
+   "verification": 0
+  },
+  "final_status": {
+   "s1": {
+    "degenerate": 3328,
+    "dominated": 0,
+    "failed": 0,
+    "not_run": 0,
+    "pass": 1020944
+   },
+   "s3": {
+    "alias": 403360,
+    "computed": 617584,
+    "failed": 0,
+    "not_run": 0,
+    "skipped_degenerate": 3328,
+    "skipped_dominated": 0,
+    "skipped_failed_upstream": 0,
+    "skipped_not_selected": 0
+   }
+  },
+  "registered": {
+   "candidates": 1024272,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 256068
+  },
+  "violations": []
+ },
+ "registration": {
+  "candidates_per_s": 37474.35538686268,
+  "counts": {
+   "candidates": 1024272,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 256068
+  },
+  "cpu_s": 25.834965,
+  "report": {
+   "duplicate_submissions": 0,
+   "registered_candidates": 1024272,
+   "registered_specs": 30,
+   "rejected": 0,
+   "submitted": 30
+  },
+  "scale": 245.8244068920197,
+  "seconds": 27.332611580000048
+ },
+ "run": {
+  "closed": true,
+  "cpu_s": 1769.1624399999998,
+  "cpu_utilisation": 0.9176042002288239,
+  "result_root": "fced4fa186c4615dc90eb79c29e28552ca5421dcb1c0c23cccc85657826e8e97",
+  "run_id": "HR-124d07be1f00dc1c",
+  "timings": {
+   "pass_A_s": 245.91805649300022,
+   "pass_B_s": 204.91514418900078,
+   "selection_s": 4.038906001999749,
+   "stage4_s": 12.023894625000139,
+   "warm_s": 13.215923462999854
+  },
+  "wall_s": 482.00586907700017
+ },
+ "selection_counts": {
+  "alias": 403360,
+  "computed": 617584,
+  "cross_family_behaviour": 0,
+  "skipped_degenerate": 3328
+ },
+ "stages": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "storage_bytes": {
+  "attempt_log": 3992639,
+  "feature_cache": 301477248,
+  "packages": 22251,
+  "pass_A": 134489787,
+  "pass_B": 105096065,
+  "per_candidate_excluding_cache": 614.6703121827014,
+  "registry": 118834053,
+  "results": 251971258,
+  "total": 931066838
+ },
+ "synthetic": true,
+ "target": 1000000,
+ "throughput": {
+  "end_to_end_candidates_per_s": 2125.019767832688,
+  "pass_A_candidates_per_s": 4165.094725482896,
+  "pass_A_label": "stages 1+2 (screen + screening stats)",
+  "pass_B_candidates_per_s": 3013.852404341475,
+  "pass_B_computed": 617584
+ },
+ "workers": 4
+}

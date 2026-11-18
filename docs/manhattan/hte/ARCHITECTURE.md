@@ -1,7 +1,12 @@
 # Manhattan HTE: high-throughput hypothesis-evaluation engine
 
 Status: **research infrastructure, synthetic data only, not in force.** Branch `claude/manhattan-hypothesis-engine-jypgud`
-(session S9, 2026-11-18). Code: `manhattan/hte/`. Tests: `tests/test_manhattan_hte_core.py` and
+(session S9, 2026-11-18). Validation on this branch:
+
+- HTE tests: 153 passed.
+- Full repository suite: 2,123 passed, 132 skipped, and 1 error, the known local Q019 E2BIG, which also fails on clean
+  main (1,970 passed, 132 skipped, the same error).
+- `nightshift.protected` passes on every changed path. Code: `manhattan/hte/`. Tests: `tests/test_manhattan_hte_core.py` and
 `tests/test_manhattan_hte_funnel.py`. Measured throughput: [BENCHMARKS.md](BENCHMARKS.md). Limitations and blockers:
 [LIMITATIONS.md](LIMITATIONS.md).
 
@@ -284,15 +289,15 @@ Across CPUs or BLAS builds, results agree to rounding but not bit-for-bit. The p
 
 | technique | where | measured effect (BENCHMARKS.md) |
 |---|---|---|
-| shared rolling features (momentum, EWMA vol, z-scores, rolling extremes, carry means, unit-risk scale, \|r\|), computed once per process | `features.FeatureCache` | about 58,000 hits per 225 misses at 10^4 candidates |
+| shared rolling features (momentum, EWMA vol, z-scores, rolling extremes, carry means, unit-risk scale, \|r\|), computed once per process | `features.FeatureCache` | 68,319 hits per 231 misses at 10^4 candidates (1 worker); 4.2 million per 1,496 at 10^6 |
 | parent warm-up before forking: workers inherit features copy-on-write | `Runner._warm` | no feature is computed twice |
 | disk cache keyed by data hash, feature, parameters and feature-code hash, verified on load | `FeatureCache` | corrupt entry: quarantined, recomputed, logged; never changes a result (tested) |
-| behavioural dedup: alias candidates skip stage 3 | selection | 17% of the 10^4 workload |
+| behavioural dedup: alias candidates skip stage 3 | selection | 16.9% of the 10^4 workload, 39.4% of the 10^6 workload |
 | vectorised vol-target recursion across a chunk (time-major, masked coefficients) | `kernels._scales` | the Python loop runs over days once per chunk, not once per candidate |
 | grouped BLAS-3 bootstrap | `kernels.stage3_boot` | 0.09 ms vs 0.71 ms per candidate |
 | sliding-window process pool (fork), intent before dispatch | `Runner._execute` | 3.3-3.4x on 4 workers |
 | bounded stage 4: M_eff on at most `meff_cap` series per hypothesis (outcome-blind stride), parallel | `package._run_meff` | cost independent of N |
-| positions recomputed in pass B rather than stored | design | storing would cost 237 KB per candidate (about 237 GB at 10^6) |
+| positions recomputed in pass B rather than stored | design | storing would cost about 180 KB per candidate (2,220 days x ~10 assets x 8 B; about 180 GB at 10^6) |
 
 ### 6.3 What was not done, and why
 
@@ -396,6 +401,8 @@ A second pass found five more problems, each fixed with a regression test:
 - **Narrow engine digest.** It ignored `manhattan/stats/bootstrap.py` and the other dependencies. A change there would
   have reused a closed run silently; the digest now covers them.
 - **No guard on concurrent runners or disk.** Runs now take a workspace `flock` and run a disk preflight.
+- **Pool broken at submit.** A new lost-worker test showed that the pool can break between completions, so
+  `submit()` itself raises after the intent is written. That intent now gets a `worker_lost` terminal.
 
 **Independent read (a separate reviewer agent given the code, not my conclusions).** It reported 12 findings. I
 checked each against the code. All but #11 were real, and all were fixed with regression tests. #11 is documented

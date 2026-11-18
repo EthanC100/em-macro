@@ -1,0 +1,147 @@
+{
+ "cache": {
+  "compute_s": 1.4696516520034493,
+  "corrupt": 0,
+  "disk_hits": 0,
+  "mem_hits": 68319,
+  "misses": 231
+ },
+ "chunk": 256,
+ "cpu_hours": {
+  "per_100k": 0.07750596158803814,
+  "per_1k": 0.0007750596158803815,
+  "per_1m_linear_extrapolation": 0.7750596158803814
+ },
+ "feature_cache": true,
+ "hardware": {
+  "blas": "scipy-openblas 0.3.34.106.0",
+  "blas_threads_env": "1",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags": "avx2,avx512f,fma",
+  "logical_cpus": 4,
+  "mem_gib": 15.7,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v595-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "memory": {
+  "peak_rss_largest_child_mib": 56.26171875,
+  "peak_rss_parent_mib": 226.9296875
+ },
+ "panel": {
+  "assets": {
+   "commodity": 12,
+   "fx": 10,
+   "rates": 8
+  },
+  "data_hash": "435bbc92b04d5c4beaad96ec199467480c0c84e2502d28aab86e4a70579f615e",
+  "evaluated_days": 2220
+ },
+ "reconciliation": {
+  "attempts": {
+   "completed": 75,
+   "failed": 0,
+   "interrupted": 0,
+   "started": 75,
+   "unfinished": 0,
+   "verification": 0
+  },
+  "final_status": {
+   "s1": {
+    "degenerate": 72,
+    "dominated": 0,
+    "failed": 0,
+    "not_run": 0,
+    "pass": 10272
+   },
+   "s3": {
+    "alias": 1744,
+    "computed": 8528,
+    "failed": 0,
+    "not_run": 0,
+    "skipped_degenerate": 72,
+    "skipped_dominated": 0,
+    "skipped_failed_upstream": 0,
+    "skipped_not_selected": 0
+   }
+  },
+  "registered": {
+   "candidates": 10344,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 2586
+  },
+  "violations": []
+ },
+ "registration": {
+  "candidates_per_s": 7929.244913060635,
+  "counts": {
+   "candidates": 10344,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 2586
+  },
+  "cpu_s": 1.21058,
+  "report": {
+   "duplicate_submissions": 0,
+   "registered_candidates": 10344,
+   "registered_specs": 30,
+   "rejected": 0,
+   "submitted": 30
+  },
+  "scale": 2.0535250264571463,
+  "seconds": 1.304537836000236
+ },
+ "run": {
+  "closed": true,
+  "cpu_s": 28.861979999999996,
+  "cpu_utilisation": 0.9603003945434785,
+  "result_root": "93c8032d4b7bdb03642220651f0dacc26a44063e103010365c7c5ca8ac5162f0",
+  "run_id": "HR-450c9932daa3ebca",
+  "timings": {
+   "pass_A_s": 8.13437267800009,
+   "pass_B_s": 11.11007310900004,
+   "selection_s": 0.0258850270001858,
+   "stage4_s": 9.059521416999814,
+   "warm_s": 1.7015124079998714
+  },
+  "wall_s": 30.05515791100015
+ },
+ "selection_counts": {
+  "alias": 1744,
+  "computed": 8528,
+  "cross_family_behaviour": 0,
+  "skipped_degenerate": 72
+ },
+ "stages": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "storage_bytes": {
+  "attempt_log": 104558,
+  "feature_cache": 46613952,
+  "packages": 22069,
+  "pass_A": 1361419,
+  "pass_B": 2440265,
+  "per_candidate_excluding_cache": 759.6444315545243,
+  "registry": 1212702,
+  "results": 2544948,
+  "total": 54471714
+ },
+ "synthetic": true,
+ "target": 10000,
+ "throughput": {
+  "end_to_end_candidates_per_s": 344.1672151791992,
+  "pass_A_candidates_per_s": 1271.640777902392,
+  "pass_A_label": "stages 1+2 (screen + screening stats)",
+  "pass_B_candidates_per_s": 767.5917085632536,
+  "pass_B_computed": 8528
+ },
+ "workers": 1
+}
