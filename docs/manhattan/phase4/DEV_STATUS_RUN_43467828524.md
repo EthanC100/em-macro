@@ -41,11 +41,11 @@ Written by `python -m manhattan.sim.dev_status` with `--include-stale`. Syntheti
 | D07ah | STD | v2 | `9d1b680ff7e19ca7` | 400 | 400 | complete | none | - |
 | D07bh | STD | v2 | `9d1b680ff7e19ca7` | 400 | 400 | complete | none | - |
 | D08h | STD | v2 | `9d1b680ff7e19ca7` | 400 | 400 | complete | none | - |
-| D01 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` step 63; 12 × `630059032fd6e5b8`; 12 × `6d71b497779d4842`; 12 × `c22815235975c486` |
-| D02 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` step 63; 12 × `630059032fd6e5b8`; 12 × `6d71b497779d4842`; 12 × `c22815235975c486` |
-| D05 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` step 63; 12 × `630059032fd6e5b8`; 12 × `c22815235975c486`; 8 × `6d71b497779d4842` |
-| D08 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` step 63; 12 × `630059032fd6e5b8`; 12 × `c22815235975c486` |
-| D10 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` step 63; 12 × `630059032fd6e5b8`; 12 × `c22815235975c486` |
+| D01 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` (other code, step 63, years [2, 4, 7, 10]); 12 × `630059032fd6e5b8` (other review step); 12 × `6d71b497779d4842` (other review step); 12 × `c22815235975c486` (other review step) |
+| D02 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` (other code, step 63, years [2, 4, 7, 10]); 12 × `630059032fd6e5b8` (other review step); 12 × `6d71b497779d4842` (other review step); 12 × `c22815235975c486` (other review step) |
+| D05 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` (other code, step 63, years [2, 4, 7, 10]); 12 × `630059032fd6e5b8` (other review step); 12 × `c22815235975c486` (other review step); 8 × `6d71b497779d4842` (other review step) |
+| D08 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` (other code, step 63, years [2, 4, 7, 10]); 12 × `630059032fd6e5b8` (other review step); 12 × `c22815235975c486` (other review step) |
+| D10 | HB | v2 | `c864e57955126c37` | 0 | 400 | other code only | 0 to 399 | 400 × `4252b971831004e3` (other code, step 63, years [2, 4, 7, 10]); 12 × `630059032fd6e5b8` (other review step); 12 × `c22815235975c486` (other review step) |
 
 ## 2. Required criteria on development scenarios
 
@@ -502,52 +502,70 @@ The last column is what the metric code would say on records of other code: info
 
 ## 3. Screening candidates: the development half of SIM_PREREG section 7 step 1
 
-Eligibility also needs the same criteria on the held-out scenarios of a confirmation run, which has not happened. **No candidate is eligible or selected here**, and the power comparison of step 2 is not computed.
+Eligibility also needs the same criteria on the held-out scenarios of a confirmation run, which has not happened. **No candidate is eligible or selected here**, and the power comparison of step 2 is not computed. States: PASS, FAIL, NOT EVALUATED (a small group: **not evaluated is not passed**), NOT DECIDED.
 
-| candidate | criteria | development state | required rows by category | runs not complete | held-out half | eligible |
+**Selection: NO SELECTION. SIM_PREREG section 7 chooses once, after the first confirmation run in which a candidate is eligible. A development failure of one candidate does not select the other: section 7 step 3 ("one eligible: choose it") needs an eligible candidate, and none is.**
+
+| candidate | criteria | development state | required rows by category | runs not complete | held-out half | eligibility |
 |---|---|---|---|---|---|---|
-| candidate (i) | V1, V4, V3, V10, V11 | FAIL on development | FAIL: 2, pass: 152 | D04h STD | not evaluated: needs a tagged confirmation run (SIM_PREREG section 8.1 rule 4) | not determined |
-| candidate (ii) | V1, V4, V10, V11 | development rows pass | not evaluated (small group): 4, pass: 70 | - | not evaluated: needs a tagged confirmation run (SIM_PREREG section 8.1 rule 4) | not determined |
+| candidate (i) | V1, V4, V3, V10, V11 | **FAIL** | FAIL: 2, pass: 152 | D04h STD | not evaluated: needs a tagged confirmation run (SIM_PREREG section 8.1 rule 4) | not determined; a required development criterion FAILS (2 row(s)), which, under section 7 step 1 as written for the current protocol version, held-out results cannot undo; the held-out half of SIM_PREREG section 7 step 1 has not been run |
+| candidate (ii) | V1, V4, V10, V11 | **NOT EVALUATED** | not evaluated (small group): 4, pass: 70 | - | not evaluated: needs a tagged confirmation run (SIM_PREREG section 8.1 rule 4) | OWNER DECISION REQUIRED: 4 required row(s) were not evaluated (small groups); not evaluated is not passed, and the frozen text does not say whether such a row can count as met; the held-out half of SIM_PREREG section 7 step 1 has not been run |
+
+candidate (i):
+- FAIL: D07a STD V3: SPA size at 0.05
+- FAIL: D07a STD V3: SPA size at 0.001 (pooled)
+
+candidate (ii):
+- NOT EVALUATED (small group): D01 STD V4: linked average error, candidate (ii) (0 families passed)
+- NOT EVALUATED (small group): D07a STD V4: linked average error, candidate (ii) (30 families passed)
+- NOT EVALUATED (small group): P1 STD V4: linked average error, candidate (ii) (3 families passed)
+- NOT EVALUATED (small group): D01 LONG V4: linked average error, candidate (ii) (0 families passed)
 
 ## 4. Components (SIM_PREREG section 8.1 rule 2)
 
-| component | development state | required rows by category | runs not complete | note |
-|---|---|---|---|---|
-| within-family tests (SPA, Romano-Wolf, Benjamini-Bogomolov link) | FAIL on development | FAIL: 2, not evaluated (small group): 4, pass: 110 | D04h STD | - |
-| forward test (e-process, e-LOND) | development rows pass | pass: 129 | - | forward criteria must hold for the candidate that is selected (SIM_PREREG section 2.5); no candidate is selected, so rows of both are shown |
-| hierarchical model: posterior-based tiers | not decided | not decided: 77 | D01 HB, D02 HB, D05 HB, D08 HB, D10 HB | - |
-| hierarchical model: dormancy | not decided | not decided: 15 | D01 HB, D02 HB, D05 HB, D08 HB, D10 HB | - |
+| component | development state | required rows by category | not evaluated (small groups) | runs not complete | note |
+|---|---|---|---|---|---|
+| within-family tests (SPA, Romano-Wolf, Benjamini-Bogomolov link) | **FAIL** | FAIL: 2, not evaluated (small group): 4, pass: 110 | 4 | D04h STD | - |
+| forward test (e-process, e-LOND) | **PASS** | pass: 129 | - | - | forward criteria must hold for the candidate that is selected (SIM_PREREG section 2.5); no candidate is selected, so rows of both are shown |
+| hierarchical model: posterior-based tiers | **NOT DECIDED** | not decided: 77 | - | D01 HB, D02 HB, D05 HB, D08 HB, D10 HB | - |
+| hierarchical model: dormancy | **NOT DECIDED** | not decided: 15 | - | D01 HB, D02 HB, D05 HB, D08 HB, D10 HB | - |
 
 Code properties checked by the test suite, not by runs: V10(a) (results file v10a.json and tests/test_manhattan_sim_pipeline.py); V13 (tests/test_manhattan_spa_hedged.py); V14 (tests/test_manhattan_adaptive_weight.py); V15 (tests/test_manhattan_tailrisk.py).
 
 ## 5. Held-out scenarios
 
-| scenario | pre-registration | sizes | world coded | runs on record | refusals on record |
-|---|---|---|---|---|---|
-| H01 | v1 | STD, STD E-ALL | no | 0 | 0 |
-| H02a | v1 | STD | no | 0 | 0 |
-| H02b | v1 | STD E-ALL | no | 0 | 0 |
-| H02c | v1 | STD E-ALL | no | 0 | 0 |
-| H03 | v1 | STD, HB | no | 0 | 0 |
-| H04 | v1 | STD, STD E-ALL | no | 0 | 0 |
-| H05 | v1 | STD, HB | no | 0 | 0 |
-| H06 | v1 | STD, HB | no | 0 | 0 |
-| H07 | v1 | HB | no | 0 | 0 |
-| H08m | v1 | STD E-ALL | no | 0 | 0 |
-| H08x | v1 | STD E-ALL | no | 0 | 0 |
-| H09 | v1 | HB | no | 0 | 0 |
-| H10 | v1 | STD E-ALL, HB | no | 0 | 0 |
-| H11 | v1 | STD, LONG, HB | no | 0 | 0 |
-| H12 | v2 | STD | no | 0 | 0 |
+Distinct runs by run id, not log events.
+
+| scenario | pre-registration | sizes | world coded | runs started | runs completed | refusals |
+|---|---|---|---|---|---|---|
+| H01 | v1 | STD, STD E-ALL | no | 0 | 0 | 0 |
+| H02a | v1 | STD | no | 0 | 0 | 0 |
+| H02b | v1 | STD E-ALL | no | 0 | 0 | 0 |
+| H02c | v1 | STD E-ALL | no | 0 | 0 | 0 |
+| H03 | v1 | STD, HB | no | 0 | 0 | 0 |
+| H04 | v1 | STD, STD E-ALL | no | 0 | 0 | 0 |
+| H05 | v1 | STD, HB | no | 0 | 0 | 0 |
+| H06 | v1 | STD, HB | no | 0 | 0 | 0 |
+| H07 | v1 | HB | no | 0 | 0 | 0 |
+| H08m | v1 | STD E-ALL | no | 0 | 0 | 0 |
+| H08x | v1 | STD E-ALL | no | 0 | 0 | 0 |
+| H09 | v1 | HB | no | 0 | 0 | 0 |
+| H10 | v1 | STD E-ALL, HB | no | 0 | 0 | 0 |
+| H11 | v1 | STD, LONG, HB | no | 0 | 0 | 0 |
+| H12 | v2 | STD | no | 0 | 0 | 0 |
 
 ## 6. Missing or unverified evidence
 
 - D04h at STD: 368 of 400 for the current code 9d1b680ff7e19ca7 (missing: 172 to 203); other code on file: none
-- D01 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (review step 63); 12 by code 630059032fd6e5b8; 12 by code 6d71b497779d4842; 12 by code c22815235975c486
-- D02 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (review step 63); 12 by code 630059032fd6e5b8; 12 by code 6d71b497779d4842; 12 by code c22815235975c486
-- D05 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (review step 63); 12 by code 630059032fd6e5b8; 12 by code c22815235975c486; 8 by code 6d71b497779d4842
-- D08 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (review step 63); 12 by code 630059032fd6e5b8; 12 by code c22815235975c486
-- D10 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (review step 63); 12 by code 630059032fd6e5b8; 12 by code c22815235975c486
+- D01 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (other code, review step 63, years [2, 4, 7, 10]); 12 by code 630059032fd6e5b8 (other review step); 12 by code 6d71b497779d4842 (other review step); 12 by code c22815235975c486 (other review step)
+- D02 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (other code, review step 63, years [2, 4, 7, 10]); 12 by code 630059032fd6e5b8 (other review step); 12 by code 6d71b497779d4842 (other review step); 12 by code c22815235975c486 (other review step)
+- D05 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (other code, review step 63, years [2, 4, 7, 10]); 12 by code 630059032fd6e5b8 (other review step); 12 by code c22815235975c486 (other review step); 8 by code 6d71b497779d4842 (other review step)
+- D08 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (other code, review step 63, years [2, 4, 7, 10]); 12 by code 630059032fd6e5b8 (other review step); 12 by code c22815235975c486 (other review step)
+- D10 at HB: 0 of 400 for the current code c864e57955126c37 (missing: 0 to 399); other code on file: 400 by code 4252b971831004e3 (other code, review step 63, years [2, 4, 7, 10]); 12 by code 630059032fd6e5b8 (other review step); 12 by code c22815235975c486 (other review step)
+- NOT EVALUATED (small group; not a pass): D01 STD V4: linked average error, candidate (ii) (0 families passed)
+- NOT EVALUATED (small group; not a pass): D07a STD V4: linked average error, candidate (ii) (30 families passed)
+- NOT EVALUATED (small group; not a pass): P1 STD V4: linked average error, candidate (ii) (3 families passed)
+- NOT EVALUATED (small group; not a pass): D01 LONG V4: linked average error, candidate (ii) (0 families passed)
 - H01: world not coded; no held-out evidence of any kind
 - H02a: world not coded; no held-out evidence of any kind
 - H02b: world not coded; no held-out evidence of any kind

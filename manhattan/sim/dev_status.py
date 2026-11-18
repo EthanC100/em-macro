@@ -8,17 +8,26 @@ record files under ``--out`` and sorts every run of the development plan (SIM_PR
 section 3) and every criterion into separate categories, so that a development read is never mistaken for a
 confirmation result or for a method selection:
 
-- **runs**: complete at the pre-registered count for the code now checked out; incomplete; pilot only; or on file
-  only for **other code** (records of different code are never pooled: SIM_PREREG_v2 section 9);
+- **runs**: ``complete`` (every replication of the pre-registered count on file for the code now checked out),
+  ``incomplete`` (some, not all), ``other code only`` (a full count on file, but only for **other code**: records of
+  different code are never pooled, SIM_PREREG_v2 section 9), ``other code only (incomplete)``, or
+  ``nothing on file``. A pilot of the current code is ``incomplete``: there is no separate pilot state. HB records of the current
+  code reviewed at another step or read at other years are listed apart (``other_code`` entries with a ``reason``);
 - **criteria**: per development scenario, the verdict of the existing metric code (``metrics``, ``metrics_v2``) on
   complete runs of the current code. A verdict is never computed on records of other code: with
-  ``--include-stale`` their numbers are shown, and every verdict reads "not decided: other code";
+  ``--include-stale`` their numbers are shown, and every verdict reads "not decided: other code". Verdicts fall in
+  four categories that are never merged: PASS, FAIL, NOT EVALUATED (a group below the 200 observations of
+  SIM_PREREG section 5, "Small groups") and NOT DECIDED (incomplete, pilot or other code). **Not evaluated does
+  not mean passed** (owner decision, 2026-11-18);
 - **screening candidates**: the development half of SIM_PREREG section 7 step 1 (V1 and V4 where required, V3 for
   candidate (i), V10(a), V11 for screening). The other half needs the held-out scenarios of a tagged confirmation
-  run, so **no candidate is called eligible here and no method is selected**. The power numbers of step 2 are
+  run, so **no candidate is called eligible here and no method is selected**. A failure of one candidate selects
+  nothing for the other: where the frozen text does not settle a question (a criterion not evaluated for a small
+  group), the status reads OWNER DECISION REQUIRED instead of a rule made here. The power numbers of step 2 are
   deliberately not computed;
 - **components**: the forward test, the hierarchical model, tiers and dormancy (SIM_PREREG section 8.1 rule 2);
-- **held-out**: H01-H12 are listed with whether their worlds are coded and whether any held-out run is on record.
+- **held-out**: H01-H12 are listed with whether their worlds are coded and how many distinct held-out runs (by run
+  id) were started, completed or refused.
   Nothing held-out is generated, run or read;
 - **missing or unverified evidence**.
 
@@ -102,14 +111,26 @@ def _gaps(have: set, need: int) -> str:
     return ", ".join(out)
 
 
-READ_AT = hb_v2.REVIEW_STEP
-
-
 def hb_ok(r: dict) -> bool:
     """An HB record that may be read: reviewed every 63 days (SIM_PREREG_v2 amendment 1) and read at years 2, 4, 7
     and 10 (SIM_PREREG section 5, V6 and V8 at 4 and 10). ``MANHATTAN_SIM_EVAL_YEARS`` can change the years a
     record is read at, and the metric code does not check them: such records are treated here as other records."""
     return r.get("review_step") == hb_v2.REVIEW_STEP and tuple(r.get("eval_years") or ()) == hb.EVAL_YEARS
+
+
+OTHER_CODE = "other code"
+OTHER_STEP = "other review step"
+OTHER_YEARS = "non-default evaluation years"
+
+
+def exclusion(r: dict, now: str, hb_run: bool) -> str:
+    """Why a record is not counted for the current code. Calendar defects come first: a record of another review
+    step or read at other years is never a result of the pre-registered question, whatever its code."""
+    if hb_run and r.get("review_step") != hb_v2.REVIEW_STEP:
+        return OTHER_STEP
+    if hb_run and tuple(r.get("eval_years") or ()) != hb.EVAL_YEARS:
+        return OTHER_YEARS
+    return OTHER_CODE if r.get("code") != now else "outside the pre-registered count"
 
 
 def inventory(out: Path) -> list[dict]:
@@ -121,20 +142,24 @@ def inventory(out: Path) -> list[dict]:
         rows = _read_all(path)
         need = cr2.replications(scenario, size)
         now = run.code_hash(size, version=version)
-        hb = size == "HB" and version == "v2"
-        usable = [r for r in rows if r.get("code") == now and (not hb or hb_ok(r))]
+        is_hb = size == "HB" and version == "v2"
+        usable = [r for r in rows if r.get("code") == now and (not is_hb or hb_ok(r))]
         current = _one_per_rep([r for r in usable if isinstance(r.get("rep"), int) and 0 <= r["rep"] < need])
         by_code: dict = {}
         used = {id(r) for r in usable}
         for r in rows:
             if id(r) in used:
                 continue
-            key = (r.get("code"), (READ_AT if hb_ok(r) else r.get("review_step")) if hb else None)
+            key = (r.get("code"), r.get("review_step") if is_hb else None,
+                   tuple(r.get("eval_years") or ()) if is_hb else None, exclusion(r, now, is_hb))
             by_code.setdefault(key, set()).add(r.get("rep"))
-        others = [{"code": c, "review_step": s, "replications": len(reps)} for (c, s), reps in
-                  sorted(by_code.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]
+        others = [{"code": c, "review_step": s, "eval_years": list(y) if y is not None else None, "reason": why,
+                   "replications": len(reps)}
+                  for (c, s, y, why), reps in sorted(by_code.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]
         n = len(current)
-        stale_full = [o for o in others if o["replications"] >= need and (not hb or o["review_step"] == READ_AT)]
+        # only records whose sole defect is their code can be shown with --include-stale; a record with another
+        # review step or other evaluation years answers a different question and is never shown as a result
+        stale_full = [o for o in others if o["replications"] >= need and o["reason"] == OTHER_CODE]
         if n >= need:
             state = "complete"
         elif n > 0:
@@ -152,7 +177,7 @@ def inventory(out: Path) -> list[dict]:
                         "missing_current": _gaps({r["rep"] for r in current}, need), "state": state,
                         "other_code": others, "files": _digest(path), "_current": current,
                         "_stale": _one_per_rep([r for r in rows if stale_full and r.get("code") == stale_full[0]["code"]
-                                                and (not hb or hb_ok(r))])
+                                                and (not is_hb or hb_ok(r))])
                         if stale_full and n < need else []})
     return entries
 
@@ -225,23 +250,55 @@ def criterion_rows(entry: dict, include_stale: bool) -> list[dict]:
     return out
 
 
+PASS, FAIL, NOT_EVALUATED, NOT_DECIDED = "PASS", "FAIL", "NOT EVALUATED", "NOT DECIDED"
+OWNER = "OWNER DECISION REQUIRED"
+
+
 def _gate(rows: list[dict], criteria: tuple, candidate: str | None, runs: list[dict]) -> dict:
-    """Pass only if every required row of these criteria passes and every run that requires them is complete."""
+    """The development state of a group of criteria, in four categories that are never merged.
+
+    FAIL if any required row fails. Otherwise NOT DECIDED if a run that requires them is incomplete or a row is not
+    decided. Otherwise NOT EVALUATED if any required row could not be evaluated (a group below 200 observations):
+    **not evaluated does not mean passed**, so such a gate is never reported as passing, and whether it may ever
+    count towards eligibility is an owner decision (SIM_PREREG section 5 says the criterion "is not evaluated
+    there"; section 7 step 1 asks that a candidate "meets" V1 and V4 "in every scenario where they are required",
+    and the text does not say which of the two governs). PASS only if every required row passes."""
     cats = Counter()
+    unevaluated, failed = [], []
     for r in rows:
         if r["criterion"] in criteria and r["required"] and (candidate is None or r["candidate"] in (None, candidate)):
             cats[r["category"]] += 1
+            where = f"{r['scenario']} {r['size']} {r['criterion']}: {r['what']}"
+            if r["category"] == "not evaluated (small group)":
+                unevaluated.append(where)
+            elif r["category"] == "FAIL":
+                failed.append(where)
     incomplete = [f"{e['scenario']} {e['size']}" for e in runs if e["state"] != "complete"
                   and any(cr_required(c, e["scenario"], e["size"]) for c in criteria)]
-    if cats.get("FAIL"):
-        state = "FAIL on development"
+    if failed:
+        state = FAIL
     elif incomplete or cats.get("not decided") or cats.get("no data"):
-        state = "not decided"
+        state = NOT_DECIDED
+    elif unevaluated:
+        state = NOT_EVALUATED
     elif cats.get("pass"):
-        state = "development rows pass"
+        state = PASS
     else:
-        state = "no required row"
-    return {"state": state, "rows": dict(sorted(cats.items())), "runs_not_complete": incomplete}
+        state = NOT_DECIDED + " (no required row)"
+    return {"state": state, "rows": dict(sorted(cats.items())), "runs_not_complete": incomplete,
+            "failed_rows": failed, "not_evaluated_rows": unevaluated}
+
+
+def _eligibility(g: dict) -> str:
+    """What may be said about a candidate's eligibility from development records alone. Never "eligible"."""
+    held = "the held-out half of SIM_PREREG section 7 step 1 has not been run"
+    if g["state"] == FAIL:
+        return (f"not determined; a required development criterion FAILS ({len(g['failed_rows'])} row(s)), which, under "
+                f"section 7 step 1 as written for the current protocol version, held-out results cannot undo; {held}")
+    if g["state"] == NOT_EVALUATED:
+        return (f"{OWNER}: {len(g['not_evaluated_rows'])} required row(s) were not evaluated (small groups); not "
+                f"evaluated is not passed, and the frozen text does not say whether such a row can count as met; {held}")
+    return f"not determined; {held}"
 
 
 def cr_required(criterion: str, scenario: str, size: str) -> bool:
@@ -265,11 +322,13 @@ def heldout_status(log: list[dict]) -> list[dict]:
     coded = set(world.SCENARIOS)
     out = []
     for h in HELD_OUT_V1 + HELD_OUT_V2:
-        made = [r for r in log if r.get("scenario") == h and r.get("event") in ("start", "end")]
-        refused = [r for r in log if r.get("scenario") == h and r.get("status") == "refused"]
+        mine = [r for r in log if r.get("scenario") == h]
+        started = {r.get("run_id") for r in mine if r.get("event") == "start"}
+        completed = {r.get("run_id") for r in mine if r.get("event") == "end" and r.get("status") == "completed"}
+        refused = {r.get("run_id") for r in mine if r.get("status") == "refused"}
         out.append({"scenario": h, "pre_registration": "v1" if h in HELD_OUT_V1 else "v2",
-                    "sizes": list(HELD_OUT_SIZES[h]), "world_coded": h in coded, "runs_on_record": len(made),
-                    "refusals_on_record": len(refused)})
+                    "sizes": list(HELD_OUT_SIZES[h]), "world_coded": h in coded, "runs_started": len(started),
+                    "runs_completed": len(completed), "refusals_on_record": len(refused)})
     return out
 
 
@@ -299,8 +358,11 @@ def build(out: Path, include_stale: bool = False) -> dict:
         g = _gate([r for r in rows if r["criterion"] != "V11 forward"], crit, cand, entries)
         g["criteria"] = list(crit)
         g["held_out_half"] = "not evaluated: needs a tagged confirmation run (SIM_PREREG section 8.1 rule 4)"
-        g["eligible"] = "not determined"
+        g["eligible"] = _eligibility(g)
         candidates[cand] = g
+    selection = ("NO SELECTION. SIM_PREREG section 7 chooses once, after the first confirmation run in which a candidate "
+                 "is eligible. A development failure of one candidate does not select the other: section 7 step 3 "
+                 "(\"one eligible: choose it\") needs an eligible candidate, and none is.")
     components = {name: _gate(rows, crit, None, entries) for name, crit in COMPONENTS.items()}
     for name in components:
         components[name]["held_out_half"] = "not evaluated"
@@ -311,11 +373,14 @@ def build(out: Path, include_stale: bool = False) -> dict:
     missing = []
     for e in entries:
         if e["state"] != "complete":
-            others = "; ".join(f"{o['replications']} by code {o['code']}" + (f" (review step {o['review_step']})"
-                                                                               if o["review_step"] is not None else "")
-                               for o in e["other_code"]) or "none"
+            others = "; ".join(f"{o['replications']} by code {o['code']} ({o['reason']}"
+                               + (f", review step {o['review_step']}, years {o['eval_years']}" if o["review_step"] is not None else "")
+                               + ")" for o in e["other_code"]) or "none"
             missing.append(f"{e['scenario']} at {e['size']}: {e['on_file_current']} of {e['required']} for the current "
                            f"code {e['current_code']} (missing: {e['missing_current']}); other code on file: {others}")
+    for r in rows:
+        if r["required"] and r["category"] == "not evaluated (small group)":
+            missing.append(f"NOT EVALUATED (small group; not a pass): {r['scenario']} {r['size']} {r['criterion']}: {r['what']}")
     if v10a is None:
         missing.append("V10(a): no v10a.json under the records directory")
     for h in held:
@@ -330,10 +395,12 @@ def build(out: Path, include_stale: bool = False) -> dict:
         "runs": [{k: v for k, v in e.items() if not k.startswith("_")} for e in entries],
         "criteria": rows,
         "screening_candidates": candidates,
+        "selection": selection,
         "components": components,
         "code_properties": CODE_PROPERTIES,
         "held_out": held,
-        "held_out_runs_on_record": sum(h["runs_on_record"] for h in held),
+        "held_out_runs_started": sum(h["runs_started"] for h in held),
+        "held_out_runs_completed": sum(h["runs_completed"] for h in held),
         "missing_or_unverified": missing,
     }
     return summary
@@ -351,7 +418,8 @@ def markdown(s: dict) -> str:
          "| scenario | size | code route | current code | on file (current code) | pre-registered | state | missing | other code on file |",
          "|---|---|---|---|---|---|---|---|---|"]
     for e in s["runs"]:
-        others = "; ".join(f"{o['replications']} × `{o['code']}`" + (f" step {o['review_step']}" if o["review_step"] is not None else "")
+        others = "; ".join(f"{o['replications']} × `{o['code']}` ({o['reason']}"
+                           + (f", step {o['review_step']}, years {o['eval_years']}" if o["review_step"] is not None else "") + ")"
                            for o in e["other_code"]) or "-"
         L.append(f"| {e['scenario']} | {e['size']} | {e['code_route']} | `{e['current_code']}` | {e['on_file_current']} | "
                  f"{e['required']} | {e['state']} | {e['missing_current']} | {others} |")
@@ -371,25 +439,33 @@ def markdown(s: dict) -> str:
                  f"{r.get('computed_on_other_code') or '-'} |")
     L += ["", "## 3. Screening candidates: the development half of SIM_PREREG section 7 step 1", "",
           "Eligibility also needs the same criteria on the held-out scenarios of a confirmation run, which has not "
-          "happened. **No candidate is eligible or selected here**, and the power comparison of step 2 is not computed.", "",
-          "| candidate | criteria | development state | required rows by category | runs not complete | held-out half | eligible |",
+          "happened. **No candidate is eligible or selected here**, and the power comparison of step 2 is not computed. "
+          "States: PASS, FAIL, NOT EVALUATED (a small group: **not evaluated is not passed**), NOT DECIDED.", "",
+          f"**Selection: {s['selection']}**", "",
+          "| candidate | criteria | development state | required rows by category | runs not complete | held-out half | eligibility |",
           "|---|---|---|---|---|---|---|"]
     for c, g in s["screening_candidates"].items():
-        L.append(f"| {CANDIDATE_NAME[c]} | {', '.join(g['criteria'])} | {g['state']} | "
+        L.append(f"| {CANDIDATE_NAME[c]} | {', '.join(g['criteria'])} | **{g['state']}** | "
                  f"{', '.join(f'{k}: {v}' for k, v in g['rows'].items()) or '-'} | {', '.join(g['runs_not_complete']) or '-'} | "
                  f"{g['held_out_half']} | {g['eligible']} |")
+    for c, g in s["screening_candidates"].items():
+        if g["failed_rows"] or g["not_evaluated_rows"]:
+            L += ["", f"{CANDIDATE_NAME[c]}:"]
+            L += [f"- FAIL: {x}" for x in g["failed_rows"]] + [f"- NOT EVALUATED (small group): {x}" for x in g["not_evaluated_rows"]]
     L += ["", "## 4. Components (SIM_PREREG section 8.1 rule 2)", "",
-          "| component | development state | required rows by category | runs not complete | note |", "|---|---|---|---|---|"]
+          "| component | development state | required rows by category | not evaluated (small groups) | runs not complete | note |",
+          "|---|---|---|---|---|---|"]
     for name, g in s["components"].items():
-        L.append(f"| {name} | {g['state']} | {', '.join(f'{k}: {v}' for k, v in g['rows'].items()) or '-'} | "
-                 f"{', '.join(g['runs_not_complete']) or '-'} | {g['note'] or '-'} |")
+        L.append(f"| {name} | **{g['state']}** | {', '.join(f'{k}: {v}' for k, v in g['rows'].items()) or '-'} | "
+                 f"{len(g['not_evaluated_rows']) or '-'} | {', '.join(g['runs_not_complete']) or '-'} | {g['note'] or '-'} |")
     L += ["", "Code properties checked by the test suite, not by runs: "
           + "; ".join(f"{k} ({v})" for k, v in s["code_properties"].items()) + ".", "",
           "## 5. Held-out scenarios", "",
-          "| scenario | pre-registration | sizes | world coded | runs on record | refusals on record |", "|---|---|---|---|---|---|"]
+          "Distinct runs by run id, not log events.", "",
+          "| scenario | pre-registration | sizes | world coded | runs started | runs completed | refusals |", "|---|---|---|---|---|---|---|"]
     for h in s["held_out"]:
         L.append(f"| {h['scenario']} | {h['pre_registration']} | {', '.join(h['sizes'])} | {'yes' if h['world_coded'] else 'no'} | "
-                 f"{h['runs_on_record']} | {h['refusals_on_record']} |")
+                 f"{h['runs_started']} | {h['runs_completed']} | {h['refusals_on_record']} |")
     L += ["", "## 6. Missing or unverified evidence", ""] + [f"- {m}" for m in s["missing_or_unverified"]]
     L += ["", "## 7. Record files read (SHA-256)", ""]
     for e in s["runs"]:

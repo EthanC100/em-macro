@@ -116,9 +116,10 @@ def test_dev_status_on_an_empty_directory_decides_nothing(tmp_path):
     assert {e["state"] for e in s["runs"]} == {"nothing on file"}
     assert s["criteria"] == []
     for g in s["screening_candidates"].values():
-        assert g["eligible"] == "not determined" and g["state"] == "not decided"
+        assert g["eligible"].startswith("not determined") and g["state"] == dev_status.NOT_DECIDED
     assert "DEVELOPMENT ONLY" in s["verdict_scope"] and "No screening method is selected" in s["verdict_scope"]
-    assert s["held_out_runs_on_record"] == 0
+    assert s["held_out_runs_started"] == 0 and s["held_out_runs_completed"] == 0
+    assert s["selection"].startswith("NO SELECTION")
     assert len(s["held_out"]) == len(heldout_spec.SCENARIOS)
 
 
@@ -129,7 +130,8 @@ def test_records_of_other_code_are_never_decided(tmp_path):
                   for i in range(400)])
     e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D01", "HB"))
     assert e["state"] == "other code only" and e["on_file_current"] == 0
-    assert e["other_code"] == [{"code": "0000000000000000", "review_step": 63, "replications": 400}]
+    assert e["other_code"] == [{"code": "0000000000000000", "review_step": 63, "eval_years": [2, 4, 7, 10],
+                                "reason": dev_status.OTHER_CODE, "replications": 400}]
     assert dev_status.criterion_rows(e, include_stale=False) == []
 
 
@@ -201,3 +203,83 @@ def test_hb_records_read_at_other_years_do_not_count(tmp_path):
                   for i in range(400)])
     e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D05", "HB"))
     assert e["on_file_current"] == 0 and e["state"] != "complete"
+
+
+# ------------------------------------------------------------------------ S6 review: M6, L1, L3
+
+def _row(scenario, criterion, category, candidate=None, size="STD"):
+    return {"scenario": scenario, "size": size, "criterion": criterion, "required": True, "candidate": candidate,
+            "category": category, "what": f"{criterion} row"}
+
+
+def _complete(*scenarios):
+    return [{"scenario": sc, "size": "STD", "state": "complete"} for sc in scenarios]
+
+
+def test_not_evaluated_is_never_a_pass():
+    """Owner decision 2026-11-18: a small-group row stays unresolved; the gate is NOT EVALUATED, never PASS."""
+    rows = [_row("D02", "V1", "pass", "ii"), _row("D01", "V4", "not evaluated (small group)", "ii")]
+    g = dev_status._gate(rows, ("V1", "V4"), "ii", _complete("D01", "D02"))
+    assert g["state"] == dev_status.NOT_EVALUATED != dev_status.PASS
+    assert g["not_evaluated_rows"] == ["D01 STD V4: V4 row"]
+    assert dev_status._eligibility(g).startswith(dev_status.OWNER)
+
+
+def test_four_states_are_kept_apart():
+    run_ok = _complete("D01")
+    gate = lambda *cats: dev_status._gate([_row("D01", "V1", c) for c in cats], ("V1",), None, run_ok)["state"]
+    assert gate("pass") == dev_status.PASS
+    assert gate("pass", "FAIL", "not evaluated (small group)") == dev_status.FAIL
+    assert gate("pass", "not decided", "not evaluated (small group)") == dev_status.NOT_DECIDED
+    assert gate("pass", "not evaluated (small group)") == dev_status.NOT_EVALUATED
+    incomplete = [{"scenario": "D01", "size": "STD", "state": "incomplete"}]
+    assert dev_status._gate([_row("D01", "V1", "pass")], ("V1",), None, incomplete)["state"] == dev_status.NOT_DECIDED
+
+
+def test_one_candidates_failure_selects_nothing_for_the_other():
+    rows = [_row("D07a", "V3", "FAIL"), _row("D07a", "V1", "pass", "i"), _row("D07a", "V1", "pass", "ii"),
+            _row("D07a", "V4", "not evaluated (small group)", "ii")]
+    gi = dev_status._gate(rows, ("V1", "V4", "V3"), "i", _complete("D07a"))
+    gii = dev_status._gate(rows, ("V1", "V4"), "ii", _complete("D07a"))
+    assert gi["state"] == dev_status.FAIL and gi["failed_rows"] == ["D07a STD V3: V3 row"]
+    assert gii["state"] == dev_status.NOT_EVALUATED
+    for g in (gi, gii):
+        assert "eligible" not in dev_status._eligibility(g).split(";")[0].replace("eligibility", "")
+
+
+def test_non_default_years_are_listed_apart_from_old_code(tmp_path):
+    """L1: old-code records with the pre-registered calendar and records read at other years are separate entries,
+    and only the first kind can be shown with --include-stale."""
+    path = run.reps_path("D08", "HB", 0, tmp_path, "v2")
+    old = [{"rep": i, "code": "1111111111111111", "scenario": "D08", "size": "HB", "review_step": 63,
+            "eval_years": [2, 4, 7, 10]} for i in range(400)]
+    odd = [{"rep": i, "code": "1111111111111111", "scenario": "D08", "size": "HB", "review_step": 63,
+            "eval_years": [2, 7]} for i in range(400)]
+    _write(path, old + odd)
+    e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D08", "HB"))
+    reasons = sorted(o["reason"] for o in e["other_code"])
+    assert reasons == sorted([dev_status.OTHER_CODE, dev_status.OTHER_YEARS])
+    assert e["state"] == "other code only" and len(e["_stale"]) == 400
+    assert all(r["eval_years"] == [2, 4, 7, 10] for r in e["_stale"])
+    _write(path, odd)
+    e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D08", "HB"))
+    assert e["_stale"] == [] and e["state"] == "other code only (incomplete)"
+
+
+def test_heldout_runs_are_counted_by_run_id_not_by_event():
+    """L3: a start and an end of one run is one run; a start without an end is started, not completed."""
+    log = [{"run_id": "a", "scenario": "H01", "event": "start", "status": "started"},
+           {"run_id": "a", "scenario": "H01", "event": "end", "status": "completed"},
+           {"run_id": "b", "scenario": "H01", "event": "start", "status": "started"},
+           {"run_id": "c", "scenario": "H03", "event": "refused", "status": "refused"}]
+    h = {x["scenario"]: x for x in dev_status.heldout_status(log)}
+    assert (h["H01"]["runs_started"], h["H01"]["runs_completed"], h["H01"]["refusals_on_record"]) == (2, 1, 0)
+    assert (h["H03"]["runs_started"], h["H03"]["runs_completed"], h["H03"]["refusals_on_record"]) == (0, 0, 1)
+
+
+def test_docstring_names_only_states_the_code_produces():
+    """L2: the module documentation lists exactly the run states inventory() can return."""
+    doc = dev_status.__doc__
+    assert "pilot only" not in doc
+    for state in ("complete", "incomplete", "other code only", "other code only (incomplete)", "nothing on file"):
+        assert f"``{state}``" in doc

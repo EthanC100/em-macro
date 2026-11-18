@@ -57,6 +57,19 @@ Synthetic data only throughout.
 
 ---
 
+## Revision after the independent S6 review (2026-11-18)
+
+| item | change |
+|---|---|
+| M6, small groups | Owner decision: **not evaluated does not mean passed.** Gates now read PASS, FAIL, NOT EVALUATED or NOT DECIDED, never merged. Candidate (ii) reads NOT EVALUATED, OWNER DECISION REQUIRED (D8). Candidate (i)'s FAIL is kept and selects nothing for (ii). No new rule was written, and every number is unchanged: section 2 of the snapshot and its file digests are byte-identical to the first version. |
+| L1 | HB records read at non-default evaluation years are listed separately from otherwise valid old-code records, each with a `reason`. Only old-code records with the pre-registered calendar can be shown with `--include-stale`. |
+| L2 | The "pilot only" state in the module documentation did not exist; the docstring now lists exactly the five states the code returns (checked by a test). |
+| L3 | Held-out runs are counted as distinct run ids (started, completed, refused), not as start/end log events. |
+| D08 | The 0.114 against 0.10 is explained separately: [D08_CALIBRATION_NOTE.md](D08_CALIBRATION_NOTE.md). |
+| hash | The current hash is checked against what the code imports, and a narrower scheme is proposed for future runs only: [CODE_HASH_PROPOSAL.md](CODE_HASH_PROPOSAL.md). |
+
+---
+
 ## 1. Workstream A: verified run status and artifact inventory
 
 Source: the GitHub Actions API, read-only. No run was dispatched, re-run or cancelled.
@@ -187,17 +200,24 @@ made". These gaps were found, and none is repaired in those files (they are the 
 - **What it reads.** Only the record files under `--out`. It writes nothing unless `--md` or `--json` is given.
 - **What it reports.** It sorts:
   - every run of the development plan into complete, incomplete, other code only, or nothing on file;
-  - every required criterion into pass, FAIL, not decided, not evaluated (small group), or reported.
+  - every required criterion into pass, FAIL, not decided, not evaluated (small group), or reported;
+  - every gate into **PASS, FAIL, NOT EVALUATED or NOT DECIDED**, four states that are never merged. **Not evaluated
+    does not mean passed** (owner decision, 2026-11-18, S6 review M6): a gate with a small-group row is NOT
+    EVALUATED, never PASS.
 - **Other code.** Records of other code are never given a verdict. With `--include-stale`, their numbers are shown,
   every verdict reads "not decided: records of other code (…)", and what the metric code would have said appears in
   a separate column marked "not a verdict".
 - **Screening candidates.** It shows the development half of §7 step 1 per candidate: V1 and V4 where required, V3
   for (i) only, V10(a), and V11 for screening.
-  - It always prints "eligible: not determined" and "held-out half: not evaluated".
+  - It never prints "eligible". It prints "not determined" with the reason, or **OWNER DECISION REQUIRED** where
+    the frozen text does not settle the question (a required row not evaluated for a small group), and always
+    "held-out half: not evaluated".
+  - It prints "NO SELECTION": a development failure of one candidate selects nothing for the other.
   - It never computes the step-2 power comparison.
 - **Components.** It shows the component gates of §8.1 rule 2: within-family tests, forward test, model tiers and
   dormancy.
-- **Held-out and gaps.** It lists the held-out scenarios (coded? runs on record?) and every missing or unverified
+- **Held-out and gaps.** It lists the held-out scenarios (coded? distinct runs started, completed and refused, by
+  run id) and every missing or unverified
   item.
 - **Integrity.** It prints the SHA-256 of every record file it read. Its output is deterministic: there is no clock,
   and the bootstrap seeds are those of `metrics`.
@@ -216,13 +236,14 @@ The snapshot from run `43467828524`'s artifact is [DEV_STATUS_RUN_43467828524.md
 | **Development, other code (not decided)** | the five HB runs, as in the summary. |
 | **Held-out confirmation** | none coded, none run, nothing drawn. |
 | **Pilot artifacts** | the 12/6/36-replication pilots on main and the earlier pilot reports in `results/manhattan_sim/`. They are labelled pilot by the existing reports. |
-| **Method eligibility** | Candidate (i): a development FAIL (V3 in D07a), so it cannot become eligible under the current protocol. Candidate (ii): every required development row passes or is a small group, but eligibility needs the held-out half. **Neither is called eligible; no method is selected.** |
+| **Method eligibility** | Candidate (i): **FAIL** on development (V3 in D07a, both rows kept as computed). Under §7 step 1 as written, it cannot become eligible in the current protocol version. Candidate (ii): **NOT EVALUATED, OWNER DECISION REQUIRED**. 70 required rows pass, but 4 V4 rows were not evaluated (D01 STD 0, D01 LONG 0, P1 3 and D07a 30 families passed, against 200). §5 says such a criterion "is not evaluated there"; §7 step 1 asks that a candidate "meets" V4 "in every scenario where they are required". The text does not say which governs, and not evaluated is not passed. Its held-out half has not run either. **Neither is called eligible, and no method is selected (D8).** |
 | **Missing or unverified** | listed in section 1 and in the snapshot's section 6. |
 
 The development records alone **do not** select a method. Under SIM_PREREG §7, a candidate becomes eligible only
 after a confirmation run, and the choice is made once. Under §8.1 rule 1, a failure leads to a revised method in a
 new protocol version; the threshold never moves. Whether to revise the SPA test for positively autocorrelated
-returns, or to proceed with candidate (ii) only, is decision D3.
+returns is decision D3. Candidate (i)'s failure **does not** make candidate (ii) the choice: (ii) has unresolved
+small-group rows (D8) and no held-out half.
 
 ---
 
@@ -395,10 +416,13 @@ The selection rule exists only as text and as the numbers `report.py` prints. No
 correct: it may be applied only after a confirmation run. `dev_status` evaluates only the development half of step 1
 and never step 2.
 
-V3 is required in D07a, and that row currently fails. So, as the frozen §7 is written, candidate (i) cannot become
-eligible, whatever the held-out results. If candidate (ii) passes its held-out half, step 3 ("one eligible: choose
-it") would apply. That is a consequence of the frozen rule, recorded here so that nobody is surprised by it. **It is
-not a selection.**
+V3 is required in D07a, and that row currently fails. So, as the frozen §7 is written for the current protocol
+version, candidate (i) cannot become eligible, whatever the held-out results.
+
+**This does not select candidate (ii).** Step 3 ("one eligible: choose it") needs a candidate that *is* eligible,
+and candidate (ii) is not. Four of its required V4 rows were not evaluated because fewer than 200 families passed
+screening. Not evaluated is not passed, and whether such a row can ever count as "met" is the owner's to decide
+(D8). It is not settled by a rule made here. Its held-out half has not run. **No selection.**
 
 ---
 
@@ -422,10 +446,11 @@ confirmation run.
 | id | decision | why it is yours |
 |---|---|---|
 | **D0** | Confirm in writing that Protocol v3.1 and SIM_PREREG_v2 are **adopted**. ETHAN_ACTIONS item 19 still reads "drafts … not in force", but CODEOWNERS (`1a7f653`, item 19 step 4) protects them and you dispatched the run under v2. | adoption is the owner's act; `ADOPTED_PROTOCOLS` in ops is empty |
-| **D1** | May HB records made by code `4252b971831004e3` count under SIM_PREREG_v2 §9, given that the only difference is the inert `evidential_weight` change? If not, the five HB runs (about 520 CPU-hours) must be re-run for the current code. Separately: narrow the HB code hash to the code the model actually executes (a versioned change to `run.py`), so that operational edits to `manhattan/ledger.py` stop invalidating simulation records. | "different code" is a reading of a frozen rule |
+| **D1** | May HB records made by code `4252b971831004e3` count under SIM_PREREG_v2 §9, given that the only difference is the inert `evidential_weight` change? If not, the five HB runs (about 520 CPU-hours) must be re-run for the current code. Separately, for future runs only: the narrower "code scheme 2" of [CODE_HASH_PROPOSAL.md](CODE_HASH_PROPOSAL.md), which hashes shared modules by function from a manifest and adds a closure test, because the current hash is both too broad (all of `ledger.py`) and too narrow (`spec.py`, `availability.py`, `stats/hier.py` and `prereg.py` are imported but not hashed). It never recomputes old identities and does not validate the old records. | "different code" is a reading of a frozen rule |
 | **D2** | Complete D04h (replications 172–203) with a run that has `earlier_runs=43467828524`, from main, then bring the records home (SIM_RUNBOOK §8). | runs are dispatched by you only |
 | **D3** | D07a V3 fails on development. Choose between revising the SPA test (a new protocol version, then a retest; the threshold does not move: §8.1 rule 1) and accepting that candidate (i) and the within-family SPA claims stay off. Under §7 this also decides whether the comparison of step 2 can ever arise. | a protocol-level consequence; must not be repaired silently |
 | **D4** | Fix the held-out draw protocol (G1–G4) and answer the per-scenario questions of `heldout_spec.py` **before** any held-out value is drawn: an addition to `SIM_PREREG_AMENDMENTS.md` (§8.4: correcting a scenario's description) or a new pre-registration version. Also decide whether the missing-data path (H10), "not cheap" (H09) and the multi-factor hedge layer (H12) are built as pipeline code under a new code hash. | every answer is researcher discretion |
-| **D5** | The hierarchical results on the HB records, if D1 lets them count: V6 in D08 (item 21(b), option (ii): a two-group prior in a new protocol version, or (iii): the posterior tiers stay off) and V8 in D05, D08 and D10. | a failing component is not switched on (§8.1 rule 2); revising the model is a new version |
+| **D5** | The hierarchical results on the HB records, if D1 lets them count: V6 in D08, 0.114 (0.106 to 0.122) against 0.10, explained separately in [D08_CALIBRATION_NOTE.md](D08_CALIBRATION_NOTE.md) (item 21(b), option (ii): a two-group prior in a new protocol version, or (iii): the posterior tiers stay off); and V8 in D05, D08 and D10. | a failing component is not switched on (§8.1 rule 2); revising the model is a new version |
 | **D6** | Whether forward criteria (M2) and V8 rows should be marked "reported" for the non-selected candidate in the report of record (reading R2), and whether M4's "0 if none" reading (R1) stands. Whether to fix the report-of-record gaps of section 2.1 and H1/H2: those files' code is not hashed, but they are the reports of record. | readings of frozen text |
-| **D7** | Tag `manhattan-sim-confirm-1` only after D0–D5 are settled and every required development criterion is met (§8.1 rule 4). | the tag is the confirmation switch |
+| **D7** | Tag `manhattan-sim-confirm-1` only after D0–D5 and D8 are settled and every required development criterion is met (§8.1 rule 4). | the tag is the confirmation switch |
+| **D8** | **Small groups and eligibility.** The owner has ruled that not evaluated is not passed, so a small-group row stays unresolved. Still open: what happens to a candidate whose only open rows are small groups, as candidate (ii) is now (V4 in D01 STD, D01 LONG, P1, D07a)? Options: it can never become eligible on those scenarios; the rows are settled in the held-out run or a larger run; or a written reading of §5 against §7 step 1 (an amendment under §8.4 or a new version). The reporter shows OWNER DECISION REQUIRED until then. | the frozen text does not settle it |
