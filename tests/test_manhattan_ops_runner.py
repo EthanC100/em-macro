@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import manhattan_attempt_fixtures as F
 from manhattan.generate import parse_reply
 from manhattan.ops import data as D
 from manhattan.ops import freeze_pr, mockgen
@@ -44,7 +45,8 @@ def setup(tmp_path):
 
     def cfg(asof, **kw):
         n["run"] += 1
-        kw.setdefault("commit", "c" * 40)     # Phase 4B: forward attempts need a known code identity
+        # Phase 4B: forward attempts need a known code identity, and the configuration is verified against it (D-12)
+        kw.setdefault("commit", F.HEAD)
         return R.RunConfig(ledger_dir=tmp_path / f"rt{n['run']}/private/ledger", remote=str(remote),
                            batches_dir=tmp_path / "batches", asof=asof, sources=("synthetic",), run_id=str(n["run"]),
                            private_dir=tmp_path / f"rt{n['run']}/private", run_calendar="synthetic", **kw)

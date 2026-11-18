@@ -338,6 +338,13 @@ class Store:
             f.write(json.dumps(_canon(entry), sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
 
     # ------------------------------------------------------------ the journalled write
+    @staticmethod
+    def entry_id(intents: list, label: str, files: dict | None = None) -> str:
+        """The journal entry a ``write`` of these intents makes (deterministic: label, intents and file names)."""
+        intents = [it if isinstance(it, Intent) else Intent.from_dict(it) for it in intents]
+        return hashlib.sha256(S.canonical_bytes({"label": label, "intents": [it.as_dict() for it in intents],
+                                                 "files": sorted((files or {}).keys())})).hexdigest()
+
     def holds_lock(self) -> bool:
         """Whether this run's lock is in the loaded chain, not ended or broken, and not expired by this clock."""
         me = ("lock", str(self.run_id), str(self.run_attempt))
@@ -356,13 +363,12 @@ class Store:
         state each push attempt is based on, so a lock broken by another run (and pushed first) makes the push
         lose the race, reload, and refuse (``Locked``)."""
         intents = [it if isinstance(it, Intent) else Intent.from_dict(it) for it in intents]
+        entry = self.entry_id(intents, label, files)
         if any(it.type in PROTECTED_TYPES for it in intents):
             from manhattan import access
             if not access.store_seal_ok(sealed, intents, label):
                 raise StoreError("evidence and attempt records are written through manhattan.access only")
         body = [it.as_dict() for it in intents]
-        entry = hashlib.sha256(S.canonical_bytes({"label": label, "intents": body,
-                                                  "files": sorted((files or {}).keys())})).hexdigest()
         if any(j["entry"] == entry and j["state"] == "verified" for j in self.journal()):
             return {"entry": entry, "appended": 0, "duplicate": len(intents), "conflict": 0, "skipped": True}
 

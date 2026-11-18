@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import weakref
@@ -184,6 +185,9 @@ def check_declaration(kind: str, identity: dict, windows: tuple, *, caller: str,
         raise AccessError("only forward observations declare a signal warm-up")
     if ev.role in PROTECTED and caller != roles.RUNNER:
         raise AccessError(f"{ev.role} windows are the runner's")
+    if ev.role == roles.RESERVE and identity["designated"] is not True:
+        raise AccessError("a reserve attempt is its batch's designated evaluation of the domain; non-designated "
+                          "reserve reads have no permitted lifecycle (S7 N1)")
     if ev.role == roles.RESERVE:
         # S7 M6: the token is bound to the attempt it authorizes: its batch, a manifest, the specification and the
         # declared (domain, window) pair (the last also checked by roles.check_read).
@@ -203,25 +207,68 @@ def check_declaration(kind: str, identity: dict, windows: tuple, *, caller: str,
         _role_now(kind, w, caller=caller, fence=fence, freeze=freeze, holding=holding, token=token)
 
 
+CONFIG_PATH = "config/manhattan.yaml"
+
+
+def verified_fence(commit: str, *, root=None, expected_sha256: str | None = None) -> tuple[roles.Fence, str]:
+    """The fence from the authoritative configuration, verified against its pinned identity (owner decision D-12).
+
+    The working ``config/manhattan.yaml`` must be byte-identical to that file at ``commit`` (the attempt's registered
+    code identity: ``git show <commit>:config/manhattan.yaml``) and, if ``expected_sha256`` is given, hash to it. It
+    is parsed with ``yaml.safe_load``. Anything unavailable, unparseable or mismatched raises ``AccessError``: no
+    forward attempt is registered on an unverified fence. Returns the fence and the configuration's SHA-256, which
+    the attempt records."""
+    import subprocess
+    from pathlib import Path
+    root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+    if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit) is None or set(commit) == {"0"}:
+        raise AccessError("the configuration is pinned by a known commit")
+    try:
+        raw = (root / CONFIG_PATH).read_bytes()
+        pinned = subprocess.run(["git", "show", f"{commit}:{CONFIG_PATH}"], cwd=root, capture_output=True,
+                                check=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise AccessError("the configuration or its pinned version at the registered commit is unavailable") from exc
+    sha = hashlib.sha256(raw).hexdigest()
+    if raw != pinned:
+        raise AccessError("the configuration differs from its version at the registered commit")
+    if expected_sha256 is not None and expected_sha256 != sha:
+        raise AccessError("the configuration does not match its pinned SHA-256")
+    try:
+        import yaml
+        data = yaml.safe_load(raw.decode("utf-8")) or {}
+        return roles.Fence.from_config(data), sha
+    except Exception as exc:                             # noqa: BLE001 - any parse or shape error fails closed
+        raise AccessError("the configuration cannot be read as a fence") from exc
+
+
 def _token_snapshot(token, identity: dict) -> dict | None:
     if token is None:
         return None
     return {"batch": str(token.batch), "manifest_hash": str(token.manifest_hash), "spec_hash": identity["spec_hash"]}
 
 
-def authorization(kind, windows, *, caller, fence, freeze, holding, token, identity: dict) -> dict:
+def authorization(kind, windows, *, caller, fence, freeze, holding, token, identity: dict,
+                  config_sha256: str | None = None) -> dict:
+    """``config_sha256``: the verified configuration the fence came from (D-12); ``None`` when the caller supplied
+    the fence (synthetic and engine tests), which the reconciler reports as an unpinned fence."""
     domain = next(w.domain for w in windows if w.purpose == "evaluation")
     return {"caller": caller, "windows": [w.as_dict() for w in windows], "fence": fence_snapshot(fence, domain),
             "freeze": None if freeze is None else freeze.isoformat(), "holding": holding,
-            "token": _token_snapshot(token, identity)}
+            "token": _token_snapshot(token, identity), "config_sha256": config_sha256}
 
 
 def check_recorded(kind: str, identity: dict, auth: dict) -> None:
     """Re-validate a persisted authorization from its own fence snapshot (the reconciler's check). The recorded
     token's signature or tag cannot be re-verified here: a reserve window is checked for role, fence, and the
     token's recorded binding to the attempt's batch, specification and window."""
-    if not isinstance(auth, dict) or set(auth) != {"caller", "windows", "fence", "freeze", "holding", "token"}:
+    if not isinstance(auth, dict) or set(auth) != {"caller", "windows", "fence", "freeze", "holding", "token",
+                                                   "config_sha256"}:
         raise AccessError("malformed authorization")
+    c = auth["config_sha256"]
+    if (c is not None and (not isinstance(c, str) or re.fullmatch(r"[0-9a-f]{64}", c) is None)) or \
+            (kind == "forward_observation" and c is None):
+        raise AccessError("a forward observation records the verified configuration it was fenced by (D-12)")
     if not isinstance(auth["windows"], list) or not auth["windows"]:
         raise AccessError("malformed authorization")
     windows = tuple(DeclaredWindow.from_any(w) for w in auth["windows"])
@@ -366,6 +413,7 @@ class AttemptContext:
         self._require_active()
         out = self._backend.terminal(self.attempt_id, status, reason, self.data_read)
         self._ended = True
+        _BOUND.pop(self.attempt_id, None)
         return out
 
     def _mark_completed(self) -> None:
@@ -375,10 +423,11 @@ class AttemptContext:
 # ---------------------------------------------------------------- the Ledger (engine evaluations)
 
 def _one_designated(ledger: L.Ledger, batch: str, dws: tuple, supersedes: str | None) -> None:
-    """D-6, conservatively: one designated reserve evaluation per (batch, domain). A second registration is refused
-    unless it retries (``supersedes``) the one unfinished earlier attempt of that pair; a failed, aborted or
-    completed designated attempt consumes the designation. Relaxing this for attempts that never read data is an
-    owner decision, not taken here."""
+    """D-6 and D-13, conservatively: one reserve attempt per (batch, domain), and it is the designated evaluation
+    (S7 N1: a reserve attempt is never non-designated). A second registration is refused unless it retries
+    (``supersedes``) the one unfinished earlier attempt of that pair. A failed, aborted or completed attempt
+    consumes the designation, **even if it failed before any read** (owner decision D-13): it is never released or
+    recycled."""
     domain = next(w.domain for w in dws if w.purpose == "evaluation")
     prior = ledger.designated_reserve_starts(batch, domain)
     if not prior:
@@ -447,11 +496,9 @@ def _identity(identity: dict) -> dict:
 
 
 def _fence(fence):
-    if fence is None:
-        from manhattan import config as mconfig
-        return roles.Fence.from_config(mconfig.load())
+    """An explicit fence. There is no silent default: the authoritative one comes from ``verified_fence`` (D-12)."""
     if not isinstance(fence, roles.Fence):
-        raise AccessError("a fence is a roles.Fence")
+        raise AccessError("an operational attempt needs an explicit fence (access.verified_fence for forward runs)")
     return fence
 
 
@@ -466,13 +513,17 @@ def register_evaluation(ledger: L.Ledger, *, identity: dict, windows, caller: st
     if not isinstance(ledger, L.Ledger) or isinstance(ledger, L.PublicIndex):
         raise AccessError("engine attempts are registered in the full Manhattan ledger")
     ident = _identity(identity)
-    fence = _fence(fence)
+    config_sha = None
+    if fence is None:                                    # the authoritative configuration, verified (D-12)
+        fence, config_sha = verified_fence(ident["code_version"]["commit"])
+    elif not isinstance(fence, roles.Fence):
+        raise AccessError("a fence is a roles.Fence")
     dws = tuple(DeclaredWindow.from_any(w) for w in windows)
     check_declaration("engine_evaluation", ident, dws, caller=caller, fence=fence, freeze=freeze, holding=holding,
                       token=token)
     auth = authorization("engine_evaluation", dws, caller=caller, fence=fence, freeze=freeze, holding=holding,
-                         token=token, identity=ident)
-    if ident["role"] == roles.RESERVE and ident["designated"]:
+                         token=token, identity=ident, config_sha256=config_sha)
+    if ident["role"] == roles.RESERVE:
         _one_designated(ledger, ident["batch"], dws, supersedes)
     rec = ledger.start_evaluation({**ident, "attempt_schema": L.ATTEMPT_SCHEMA, "kind": "engine_evaluation",
                                    "authorization": auth}, supersedes=supersedes)
@@ -546,7 +597,8 @@ def commit_recovery(store, *, kinds: tuple = ("forward_observation",), epoch: bo
 def commit_failures(store, ctxs: list, *, require_lock: bool = False) -> int:
     """Close every listed attempt still without a terminal as ``failed: execution_error`` (reason class only)."""
     its = [terminal_intent(c.attempt_id, "failed", reason="execution_error", data_read=c.data_read)
-           for c in ctxs if store.get((STORE_TERMINAL, c.attempt_id)) is None]
+           for c in ctxs if store.get((STORE_TERMINAL, c.attempt_id)) is None
+           and c.attempt_id not in _COMMIT_PENDING]
     for c in ctxs:
         c._ended = True
     if its:
@@ -581,10 +633,39 @@ def commit_results(store, results: list, completions: list, label: str, *, requi
         for link in c.payload["results"]:
             if link["disposition"] in ("new", "conflict") and tuple(link["key"]) not in batch:
                 raise AccessError("a completion links a new result that is not in the batch")
-    out = _sealed_write(store, list(results) + list(completions), label, require_lock)
+    intents = list(results) + list(completions)
+    try:
+        out = _sealed_write(store, intents, label, require_lock)
+    except Exception:
+        _settle_failed_commit(store, intents, label, [_MINTED[id(c)][1] for c in completions])
+        raise
     for c in completions:
         _MINTED.pop(id(c), None)
     return out
+
+
+_COMMIT_PENDING: set = set()       # attempts whose completion may still be applied from the journal (S7 N8)
+
+
+def _settle_failed_commit(store, intents: list, label: str, attempt_ids: list) -> None:
+    """S7 N8. A results write failed. Before anyone may write another terminal for these attempts, find out where
+    their completion stands: reset the clone to the remote (dropping any half-applied local state); if the
+    results entry reached the remote journal, finish it now, or leave it for the next run's journal recovery,
+    and in either case never write a failed terminal for these attempts in this process. Only if the entry
+    provably never left this process may ``commit_failures`` close them as failed."""
+    try:
+        store._reset_to_remote()
+        pushed = any(j["entry"] == store.entry_id(intents, label) for j in store.journal())
+    except Exception:                                    # noqa: BLE001 - unknown state: leave it to recovery
+        _COMMIT_PENDING.update(attempt_ids)
+        return
+    if not pushed:
+        return
+    try:
+        store.reconcile()                                # idempotent; the entry was written under the lock
+    except Exception:                                    # noqa: BLE001 - the next run's journal recovery finishes it
+        pass
+    _COMMIT_PENDING.update(attempt_ids)
 
 
 @dataclass(frozen=True)
@@ -598,6 +679,7 @@ class StoreAttempt:
     freeze: date | None = None
     holding: int = 0
     caller: str = roles.RUNNER
+    config_sha256: str | None = None    # required for forward observations: the verified configuration (D-12)
 
 
 def start_payload(a: StoreAttempt, *, fence: roles.Fence, run_id: str, run_attempt: int, nonce: str,
@@ -607,11 +689,15 @@ def start_payload(a: StoreAttempt, *, fence: roles.Fence, run_id: str, run_attem
             any(not isinstance(v, str) or not v for v in a.subject.values()):
         raise AccessError("an operational attempt names its subject")
     dws = tuple(DeclaredWindow.from_any(w) for w in a.windows)
+    if a.kind == "forward_observation" and (not isinstance(a.config_sha256, str)
+                                            or re.fullmatch(r"[0-9a-f]{64}", a.config_sha256) is None):
+        raise AccessError("a forward observation is fenced by the verified configuration (D-12)")
     check_declaration(a.kind, ident, dws, caller=a.caller, fence=fence, freeze=a.freeze, holding=a.holding,
                       token=None)
     payload = {"attempt_schema": L.ATTEMPT_SCHEMA, "kind": a.kind, "identity": ident, "subject": dict(a.subject),
                "authorization": authorization(a.kind, dws, caller=a.caller, fence=fence, freeze=a.freeze,
-                                              holding=a.holding, token=None, identity=ident),
+                                              holding=a.holding, token=None, identity=ident,
+                                              config_sha256=a.config_sha256),
                "run": {"run_id": str(run_id), "run_attempt": int(run_attempt)}, "nonce": nonce,
                "retry_of": retry_of}
     return payload, dws
@@ -683,6 +769,51 @@ def terminal_intent(attempt_id: str, status: str, *, reason: str | None = None, 
 
 
 RESULT_TYPES = {"forward_observation": ("observation", "missed_observation"), "screening": ("screening",)}
+_BOUND: dict[str, object] = {}     # attempt ID -> the backtest result computed by run_bound (S7 N2)
+
+
+def run_bound(ctx: AttemptContext, window: pit.Window, strategy):
+    """S7 N2. Run ``strategy`` over the attempt's own window here and bind the result to the attempt: an
+    operational completion then accepts only results whose computed values are this result's. The window must be
+    the one the attempt opened (its ID, declared window and purpose)."""
+    from manhattan.engine import backtest
+    if not isinstance(ctx, AttemptContext) or ctx.kind not in RESULT_TYPES:
+        raise AccessError("only an operational attempt binds a computation")
+    ctx._require_active()
+    purpose = "forward_observation" if ctx.kind == "forward_observation" else "evaluation"
+    if (window.attempt_id, window.window_id, window.purpose) != (ctx.attempt_id, ctx.evaluation_window.id, purpose):
+        raise AccessError("the window is not this attempt's own")
+    res = backtest.run(window, strategy)
+    _BOUND[ctx.attempt_id] = res
+    return res
+
+
+def observation_values(res, i: int) -> dict:
+    """The computed fields of one forward observation (day ``i`` of a bound result)."""
+    return {"net": round(float(res.net[i]), 12), "gross": round(float(res.gross[i]), 12),
+            "cost": round(float(res.cost[i]), 12), "turnover": round(float(res.turnover[i]), 12),
+            "exposure": [round(float(e), 12) for e in res.exposure[i]]}
+
+
+def screening_values(res) -> dict:
+    """The computed fields of one screening record."""
+    return {"result_hash": res.result_hash(),
+            "summary": {k: (round(v, 10) if isinstance(v, float) and v == v else None) if isinstance(v, float)
+                        else v for k, v in res.summary().items()}}
+
+
+def _bound_values_ok(kind: str, payload: dict, res) -> bool:
+    """A result's computed values are those of the bound computation (S7 N2). Missed observations carry none."""
+    if kind == "missed_observation":
+        return True
+    canon = lambda x: json.loads(S.canonical_bytes(x))                    # as the Store holds payloads
+    if kind == "screening":
+        return {k: payload.get(k) for k in ("result_hash", "summary")} == canon(screening_values(res))
+    days = [str(d) for d in res.dates.astype("datetime64[D]")]
+    if payload.get("date") not in days:
+        return False
+    want = canon(observation_values(res, days.index(payload["date"])))
+    return {k: payload.get(k) for k in want} == want
 
 
 def result_fits(kind: str, key, payload: dict, start: dict) -> bool:
@@ -718,16 +849,22 @@ def completion(ctx: AttemptContext, store, result_intents: list):
     if not ctx.data_read:
         raise AccessError("an attempt that read nothing cannot complete")
     start = store.get((STORE_START, ctx.attempt_id))["payload"]
+    res = _BOUND.get(ctx.attempt_id)
+    if res is None:
+        raise AccessError("an operational completion needs the attempt's bound computation (access.run_bound)")
     links = []
     for it in result_intents:
         if not result_fits(it.type, it.key, ST._canon(it.payload), start):
             raise AccessError("a result does not belong to this attempt (subject, executable, data or window)")
+        if not _bound_values_ok(it.type, ST._canon(it.payload), res):
+            raise AccessError("a result's values are not those of the attempt's bound computation")
         h = ST.content_hash(it.type, it.key, ST._canon(it.payload))
         have = store.get(it.key)
         disp = "new" if have is None else (
             "duplicate" if ST.content_hash(have["type"], have["key"], have["payload"]) == h else "conflict")
         links.append({"key": [str(k) for k in it.key], "type": it.type, "content_hash": h, "disposition": disp})
     ctx._mark_completed()
+    _BOUND.pop(ctx.attempt_id, None)
     it = terminal_intent(ctx.attempt_id, "completed", data_read=True, results=links)
     key = id(it)
     _MINTED[key] = (S.canonical_bytes(it.as_dict()), ctx.attempt_id)

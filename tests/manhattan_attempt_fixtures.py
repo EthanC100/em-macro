@@ -6,6 +6,17 @@ from datetime import date
 from manhattan import access, roles, spec
 from manhattan.engine import evaluate
 
+def _head() -> str:
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+# The checked-out commit: the configuration pin of forward runs is verified against it (D-12).
+HEAD = _head()
+
 SPECS = {level: {"level": level, "fixture": "phase4b synthetic"}
          for level in ("executable", "variant", "hypothesis", "family")}
 OPEN_FENCE = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)

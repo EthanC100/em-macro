@@ -204,9 +204,10 @@ def same_identity(start: dict, completion: dict) -> bool:
     return True
 
 
-def _designated_domain(p: dict) -> str | None:
-    """The evaluation domain of a schema-2 designated reserve start, else None."""
-    if p.get("attempt_schema") != ATTEMPT_SCHEMA or p.get("role") != "reserve" or p.get("designated") is not True:
+def _reserve_domain(p: dict) -> str | None:
+    """The evaluation domain of a schema-2 reserve start (designated or not: every reserve attempt consumes its
+    (batch, domain) designation, S7 N1), else None."""
+    if p.get("attempt_schema") != ATTEMPT_SCHEMA or p.get("role") != "reserve":
         return None
     auth = p.get("authorization")
     windows = auth.get("windows") if isinstance(auth, dict) else None
@@ -246,7 +247,7 @@ class Ledger:
         self._evals_by_key: dict[tuple, list] = {}
         self._evals: list[dict] = []
         self._legacy_last: dict[tuple, int] = {}      # key -> seq of the latest unlinked completion
-        self._designated: dict[tuple, list] = {}      # (batch, domain) -> designated reserve schema-2 starts
+        self._designated: dict[tuple, list] = {}      # (batch, domain) -> every schema-2 reserve start
         for rec in read(self.path):
             self._index(rec)
 
@@ -262,7 +263,7 @@ class Ledger:
                 self._starts_by_key.setdefault(k, []).append(rec)
             if isinstance(p.get("supersedes"), str):
                 self._superseded.add(p["supersedes"])
-            dom = _designated_domain(p)
+            dom = _reserve_domain(p)
             if dom is not None:
                 self._designated.setdefault((p.get("batch"), dom), []).append(rec["hash"])
         elif t in COMPLETIONS:
@@ -456,7 +457,7 @@ class Ledger:
         return self._append("evaluation", payload)
 
     def designated_reserve_starts(self, batch: str, domain: str) -> list[str]:
-        """Attempt IDs of the registered designated reserve evaluations of (batch, domain) (D-6)."""
+        """Attempt IDs of every registered reserve attempt of (batch, domain) (D-6, S7 N1)."""
         return list(self._designated.get((batch, domain), []))
 
     def is_superseded(self, attempt_id: str) -> bool:

@@ -41,6 +41,7 @@ supported Manhattan APIs.** It is not a sandbox. Stated plainly:
 | A protected window reads only while its attempt is registered and active | every read re-checks the attempt (liveness on the shared read meter), the store version, and that the object is the one minted here, unchanged, in this process; copies, deep copies, pickling, `object.__setattr__` widening and fork inheritance are refused | the liveness check sees the attempt's own `Ledger`/`Store` object in this process; another process's terminal is enforced at write time (Store lock compare-and-swap; single-writer Ledger) and by reconciliation |
 | A terminal's `data_read` is true whenever a value was read | reads are counted before any value leaves, and refused after the terminal | as above |
 | Every protected statistical evaluation has a start, an identity and exactly one terminal | registration before exposure; protected completions need a one-use completion proof (Ledger) or a sealed, linkage-checked commit (Store) | a process that never runs Manhattan code leaves no record (ARCHITECTURE §8 item 3) |
+| A recorded result's computed values are those of the attempt's own computation | Ledger: the completion proof is minted by `engine.evaluate` for the result hash of the backtest it ran. Store (S7 N2): `access.run_bound` runs the strategy over the attempt's own window and binds the result; `completion` refuses any observation whose `net`, `gross`, `cost`, `turnover` or `exposure` differ from that result at its date, and any screening record whose `result_hash` or `summary` differ | **narrow:** an observation's provenance fields (`reconstructed`, and through it the weight) are derived by runner code from first-seen captures and are **not** bound to the capture records here; eligibility, registration status and weight are re-checked against the registration by the reconciler. Activation gate G-1 (section 18) |
 | Deletion or alteration of either store's history is detected | chains re-verified from immutable snapshots against a supplied anchor `{records, head}` | a supplied anchor is not independent custody (D-7, section 10) |
 
 The exploration role stays open (ARCHITECTURE §6.1): exploration windows need no registration and exploratory reads
@@ -162,6 +163,19 @@ side file, never a complete record. The interrupted attempt then shows as unfini
    journalled write. A crash at any stage either leaves the pending entry, which `reconcile` finishes at the next
    run (results and terminals together), or leaves nothing, in which case the starts remain unfinished.
 
+**A failure (not a crash) while the results are being written** (S7 N8): `access.commit_results` first settles
+that write before any other terminal may be written for those attempts. It resets the clone to the remote,
+dropping any half-applied local state.
+- If the results entry reached the remote journal, it is finished now, or by the next run's journal recovery, which
+  runs under the lock before attempt recovery. Its completions are then those attempts' only terminals: no failed
+  terminal is written for them in this process.
+- Only if the entry provably never left the process are the attempts closed as `failed: execution_error`, with
+  nothing of that evaluation written.
+- If the state cannot be determined, nothing is written and the next run's journal recovery and attempt recovery
+  decide.
+
+The same path serves the nightly forward observations and screening.
+
 Terminal records use one key per attempt (`("attempt_terminal", id)`), so the Store's own idempotency rule makes a
 second, different terminal a `conflict` record instead of a second terminal (and, since the S7 correction, the
 public `Store.write` refuses an unsealed terminal outright, while any conflict on an evidence or attempt record makes
@@ -235,7 +249,9 @@ round (after the S7 audit) are marked **decided**.
 | D-3 | May a forward strategy's signal warm-up read dates inside (or in the embargo margin of) a configured reserve window? | open: refused (fail closed); no reserve window is configured today |
 | D-4 | Disposition of legacy records: may certification start at an accounting epoch? | open: readable, counted, never certified; their presence keeps `access_reconciled` false |
 | D-5 | Must protected completions require a registered attempt and a completion path that establishes authorization and accounting? | **decided (yes)**: `Ledger.record_evaluation` writes a reserve/forward completion only with the attempt's one-use completion proof (minted by `engine.evaluate` after a read); `Ledger.append` refuses lifecycle types; `Store.write` refuses evidence and attempt types unless sealed by `manhattan.access`, whose results commit checks linkage. Historical records stay readable and are never certified |
-| D-6 | One designated reserve evaluation per (batch, domain) | **decided (enforce conservatively)**: a second designated reserve registration for a (batch, domain) is refused unless it retries (`supersedes`) the one unfinished earlier attempt; a failed, aborted or completed designated attempt consumes the designation; the reconciler reports any reuse. Whether a designated attempt that never read data should release the designation is not decided here |
+| D-6 | One designated reserve evaluation per (batch, domain) | **decided (enforce conservatively)**: a reserve attempt is always the designated evaluation of its (batch, domain); non-designated reserve attempts are refused at registration (S7 N1). A second reserve registration of any kind for a (batch, domain) is refused unless it retries (`supersedes`) the one unfinished earlier attempt. The reconciler reports any non-designated reserve attempt (`non_designated_reserve_attempt`) and any second reserve attempt or completion (`designated_reserve_reused`), forged histories included |
+| D-12 | Configuration of the hash-locked runner | **decided (adopt a hash-pinned PyYAML)**: `pyyaml==6.0.3` is added to `requirements-manhattan-runner.lock` with the SHA-256 of its CPython 3.12 manylinux wheel; the hash was checked against PyPI's published digest and against two independent downloads. The fence comes only from `config/manhattan.yaml`, read with `yaml.safe_load` and verified against its pinned identity: byte-identical to the file at the attempt's registered commit, and to an explicit SHA-256 pin when one is given (`--config-sha256` / `MANHATTAN_CONFIG_SHA256`). A caller can no longer inject a fence into the runner. A missing, unparseable or mismatched configuration fails closed before any attempt is registered. Forward attempts record the configuration's SHA-256, which the reconciler requires |
+| D-13 | Designation consumption | **decided (never released)**: a designated reserve attempt consumes its (batch, domain) designation however it ends, **even if it failed or was aborted before any protected read**; the designation is never released or recycled |
 | D-7 | Custody of anchors | **decided (no false certification)**: an anchor held by the same writing credential is not independent. No independent custody is configured, so the reconciler reports `checked_against_supplied_anchor` only and never `independently_certified`. No external service is implemented |
 
 ---
@@ -349,10 +365,16 @@ Limitations (also returned in every report's `limitations`):
    compare-and-swap; the Ledger is single-writer) and by reconciliation, not on the in-memory read.
 10. Registration records (`registration`, from the merge time and witness) are written by the existing registration
     path; this phase checks attempts against them but does not re-authenticate them.
+11. Store computation binding is narrow (S7 N2): computed values are bound to the attempt's own computation;
+    the `reconstructed` provenance flag is not bound to the capture records, and a selectively omitted observation
+    is not detected in the run (the next run records it, since its key is still absent). Gate G-1.
+12. A missing `config_sha256` (a caller-supplied fence; engine attempts in tests) is recorded as such. No
+    production engine reserve or forward caller exists; gate G-3 covers one.
 
 ## 15. Remaining integration decisions
 
-D-1 to D-4 (section 10) stay open; D-5 to D-7 are decided. Found during implementation:
+D-1 to D-4 (section 10) stay open; D-5, D-6, D-7, D-12 and D-13 are decided (section 10). Found during
+implementation and still open:
 
 | # | decision | meanwhile |
 |---|---|---|
@@ -360,8 +382,6 @@ D-1 to D-4 (section 10) stay open; D-5 to D-7 are decided. Found during implemen
 | D-9 | Extend the code-identity contract with a digest of `manhattan/ops` (a new key the contract does not yet know) | `engine_sha256` plus the commit; a dirty runner checkout is not detected by the digest |
 | D-10 | Whether `factors/reproduce.py` and other exploration evaluations should register attempts | unchanged: open exploration |
 | D-11 | Whether `attempts_registered` and `attempts_recovered` may appear in the public health record | added as integer counts (like `observations_new`); remove them from `HEALTH_SCHEMA` if not wanted |
-| D-12 | The candidate hash-locked runner environment has no PyYAML. A locked run with predictions to observe needs the fence injected (`RunConfig.fence`) or PyYAML added to the lock; neither is done here | the runner imports and runs without PyYAML; with predictions and no injected fence it reads `config/manhattan.yaml` lazily, and fails closed at the evaluate stage if PyYAML is absent. The live workflow installs `requirements.txt` (PyYAML included) and is unchanged |
-| D-13 | Whether a designated reserve attempt that failed or was aborted without reading data should release its designation (D-6) | not released: conservative |
 
 ## 16. Test evidence
 
@@ -457,3 +477,40 @@ Existing tests changed in this round, each because the old expectation encoded a
 - The end-to-end overwrite attempt is now refused instead of recorded as a conflict.
 - The round-1 test expecting a second terminal to reconcile is corrected.
 - The capacity harness's ledger benchmark writes a neutral record type.
+
+## 18. S1 correction round after the S7 re-review (head `8615c69`)
+
+S7 confirmed that the 11 original counterexamples were fixed, and reported two new High defects (N8, N1) and three
+smaller findings (N2–N4). The owner also decided D-12 and D-13. Every defect test below fails on `8615c69` and passes
+on the corrected code (checked in a scratch worktree). N3's scan self-test and the restored N4 tests pass on both,
+because they add coverage rather than reproduce a defect.
+
+| item | defect / decision | fix | tests |
+|---|---|---|---|
+| **N8** | A failure (not a crash) after the results entry was journalled but before it was applied made the runner write failed terminals; the later journal recovery then wrote the completions, creating permanent conflicts | `commit_results` settles a failed write first (section 7): reset to the remote; a pushed entry is finished now or by the next run's journal recovery, and no failed terminal is written for its attempts; only an entry that provably never left the process lets those attempts be closed as failed. Nightly forward processing and screening share the path | `test_failure_while_applying_results_never_contradicts_them` (transient; until restart), `test_an_uncommitted_results_entry_never_becomes_a_success`, `test_screening_failure_while_applying_results_never_contradicts_them` |
+| **N1** | Five non-designated reserve attempts read protected data and were cancelled, then a designated evaluation completed at weight 1 and reconciled | registration refuses any non-designated reserve attempt, and any second reserve attempt of the (batch, domain), designated or not; the reconciler reports `non_designated_reserve_attempt` and `designated_reserve_reused` in forged histories | `test_non_designated_reserve_attempts_are_refused`, `test_forged_non_designated_reserve_history_never_reconciles` (0, 1, 5 forged probes) |
+| **N2** | A fabricated observation was accepted after a legitimate read | narrow fail-closed binding: `access.run_bound` computes over the attempt's own window and binds the result; `completion` refuses values that are not the bound result's, and refuses completion without a bound computation. The provenance flag `reconstructed` is not bound: gate G-1 | `test_a_fabricated_observation_after_a_legitimate_read_is_refused` (net, exposure, turnover, an unbound raw backtest), `test_a_fabricated_screening_result_is_refused`, `test_the_bound_computation_is_the_attempts_own_window` |
+| **N3** | The static scan did not cover the new private access-control names | the scan covers every private capability and raw writer (pit grants and seals; access proofs, seals, bindings, settlement; Ledger `_append`/`_index`; Store `_append_local`/`_commit`/`_push`/`_transact`/`_apply`), including definitions, `from … import`, and exact string constants such as `getattr(m, "_GRANTS")` | `test_private_access_paths_are_used_only_where_allowed`, `test_the_scan_detects_prohibited_references` (10 synthetic violations) |
+| **N4** | Weight tests had moved to exploration records, whose weight is always 0 | through registered forward attempts: first valid evaluation weight 1; rerun, nondeterministic result and changed data weight 0 (family suspended, result of record kept); reserve: weight 1 once, and no protected rerun can even be registered | `test_protected_weights_through_the_real_path`, `test_reserve_weight_1_once_and_no_protected_rerun` |
+| **D-12** | Configuration of the locked runner | hash-pinned PyYAML in the lock; `safe_load`; the configuration is verified against the file at the registered commit and an optional explicit SHA-256 pin; no injected fence; fail closed (section 10) | `test_the_runner_fence_is_verified_against_its_pinned_identity` (7 cases), `test_runner_imports_without_pyyaml`, the exact CPython 3.12 locked-runner test (its probe now checks the verified fence and a wrong pin) |
+| **D-13** | Designation consumption | never released, even when no protected read was recorded | `test_a_designation_is_consumed_even_without_a_read` |
+
+**Before and after.**
+
+| counterexample | before (`8615c69`) | after |
+|---|---|---|
+| N8: an exception while applying the journalled results, then restart | 8 `attempt_failed` terminals written while the completions were pending; journal recovery then conflicts | no failed terminal for those attempts; the entry is finished (in the run, or on restart); no conflict; a second restart changes nothing; `access_reconciled` true |
+| N8: the results entry never reached the remote | the unpushed local journal commit rode along with the failed-terminal write, and journal recovery then applied the uncommitted evaluation: 8 terminal conflicts (a success fabricated from an uncommitted evaluation) | the clone is reset first; attempts closed as failed with `data_read: true`; no observation or completion of that evaluation is ever written; the restart computes its own |
+| N1: five non-designated reserve reads, then a designated weight-1 evaluation | registered, read, reconciled true | refused at the first registration, before any read; forged equivalents are violations |
+| N2: a fabricated observation after a legitimate read | accepted | refused (`values are not those of the attempt's bound computation`) |
+
+**Activation gates.** None of these is lifted by this PR.
+
+| gate | before forward or reserve results may count as evidence |
+|---|---|
+| G-1 | Bind the observations' `reconstructed` provenance to the Store's capture records. For example, the reconciler could re-derive first-seen availability from the Store clone's captures and raw files. Until then, forward observations must not count as evidence (S7 N2). |
+| G-2 | Independent custody of anchors (D-7). Without it, nothing is independently certified. |
+| G-3 | Any production engine reserve or forward caller registers with the verified configuration (`fence=None`). Caller-supplied fences are reported as `protected_attempts_with_unpinned_fence`. |
+| G-4 | A workflow adopts the candidate lock (owner). The live workflow is unchanged and installs `requirements.txt`. |
+| G-5 | Reserve stays disabled (`config/manhattan.yaml`). No reserve workflow is authorized, and this PR enables none. |
+| G-6 | D-1: the counting unit of any multiple-testing denominator. `independent_statistical_tests` stays `null`. |

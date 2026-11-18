@@ -156,6 +156,7 @@ class _Audit:
         self.observations = 0
         self.designated: dict[str, int] = {}
         self.designated_chains: dict[tuple, int] = {}
+        self.unpinned = 0
 
     def v(self, code: str, store: str, seq) -> None:
         self.violations.append({"code": code, "store": store, "seq": seq})
@@ -190,6 +191,8 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                     if p.get("kind") != "engine_evaluation":
                         raise A.AccessError("kind")
                     A.check_recorded("engine_evaluation", ident, p.get("authorization"))
+                    if ident["role"] in PROTECTED and p["authorization"]["config_sha256"] is None:
+                        audit.unpinned += 1                    # a caller-supplied fence (gate G-3)
                 except (KeyError, L.LedgerError, PermissionError):
                     audit.v("invalid_identity_or_authorization", "ledger", seq)
             elif "attempt_schema" in p:
@@ -216,7 +219,10 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                     if audit.scoped(p):
                         audit.counts["retries"] += 1
             starts[r["hash"]] = (seq, p)
-            dom = L._designated_domain(p)
+            dom = L._reserve_domain(p)
+            if dom is not None and p.get("designated") is not True:
+                # S7 N1: a reserve read is the designated evaluation of its (batch, domain) or nothing
+                audit.v("non_designated_reserve_attempt", "ledger", seq)
             if dom is not None and p.get("supersedes") is None:
                 chains = audit.designated_chains
                 chains[(p.get("batch"), dom)] = chains.get((p.get("batch"), dom), 0) + 1
@@ -270,8 +276,8 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
             if audit.scoped(start):
                 audit.ended("completed", True)
                 audit.keys.add(("ledger", p["spec_hash"], p["data_hash"], p["window"]["id"]))
-                if kind == "evaluation" and p["role"] == "reserve" and p["designated"] and not p.get("data_changed"):
-                    k = f"{p['batch']}|{L._designated_domain(start) or 'unknown'}"
+                if p["role"] == "reserve":
+                    k = f"{p['batch']}|{L._reserve_domain(start) or 'unknown'}"
                     audit.designated[k] = audit.designated.get(k, 0) + 1
                     if audit.designated[k] > 1:
                         audit.v("designated_reserve_reused", "ledger", seq)
@@ -536,6 +542,7 @@ def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_a
             "distinct_specifications": len(audit.specs), "completed_evaluation_keys": len(audit.keys),
             "repeated_observations": audit.observations, "independent_statistical_tests": None,
             "legacy": audit.legacy, "designated_reserve_completions": audit.designated,
+            "protected_attempts_with_unpinned_fence": audit.unpinned,
             "violations": audit.violations,
             "access_reconciled": reconciled,
             "limitations": list(LIMITATIONS)}

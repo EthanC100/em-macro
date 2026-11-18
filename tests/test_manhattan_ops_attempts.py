@@ -16,6 +16,7 @@ from manhattan.engine import pit
 from manhattan.ops import data as D
 from manhattan.ops import runner as R
 from manhattan.ops import store as ST
+import manhattan_attempt_fixtures as F
 from test_manhattan_ops_runner import setup  # noqa: F401  (the runner fixture: batch, clock, nights)
 
 PRIVATE = "private_canary_0.987654321"
@@ -90,9 +91,9 @@ def test_observations_need_an_active_forward_attempt(setup):
     with pytest.raises(pit.AccessError):
         R.observation_intents(led, fs, store, reg, exe, date(2026, 11, 16), attempt=None)
     led2 = ST.Store(workdir=led.workdir.parent / "w2", remote=led.remote, run_id="t", commit="c" * 40).open()
+    fence, sha = A.verified_fence(F.HEAD)
     (ctx,) = A.register_store_attempts(led2, [R.forward_attempt(reg, exe, date(2026, 11, 17), store.data_hash(),
-                                                                R.code_identity("c" * 40))],
-                                       fence=roles.Fence.from_config(MC.load()))
+                                                                R.code_identity("c" * 40), sha)], fence=fence)
     with pytest.raises(pit.AccessError):                       # declared for another night
         R.observation_intents(led2, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
     ctx.fail("cancelled")
@@ -109,7 +110,7 @@ def test_warmup_overlapping_a_configured_reserve_is_refused(setup):
     manifest, specs = R.load_batch(s["cfg"](date(2026, 11, 16)).batches_dir, 1)
     exe = next(x for x in R.batch_executables(specs) if R.prediction_id(R.S.spec_hash(manifest), x.spec_hash)
                == reg["prediction"])
-    attempt = R.forward_attempt(reg, exe, date(2026, 11, 16), "d" * 64, R.code_identity("c" * 40))
+    attempt = R.forward_attempt(reg, exe, date(2026, 11, 16), "d" * 64, R.code_identity("c" * 40), "e" * 64)
     warm = next(w for w in attempt.windows if w.purpose == "signal_warmup")
     fence = roles.Fence(exploration_end=date(2019, 12, 31), enabled=False,
                         reserve={exe.universe.domain: (warm.start, warm.start)})
@@ -459,9 +460,9 @@ def _one_ctx(s, asof=date(2026, 11, 16)):
     fs = D.first_seen(led, ("synthetic",))
     store = fs.pit_store()
     w = ST.Store(workdir=led.workdir.parent / f"ctx-{asof}", remote=led.remote, run_id="ctx", commit="c" * 40).open()
+    fence, sha = A.verified_fence(F.HEAD)
     (ctx,) = A.register_store_attempts(w, [R.forward_attempt(reg, exe, asof, store.data_hash(),
-                                                             R.code_identity("c" * 40))],
-                                       fence=roles.Fence.from_config(MC.load()))
+                                                             R.code_identity("c" * 40), sha)], fence=fence)
     return w, ctx, reg, exe, fs, store
 
 
@@ -477,6 +478,7 @@ def test_store_window_reads_only_while_its_attempt_is_active(setup, ending):
         ctx.fail("execution_error")
         assert w.get((A.STORE_TERMINAL, ctx.attempt_id))["payload"]["data_read"] is True
     elif ending == "complete":
+        A.run_bound(ctx, win, exe.strategy())
         A.completion(ctx, w, [])
     else:
         assert A.commit_recovery(w, require_lock=False) == 1
@@ -569,3 +571,175 @@ def test_a_pending_entry_pushed_under_the_lock_is_finished_before_recovery(setup
     assert h["status"] == "ok" and h["attempts_recovered"] == 0
     r = audit(s["ledger"]())
     assert r["access_reconciled"] and r["aborted"] == 0
+
+
+# ================================================================== S7 re-review (N8): failure while applying results
+
+@pytest.mark.parametrize("persist", [False, True], ids=["transient", "until_restart"])
+def test_failure_while_applying_results_never_contradicts_them(setup, monkeypatch, persist):
+    """S7 N8. The results entry (observations + completions) is journalled and pushed; applying it then fails. The
+    run must not write failed terminals for those attempts: the pending entry is finished (now, or by the next
+    run's journal recovery) and is the attempts' only terminal. Restart, reconcile, and recover again: no conflict,
+    no contradictory terminal, the same records."""
+    s = setup
+    first_night(s)
+    real = ST.Store._apply
+    calls = {"n": 0}
+
+    def flaky(self, entry, intents, label):
+        if label.startswith("observations to") and (persist or calls["n"] == 0):
+            calls["n"] += 1
+            raise ST.StoreError("injected: journal application failed")
+        return real(self, entry, intents, label)
+
+    monkeypatch.setattr(ST.Store, "_apply", flaky)
+    h = s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
+    assert h["status"] == "failed" and h["stage"] == "evaluate"
+    monkeypatch.undo()
+    first = s["ledger"]()
+    started = {r["key"][1] for r in first.of_type("attempt_started")}
+    assert first.of_type("attempt_failed") == [] and first.of_type("conflict") == []
+    for when in ("2026-11-17T02:00:00Z", "2026-11-17T02:30:00Z"):     # restart, then an idempotent rerun
+        assert s["night"](date(2026, 11, 16), when)["status"] == "ok"
+    led = s["ledger"]()
+    done = {r["key"][1] for r in led.of_type("attempt_completed")}
+    assert started <= done and led.of_type("conflict") == [] and led.of_type("attempt_failed") == []
+    assert led.of_type("attempt_aborted") == []
+    keys = [tuple(x["key"]) for x in led.records]
+    assert len(keys) == len(set(keys))
+    r = audit(led)
+    assert r["access_reconciled"], r["violations"]
+
+
+def test_an_uncommitted_results_entry_never_becomes_a_success(setup, monkeypatch):
+    """S7 N8, the other side: the results entry never reached the remote. The attempts are closed as failed
+    (data read), nothing of the uncommitted evaluation is written, and the restart computes its own results."""
+    s = setup
+    first_night(s)
+    real = ST.Store._push
+
+    def refuse(self):
+        msg = self._git("log", "-1", "--format=%s").stdout
+        if msg.startswith("journal pending") and "observations to" in msg:
+            raise ST.StoreError("injected: the results entry could not be pushed")
+        return real(self)
+
+    monkeypatch.setattr(ST.Store, "_push", refuse)
+    h = s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
+    assert h["status"] == "failed"
+    monkeypatch.undo()
+    first = s["ledger"]()
+    failed = first.of_type("attempt_failed")
+    assert failed and all(f["payload"]["data_read"] is True for f in failed)
+    assert first.of_type("observation") == [] and first.of_type("attempt_completed") == []
+    assert s["night"](date(2026, 11, 16), "2026-11-17T02:00:00Z")["status"] == "ok"
+    led = s["ledger"]()
+    done = {r["key"][1] for r in led.of_type("attempt_completed")}
+    assert not done & {f["key"][1] for f in failed}                  # no success for the uncommitted attempts
+    assert led.of_type("conflict") == []
+    r = audit(led)
+    assert r["access_reconciled"], r["violations"]
+    assert r["failed"] == len(failed) and r["terminals_by_data_read"]["failed_read"] == len(failed)
+
+
+# ================================================================== S7 re-review (N2): results bound to the computation
+
+@pytest.mark.parametrize("fabrication", ["net", "exposure", "turnover", "unread_raw_backtest"])
+def test_a_fabricated_observation_after_a_legitimate_read_is_refused(setup, fabrication):
+    """S7 N2. The attempt has read its window legitimately; an observation whose computed values are not those
+    of the attempt's own bound computation (access.run_bound) is refused before anything is written."""
+    from manhattan.engine import backtest
+    from manhattan.ops import timing as TM
+    s = setup
+    first_night(s)
+    cap = s["ledger"]()
+    it, files = D.capture_intent(D.SOURCES["synthetic"], D.synthetic_csv(date(2026, 11, 16)),
+                                 TM.parse_time("2026-11-16T23:30:00Z"))
+    cap.write([it], "capture", files=files)
+    w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
+    if fabrication == "unread_raw_backtest":
+        # a computation outside run_bound, on the attempt's own window: read, but never bound
+        backtest.run(D.forward_window(ctx, store), exe.strategy())
+        its = [ST.Intent("observation", ("observation", reg["prediction"], "2026-11-16"),
+                         {"prediction": reg["prediction"], "executable": exe.id, "date": "2026-11-16", "net": 0.01,
+                          "gross": 0.01, "cost": 0.0, "turnover": 0.0, "exposure": [0.0], "role": "forward"})]
+        match = "bound computation"
+    else:
+        its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
+        o = next(i for i in its if i.type == "observation")
+        forged = dict(o.payload)
+        forged[fabrication] = [0.5] * len(forged["exposure"]) if fabrication == "exposure" else 0.0123
+        its = [ST.Intent(o.type, o.key, forged) if i is o else i for i in its]
+        match = "values are not those"
+    with pytest.raises(pit.AccessError, match=match):
+        A.completion(ctx, w, its)
+    assert ctx.active() and w.of_type("observation") == []
+
+
+def test_the_bound_computation_is_the_attempts_own_window(setup):
+    """run_bound computes only over the window the attempt itself opened."""
+    s = setup
+    first_night(s)
+    w, ctx, reg, exe, fs, store = _one_ctx(s)
+    w2, other, *_ = _one_ctx(s, asof=date(2026, 11, 17))
+    with pytest.raises(pit.AccessError, match="own"):
+        A.run_bound(ctx, D.forward_window(other, store), exe.strategy())
+
+
+def _screening_setup(tmp_path, n=2):
+    import subprocess
+    from manhattan.generate import parse_reply
+    from manhattan.ops import compiler as CP, mockgen
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+    req = mockgen.blind_request(n_families=2, max_hypotheses=1, domains=("syn_daily",))
+    fams, hyps = parse_reply(mockgen.mock_reply(req, n=2), "blind")
+    exes = list(CP.iter_batch(fams, hyps, "c" * 40))[:n]
+    st = pit.PitStore()
+    by = {}
+    for s_, p_, v_ in D.synthetic_rows(date(2008, 12, 31)):
+        by.setdefault(s_, ([], []))
+        by[s_][0].append(p_)
+        by[s_][1].append(v_)
+    for s_, (ps, vs) in by.items():
+        st.add(s_, ps, vs, lag_days=0 if "px" in s_ or "evt" in s_ else 1)
+    led = ST.Store(workdir=tmp_path / "w", remote=str(remote), run_id="900", commit="c" * 40).open()
+    return led, exes, st, roles.Fence.from_config(MC.load())
+
+
+def test_a_fabricated_screening_result_is_refused(tmp_path, monkeypatch):
+    """S7 N2 for screening: a screening record whose result hash or summary is not the bound computation's is
+    refused, and screen() then closes its attempts as failed (nothing of the batch is written)."""
+    led, exes, st, fence = _screening_setup(tmp_path)
+    real = A.completion
+
+    def tamper(ctx, store, its):                     # the record handed in is not the bound computation's
+        return real(ctx, store, [ST.Intent(i.type, i.key, {**i.payload, "result_hash": "f" * 64}) for i in its])
+
+    monkeypatch.setattr(A, "completion", tamper)
+    with pytest.raises(pit.AccessError, match="values are not those"):
+        R.screen(led, exes, st, fence, date(2007, 1, 2), date(2008, 12, 31))
+    assert led.of_type("screening") == [] and len(led.of_type("attempt_failed")) == len(exes)
+
+
+def test_screening_failure_while_applying_results_never_contradicts_them(tmp_path, monkeypatch):
+    """S7 N8 for screening: the results entry reached the journal, applying it failed; screen() writes no failed
+    terminal, and finishing the journal completes the attempts without a conflict."""
+    led, exes, st, fence = _screening_setup(tmp_path)
+    real = ST.Store._apply
+
+    def flaky(self, entry, intents, label):
+        if label.startswith("screening 2007"):
+            raise ST.StoreError("injected: journal application failed")
+        return real(self, entry, intents, label)
+
+    monkeypatch.setattr(ST.Store, "_apply", flaky)
+    with pytest.raises(ST.StoreError):
+        R.screen(led, exes, st, fence, date(2007, 1, 2), date(2008, 12, 31))
+    monkeypatch.undo()
+    later = ST.Store(workdir=tmp_path / "later", remote=led.remote, run_id="901", commit="c" * 40).open()
+    assert later.of_type("attempt_failed") == []
+    assert later.reconcile() == 1
+    r = audit(later)
+    assert r["access_reconciled"], r["violations"]
+    assert r["completed"] == len(exes) and later.of_type("conflict") == []

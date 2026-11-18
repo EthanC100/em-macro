@@ -40,7 +40,6 @@ from manhattan import access as A
 from manhattan import ledger as L
 from manhattan import roles
 from manhattan import spec as S
-from manhattan.engine import backtest
 from manhattan.engine import evaluate as EV
 
 from . import blinding as B
@@ -70,20 +69,17 @@ class RunConfig:
     lock_ttl_minutes: int = 75
     crash_at: str | None = None
     extra: dict = field(default_factory=dict)
-    fence: roles.Fence | None = None    # injected; otherwise read from config/manhattan.yaml when first needed
+    config_sha256: str | None = None    # optional explicit pin of config/manhattan.yaml (D-12)
 
 
-def run_fence(cfg: RunConfig) -> roles.Fence:
-    """The fence for forward-observation attempts: the injected one, else ``config/manhattan.yaml``. The config
-    module (PyYAML) is imported only here, when a run has predictions to observe, so the runner imports and runs
-    without PyYAML otherwise (the hash-locked runner environment; S7 H1). A locked environment that must observe
-    predictions needs the fence injected or PyYAML added to its lock (owner decision D-12)."""
-    if cfg.fence is not None:
-        if not isinstance(cfg.fence, roles.Fence):
-            raise TypeError("RunConfig.fence is a roles.Fence")
-        return cfg.fence
-    from manhattan import config as MC
-    return roles.Fence.from_config(MC.load())
+def run_fence(cfg: RunConfig) -> tuple[roles.Fence, str]:
+    """The fence for forward-observation attempts, from ``config/manhattan.yaml`` verified against its pinned
+    identity: byte-identical to the file at the run's commit (the attempts' registered code identity) and, if
+    ``cfg.config_sha256`` is set, hashing to it; parsed with ``yaml.safe_load`` (owner decision D-12). A caller
+    cannot inject a fence. PyYAML is imported only here, so the runner module imports without it (S7 H1); the
+    hash-locked runner environment now pins PyYAML. Fails closed (``AccessError``) when the configuration is
+    unavailable or mismatched, before any attempt is registered."""
+    return A.verified_fence(cfg.commit, expected_sha256=cfg.config_sha256)
 
 
 # ---------------------------------------------------------------- the frozen batches (public specs)
@@ -160,7 +156,8 @@ def code_identity(commit: str) -> dict:
     return version
 
 
-def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, version: dict) -> A.StoreAttempt:
+def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, version: dict,
+                    config_sha256: str | None = None) -> A.StoreAttempt:
     """The declaration of one night's forward observation of one prediction (an accounting unit, not a test:
     BINDING_ACCOUNTING.md section 2). Evaluation window: first observation to ``asof`` + 7 days; signal warm-up:
     the executable's warm-up days before it."""
@@ -179,7 +176,7 @@ def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, v
                 "code_version": version}
     return A.StoreAttempt("forward_observation", identity, tuple(windows),
                           {"prediction": reg["prediction"], "asof": asof.isoformat()},
-                          freeze=date.fromisoformat(reg["registration_utc"][:10]))
+                          freeze=date.fromisoformat(reg["registration_utc"][:10]), config_sha256=config_sha256)
 
 
 def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: CP.Executable,
@@ -202,7 +199,7 @@ def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: 
     if (window.start, window.end, window.signal_start) != (start - timedelta(days=exe.warmup_days),
                                                            asof + timedelta(days=7), start):
         raise A.AccessError("the attempt did not declare this prediction's forward window")
-    res = backtest.run(window, exe.strategy())
+    res = A.run_bound(attempt, window, exe.strategy())          # S7 N2: the completion accepts only these values
     at = {str(d): i for i, d in enumerate(res.dates.astype("datetime64[D]"))}
     out = []
     for d in cal.sessions(start + timedelta(days=1), asof):
@@ -217,9 +214,7 @@ def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: 
                                                   registration_weight=reg["evidential_weight"],
                                                   reconstructed=bool(recon), channel=reg.get("channel", "blind"))
             payload = {"prediction": reg["prediction"], "executable": exe.id, "date": ds,
-                       "net": round(float(res.net[i]), 12), "gross": round(float(res.gross[i]), 12),
-                       "cost": round(float(res.cost[i]), 12), "turnover": round(float(res.turnover[i]), 12),
-                       "exposure": [round(float(e), 12) for e in res.exposure[i]],
+                       **A.observation_values(res, i),
                        "eligible": bool(reg["eligible"]), "reconstructed": bool(recon), "evidential_weight": weight,
                        "registration_status": reg["registration_status"], "role": "forward"}
             if ledger.get(("observation", reg["prediction"], ds)) is None:
@@ -348,9 +343,10 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
             if plans:
                 # Registration before exposure: every start is durable on the remote before any window opens.
                 version, data_hash = code_identity(cfg.commit), pit.data_hash()
+                fence, config_sha = run_fence(cfg)
                 ctxs = A.register_store_attempts(
-                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version) for reg, x in plans],
-                    fence=run_fence(cfg), label=f"forward attempts {cfg.asof}", require_lock=True)
+                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version, config_sha) for reg, x in plans],
+                    fence=fence, label=f"forward attempts {cfg.asof}", require_lock=True)
             health["attempts_registered"] = len(ctxs)
             intents, terminals = [], []
             try:
@@ -549,15 +545,12 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
     try:
         for x, ctx in zip(exes, ctxs):
             w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence, attempt=ctx).window(start, end)
-            res = backtest.run(w, x.strategy())
-            summ = res.summary()
+            res = A.run_bound(ctx, w, x.strategy())             # S7 N2: the completion accepts only these values
             it = ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
                            {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
                             "label": "exploration: no evidential weight", "evidential_weight": 0,
                             "window": {"start": str(start), "end": str(end)}, "data_hash": w.data_hash(),
-                            "result_hash": res.result_hash(),
-                            "summary": {k: (round(v, 10) if isinstance(v, float) and v == v else None)
-                                        if isinstance(v, float) else v for k, v in summ.items()}},
+                            **A.screening_values(res)},
                            source="exploration")
             intents.append(it)
             terminals.append(A.completion(ctx, ledger, [it]))
@@ -599,6 +592,7 @@ def main(argv=None) -> int:
             p.add_argument("--asof", default=datetime.now(timezone.utc).date().isoformat())
             p.add_argument("--sources", default="fred_DEXBZUS,fred_DEXMXUS,fred_DEXSFUS")
             p.add_argument("--mirror", default=os.environ.get("MANHATTAN_MIRROR_URL") or None)
+            p.add_argument("--config-sha256", default=os.environ.get("MANHATTAN_CONFIG_SHA256") or None)
         else:
             p.add_argument("--batch", type=int, required=True)
             p.add_argument("--pr-json", required=True)
@@ -636,6 +630,7 @@ def _run_cli(a) -> int:
     if a.cmd == "nightly":
         cfg.sources = tuple(x for x in a.sources.split(",") if x)
         cfg.mirror = a.mirror
+        cfg.config_sha256 = a.config_sha256
         fetchers = {sid: (lambda src=D.SOURCES[sid]: D.fetch_fred(src)) for sid in cfg.sources
                     if D.SOURCES[sid].kind == "fred"}
         rec = nightly(cfg, fetchers)

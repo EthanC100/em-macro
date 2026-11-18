@@ -50,9 +50,9 @@ def anchor(b: L.Ledger) -> dict:
     return {"records": len(b), "head": b.head}
 
 
-def reserve_ctx(b, st, wid="test:reserve", start=date(2010, 1, 4), end=date(2010, 1, 15), **kw):
+def reserve_ctx(b, st, wid="test:reserve", start=date(2010, 1, 4), end=date(2010, 1, 15), designated=True, **kw):
     return F.register(b, st, domain=DOM, start=start, end=end, role="reserve", window_id=wid,
-                      fence=RESERVE_FENCE, token=F.reserve_token(DOM, wid), designated=True, **kw)
+                      fence=RESERVE_FENCE, token=F.reserve_token(DOM, wid), designated=designated, **kw)
 
 
 def forward_ctx(b, st, start=date(2010, 1, 4), end=date(2010, 1, 15), **kw):
@@ -164,55 +164,98 @@ def test_attempt_contexts_come_from_registration_only():
 
 
 def _refs(tree: ast.AST) -> set[str]:
+    """Every name a module defines, imports, references as an attribute or a name, or spells as an exact string
+    constant (``getattr(pit, "_open_window")``)."""
     out = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute):
             out.add(node.attr)
         elif isinstance(node, ast.Name):
             out.add(node.id)
-        elif isinstance(node, ast.ImportFrom):
-            out.update(a.name for a in node.names)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, (ast.ImportFrom, ast.Import)):
+            out.update(a.name.rsplit(".", 1)[-1] for a in node.names)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            out.add(node.value)
     return out
 
 
 # Who may touch each private access path (BINDING_ACCOUNTING.md section 1). Adding a module here is a reviewable
-# decision, not a refactor.
+# decision, not a refactor. Names are the access-control capabilities and the raw writers behind them.
+PIT, ACCESS, LEDGER, STORE = ("manhattan/engine/pit.py", "manhattan/access.py", "manhattan/ledger.py",
+                              "manhattan/ops/store.py")
+EVALUATE, RUNNER = "manhattan/engine/evaluate.py", "manhattan/ops/runner.py"
 ALLOWED = {
-    "_open_window": {"manhattan/engine/pit.py", "manhattan/access.py"},
-    "_SEAL_KEY": {"manhattan/engine/pit.py"},
-    "_seal": {"manhattan/engine/pit.py"},
-    "_CTX_KEY": {"manhattan/access.py"},
-    "_as_of": {"manhattan/engine/pit.py"},
-    "_store": {"manhattan/engine/pit.py", "manhattan/access.py"},
-    "_value": {"manhattan/engine/pit.py", "manhattan/engine/lookahead.py"},
-    "_period": {"manhattan/engine/pit.py", "manhattan/engine/lookahead.py"},
-    "diagnostic_window": {"manhattan/engine/pit.py", "manhattan/ops/capacity.py"},
-    "forward_window": {"manhattan/ops/data.py", "manhattan/ops/runner.py", "manhattan/access.py"},
-    "record_evaluation": {"manhattan/ledger.py", "manhattan/engine/evaluate.py"},
-    "Window": {"manhattan/engine/pit.py", "manhattan/engine/backtest.py", "manhattan/engine/evaluate.py",
-               "manhattan/ops/data.py", "manhattan/factors/reproduce.py", "manhattan/access.py"},
+    # pit: minting, sealing and the per-process grant registry
+    "_open_window": {PIT, ACCESS}, "_SEAL_KEY": {PIT}, "_seal": {PIT}, "_GRANTS": {PIT}, "_fields": {PIT},
+    "_guard": {PIT}, "_Meter": {PIT, ACCESS}, "_meter": {PIT, ACCESS}, "_open_read": {PIT, ACCESS},
+    "_as_of": {PIT}, "_store": {PIT, ACCESS},
+    "_value": {PIT, "manhattan/engine/lookahead.py"}, "_period": {PIT, "manhattan/engine/lookahead.py"},
+    "diagnostic_window": {PIT, "manhattan/ops/capacity.py"},
+    "Window": {PIT, "manhattan/engine/backtest.py", EVALUATE, "manhattan/ops/data.py",
+               "manhattan/factors/reproduce.py", ACCESS},
+    # access: contexts, proofs, seals, bindings and settlement
+    "_CTX_KEY": {ACCESS}, "_PROOF_KEY": {ACCESS}, "_mac": {ACCESS}, "_store_mac": {ACCESS},
+    "_sealed_write": {ACCESS}, "_MINTED": {ACCESS}, "_BOUND": {ACCESS}, "_COMMIT_PENDING": {ACCESS},
+    "_settle_failed_commit": {ACCESS}, "_StoreBackend": {ACCESS}, "_LedgerBackend": {ACCESS, EVALUATE},
+    "_completion_proof": {ACCESS, EVALUATE}, "_mark_completed": {ACCESS, EVALUATE}, "_backend": {ACCESS, EVALUATE},
+    "_require_active": {ACCESS}, "_ended": {ACCESS}, "CompletionProof": {ACCESS},
+    "verify_completion": {ACCESS, LEDGER}, "store_seal_ok": {ACCESS, STORE},
+    "run_bound": {ACCESS, RUNNER}, "commit_results": {ACCESS, RUNNER}, "commit_failures": {ACCESS, RUNNER},
+    "commit_recovery": {ACCESS, RUNNER}, "forward_window": {"manhattan/ops/data.py", RUNNER, ACCESS},
+    # the Ledger's raw writer and lifecycle indexes
+    "record_evaluation": {LEDGER, EVALUATE}, "_append": {LEDGER}, "_index": {LEDGER}, "_starts": {LEDGER},
+    "_terminated": {LEDGER}, "_superseded": {LEDGER}, "_designated": {LEDGER},
+    # the Store's raw writer (journal, git) behind the sealed write
+    "_append_local": {STORE}, "_commit": {STORE}, "_push": {STORE}, "_transact": {STORE}, "_apply": {STORE},
+    "_verify_entry": {STORE}, "_reset_to_remote": {STORE, ACCESS},
 }
 
 
-def test_private_access_paths_are_used_only_where_allowed():
+def scan(sources: dict) -> dict:
+    """{name: [modules that reference it without being allowed]} over {relative path: source text}."""
     found: dict[str, set[str]] = {k: set() for k in ALLOWED}
-    for path in sorted((ROOT / "manhattan").rglob("*.py")):
-        rel = path.relative_to(ROOT).as_posix()
-        refs = _refs(ast.parse(path.read_text(encoding="utf-8")))
+    for rel, text in sources.items():
+        refs = _refs(ast.parse(text))
         for name in ALLOWED:
             if name in refs:
                 found[name].add(rel)
-    bad = {k: sorted(v - ALLOWED[k]) for k, v in found.items() if v - ALLOWED[k]}
-    assert bad == {}
+    return {k: sorted(v - ALLOWED[k]) for k, v in found.items() if v - ALLOWED[k]}
+
+
+def test_private_access_paths_are_used_only_where_allowed():
+    sources = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8")
+               for p in sorted((ROOT / "manhattan").rglob("*.py"))}
+    assert scan(sources) == {}
     # and nothing outside pit.py calls the Window constructor (its seal would fail anyway)
-    for path in sorted((ROOT / "manhattan").rglob("*.py")):
-        if path.name == "pit.py":
+    for rel, text in sources.items():
+        if rel == PIT:
             continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(ast.parse(text)):
             if isinstance(node, ast.Call):
                 f = node.func
                 name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
-                assert name != "Window", path
+                assert name != "Window", rel
+
+
+@pytest.mark.parametrize("snippet,name", [
+    ("from manhattan.engine.pit import _open_window", "_open_window"),
+    ("import manhattan.engine.pit as p\nw = p._open_window", "_open_window"),
+    ("getattr(__import__('manhattan.engine.pit'), '_GRANTS')", "_GRANTS"),
+    ("from manhattan import access\nk = access._PROOF_KEY", "_PROOF_KEY"),
+    ("from manhattan.access import _sealed_write", "_sealed_write"),
+    ("def f(store):\n    store._append_local([])\n    store._push()", "_append_local"),
+    ("def f(ledger, p):\n    return ledger._append('evaluation', p)", "_append"),
+    ("from manhattan.access import CompletionProof", "CompletionProof"),
+    ("def f(ctx):\n    return ctx._completion_proof('c' * 64)", "_completion_proof"),
+    ("x = {'name': '_BOUND'}", "_BOUND"),
+])
+def test_the_scan_detects_prohibited_references(snippet, name):
+    """N3: a module outside the allowlist that reaches a private access path is flagged."""
+    assert name in scan({"manhattan/ops/rogue.py": snippet})
+    assert scan({ACCESS if name not in ("_append_local", "_append", "_GRANTS") else
+                 {"_append_local": STORE, "_append": LEDGER, "_GRANTS": PIT}[name]: snippet}) .get(name) is None
 
 
 # ------------------------------------------------------------------ identities
@@ -598,13 +641,67 @@ import sys
 # ---- H1: the runner imports and runs without PyYAML (the hash-locked runner environment)
 
 def test_runner_imports_without_pyyaml():
+    """The runner module imports without PyYAML; reading the fence without it fails closed (D-12: no injected
+    fence, no unverified fallback)."""
     code = ("import sys; sys.modules['yaml'] = None; sys.path.insert(0, %r); "
-            "from manhattan.ops import runner as R; from manhattan import roles; "
-            "from datetime import date; f = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}); "
-            "cfg = R.RunConfig(ledger_dir='x', remote='x', batches_dir='x', asof=date(2026, 1, 2), fence=f); "
-            "assert R.run_fence(cfg) is f; assert 'manhattan.config' not in sys.modules" % str(ROOT))
+            "from manhattan.ops import runner as R; from manhattan import access as A; "
+            "from datetime import date; import subprocess; "
+            "head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=%r, capture_output=True, text=True).stdout.strip(); "
+            "cfg = R.RunConfig(ledger_dir='x', remote='x', batches_dir='x', asof=date(2026, 1, 2), commit=head)\n"
+            "try:\n    R.run_fence(cfg)\n    raise SystemExit('read a fence without PyYAML')\n"
+            "except A.AccessError:\n    pass\n"
+            "assert 'manhattan.config' not in sys.modules" % (str(ROOT), str(ROOT)))
     r = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("case", ["verified", "pinned", "wrong_pin", "unknown_commit", "zero_commit",
+                                  "edited_config", "not_a_mapping"])
+def test_the_runner_fence_is_verified_against_its_pinned_identity(tmp_path, case):
+    """D-12: the authoritative configuration must equal its version at the registered commit (and an explicit pin,
+    if given), parsed with safe_load; anything else fails closed. A caller cannot inject a fence."""
+    from manhattan.ops import runner as R
+    cfg = R.RunConfig(ledger_dir=tmp_path, remote="", batches_dir=tmp_path, asof=date(2026, 1, 2), commit=F.HEAD)
+    assert not hasattr(cfg, "fence")
+    if case in ("verified", "pinned"):
+        fence, sha = R.run_fence(cfg)
+        assert fence == roles.Fence.from_config(__import__("manhattan.config", fromlist=["load"]).load())
+        if case == "pinned":
+            cfg.config_sha256 = sha
+            assert R.run_fence(cfg) == (fence, sha)
+        return
+    root = ROOT
+    if case == "wrong_pin":
+        cfg.config_sha256 = "f" * 64
+    elif case == "unknown_commit":
+        cfg.commit = "a" * 40
+    elif case == "zero_commit":
+        cfg.commit = "0" * 40
+    else:                                                # a working copy whose configuration was edited
+        import shutil
+        root = tmp_path / "repo"
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        (root / "config").mkdir()
+        shutil.copy(ROOT / "config/manhattan.yaml", root / "config/manhattan.yaml")
+        subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                        "commit", "-qm", "c"], check=True)
+        commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True,
+                                check=True).stdout.strip()
+        text = "reserve:\n  enabled: true\n" if case == "edited_config" else "[1, 2]\n"
+        if case == "not_a_mapping":
+            (root / "config/manhattan.yaml").write_text(text)
+            subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                            "commit", "-qam", "d"], check=True)
+            commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
+                                    text=True, check=True).stdout.strip()
+        else:
+            (root / "config/manhattan.yaml").write_text(text)          # not committed
+        with pytest.raises(access.AccessError):
+            access.verified_fence(commit, root=root)
+        return
+    with pytest.raises(access.AccessError):
+        R.run_fence(cfg)
 
 
 # ---- H2: a protected window reads only while its attempt is registered and active
@@ -834,3 +931,105 @@ def test_reconciliation_never_claims_independent_certification(tmp_path):
     assert r["assurance"] == {"internally_consistent": True, "checked_against_supplied_anchor": True,
                               "independently_anchored": False}
     assert r["independent_statistical_tests"] is None
+    assert r["protected_attempts_with_unpinned_fence"] == 1        # a caller-supplied fence is reported (G-3)
+
+
+# ================================================================== S7 re-review (N1, N4, D-13)
+
+def test_non_designated_reserve_attempts_are_refused(tmp_path):
+    """N1: a reserve read is the designated evaluation of its (batch, domain) or nothing; even a token that names
+    the window does not allow a non-designated read. Nothing is written, nothing is read."""
+    b, st = book(tmp_path), store()
+    for _ in range(5):
+        with pytest.raises(pit.AccessError, match="non-designated"):
+            reserve_ctx(b, st, designated=False)
+    assert len(b) == 0
+    ctx = reserve_ctx(b, st)                                       # the designated evaluation is still available
+    _, rec = evaluate.evaluate(ctx.window(st), hold(), ledger=b, **F.spec_kwargs(designated=True), attempt=ctx)
+    assert rec["payload"]["evidential_weight"] == 1
+    assert attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))["access_reconciled"]
+
+
+def test_a_designation_is_consumed_even_without_a_read(tmp_path):
+    """D-13: a designated reserve attempt that ended before any read still consumes its (batch, domain)
+    designation; it is never released or recycled."""
+    b, st = book(tmp_path), store()
+    first = reserve_ctx(b, st)
+    first.abort("cancelled")
+    assert b.records()[-1]["payload"]["data_read"] is False
+    for designated in (True, False):
+        with pytest.raises(pit.AccessError):
+            reserve_ctx(b, st, wid="test:again", end=date(2010, 1, 14), designated=designated)
+
+
+@pytest.mark.parametrize("prefix", [0, 1, 5])
+def test_forged_non_designated_reserve_history_never_reconciles(tmp_path, prefix):
+    """N1 in a hostile history: non-designated reserve attempts that read and were cancelled before a designated
+    evaluation are violations, as is any second reserve attempt of the (batch, domain)."""
+    b, st = book(tmp_path), store()
+    ctx = reserve_ctx(b, st)
+    _, rec = evaluate.evaluate(ctx.window(st), hold(), ledger=b, **F.spec_kwargs(designated=True), attempt=ctx)
+    start = b.records("evaluation_started")[0]["payload"]
+    forged = book(tmp_path, "forged.jsonl")
+    for i in range(prefix):
+        p = json.loads(json.dumps(start))
+        p["designated"] = False
+        p["window"]["id"] = f"test:probe{i}"
+        for w in p["authorization"]["windows"]:
+            w["id"] = f"test:probe{i}"
+        s_ = F.forge(forged, "evaluation_started", p)
+        F.forge(forged, "attempt_aborted", {"attempt_id": s_["hash"], "reason": "cancelled", "data_read": True})
+    s_ = F.forge(forged, "evaluation_started", start)
+    F.forge(forged, "evaluation", {**rec["payload"], "attempt_id": s_["hash"]})
+    r = attempts.reconcile(ledger_path=forged.path, ledger_anchor=anchor(forged))
+    codes = [v["code"] for v in r["violations"]]
+    if prefix == 0:
+        assert r["access_reconciled"], codes                      # the clean history reconciles
+    else:
+        assert codes.count("non_designated_reserve_attempt") == prefix and "designated_reserve_reused" in codes
+        assert not r["access_reconciled"]
+
+
+def _evaluate_forward(b, st, strategy, end=date(2010, 1, 15)):
+    ctx = forward_ctx(b, st, end=end)
+    return evaluate.evaluate(ctx.window(st), strategy, ledger=b, **F.spec_kwargs(), attempt=ctx)[1]
+
+
+def test_protected_weights_through_the_real_path(tmp_path):
+    """N4: through registered forward attempts (never the storage API): the first valid evaluation has weight 1; a
+    rerun with the same result, a nondeterministic result and a changed-data evaluation of the same key have
+    weight 0; the family is suspended; reconciliation recomputes every weight and agrees."""
+    b, st = book(tmp_path), store()
+    first = _evaluate_forward(b, st, hold())
+    assert (first["type"], first["payload"]["evidential_weight"]) == ("evaluation", 1)
+    rerun = _evaluate_forward(b, st, hold())
+    assert (rerun["type"], rerun["payload"]["evidential_weight"], rerun["payload"]["first_seq"]) == \
+        ("rerun", 0, first["seq"])
+    half = Strategy((Instrument("A", "A"),), lambda v: {"A": 0.5}, rebalance="D", lag=0)
+    odd = _evaluate_forward(b, st, half)                           # same spec, data and window; another result
+    assert (odd["type"], odd["payload"]["evidential_weight"]) == ("nondeterminism", 0)
+    assert odd["payload"]["first_result_hash"] == first["payload"]["result_hash"]
+    assert b.suspended_families() == {first["payload"]["family"]}
+    revised = store()
+    revised.add("A", ["2010-01-06"], [999.0], available=["2010-01-12"])   # a vendor revision: new data identity
+    changed = _evaluate_forward(b, revised, hold())
+    p = changed["payload"]
+    assert (changed["type"], p["evidential_weight"], p["data_changed"]) == ("evaluation", 0, True)
+    assert p["result_of_record_seq"] == first["seq"] and b.looks() == 2
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert r["access_reconciled"], r["violations"]
+    assert (r["completed"], r["completed_evaluation_keys"], r["registered_executions"]) == (4, 2, 4)
+
+
+def test_reserve_weight_1_once_and_no_protected_rerun(tmp_path):
+    """N4 for the reserve: the designated evaluation has weight 1; a rerun, a nondeterministic or a changed-data
+    reserve evaluation of the same batch and domain cannot even be registered (D-6, N1)."""
+    b, st = book(tmp_path), store()
+    ctx = reserve_ctx(b, st)
+    _, rec = evaluate.evaluate(ctx.window(st), hold(), ledger=b, **F.spec_kwargs(designated=True), attempt=ctx)
+    assert (rec["type"], rec["payload"]["evidential_weight"]) == ("evaluation", 1)
+    revised = store()
+    revised.add("A", ["2010-01-06"], [999.0], available=["2010-01-12"])
+    for s_ in (st, revised):
+        with pytest.raises(pit.AccessError, match="D-6"):
+            reserve_ctx(b, s_)

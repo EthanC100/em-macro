@@ -7,6 +7,7 @@ half-way through writing the chain and then recovered. The whole flow runs twice
 the two private ledgers are compared. Then every public channel is searched for the performance values the private
 ledger holds. Synthetic data only; no network; nothing is written to the repository.
 """
+import manhattan_attempt_fixtures as F  # the checked-out commit pins the configuration (D-12)
 import contextlib
 import json
 import os
@@ -131,7 +132,7 @@ def flow(root: Path, crash: bool) -> dict:
     def cfg(asof, run, attempt=1, crash_at=None):
         return R.RunConfig(ledger_dir=root / f"rt{run}.{attempt}/private/ledger", remote=str(remote),
                            batches_dir=batches, asof=asof, sources=("synthetic",), mirror=str(mirror), run_id=str(run),
-                           run_attempt=attempt, commit="c" * 40, private_dir=root / f"rt{run}.{attempt}/private",
+                           run_attempt=attempt, commit=F.HEAD, private_dir=root / f"rt{run}.{attempt}/private",
                            run_calendar="synthetic", crash_at=crash_at)
 
     fetch = lambda a: {"synthetic": (lambda: D.synthetic_csv(a))}
