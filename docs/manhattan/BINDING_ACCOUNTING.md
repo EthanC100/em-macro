@@ -301,3 +301,33 @@ D-1 to D-7 (section 10) stand. Found during implementation:
 | D-9 | Extend the code-identity contract with a digest of `manhattan/ops` (a new key the contract does not yet know) | `engine_sha256` plus the commit; a dirty runner checkout is not detected by the digest |
 | D-10 | Whether `factors/reproduce.py` and other exploration evaluations should register attempts | unchanged: open exploration |
 | D-11 | Whether `attempts_registered` and `attempts_recovered` may appear in the public health record | added as integer counts (like `observations_new`); remove them from `HEALTH_SCHEMA` if not wanted |
+
+## 16. Test evidence (local; remote CI is reported on the draft PR)
+
+New adversarial tests: `tests/test_manhattan_binding_access.py` (66: engine, PIT, Ledger, static scan) and
+`tests/test_manhattan_ops_attempts.py` (28: Store, crash stages, recovery, forgeries, screening, both stores), with
+synthetic fixtures in `tests/manhattan_attempt_fixtures.py`. No Monte Carlo or simulation run.
+
+| run | command | result | exit |
+|---|---|---|---|
+| new Ledger/engine tests | `python -m pytest -q tests/test_manhattan_binding_access.py` | 66 passed | 0 |
+| new Store tests | `python -m pytest -q tests/test_manhattan_ops_attempts.py` | 27 passed; the 28th (same-run-identity recovery) and the operator screening recovery added after, 2 passed | 0 |
+| end-to-end ops | `python -m pytest -q tests/test_manhattan_ops_e2e.py` | 10 passed | 0 |
+| targeted Manhattan + Q019 | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/test_manhattan_*.py tests/test_q019_*.py -p no:cacheprovider` | 1,001 passed, 2 skipped, 1 error | 1 |
+| full suite, final code | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,065 passed, 131 skipped, 30 warnings, 1 error, 1,353 s | 1 |
+
+**The one error is environmental and pre-existing.** It is
+`test_q019_collect_refuses_late_dated_oversized_or_binary_tables[big.csv-...]` at setup:
+`OSError: [Errno 7] Argument list too long: 'git'`. The case's parameter (2.2 MB) is part of its test ID, which pytest
+exports as `PYTEST_CURRENT_TEST`, so the fixture's `git` subprocess exceeds the exec limit. On unmodified main
+(`f5f8045`, in a scratch worktree) the same file gives the same result: 85 passed, 1 error. The other 85 Q019 tests pass
+here. Remote CI may differ.
+
+Skips (131) are the existing environment-gated ones: no private Norgate snapshot or `EM_MACRO_DATA`, shallow clone
+without the pinned commits, `MANHATTAN_SLOW_TESTS`, `EM_MACRO_VERIFY_V1`, `Q009_FULL_SWEEP`, the CPython 3.12-only
+wheel-lock test, and model tests without their sampler.
+
+Environment: Python 3.13; `scipy` was missing at first (a collection failure that also happens on unmodified main), so
+`requirements.txt` and `requirements-manhattan.txt` were installed. Checks: `python -m nightshift.protected <every
+changed path>` exit 0; `git diff --check` exit 0; `docs/manhattan/SIM_PREREG.md` and `SIM_PREREG_v2.md` match their
+recorded SHA-256 files. No protected path, `config/manhattan.yaml`, workflow, threshold or protocol file changed.
