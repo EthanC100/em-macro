@@ -18,6 +18,9 @@ empirically calibrated cost. There are no default cost values: every term is giv
     execution cost (currency) = (fill − ref) × q × point_value = (s + g + i + r) × |q| × point_value   ≥ 0
     fees (fee currency)       = |q| × (commission_per_contract + exchange_fee_per_contract)
 
+Fractional ticks cost whole ticks: half a tick of half-spread fills a full tick away, shown as 0.5 tick of
+``spread`` and 0.5 tick of ``rounding`` (a conservative convention, kept on purpose: design section 5).
+
 The four execution parts are reported separately and add up exactly to ``(fill − ref) × q × point_value``; fees
 are per contract per side, in their own currency. A roll is two orders (close the old month, open the new one), so
 it pays both legs' spread, slippage, impact and fees, once each.
@@ -110,9 +113,13 @@ class CostScenario:
                 "terms": {r: t.as_dict() for r, t in self.terms}}
 
     def scenario_id(self) -> str:
-        """Content address of the scenario, for an executable's ``cost_model_id`` (ARCHITECTURE section 3)."""
+        """Content address of the scenario's economics, for an executable's ``cost_model_id`` (ARCHITECTURE
+        section 3): the provenance and every root's terms. The name is a label and is left out, so renaming a
+        scenario keeps its id and two scenarios with the same terms share one."""
         from manhattan import spec
-        return "AC-" + spec.spec_hash(self.as_dict())[:16]
+        d = self.as_dict()
+        del d["name"]
+        return "AC-" + spec.spec_hash(d)[:16]
 
 
 @dataclass(frozen=True)
@@ -136,6 +143,7 @@ class Fill:
     exchange_fee: float
     traded_notional: float          # |filled| × |reference_price| × point_value, in ``currency``
     liquidity_known_at: datetime | None
+    roll_quantity: int = 0          # signed contracts of ``filled`` that are a leg of a roll (0 for an outright order)
 
     @property
     def execution_cost(self) -> float:
@@ -148,10 +156,14 @@ def capacity(liq: Liquidity, terms: CostTerms) -> int:
 
 
 def fill_order(spec: ContractSpec, settlement: Settlement, quantity: int, liq: Liquidity, terms: CostTerms, *,
-               decided_at: datetime, shortfall: str = "raise", reason: str = "decision") -> Fill:
+               decided_at: datetime, shortfall: str = "raise", reason: str = "decision", roll_quantity: int = 0) -> Fill:
     """Fill ``quantity`` (signed contracts) of ``spec`` at ``settlement``'s day, with the liquidity known at
-    ``decided_at``. Pure: the same inputs always give the same ``Fill``."""
+    ``decided_at``. ``roll_quantity`` says how many of those contracts are a roll leg (same sign, not more).
+    Pure: the same inputs always give the same ``Fill``."""
     q = U.contracts(quantity)
+    rq = U.contracts(roll_quantity, "roll_quantity")
+    if rq and (abs(rq) > abs(q) or (rq > 0) != (q > 0)):
+        raise UnitError(f"roll_quantity {rq} must have the sign of the order {q} and be no larger")
     if shortfall not in SHORTFALL:
         raise UnitError(f"shortfall policy is one of {SHORTFALL}, not {shortfall!r}")
     if not isinstance(settlement, Settlement) or not getattr(settlement, "tradable", False):
@@ -166,7 +178,7 @@ def fill_order(spec: ContractSpec, settlement: Settlement, quantity: int, liq: L
         raise LookAheadError(f"{spec.contract_id}: the settlement of {settlement.day} was already published at "
                              f"{settlement.known_at.isoformat()}, before the decision at {decided_at.isoformat()}; "
                              "a decision cannot trade at a price it has already seen")
-    spec.require_tradable(settlement.day)
+    spec.require_model_tradable(settlement.day)
     side = 1 if q > 0 else -1
     cap = capacity(liq, terms)
     done = q
@@ -182,7 +194,7 @@ def fill_order(spec: ContractSpec, settlement: Settlement, quantity: int, liq: L
                 exchange_fee=0.0, traded_notional=0.0)
     if n == 0:
         return Fill(settlement.day, spec.contract_id, spec.root, reason, q, 0, ref, ref, spec.currency,
-                    fee_currency=terms.fee_currency, liquidity_known_at=liq.known_at, **zero)
+                    fee_currency=terms.fee_currency, liquidity_known_at=liq.known_at, roll_quantity=0, **zero)
     s = terms.half_spread_ticks * spec.tick_size
     g = terms.slippage_ticks * spec.tick_size
     i = terms.impact_coefficient * liq.daily_vol_points * math.sqrt(n / liq.adv_contracts)
@@ -193,7 +205,7 @@ def fill_order(spec: ContractSpec, settlement: Settlement, quantity: int, liq: L
                 spread_cost=s * n * pv, slippage_cost=g * n * pv, impact_cost=i * n * pv, rounding_cost=r * n * pv,
                 fee_currency=terms.fee_currency, commission=n * terms.commission_per_contract,
                 exchange_fee=n * terms.exchange_fee_per_contract, traded_notional=n * abs(ref) * pv,
-                liquidity_known_at=liq.known_at)
+                liquidity_known_at=liq.known_at, roll_quantity=side * min(abs(rq), n) if rq else 0)
 
 
 def one_way_cost_fraction(spec: ContractSpec, reference_price: float, contracts: int, liq: Liquidity, terms: CostTerms,

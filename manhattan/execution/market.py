@@ -175,7 +175,9 @@ class MarketData:
         return rows[i - 1]
 
     def rate(self, frm: str, to: str, d: date) -> float:
-        """Units of ``to`` per one unit of ``frm`` on day ``d``."""
+        """Units of ``to`` per one unit of ``frm`` on day ``d``: the day's fix, for **valuation** of day ``d``'s
+        amounts. Its publication time is not checked here (ex-post valuation); ``ExecutionPolicy``'s
+        ``fx_valuation_cutoff`` checks it for contemporaneous valuation, and ``rate_as_of`` serves decisions."""
         U.currency(frm)
         U.currency(to)
         if frm == to:
@@ -187,6 +189,27 @@ class MarketData:
         if r is not None:
             return 1.0 / r.rate
         raise MissingInputError(f"no {frm}/{to} rate on {d} (no cross rates and no other day's rate are used)")
+
+    def rate_as_of(self, frm: str, to: str, t: datetime) -> tuple[float, date]:
+        """For a **decision** at ``t``: the most recent ``frm``/``to`` rate already published at ``t`` (direct or
+        inverted pair), and the day it is for. A rate published after ``t`` is never used, whatever day it is for;
+        refuses when none was known."""
+        U.currency(frm)
+        U.currency(to)
+        t = U.utc(t, "decision time")
+        if frm == to:
+            return 1.0, None
+        best = None
+        for (b, q, d), r in self.fx.items():
+            if {b, q} == {frm, to} and r.known_at <= t and (best is None or (d, r.known_at) > (best[1], best[0].known_at)):
+                best = (r, d)
+        if best is None:
+            later = [r for (b, q, _), r in self.fx.items() if {b, q} == {frm, to}]
+            if later:
+                raise LookAheadError(f"no {frm}/{to} rate was published by {t.isoformat()}")
+            raise MissingInputError(f"no {frm}/{to} rate at all")
+        r, d = best
+        return (r.rate if r.base == frm else 1.0 / r.rate), d
 
     def convert(self, amount: float, frm: str, to: str, d: date) -> float:
         return amount * self.rate(frm, to, d)          # the rate is required even for a zero amount

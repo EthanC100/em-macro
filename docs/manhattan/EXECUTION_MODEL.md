@@ -1,6 +1,6 @@
 # Synthetic futures execution, cost and roll model
 
-Version 0.1, 2026-11-18 (Project Manhattan, session 4). Code: `manhattan/execution/`. Tests:
+Version 0.2, 2026-11-18 (Project Manhattan, session 4; 0.2 answers the S6 review: section 19). Code: `manhattan/execution/`. Tests:
 `tests/test_manhattan_execution.py`.
 
 **What this is.** A deterministic, pure-function model of how a futures position plan turns into gross and net P&L:
@@ -77,6 +77,13 @@ assumption).
   functional form is the square-root law already used in `ledger/capacity.py`; the coefficient has no default.
 * The sum is rounded to the tick grid **against the trader** (buy up, sell down); the rounding is its own cost line.
 
+**Fractional ticks cost whole ticks (a deliberate, conservative convention).** A fill must be a price on the tick
+grid, so a cost scenario of half a tick of half-spread and no slippage fills one full tick away: the spread line
+shows the nominal 0.5 tick and the `rounding` line shows the other 0.5 tick. Read a scenario's cost from
+`spread + slippage + impact + rounding`, not from the nominal ticks. The model does not average fractional ticks
+across fills (as a mid-quote fill half the time would); that would be a different economic convention and is not
+made here. Any change to it would be a new cost-model version, not an edit.
+
 Per fill: `execution cost = (fill − reference) × q × point_value = spread + slippage + impact + rounding`, all ≥ 0
 for longs and shorts alike. The four parts add up exactly to the price difference; a test checks this.
 
@@ -89,6 +96,13 @@ Orders are signed whole contracts (`int`; floats, including `2.0`, and booleans 
 * `"clip"`: the cap is filled, the remainder is recorded as `Unfilled` and worked on the next trading day (reason
   `carry`) until the target is reached or replaced by a new decision.
 
+**Labels.** Each `Fill` has a `reason` and a `roll_quantity` (the signed contracts of the fill that are a roll leg):
+`decision` (an outright trade on the day a decision executes), `carry` (an outright trade on a later day, working
+toward a target the cap or a missing price held back), `roll` (a pure roll leg), `roll+decision` / `roll+carry` (one
+contract's fill that is partly a roll leg and partly an outright trade: one fill per contract per day, so impact
+and rounding are charged on the whole size once). Each `Unfilled` says what the order was (`reason`) and why it
+was short (`why`): `no settlement`, `liquidity` (its own cap) or `paired leg` (the roll's other leg could not trade).
+
 ADV = 0 allows nothing (`raise` refuses; `clip` fills zero and charges nothing). A very large ADV drives impact to
 zero; spread, slippage, rounding and fees remain.
 
@@ -100,11 +114,46 @@ Decisions name a **root** and a signed target in contracts; the roll rule picks 
 * **Roll** at the settlement of the first trading day on which the held contract is `roll_before_notice_days` or
   fewer calendar days from its notice. `buffer_days > roll_before_notice_days` is enforced.
 
-A roll is two orders, each paying spread, slippage, impact and fees once. It is treated as a calendar spread: the
-old month is never closed faster than the new month can absorb (under `clip`), and the new month is never opened
-beyond what was closed, so exposure neither lapses nor doubles; a roll whose new month has no settlement waits. A
-contract still held after its last trading day stops the run (`InvalidContractError`); so does a day on which no
-listed contract qualifies.
+**Each day, for each root, the trades are split in two** (`account._plan_root`), whether or not a decision arrived:
+
+1. **The month to hold** (`primary`): a held month that need not exit today (`RollPolicy.must_exit`: roll window,
+   delivery boundary, last trade), else the roll rule's choice. A roll is needed whenever some held month is not the
+   primary; that is decided from the holdings alone.
+2. **The roll** `K`: the part of the old months' position that the target keeps, moved into the primary as a calendar
+   spread. `K = sign(T − p) × min(|old|, |T − p|)` when the old position and the needed change `T − p` have the same
+   sign (`T` the target, `p` the primary's holding, `old` the other months' total), else 0.
+3. **The net change**: everything else, outright: the rest of the old months is closed, and the primary gets
+   `T − p − K`. Roll plus net takes the holdings exactly to `{primary: T}`.
+
+The roll executes first and paired: it moves `n = min(|K|, what the new month can trade, what the old months can
+trade)` contracts, so under `clip` or a missing price the position neither lapses nor doubles; the net change then
+uses what capacity is left. Under `raise`, any shortfall or missing price on a needed leg stops the run. A decision
+on the roll day is therefore a roll plus a net change; examples at the roll from H to J holding +5:
+
+| new target | H trade | J trade | RollEvent |
+|---|---|---|---|
+| 5 (unchanged) | −5 `roll` | +5 `roll` | 5 contracts |
+| 8 (increase) | −5 `roll` | +8 `roll+decision` (5 of them roll) | 5 |
+| 2 (decrease) | −5 `roll+decision` (2 of them roll) | +2 `roll` | 2 |
+| −3 (reversal) | −5 `decision` | −3 `decision` | none: no position is carried across |
+| 0 (flat) | −5 `decision` | — | none |
+
+Each roll leg pays spread, slippage, impact and fees once; a `RollEvent` is recorded for every day a roll moves
+contracts, with or without a decision. A day on which no listed contract can be held past the next trading day is an
+`InvalidContractError`.
+
+**Delivery boundary (owner decision, S6 M4).** This synthetic model has no delivery management, so it fails closed:
+
+* A **physically settled** contract may not be carried into its `first_notice` date: a position must be flat by the
+  close of the last trading day before `first_notice`. The exit rule rolls on that day at the latest, even with
+  `roll_before_notice_days = 0`; a position still open at that close (for example because the cap or a missing
+  price kept the roll from finishing) stops the run with `InvalidContractError`. No trade at all is made in a physical
+  contract on or after its first notice date (`ContractSpec.require_model_tradable`).
+* A **cash-settled** contract may not be carried past its `last_trade` date (its final cash settlement is not
+  modelled): flat by the close of the last trade day.
+* Dates are calendar dates of the contract's exchange as the caller gives them; "the next trading day" is the next
+  day of the caller's calendar (the day after, past its end). Where an exchange assigns delivery on positions held
+  earlier (a first position or intention day), give that earlier date as `first_notice`.
 
 ## 8. Continuous-price-series limitations
 
@@ -121,6 +170,12 @@ adjusted value. What each gets wrong, checked in tests:
 | chained return index | n/a | equal to the held contract's | an index, not a price |
 
 The accounting never uses any of them: it marks each held contract to its own settlement.
+
+**Point in time.** `difference` and `ratio` series are revised at every later roll: the value of a past day read
+from a series built over the whole window is not the value anyone saw on that day. `adjust.build(..., as_of=d)`
+builds the series from the days up to `d` only; a signal that reads back-adjusted levels must use a series built as
+of its decision. `spliced` and `chained` are not revised by later rolls (a test checks both). The hold schedule uses
+the accounting's exit rule, so the series roll on the same days the accounting does.
 
 ## 9. Roll yield versus artificial price adjustments
 
@@ -149,8 +204,13 @@ contract's own change and that a spliced series would have added the gap.
 ## 11. Portfolio turnover and exposure
 
 Per day, in the base currency: `turnover = Σ |filled| × |reference| × point_value × FX` (each contract traded counts
-once per side; a roll counts both legs), `gross_exposure = Σ |q × S × point_value × FX|` and
-`net_exposure = Σ q × S × point_value × FX` after the close, and the positions by contract. With `capital` given,
+once per side; a roll counts both legs), `gross_exposure = Σ |q| × |S| × point_value × FX` and
+`net_exposure = Σ sign(q) × |q| × |S| × point_value × FX` after the close, and the positions by contract.
+
+**Negative and zero prices.** Exposure is the size of the position at the absolute price, signed by the position:
+a long stays a positive exposure when the price is negative (with `q × S` it would flip sign and a long would look
+short). P&L is unaffected: it is always `q × ΔS × point_value`. At a price of zero the notional is zero, though the
+P&L per point is not; notional exposure is a size measure, not a risk measure. With `capital` given,
 totals are also reported as fractions of a fixed capital (no compounding).
 
 ## 12. Financing and margin
@@ -170,7 +230,23 @@ Interest earned on collateral, variation-margin timing and margin calls are not 
 `FxRate(base, quote, day, rate, known_at)`: `rate` units of `quote` per one `base`. Conversion uses that day's
 direct pair or its inverse; it never crosses through a third currency and never borrows another day's rate. A
 missing rate is an error whenever a foreign-currency amount (P&L, fee, exposure, margin) has to be converted, even a
-zero amount. Daily P&L is converted at the day's rate and assumed swept into the base currency, so the futures carry
+zero amount.
+
+**Valuation versus decisions (S6 L4).** The model uses FX in two different ways, with different time rules:
+
+* **Valuation** of day `d`'s P&L, costs, exposure and margin uses day `d`'s fix. By default this is **ex-post**
+  research accounting: the fix is used whenever it was published, because the amounts of day `d` are being valued,
+  not traded on, and nothing in the model decides anything from them (`Result.meta["fx_valuation"] = "ex_post"`).
+  For **contemporaneous** valuation (what a desk could report that evening), set
+  `ExecutionPolicy.fx_valuation_cutoff`: every rate used for day `d` must then have been published by `d`'s close
+  plus that cut-off, or the run stops with `LookAheadError`.
+* **Decisions** never read FX inside this model: orders are in whole contracts and the liquidity cap is in
+  contracts. A caller that sizes in money (section 16) uses `MarketData.rate_as_of(frm, to, t)`, which returns the
+  latest rate published at or before the decision time `t` and refuses a later one, whatever day it is for.
+
+No universal rule ties `known_at` to the rate's own day (fixes are published at different times of day around the
+world; a fix may be published before a contract's close or long after it): the two rules above are where the
+timing matters. Daily P&L is converted at the day's rate and assumed swept into the base currency, so the futures carry
 no FX exposure beyond the day's variation margin and any margin posted in a foreign currency; that sweep is an
 assumption, stated here, not a measurement.
 
@@ -185,9 +261,17 @@ first trade day or after its last, or held past its last trade day, is an `Inval
 ## 15. Determinism, reproducibility and sensitivity
 
 No randomness, no clock, no I/O. Inputs are sorted before use, so the order of decisions and of scenarios does not
-change the output. `Result.result_hash()` is the SHA-256 of a canonical JSON form (amounts rounded to 8 decimals).
-`CostScenario.scenario_id()` is a content address (`AC-` + 16 hex of the `manhattan.spec` canonical hash), suitable
-as an executable's `cost_model_id`. `run_scenarios` runs one plan under several scenarios; `sensitivity_table` gives
+change the output.
+
+* `Result.result_hash()`: SHA-256 of a canonical JSON form of the run: the policy (`ExecutionPolicy.describe()`:
+  base currency, roll rule, lag, missing-price and shortfall policies, capital, margin reporting, FX valuation rule),
+  the scenario id, and every output (days, fills, rolls, unfilled orders, unexecuted decisions), amounts rounded to
+  8 decimals of the base currency. Two runs under different rules never share a hash, even when their numbers agree.
+  The market data are **not** hashed: a caller who needs them in the identity hashes them alongside, as the engine's
+  `data_hash` does. Differences below 1e-8 of a currency unit do not change the hash.
+* `CostScenario.scenario_id()`: a content address (`AC-` + 16 hex of the `manhattan.spec` canonical hash) of the
+  scenario's economics: its provenance and every root's terms. The name is a label and is left out, so renaming a
+  scenario keeps its id. Suitable as an executable's `cost_model_id`. `run_scenarios` runs one plan under several scenarios; `sensitivity_table` gives
 one row of totals per scenario with its id and result hash. `CostScenario.scaled(k)` multiplies every price-moving
 cost and fee by `k` (the participation cap is unchanged), for multiples such as the repository's usual 2× test.
 
@@ -234,7 +318,11 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 * **Liquidity is the caller's estimate.** ADV and volatility are whatever the caller supplies, as of when they
   supply them.
 * **One rule for every roll.** The notice-date rule with fixed buffers; no open-interest-based roll, no spread
-  order book, and a roll's legs are costed as two outright orders.
+  order book, and a roll's legs are costed as two outright orders (paired in quantity, not priced as a spread).
+* **No delivery.** A position that cannot be rolled before its delivery boundary stops the run; there is no
+  delivery, no exchange-for-physical and no forced liquidation model.
+* **Hold leaves targets unmet.** Under `hold`, a day without a price in a needed month leaves the position where it
+  was (not at the target) until the price returns.
 * **Exchange calendars are not built in.** The caller supplies trading days, close times and contract dates; holidays
   and early closes are whatever the calendar says.
 * **Margin is static.** Initial margin per contract as given; no maintenance margin, no margin calls, no variation
@@ -244,3 +332,16 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 * **Fixed capital.** Fractions of capital use a fixed capital, with no compounding.
 * **Options, spreads as single instruments, and exchange-specific fee schedules** (tiers, caps, rebates) are out of
   scope.
+
+## 19. S6 review (version 0.2)
+
+| finding | decision | change |
+|---|---|---|
+| H1 a decision on the roll day bypassed the paired roll (S6: target 5 ended at 2, 8 and 10; no February RollEvent) | defect | trades split into a paired roll and a net change from the holdings alone (section 7); regression tests reproduce all three cases and cover increase, decrease, reversal, flat, zero liquidity and missing prices, checking positions, P&L, fees, turnover, exposure and roll counts |
+| M4 physical delivery | owner decision: fail closed | delivery boundary (section 7): flat by the close of the last trading day before first notice; no trade in the delivery period; cash-settled contracts flat by the last trade day |
+| M5 fractional-tick costs | convention kept | documented (section 5); the rounding line stays separate; a test shows 0.5 tick of half-spread costing a full tick |
+| L4 FX availability | defect for decision use; convention for valuation | `rate_as_of` for decisions; ex-post valuation by default, a contemporaneous cut-off on request (section 13) |
+| negative-price exposure | defect | net exposure signed by the position (section 11) |
+| deferred-order labels | defect | `roll_quantity`, combined reasons, `Unfilled.reason` (section 6) |
+| scenario and result hashes | defect | scenario id without the name; result hash covers the policy (section 15) |
+| back-adjusted series and point in time | limitation | `as_of` builds; documented as revised by later rolls (section 8) |

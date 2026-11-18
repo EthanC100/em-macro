@@ -18,11 +18,16 @@ price anyone could trade at:
 
 The hold schedule comes from the roll rule (``RollPolicy``), contract metadata only: the contract held over
 ``(D_{k−1}, D_k]`` is the one chosen at ``D_{k−1}``'s close, and a roll happens at the close of the roll day.
+
+**Not point in time.** ``difference`` and ``ratio`` move every earlier value at each later roll, so a value read
+from a series built today is not the value a researcher saw on that day. ``build(..., as_of=d)`` gives the series
+as it could have been built after ``d``'s settlements; any signal that reads back-adjusted levels must use one
+built as of its decision, never the full-window series. ``spliced`` and ``chained`` are not revised by later rolls.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 from .contracts import RollPolicy
 from .errors import MissingInputError, UnitError
@@ -53,12 +58,14 @@ class AdjustedSeries:
         return AdjustedPoint(self.root, self.days[i], self.values[i], self.method)
 
 
-def hold_schedule(market: MarketData, root: str, roll: RollPolicy) -> tuple:
-    """((day, contract held after that day's close), ...) for an always-invested holder of ``root``."""
+def hold_schedule(market: MarketData, root: str, roll: RollPolicy, as_of: date | None = None) -> tuple:
+    """((day, contract held after that day's close), ...) for an always-invested holder of ``root``, with the
+    same exit rule as the accounting (``RollPolicy.must_exit``: roll window, delivery boundary, last trade)."""
+    cal = [td.day for td in market.calendar if as_of is None or td.day <= as_of]
     out, held = [], None
-    for td in market.calendar:
-        d = td.day
-        if held is None or roll.roll_due(market.specs[held], d) or not market.specs[held].tradable_on(d):
+    for i, d in enumerate(cal):
+        nxt = market.calendar[i + 1].day if i + 1 < len(market.calendar) else d + timedelta(days=1)
+        if held is None or roll.must_exit(market.specs[held], d, nxt):
             held = roll.select(market.specs, root, d).contract_id
         out.append((d, held))
     return tuple(out)
@@ -71,10 +78,14 @@ def _px(market: MarketData, cid: str, d: date) -> float:
     return s.price
 
 
-def build(market: MarketData, root: str, roll: RollPolicy, method: str) -> AdjustedSeries:
+def build(market: MarketData, root: str, roll: RollPolicy, method: str, as_of: date | None = None) -> AdjustedSeries:
+    """The series over the calendar, or over the days up to ``as_of`` only: what a researcher could have built
+    after ``as_of``'s settlements were published. A back-adjusted series built later rewrites these values."""
     if method not in METHODS:
         raise UnitError(f"method is one of {METHODS}, not {method!r}")
-    sched = hold_schedule(market, root, roll)
+    sched = hold_schedule(market, root, roll, as_of)
+    if not sched:
+        raise MissingInputError(f"no trading day on or before {as_of}")
     days = tuple(d for d, _ in sched)
     held = tuple(c for _, c in sched)
     n = len(days)

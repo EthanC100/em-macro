@@ -18,7 +18,10 @@ day's close. Decisions that could only execute after the last day of the calenda
    two contract months at a roll.
 2. *Financing.* ``|q| × initial_margin × bp/10,000 × days/365`` for the margin held over the period, when the
    scenario funds margin. Futures need no financing of their notional: returns are in excess of cash.
-3. *Trades* at ``d``'s settlement (``manhattan.execution.costs.fill_order``). The gross already assumes the trade
+3. *Trades* at ``d``'s settlement (``manhattan.execution.costs.fill_order``), per root: first a **roll**, decided
+   from the holdings alone (any held month that is not the month to hold), executed as a paired calendar spread;
+   then the **net change** of the target, outright (``_plan_root``; design section 7). A decision on a roll day is
+   a roll plus a net change, never a replacement for the roll. The gross already assumes the trade
    happened at the settlement, so the only trading charges are the execution parts (spread, slippage, impact,
    tick rounding) and the fees. Nothing is charged twice: ``net = gross − costs`` and, equivalently, the net equals
    the cash flows at the actual fill prices plus the final marks, minus fees and financing.
@@ -26,14 +29,19 @@ day's close. Decisions that could only execute after the last day of the calenda
 
 **Missing data** (``on_missing_price``). ``raise`` (default): any held or traded contract without a settlement on
 a calendar day stops the run. ``hold``: a held contract keeps its last mark and the gap's P&L is booked on the day
-its price returns; a trade in it waits. Holding a contract past its last trading day always stops the run.
+its price returns; a trade in it waits. A position is never carried across a delivery boundary: a physical
+contract must be flat by the close before its first notice date, a cash-settled one by the close of its last
+trading day (``ContractSpec.may_hold_into``), or the run stops.
+
+**FX.** Day ``d``'s amounts are valued at ``d``'s fix: ex post by default, or only with rates published by the close
+plus ``fx_valuation_cutoff``. Nothing here decides from FX; decision-time conversion is ``MarketData.rate_as_of``.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from . import units as U
 from .contracts import RollPolicy, require_spec
@@ -73,6 +81,7 @@ class ExecutionPolicy:
     on_liquidity_shortfall: str = "raise"
     capital: float | None = None    # base currency; when given, every amount is also reported as a fraction of it
     report_margin: bool = False     # require initial margin for every held contract and report it
+    fx_valuation_cutoff: timedelta | None = None    # None: ex-post valuation; else rates must be known by close + this
 
     def __post_init__(self):
         U.currency(self.base_currency)
@@ -86,6 +95,18 @@ class ExecutionPolicy:
             raise UnitError(f"on_liquidity_shortfall is one of {SHORTFALL}")
         if self.capital is not None:
             U.finite(self.capital, "capital", positive=True)
+        if self.fx_valuation_cutoff is not None:
+            if not isinstance(self.fx_valuation_cutoff, timedelta) or self.fx_valuation_cutoff < timedelta(0):
+                raise UnitError("fx_valuation_cutoff is a non-negative timedelta after the day's close, or None")
+
+    def describe(self) -> dict:
+        """The policy as plain data: part of the result hash, so two runs under different rules never share one."""
+        cut = self.fx_valuation_cutoff
+        return {"base_currency": self.base_currency, "roll": asdict(self.roll), "lag": self.lag,
+                "on_missing_price": self.on_missing_price, "on_liquidity_shortfall": self.on_liquidity_shortfall,
+                "capital": self.capital, "report_margin": self.report_margin,
+                "fx_valuation": "ex_post" if cut is None else f"by_close_plus_{int(cut.total_seconds())}s",
+                "calibrated": False}
 
 
 COST_PARTS = ("spread", "slippage", "impact", "rounding", "commission", "exchange_fee", "financing")
@@ -105,8 +126,8 @@ class DayRecord:
     financing: float
     net: float
     turnover: float                 # Σ |filled| × |settlement| × point value
-    gross_exposure: float           # after the close
-    net_exposure: float
+    gross_exposure: float           # after the close: Σ |q| × |S| × point value
+    net_exposure: float             # Σ sign(q) × |q| × |S| × point value: a long is positive at any price
     margin: float | None
     positions: tuple                # ((contract_id, contracts), ...) after the close
     stale_marks: tuple = ()         # held contracts with no settlement today (``hold`` policy)
@@ -134,7 +155,8 @@ class Unfilled:
     contract_id: str
     requested: int
     filled: int
-    why: str                        # "liquidity", "no settlement", "roll leg not closed" or "roll leg not opened"
+    why: str                        # "no settlement", "liquidity" (its own cap) or "paired leg" (the roll's other leg)
+    reason: str = ""                # what the order was: "decision", "carry", "roll" or "roll+decision"/"roll+carry"
 
 
 @dataclass(frozen=True)
@@ -165,7 +187,10 @@ class Result:
         return out
 
     def result_hash(self) -> str:
-        """SHA-256 of a canonical form (amounts rounded to 8 decimals): equal inputs give equal hashes."""
+        """SHA-256 of a canonical form of the run: the policy, the scenario id and every output, amounts rounded to
+        8 decimals of the base currency. The same inputs give the same hash; any change of a position, fill, cost
+        (beyond 1e-8), policy or scenario changes it. The market data are not hashed: a caller who needs them in
+        the identity hashes them alongside (as the engine's ``data_hash`` does)."""
         def canon(x):
             if isinstance(x, float):
                 return format(round(x, 8) + 0.0, ".8f")
@@ -176,7 +201,7 @@ class Result:
             if isinstance(x, (list, tuple)):
                 return [canon(v) for v in x]
             return x
-        doc = {"base": self.base_currency, "scenario_id": self.scenario_id, "capital": self.capital,
+        doc = {"base": self.base_currency, "scenario_id": self.scenario_id, "capital": self.capital, "policy": self.meta,
                "days": [asdict(r) for r in self.days], "fills": [asdict(f) for f in self.fills],
                "rolls": [asdict(r) for r in self.rolls], "unfilled": [asdict(u) for u in self.unfilled],
                "unexecuted": [asdict(d) for d in self.unexecuted]}
@@ -211,6 +236,37 @@ def _schedule(market: MarketData, decisions, policy: ExecutionPolicy, scenario: 
     return by_day, tuple(unexecuted)
 
 
+def _sign(x: int) -> int:
+    return (x > 0) - (x < 0)
+
+
+def _plan_root(held: dict, tgt: int, primary: str | None) -> tuple[int, dict, dict]:
+    """Split today's trades in one root into a roll and a net change.
+
+    ``held``: contracts held now (non-zero). ``primary``: the month to hold after today (None when the target is
+    flat). Returns ``(K, roll, net)``: ``K`` the signed contracts to move from the other months into ``primary`` as
+    a calendar spread, ``roll`` the signed close of each old month that belongs to that spread (and ``+K`` on
+    ``primary``), ``net`` every remaining signed trade (closing the rest of the old months, and the change of the
+    target in ``primary``). ``roll + net`` takes ``held`` exactly to ``{primary: tgt}``."""
+    old = {c: q for c, q in held.items() if c != primary}
+    p = held.get(primary, 0) if primary else 0
+    want = tgt - p                                                   # what ``primary`` still needs
+    old_sum = sum(old.values())
+    K = _sign(want) * min(abs(old_sum), abs(want)) if primary and old_sum and _sign(old_sum) == _sign(want) else 0
+    roll, left = {}, abs(K)
+    for c in sorted(old):                                            # move from the old months in a fixed order
+        if left and _sign(old[c]) == _sign(K):
+            x = min(left, abs(old[c]))
+            roll[c] = -_sign(old[c]) * x
+            left -= x
+    if K:
+        roll[primary] = K
+    net = {c: -(q + roll.get(c, 0)) for c, q in old.items()}         # the rest of each old month is closed outright
+    if primary:
+        net[primary] = want - K                                      # the change of the target, outright
+    return K, roll, {c: q for c, q in net.items() if q}
+
+
 def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostScenario) -> Result:
     """Account for ``decisions`` under ``policy`` and ``scenario``. Pure and deterministic."""
     if not isinstance(market, MarketData):
@@ -219,128 +275,159 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
         raise TypeError("scenario must be a CostScenario")
     base = policy.base_currency
     specs = market.specs
+    cal = market.calendar
     by_day, unexecuted = _schedule(market, tuple(decisions), policy, scenario)
     pos: dict[str, int] = {}
     mark: dict[str, float] = {}
     target: dict[str, int] = {}
     days, fills, rolls, unfilled = [], [], [], []
-    for k, td in enumerate(market.calendar):
+
+    def fx(amount: float, ccy: str, k: int) -> float:
+        """Valuation of a day-``k`` amount in the base currency (section 13 of the design)."""
+        if ccy == base:
+            return amount
+        d = cal[k].day
+        if policy.fx_valuation_cutoff is not None:
+            rec = market.fx.get((ccy, base, d)) or market.fx.get((base, ccy, d))
+            limit = cal[k].close_at + policy.fx_valuation_cutoff
+            if rec is not None and rec.known_at > limit:
+                raise LookAheadError(f"{rec.base}{rec.quote} rate of {d} was published at {rec.known_at.isoformat()}, "
+                                     f"after the valuation cut-off {limit.isoformat()}")
+        return market.convert(amount, ccy, base, d)
+
+    for k, td in enumerate(cal):
         d = td.day
+        next_day = cal[k + 1].day if k + 1 < len(cal) else d + timedelta(days=1)
         acc = dict.fromkeys(("gross", *COST_PARTS, "turnover"), 0.0)
         stale = []
         # 1. marks and 2. financing, on the positions held over (D_{k-1}, D_k]
         for cid in sorted(pos):
             q, spec = pos[cid], specs[cid]
-            if d > spec.last_trade:
-                raise InvalidContractError(f"{cid} is still held ({q} contracts) on {d}, after its last trading day "
-                                           f"{spec.last_trade}")
+            if not spec.may_hold_into(d):                             # defence in depth: the close check stops this
+                raise InvalidContractError(f"{cid} is held ({q} contracts) into {d}, across its delivery boundary or "
+                                           f"after its last trading day {spec.last_trade}")
             st = market.settlement(cid, d)
             if st is None:
                 if policy.on_missing_price == "raise":
                     raise MissingInputError(f"no settlement for held contract {cid} on {d}")
                 stale.append(cid)
             else:
-                acc["gross"] += market.convert(q * (st.price - mark[cid]) * spec.point_value, spec.currency, base, d)
+                acc["gross"] += fx(q * (st.price - mark[cid]) * spec.point_value, spec.currency, k)
                 mark[cid] = st.price
             terms = scenario.for_root(spec.root)
             if k and terms.margin_funding_bps_per_year > 0:
                 if spec.initial_margin is None:
                     raise MissingInputError(f"{cid}: margin funding is costed but its initial margin is not given")
-                yrs = (d - market.calendar[k - 1].day).days / 365.0
-                acc["financing"] += market.convert(abs(q) * spec.initial_margin * terms.margin_funding_bps_per_year
-                                                   / 1e4 * yrs, spec.currency, base, d)
-        # 3. trades
+                yrs = (d - cal[k - 1].day).days / 365.0
+                acc["financing"] += fx(abs(q) * spec.initial_margin * terms.margin_funding_bps_per_year / 1e4 * yrs,
+                                       spec.currency, k)
+        # 3. trades: per root, a paired roll first, then the net change of the target
         today = by_day.get(k, {})
         for root, dec in today.items():
             target[root] = dec.contracts
-        roots = sorted(set(target) | {specs[c].root for c in pos})
-        for root in roots:
+        for root in sorted(set(target) | {specs[c].root for c in pos}):
             tgt = target.get(root, 0)
             held = {c: q for c, q in pos.items() if specs[c].root == root and q}
-            if tgt == 0:
-                desired, primary = {}, None
-            else:
-                only = next(iter(held)) if len(held) == 1 else None
-                if only is not None and specs[only].tradable_on(d) and not policy.roll.roll_due(specs[only], d):
-                    primary = only
-                else:
-                    primary = policy.roll.select(specs, root, d).contract_id
-                desired = {primary: tgt}
-            trades = {c: desired.get(c, 0) - held.get(c, 0) for c in sorted(set(desired) | set(held))}
-            trades = {c: q for c, q in trades.items() if q}
-            if not trades:
+            if not held and tgt == 0:
                 continue
-            if root in today:
-                reason, t_liq = "decision", today[root].decided_at
-            else:
-                if k == 0:
-                    raise InvalidContractError(f"{root}: a trade without a decision on the first day")   # unreachable
-                rolling = bool(held) and primary is not None and (primary not in held or len(held) > 1)
-                reason = "roll" if rolling else "carry"
-                t_liq = market.calendar[k - 1].close_at
+            dec = today.get(root)
+            if dec is None and k == 0:
+                raise InvalidContractError(f"{root}: a trade without a decision on the first day")   # unreachable
+            t_liq = dec.decided_at if dec is not None else cal[k - 1].close_at
+            base_reason = "decision" if dec is not None else "carry"
+            primary = None
+            if tgt:
+                staying = sorted(c for c in held if not policy.roll.must_exit(specs[c], d, next_day))
+                choice = policy.roll.select(specs, root, d).contract_id
+                if choice in staying or not staying:
+                    primary = choice
+                else:
+                    primary = max(staying, key=lambda c: (abs(held[c]), c))
+                if policy.roll.must_exit(specs[primary], d, next_day):
+                    raise InvalidContractError(f"{root}: no contract on {d} can be held past the next trading day "
+                                               f"({primary} reaches its delivery boundary or last trading day)")
+            K, roll, net = _plan_root(held, tgt, primary)
+            legs = sorted(set(roll) | set(net))
+            if not legs:
+                continue
             terms = scenario.for_root(root)
-            done = {}
-            closes = [c for c in trades if c in held and c != primary]
-            opens = [c for c in trades if c not in closes]
-            close_room = None
-            if reason == "roll" and primary in trades:
-                # a roll is a calendar spread: never close more of the old month than the new month can absorb
-                if market.settlement(primary, d) is None:
-                    if policy.on_missing_price == "raise":
-                        raise MissingInputError(f"no settlement for {primary} on {d}, so the roll cannot be filled")
-                    close_room = 0
-                elif policy.on_liquidity_shortfall == "clip":
-                    close_room = capacity(market.liquidity_as_of(primary, t_liq), terms)
-            for cid in closes + opens:
-                q = trades[cid]
-                if close_room is not None and cid in closes:
-                    allowed = min(abs(q), close_room)
-                    if allowed < abs(q):
-                        unfilled.append(Unfilled(d, cid, q, (1 if q > 0 else -1) * allowed, "roll leg not opened"))
-                        q = (1 if q > 0 else -1) * allowed
-                    close_room -= allowed
-                    if not q:
-                        continue
-                if reason == "roll" and cid not in closes:
-                    # never open more of the new month than was closed of the old one today
-                    room = sum(abs(done.get(c, 0)) for c in closes)
-                    if abs(q) > room:
-                        unfilled.append(Unfilled(d, cid, q, (1 if q > 0 else -1) * room, "roll leg not closed"))
-                        q = (1 if q > 0 else -1) * room
-                    if not q:
-                        continue
-                spec = require_spec(specs, cid)
-                st = market.settlement(cid, d)
+            # what each contract can trade today: its cap under ``clip`` (unbounded under ``raise``: fill_order then
+            # refuses an order over the cap); nothing without a settlement under ``hold``
+            avail, own = {}, {}
+            for c in legs:
+                st = market.settlement(c, d)
                 if st is None:
                     if policy.on_missing_price == "raise":
-                        raise MissingInputError(f"no settlement for {cid} on {d}, so the trade cannot be filled")
-                    unfilled.append(Unfilled(d, cid, q, 0, "no settlement"))
+                        raise MissingInputError(f"no settlement for {c} on {d}, so the trade cannot be filled")
+                    avail[c] = 0
+                elif policy.on_liquidity_shortfall == "clip":
+                    avail[c] = capacity(market.liquidity_as_of(c, t_liq), terms)
+                else:
+                    avail[c] = abs(roll.get(c, 0)) + abs(net.get(c, 0))
+                own[c] = avail[c]
+            # the roll moves only as many contracts as both sides can trade: exposure neither lapses nor doubles
+            n = 0
+            if K:
+                closable = sum(min(abs(roll[c]), avail[c]) for c in roll if c != primary)
+                n = min(abs(K), avail[primary], closable)
+            roll_done, left = {}, n
+            for c in sorted(c for c in roll if c != primary):
+                x = min(left, abs(roll[c]), avail[c])
+                if x:
+                    roll_done[c] = _sign(roll[c]) * x
+                    avail[c] -= x
+                    left -= x
+            if n:
+                roll_done[primary] = _sign(K) * n
+                avail[primary] -= n
+            net_done = {}
+            for c in sorted(net):
+                x = min(abs(net[c]), avail[c])
+                if x:
+                    net_done[c] = _sign(net[c]) * x
+                    avail[c] -= x
+            moved_from = []
+            for c in legs:
+                want = roll.get(c, 0) + net.get(c, 0)
+                r_q, n_q = roll_done.get(c, 0), net_done.get(c, 0)
+                q = r_q + n_q
+                if q != want:
+                    why = ("no settlement" if market.settlement(c, d) is None
+                           else "liquidity" if abs(q) >= own[c] else "paired leg")
+                    unfilled.append(Unfilled(d, c, want, q, why, base_reason if not roll.get(c) else
+                                             ("roll" if not net.get(c) else f"roll+{base_reason}")))
+                if not q:
                     continue
-                liq = market.liquidity_as_of(cid, t_liq)
-                f = fill_order(spec, st, q, liq, terms, decided_at=t_liq, shortfall=policy.on_liquidity_shortfall,
-                               reason=reason)
+                reason = "roll" if not n_q else (base_reason if not r_q else f"roll+{base_reason}")
+                st = market.settlement(c, d)
+                f = fill_order(require_spec(specs, c), st, q, market.liquidity_as_of(c, t_liq), terms,
+                               decided_at=t_liq, shortfall=policy.on_liquidity_shortfall, reason=reason,
+                               roll_quantity=r_q)
                 fills.append(f)
-                if f.filled != f.requested:
-                    unfilled.append(Unfilled(d, cid, f.requested, f.filled, "liquidity"))
-                if not f.filled:
-                    continue
-                done[cid] = f.filled
-                pos[cid] = pos.get(cid, 0) + f.filled
-                mark[cid] = st.price
+                pos[c] = pos.get(c, 0) + f.filled
+                mark[c] = st.price
+                if r_q and c != primary:
+                    moved_from.append(c)
                 for part, amount, ccy in (("spread", f.spread_cost, f.currency), ("slippage", f.slippage_cost, f.currency),
                                           ("impact", f.impact_cost, f.currency), ("rounding", f.rounding_cost, f.currency),
                                           ("commission", f.commission, f.fee_currency),
                                           ("exchange_fee", f.exchange_fee, f.fee_currency),
                                           ("turnover", f.traded_notional, f.currency)):
-                    acc[part] += market.convert(amount, ccy, base, d)
-            if reason == "roll" and primary in done:
-                closed = [c for c in done if c != primary and c in held]
-                if closed:
-                    moved = min(abs(done[primary]), sum(abs(done[c]) for c in closed))
-                    a, b = market.settlement(closed[0], d).price, market.settlement(primary, d).price
-                    rolls.append(RollEvent(d, root, tuple(closed), primary, moved, a, b, b - a))
+                    acc[part] += fx(amount, ccy, k)
+            if n:
+                a = market.settlement(moved_from[0], d).price
+                b = market.settlement(primary, d).price
+                rolls.append(RollEvent(d, root, tuple(moved_from), primary, n, a, b, b - a))
         for cid in [c for c, q in pos.items() if q == 0]:
             del pos[cid], mark[cid]
+        # the delivery boundary and the last trading day: fail closed at the close, never carry a position across
+        for cid in sorted(pos):
+            spec = specs[cid]
+            if not spec.may_hold_into(next_day):
+                what = (f"its first notice date {spec.first_notice} (delivery boundary; the model has no delivery "
+                        "management)") if spec.physical else f"after its last trading day {spec.last_trade}"
+                raise InvalidContractError(f"{cid} is still held ({pos[cid]} contracts) at the close of {d} and would be "
+                                           f"carried into {next_day}: {what}")
         # 4. exposure and margin after the close
         gexp = nexp = 0.0
         if policy.report_margin or all(specs[c].initial_margin is not None for c in pos):
@@ -349,21 +436,19 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
             margin = None                                             # not reported: some initial margin is unknown
         for cid in sorted(pos):
             q, spec = pos[cid], specs[cid]
-            notional = market.convert(q * mark[cid] * spec.point_value, spec.currency, base, d)
-            gexp += abs(notional)
-            nexp += notional
+            size = fx(abs(q) * abs(mark[cid]) * spec.point_value, spec.currency, k)
+            gexp += size
+            nexp += _sign(q) * size                                   # signed by the position, not by the price
             if margin is not None:
                 if spec.initial_margin is None:
                     raise MissingInputError(f"{cid}: margin is reported but its initial margin is not given")
-                margin += market.convert(abs(q) * spec.initial_margin, spec.currency, base, d)
+                margin += fx(abs(q) * spec.initial_margin, spec.currency, k)
         costs = sum(acc[p] for p in COST_PARTS)
         days.append(DayRecord(d, acc["gross"], *(acc[p] for p in COST_PARTS), net=acc["gross"] - costs,
                               turnover=acc["turnover"], gross_exposure=gexp, net_exposure=nexp, margin=margin,
                               positions=tuple(sorted(pos.items())), stale_marks=tuple(stale)))
     return Result(base, scenario.name, scenario.scenario_id(), scenario.provenance, policy.capital, tuple(days),
-                  tuple(fills), tuple(rolls), tuple(unfilled), unexecuted,
-                  meta={"lag": policy.lag, "roll": asdict(policy.roll), "on_missing_price": policy.on_missing_price,
-                        "on_liquidity_shortfall": policy.on_liquidity_shortfall, "calibrated": False})
+                  tuple(fills), tuple(rolls), tuple(unfilled), unexecuted, meta=policy.describe())
 
 
 def run_scenarios(market: MarketData, decisions, policy: ExecutionPolicy, scenarios) -> dict:

@@ -109,8 +109,34 @@ class ContractSpec:
         """The date a holder must be out by: min(first notice, last trade)."""
         return min(self.first_notice, self.last_trade) if self.first_notice is not None else self.last_trade
 
+    @property
+    def physical(self) -> bool:
+        return self.settlement_type == "physical"
+
     def tradable_on(self, d: date) -> bool:
+        """Inside the exchange trading life (first to last trade day). For a physical contract the model allows
+        less: see ``may_hold_into`` and ``require_model_tradable``."""
         return self.first_trade <= d <= self.last_trade
+
+    def may_hold_into(self, d: date) -> bool:
+        """May a position still be open at the close before trading day ``d`` and so be carried into ``d``?
+
+        **Delivery boundary.** This model has no delivery management, so a physically settled contract may not be
+        carried into its first notice date: it must be flat by the close of the last trading day before
+        ``first_notice``. A cash-settled contract may not be carried past its last trading day (its final cash
+        settlement is not modelled). Exchanges that assign delivery on positions held earlier (a first position or
+        intention day) are modelled by giving that earlier date as ``first_notice``."""
+        if self.physical:
+            return d < self.first_notice
+        return d <= self.last_trade
+
+    def require_model_tradable(self, d: date) -> None:
+        """``require_tradable``, and no trade at all in a physical contract on or after its first notice date."""
+        self.require_tradable(d)
+        if self.physical and d >= self.first_notice:
+            raise InvalidContractError(f"{self.contract_id} is physically settled and {d} is on or after its first "
+                                       f"notice date {self.first_notice}: the model does not trade or hold it in the "
+                                       "delivery period")
 
     def require_tradable(self, d: date) -> None:
         if d < self.first_trade:
@@ -181,6 +207,12 @@ class RollPolicy:
 
     def roll_due(self, spec: ContractSpec, d: date) -> bool:
         return (spec.notice - d).days <= self.roll_before_notice_days
+
+    def must_exit(self, spec: ContractSpec, d: date, next_day: date) -> bool:
+        """True when a position in ``spec`` has to be gone by the close of trading day ``d``: the roll window has
+        been reached, the contract can no longer be traded, or carrying it into ``next_day`` would cross its
+        delivery boundary or its last trading day (``ContractSpec.may_hold_into``)."""
+        return self.roll_due(spec, d) or not spec.tradable_on(d) or not spec.may_hold_into(next_day)
 
     def select(self, specs, root: str, d: date) -> ContractSpec:
         """The contract to open for ``root`` on trading day ``d``, from metadata only."""
