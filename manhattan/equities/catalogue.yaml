@@ -1,0 +1,2290 @@
+# Technology Equities research programme: catalogue of hypothesis families.
+#
+# Every entry is an UNTESTED hypothesis family in the sense of docs/manhattan/ARCHITECTURE.md section 3:
+# one economic mechanism, one predicted sign, one named counterparty. Nothing in this file is evidence.
+# There are no performance estimates here by design. Parameter and definition variants of the same
+# mechanism are grouped inside one family (see grouped_variants) and must not be registered as separate
+# families. Rankings are qualitative 1-5 judgements made before any data were examined; 5 is always the
+# favourable end (more plausible, cheaper data, cheaper research, simpler, more distinct, safer from leakage).
+#
+# Universe descriptions are generic on purpose: no tickers or company names appear in this catalogue.
+
+version: 1
+status: draft            # catalogue of untested hypothesis families; nothing here is evidence
+families:
+
+  # ---------------------------------------------------------------------------------------------------
+  # A. Relative value
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-A01
+    name: Peer-spread reversion within technology sub-industries
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: flow
+    sign: "-"
+    rationale: >-
+      Close economic substitutes (firms with the same products, customers and cost structure) should share
+      most of their non-idiosyncratic return. When the price spread between a stock and its closest peers
+      widens without a matching change in fundamentals, part of the move is temporary price pressure from
+      liquidity-demanding trades. Liquidity providers who bet on convergence are paid for absorbing it.
+    counterparty: >-
+      Investors who need immediacy (fund redemptions, single-name hedges, thematic basket flows) and accept a
+      price concession to trade now rather than wait for natural offsetting interest.
+    target_universe: >-
+      US-listed technology companies (semiconductors, hardware, software, IT services) passing PIT liquidity
+      and price filters, grouped by PIT sub-industry classification
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, earnings_events]
+    availability_risks:
+      - Peer groups formed with today's classification inherit look-ahead; classification_history must be point in time.
+      - Pair or basket selection on the full sample (cointegration found ex post) leaks the evaluation window into formation.
+      - Delisted and acquired names must stay in the universe; merger arbitrage spreads can masquerade as divergence.
+    signal_concept: >-
+      Standardised deviation of a stock's cumulative return from a peer-basket or paired-stock fitted
+      relation, estimated only on data available at formation, excluding windows that contain the stock's own
+      earnings announcement or a corporate event.
+    holding_horizon: "3-20 trading days"
+    horizon_bucket: days
+    baselines:
+      - one-month short-term reversal (market-wide)
+      - industry-demeaned short-term reversal
+      - market beta and sub-industry exposure
+    confounders:
+      - generic short-term reversal (TE-E03)
+      - bid-ask bounce and stale prices in less liquid names
+      - announcement-driven information that should not revert
+      - pending mergers and tender offers
+    transaction_costs: high
+    cost_notes: >-
+      Short holding periods imply high turnover on both legs, and the short leg needs borrow that may be costly
+      or recalled exactly when the spread is widest.
+    validation_requirements:
+      - Pairs or baskets selected only from data before each formation date (rolling formation, never full-sample).
+      - Evaluation windows follow Manhattan data roles; no parameter is chosen on an evaluation window.
+      - Results reported net of spread, impact and borrow assumptions, with one-day implementation lag.
+      - Multiple-testing correction across the grouped variants (distance, cointegration, basket regression).
+      - Separate results for event-free and event-containing divergences.
+    failure_conditions:
+      - No reversion beyond what market-wide short-term reversal already captures.
+      - Profits disappear after a one-day lag or realistic costs.
+      - Divergences predominantly reflect information (they continue rather than revert).
+    kill_condition: >-
+      Peer-spread reversion adds nothing net of costs to industry-demeaned short-term reversal on the
+      held-out windows.
+    tail_exposure: >-
+      Losses concentrate when a divergence marks a permanent re-rating (a lost design win, a takeover), and
+      in deleveraging events where crowded statistical-arbitrage books unwind together.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Distance-based pairs, cointegration-based pairs, regression residual against a sub-industry basket,
+      formation and trigger thresholds, look-back lengths and stop rules; all are one liquidity-provision
+      mechanism.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 4
+      research_cost: 4
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 3
+
+  - id: TE-A02
+    name: Short-sale-constrained overpricing in technology stocks
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: structural
+    sign: "-"
+    rationale: >-
+      When short selling is costly or constrained, prices reflect the views of the most optimistic holders.
+      Technology stocks with contested narratives often carry high short interest and high borrow fees, so
+      pessimistic information enters prices slowly. High and rising shorting demand relative to lendable supply
+      should precede negative hedged returns.
+    counterparty: >-
+      Optimistic long holders and retail momentum buyers who keep prices above the level a frictionless market
+      would set, because the investors who disagree cannot easily sell short.
+    target_universe: >-
+      US-listed technology companies passing PIT liquidity filters, with short interest and borrow data
+      available at formation
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, short_interest, borrow_availability, classification_history]
+    availability_risks:
+      - Short interest is published with a dissemination lag; using the settlement date instead of the publication date is look-ahead.
+      - Borrow-fee and utilisation histories are vendor products with uncertain historical coverage and backfill.
+      - Small, hard-to-borrow names may drop out of vendor coverage, creating survivorship in the signal.
+    signal_concept: >-
+      Shorting pressure measured as short interest relative to float or volume (days to cover), or borrow
+      utilisation and fee, compared with sub-industry peers and lagged to its publication date.
+    holding_horizon: "20-60 trading days"
+    horizon_bucket: months
+    baselines:
+      - size and liquidity
+      - idiosyncratic volatility
+      - 12-1 momentum and short-term reversal
+    confounders:
+      - idiosyncratic volatility and lottery-like demand
+      - small-cap and low-price effects
+      - analyst forecast dispersion (TE-C05)
+    transaction_costs: high
+    cost_notes: >-
+      The signal lives in the names that are hardest and most expensive to short, so the short leg's borrow
+      cost and recall risk may consume the predicted return.
+    validation_requirements:
+      - Short-interest values aligned to publication timestamps, not settlement dates.
+      - Returns measured net of the borrow fee actually observable at the time, not a flat assumption.
+      - Results shown with and without the smallest and hardest-to-borrow names.
+      - Control for idiosyncratic volatility, size and dispersion before attributing to shorting pressure.
+    failure_conditions:
+      - Predictive power vanishes after realistic borrow fees.
+      - Effect is fully explained by size, volatility or dispersion.
+      - Effect exists only in names that cannot be borrowed at all.
+    kill_condition: >-
+      Shorting pressure does not predict negative peer-relative returns after borrow costs and controls for
+      size, volatility and dispersion.
+    tail_exposure: >-
+      Short squeezes in heavily shorted technology names can produce extreme, fast losses on the short leg,
+      often clustered in speculative episodes.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Short interest to float, days to cover, change in short interest, utilisation, borrow fee and their
+      peer-relative versions; formation frequency.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-A03
+    name: Peer-relative consensus revisions
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Analysts revise forecasts gradually and herd towards each other, so revisions are autocorrelated and
+      prices adjust to the cumulative change with a lag. Comparing a firm's revisions with those of its
+      sub-industry peers removes common sector news and isolates firm-specific information that is likely to
+      be underweighted.
+    counterparty: >-
+      Investors anchored on prior estimates and those trading sector baskets, who price firm-specific
+      revision news slowly.
+    target_universe: >-
+      US-listed technology companies with sufficient analyst coverage at formation, grouped by PIT sub-industry
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, analyst_estimates_pit, earnings_events]
+    availability_risks:
+      - Consensus histories are prone to backfill and to the removal of analysts or brokers after the fact.
+      - Estimate timestamps may reflect vendor processing date rather than publication date.
+      - Coverage changes (initiations, drops) are themselves informative and can bias peer comparisons.
+    signal_concept: >-
+      Change in consensus forward earnings (or revenue) over a recent window, scaled by price or by
+      cross-sectional dispersion, minus the same quantity for sub-industry peers.
+    holding_horizon: "20-60 trading days"
+    horizon_bucket: months
+    baselines:
+      - industry-relative 12-1 momentum
+      - earnings surprise drift (TE-C01)
+      - market beta
+    confounders:
+      - price momentum (revisions follow prices)
+      - post-announcement drift when revisions cluster after earnings
+      - revision breadth (TE-C04)
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing with moderate turnover; the short leg is mostly in covered, liquid names.
+    validation_requirements:
+      - Consensus snapshots taken as they stood on each formation date, from a source that records as-of timestamps.
+      - Orthogonalise against price momentum and earnings drift before claiming incremental content.
+      - Check sensitivity to coverage thresholds and to excluding announcement windows.
+    failure_conditions:
+      - No incremental prediction after controlling for price momentum and earnings drift.
+      - Effect depends on a vendor's backfilled history and disappears in live-captured snapshots.
+    kill_condition: >-
+      Peer-relative revisions add no hedged return beyond momentum and earnings drift on properly as-of
+      consensus data.
+    tail_exposure: >-
+      Revision momentum and price momentum are crowded together and can reverse sharply in growth-to-value
+      rotations.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Earnings versus revenue revisions, look-back window, scaling by price or by dispersion, fiscal-year
+      versus forward-twelve-month estimates, peer definition (sub-industry or custom peer set).
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-A04
+    name: Fundamentals-implied valuation residual within peers
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Within a sub-industry, valuation multiples should be explained by observable growth, margins and
+      reinvestment. A stock trading below the multiple implied by its own fundamentals, relative to peers, may
+      be mispriced because investors overweight narratives and recent price moves. As fundamentals are reported
+      the residual should partly close.
+    counterparty: >-
+      Narrative-driven investors who pay up for popular stories and neglect peers with comparable fundamentals
+      but less attention.
+    target_universe: >-
+      US-listed technology companies with positive revenue and PIT fundamentals, grouped by sub-industry
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, fundamentals_pit, analyst_estimates_pit]
+    availability_risks:
+      - Restated fundamentals overwrite originally reported values; the model must use as-first-reported figures.
+      - Filing dates vary; using fiscal period end instead of filing date is look-ahead.
+      - Forward estimates used as inputs carry consensus backfill risk.
+    signal_concept: >-
+      Residual from a cross-sectional fit of an enterprise-value multiple on growth, margin and reinvestment
+      variables within each sub-industry and date, using only data available at that date.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - book-to-market and earnings yield
+      - intangible-adjusted value (TE-E06)
+      - profitability (TE-E04)
+    confounders:
+      - quality and profitability exposure
+      - distress risk in firms that look cheap for good reason
+      - accounting differences in stock-based compensation and capitalised costs
+    transaction_costs: low
+    cost_notes: >-
+      Slow signal with low turnover; costs are dominated by borrow on expensive short-leg names.
+    validation_requirements:
+      - All fundamentals as first reported and lagged to filing date.
+      - Fit coefficients re-estimated each date from that date's cross-section only.
+      - Show incremental content over standard value, profitability and growth factors.
+    failure_conditions:
+      - Residual is explained by standard value and quality factors.
+      - Residual persists for years without converging (structural mispricing or missing variable).
+    kill_condition: >-
+      The valuation residual does not predict hedged returns once value, profitability and growth exposures
+      are controlled.
+    tail_exposure: >-
+      Prolonged narrative-driven rallies push expensive names further from fundamentals and can impose long
+      drawdowns on the short leg.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Choice of multiple (EV to sales, EV to gross profit, EV to forward earnings), explanatory variable set,
+      sub-industry versus custom peers, winsorisation choices.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 3
+
+  - id: TE-A05
+    name: Customer-to-supplier price lead-lag
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Investors with limited attention price news about a firm's major customers into the customer's stock
+      quickly but into its suppliers' stocks slowly. In technology, supplier revenue is often concentrated in a
+      few large customers, so the customers' recent returns should predict suppliers' subsequent hedged
+      returns.
+    counterparty: >-
+      Investors who follow suppliers in isolation and do not map news about large customers into the
+      supplier's revenue outlook.
+    target_universe: >-
+      US-listed technology suppliers with disclosed major customers, both legs passing PIT liquidity filters
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, relationship_graph, customer_concentration, regulatory_filings_text]
+    availability_risks:
+      - Relationship graphs assembled today encode relationships discovered ex post; links must be dated to their first public disclosure.
+      - Major-customer disclosures are often anonymous or appear only in annual filings, so the graph is sparse and lagged.
+      - Vendor relationship databases may backfill links, inflating historical coverage.
+    signal_concept: >-
+      Weighted average recent return of a supplier's disclosed customers (weights by disclosed revenue share
+      when known), minus the supplier's own return or its sub-industry return, using only links disclosed
+      before formation.
+    holding_horizon: "5-40 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - own-stock and industry momentum
+      - industry lead-lag (large caps lead small caps)
+      - market beta
+    confounders:
+      - industry momentum (TE-E02)
+      - size-based lead-lag
+      - common exposure to the same sub-industry shock
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly or faster rebalancing on smaller supplier names with moderate turnover and possible borrow
+      constraints.
+    validation_requirements:
+      - Every link dated by its first public disclosure; test with links available at formation only.
+      - Control for size lead-lag and industry momentum.
+      - Placebo test with randomly reassigned same-industry customers.
+    failure_conditions:
+      - Effect disappears when links are restricted to those disclosed before formation.
+      - Placebo customers predict as well as true customers.
+    kill_condition: >-
+      Customer returns do not predict supplier hedged returns beyond industry and size lead-lag using
+      as-disclosed links.
+    tail_exposure: >-
+      Loss of a major customer produces large single-name gaps that the signal cannot anticipate.
+    implementation_complexity: high
+    grouped_variants: >-
+      Weighting by revenue share or equal weighting, customer-return window, inclusion of second-order links,
+      relative to sub-industry or to market.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-A06
+    name: Parent-subsidiary and carve-out stub mispricing
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: structural
+    sign: "+"
+    rationale: >-
+      When a listed technology parent holds a large stake in a listed subsidiary or a recent carve-out, the
+      market value of the stake can exceed or approach the parent's own value, implying a stub value that is
+      implausibly low or negative. Short-sale constraints on the subsidiary and benchmark frictions slow
+      convergence, but corporate actions and the eventual distribution of shares tend to force it.
+    counterparty: >-
+      Enthusiastic buyers of the subsidiary who cannot be arbitraged against because its shares are hard to
+      borrow, and parent holders who ignore the embedded stake.
+    target_universe: >-
+      US-listed technology parents with a listed subsidiary or recent carve-out where the stake is material
+      relative to the parent's market value
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit, regulatory_filings_text, borrow_availability]
+    availability_risks:
+      - Stake sizes change; ownership must be taken from filings dated before formation.
+      - Episodes are identified by searching history, which risks selecting famous cases known to have converged.
+      - Few episodes; each is a distinct situation with idiosyncratic outcomes.
+    signal_concept: >-
+      Implied stub value (parent market value minus market value of listed stakes, adjusted for net debt and
+      tax on gains), relative to the parent's own operating fundamentals.
+    holding_horizon: "60-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - parent stand-alone value factor exposure
+      - subsidiary short-term reversal
+      - market beta of the combined position
+    confounders:
+      - tax leakage on stake disposal
+      - governance or control discounts
+      - lock-up expiries at carve-outs
+    transaction_costs: medium
+    cost_notes: >-
+      Low turnover but the subsidiary short leg is often hard to borrow and expensive for long periods.
+    validation_requirements:
+      - Episode list built by a rule applied to PIT data, not by recall of known cases.
+      - Event-time analysis with small-sample inference (bootstrap or permutation over episodes).
+      - Report the share of episodes with infeasible borrow.
+    failure_conditions:
+      - Most episodes are not executable because the subsidiary cannot be borrowed.
+      - Stubs remain negative until resolution with no convergence premium after costs.
+    kill_condition: >-
+      Rule-identified stub episodes show no hedged convergence return after borrow costs.
+    tail_exposure: >-
+      The stub can widen further in speculative manias, forcing the short leg out before convergence.
+    implementation_complexity: high
+    grouped_variants: >-
+      Listed subsidiaries, carve-outs pending spin-off, tracking-stock structures; tax-adjusted versus
+      unadjusted stubs; entry thresholds.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 3
+
+  - id: TE-A07
+    name: Residual (idiosyncratic) momentum
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Total-return momentum mixes firm-specific underreaction with time-varying factor exposure, which causes
+      its crashes. Momentum in returns after removing market, industry and style factors isolates gradual
+      incorporation of firm-specific news and should be steadier. Technology stocks carry large factor loadings,
+      so the separation should matter more here than elsewhere.
+    counterparty: >-
+      Investors anchored on prior valuations who underreact to firm-specific news, and contrarian rebalancers.
+    target_universe: >-
+      US-listed technology companies passing PIT liquidity filters
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, fundamentals_pit]
+    availability_risks:
+      - Factor loadings estimated on the full sample leak future information; estimate them on rolling past windows.
+      - Survivorship in the universe inflates momentum profits; delisting returns are required.
+    signal_concept: >-
+      Cumulative residual return over an intermediate look-back from a rolling factor model (market, industry,
+      size, value, profitability), skipping the most recent month, scaled by residual volatility.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - 12-1 price momentum (TE-E01)
+      - sub-industry-neutral 12-1 momentum
+      - industry momentum (TE-E02)
+    confounders:
+      - total-return momentum
+      - earnings drift (TE-C01)
+      - choice of factor model
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing with turnover similar to standard momentum; both legs mostly liquid.
+    validation_requirements:
+      - Factor model fitted only on data before each formation date.
+      - Show incremental content over 12-1 momentum and over sub-industry-neutral momentum.
+      - Compare drawdowns in known momentum-crash regimes without tuning to them.
+    failure_conditions:
+      - No improvement over sub-industry-neutral momentum.
+      - Results depend on one specific factor-model choice.
+    kill_condition: >-
+      Residual momentum does not beat sub-industry-neutral 12-1 momentum on held-out windows after costs.
+    tail_exposure: >-
+      Sharp momentum reversals after market rebounds and growth-to-value rotations still hit the strategy,
+      though less than total-return momentum if the mechanism holds.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Sub-industry-demeaned momentum, factor-model residual momentum, look-back and skip lengths,
+      volatility scaling, factor set.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 3
+      research_cost: 4
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 4
+
+  - id: TE-A08
+    name: Index reconstitution flow in technology stocks
+    research_family: A_relative_value
+    approach: relative_value
+    mechanism_class: flow
+    sign: "+"
+    rationale: >-
+      Index funds must buy additions and sell deletions at or near the effective date regardless of price.
+      Technology stocks migrate across size and style indices often because of large price moves, so
+      predictable reconstitution demand is frequent. Stocks predicted to be added should outperform peers into
+      the effective date and partly reverse after it.
+    counterparty: >-
+      Passive funds that trade at the close of the effective date to minimise tracking error, and accept the
+      price impact as the cost of tracking.
+    target_universe: >-
+      US-listed technology companies near size or style index boundaries at PIT reconstitution dates
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, index_membership, fundamentals_pit]
+    availability_risks:
+      - Index membership histories must include announcement dates, not only effective dates.
+      - Predicting membership with today's methodology rules ignores past rule changes.
+      - Free-float data used for eligibility may be revised after the fact.
+    signal_concept: >-
+      Predicted probability of addition or deletion from published index rules and PIT market capitalisation,
+      combined with the expected passive demand relative to average volume.
+    holding_horizon: "5-30 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - size and liquidity
+      - short-term reversal
+      - 12-1 momentum (additions tend to be recent winners)
+    confounders:
+      - momentum of recent winners crossing size thresholds
+      - pre-positioning by other arbitrageurs, which changes the timing of the effect
+    transaction_costs: medium
+    cost_notes: >-
+      Event-driven turnover around a few dates a year; impact costs are high near effective dates when
+      liquidity is contested.
+    validation_requirements:
+      - Membership predicted with the methodology in force at each date.
+      - Separate pre-announcement, announcement-to-effective and post-effective windows.
+      - Test for decay over time as the trade became crowded.
+    failure_conditions:
+      - Pre-positioning removes the return before it is executable.
+      - Effect is explained by momentum of the added names.
+    kill_condition: >-
+      Predicted reconstitution demand does not produce hedged returns after costs in the pre-effective window.
+    tail_exposure: >-
+      Crowded pre-positioning can unwind violently if a predicted addition does not occur.
+    implementation_complexity: high
+    grouped_variants: >-
+      Size-index migrations, style-index migrations, thematic technology index rebalances; entry timing relative
+      to announcement; exit before or after the effective date.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 2
+      distinctiveness: 3
+      leakage_safety: 3
+
+  # ---------------------------------------------------------------------------------------------------
+  # B. Historical fundamental analogues
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-B01
+    name: Growth-stage trajectory analogues
+    research_family: B_analogues
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Investors tend to extrapolate a firm's recent growth rather than use the historical distribution of
+      outcomes for firms at the same stage. Matching a firm's revenue growth, margin and reinvestment path to
+      past firms at the same stage gives an outside-view forecast of future fundamentals. Where the analogue
+      forecast is better than the market-implied path, returns should be higher.
+    counterparty: >-
+      Extrapolating investors who price recent growth as if it were persistent, without reference to base rates
+      of similar firms.
+    target_universe: >-
+      US-listed technology companies with at least several years of PIT fundamentals history
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit, segment_reporting, classification_history]
+    availability_risks:
+      - The analogue library must contain only firms whose subsequent path was already observable at formation.
+      - Restated and reclassified fundamentals alter historical trajectories; use as-first-reported values.
+      - Survivorship in the analogue library (failed firms missing) biases forecasts upward.
+      - Matching choices (features, distance, number of neighbours) create a very large hidden search space.
+    signal_concept: >-
+      Difference between the analogue-implied forward fundamental path (from nearest past trajectories) and a
+      market-implied or consensus path, ranked within the universe.
+    holding_horizon: "120-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - consensus growth forecasts
+      - simple mean-reversion of growth towards sub-industry median
+      - value and profitability factors
+    confounders:
+      - generic growth mean reversion
+      - value exposure
+      - sub-industry cycles
+    transaction_costs: low
+    cost_notes: >-
+      Slow, low-turnover signal; costs matter little compared with research and leakage risk.
+    validation_requirements:
+      - Analogue library built strictly from outcomes known before formation (expanding window).
+      - Matching specification frozen before evaluation; every attempted specification logged.
+      - Must beat a simple growth mean-reversion baseline, not only zero.
+      - Strong multiple-testing adjustment for the matching search space.
+    failure_conditions:
+      - No improvement over simple growth mean reversion.
+      - Results change sign across reasonable matching specifications.
+    kill_condition: >-
+      Analogue-implied forecasts add no return prediction beyond simple growth mean reversion with a frozen
+      matching specification.
+    tail_exposure: >-
+      Structural breaks (new platform eras) make historical analogues systematically wrong at the same time
+      for many firms.
+    implementation_complexity: high
+    grouped_variants: >-
+      Feature sets (growth, margins, reinvestment, age since listing), distance metrics, number of neighbours,
+      horizon of the analogue path, post-listing lifecycle variants.
+    ranking:
+      economic_plausibility: 2
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  - id: TE-B02
+    name: Implied growth versus historical base rates
+    research_family: B_analogues
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      Valuations imply a path of future growth. Historical base rates show how rarely firms of a given size
+      sustain very high growth for many years. Firms whose implied growth requires an outcome that is rare in
+      the base-rate distribution should, on average, disappoint and underperform.
+    counterparty: >-
+      Investors who overweight vivid success stories and neglect the base rate of growth decay.
+    target_universe: >-
+      US-listed technology companies with positive revenue and analyst coverage
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit, analyst_estimates_pit]
+    availability_risks:
+      - Base-rate distributions must be computed from data available at formation, including failed firms.
+      - Implied-growth calculation needs discount-rate assumptions that can be tuned after the fact.
+      - Consensus inputs carry backfill risk.
+    signal_concept: >-
+      Percentile of the market-implied multi-year revenue growth within the PIT historical distribution of
+      realised growth for firms of similar size and sub-industry.
+    holding_horizon: "120-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - book-to-market and sales-to-price
+      - growth-adjusted value
+      - market beta
+    confounders:
+      - value factor
+      - duration exposure (TE-F01)
+      - quality
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover; short leg sits in large, liquid expensive names but borrow can be costly in speculative ones.
+    validation_requirements:
+      - Base rates rebuilt at each formation date from past data only.
+      - Implied-growth model and discount-rate rule frozen before evaluation.
+      - Show content beyond simple value measures.
+    failure_conditions:
+      - Signal is a relabelled value factor.
+      - Base-rate percentile is unstable to reasonable discount-rate assumptions.
+    kill_condition: >-
+      Base-rate-implausible implied growth does not predict underperformance beyond value and duration.
+    tail_exposure: >-
+      Speculative growth rallies inflict long drawdowns on the short side.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Revenue versus earnings growth, implied-growth horizon, size and sub-industry conditioning of the
+      reference class, discount-rate rule.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-B03
+    name: Inventory and margin cycle analogues
+    research_family: B_analogues
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      Hardware and semiconductor firms go through inventory build-ups that precede margin compression.
+      Investors focusing on current revenue growth tend to miss the pattern. A firm whose inventory, receivables
+      and gross-margin trajectory resembles past pre-downturn trajectories should underperform peers.
+    counterparty: >-
+      Investors who extrapolate current revenue momentum and do not read balance-sheet build-ups as a leading
+      signal of margin pressure.
+    target_universe: >-
+      US-listed semiconductor, hardware and component companies with PIT quarterly balance-sheet data
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit, classification_history, semiconductor_supply_chain]
+    availability_risks:
+      - Quarterly balance-sheet items are restated; use as-first-reported values lagged to filing date.
+      - Downturn episodes are labelled with hindsight; labels must be defined by a rule applied to PIT data.
+      - Few independent cycles in history, so effective sample size is small.
+    signal_concept: >-
+      Similarity of a firm's recent inventory-to-sales, receivables-to-sales and gross-margin path to
+      rule-labelled pre-downturn paths, relative to sub-industry peers.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - change in inventory-to-sales (simple accrual signal)
+      - accruals factor
+      - industry momentum
+    confounders:
+      - accruals anomaly
+      - semiconductor cycle exposure (TE-F04)
+    transaction_costs: low
+    cost_notes: >-
+      Quarterly signal with low turnover; short leg in mid- and large-cap hardware names.
+    validation_requirements:
+      - Downturn labels from a frozen rule, not from judgement.
+      - Must beat the simple change-in-inventory signal.
+      - Inference that accounts for the small number of independent cycles.
+    failure_conditions:
+      - No incremental content over the simple inventory or accrual signal.
+      - Results driven by a single cycle.
+    kill_condition: >-
+      Analogue similarity adds nothing to the simple change-in-inventory signal across more than one cycle.
+    tail_exposure: >-
+      Supply shortages invert the usual inventory signal and can create sudden, sector-wide losses.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Feature set, similarity metric, labelling rule for downturns, sub-industry scope.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 3
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-B04
+    name: Business-model transition analogues
+    research_family: B_analogues
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Software and hardware firms moving from licences or one-off sales to subscriptions show a predictable
+      dip in reported revenue and margins before recurring revenue builds. Investors focused on reported
+      figures may over-penalise the dip. Firms whose transition path matches past successful-transition
+      analogues should outperform once recurring revenue becomes visible.
+    counterparty: >-
+      Investors who mechanically weight reported growth and margins and sell during the transition dip.
+    target_universe: >-
+      US-listed software and hardware companies with disclosed recurring-revenue or subscription segments
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit, segment_reporting, earnings_call_text]
+    availability_risks:
+      - Transition start dates are identified with hindsight unless taken from dated disclosures.
+      - Segment definitions change; historical segment data may be restated.
+      - Very few episodes; famous successes dominate memory and risk selection bias.
+    signal_concept: >-
+      Position of a transitioning firm on the typical transition path (recurring share of revenue, reported
+      margin dip) compared with analogues identified from earlier dated disclosures.
+    holding_horizon: "120-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - growth and profitability factors
+      - revenue surprise drift (TE-C02)
+    confounders:
+      - sector-wide re-rating of recurring revenue models
+      - general growth-to-value rotations
+    transaction_costs: low
+    cost_notes: >-
+      Very low turnover; small number of positions makes idiosyncratic risk the main cost.
+    validation_requirements:
+      - Episodes identified by a rule on dated disclosures, including failed transitions.
+      - Event-time inference that respects the small number of episodes.
+      - Every attempted matching rule logged as a variant.
+    failure_conditions:
+      - Rule-identified episodes show no drift relative to peers.
+      - Too few episodes to distinguish from noise.
+    kill_condition: >-
+      Rule-identified transition episodes show no hedged outperformance relative to non-transitioning peers.
+    tail_exposure: >-
+      Failed transitions lead to large permanent losses; the strategy is long a few concentrated situations.
+    implementation_complexity: high
+    grouped_variants: >-
+      Subscription transitions, on-premise to cloud migrations, hardware-to-services shifts; stage at entry;
+      analogue matching rule.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  - id: TE-B05
+    name: Thematic episode analogues
+    research_family: B_analogues
+    approach: directional
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      Technology themes go through episodes of rapid valuation expansion, heavy issuance and rising valuation
+      dispersion, sometimes followed by sharp reversals. If a current theme's valuation, issuance and breadth
+      pattern resembles past theme peaks, subsequent returns of the theme's constituents may be lower.
+    counterparty: >-
+      Late-cycle thematic buyers and issuers' early holders, who sell into demand at elevated prices.
+    target_universe: >-
+      Technology stocks grouped into themes by a PIT rule (classification or text-based exposure)
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, fundamentals_pit, regulatory_filings_text]
+    availability_risks:
+      - Themes are defined with hindsight; theme membership must come from dated text or classification.
+      - Very few independent past episodes, so analogues are fitted to a handful of famous cases.
+      - Issuance data must be dated to the offering date, not the reporting date.
+    signal_concept: >-
+      Similarity of a theme's current valuation level, valuation dispersion, issuance and breadth pattern to
+      rule-labelled past theme peaks; used to underweight the theme within a long-biased portfolio.
+    holding_horizon: "60-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - industry momentum (TE-E02)
+      - aggregate valuation level of the sector
+      - net issuance factor (TE-E05)
+    confounders:
+      - momentum and its crash regimes
+      - discount-rate shocks (TE-F01)
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover at theme level; implementation through underweighting rather than shorting keeps costs low.
+    validation_requirements:
+      - Theme membership and peak labels from frozen rules on PIT data.
+      - Inference treats each episode as one observation; report the episode count.
+      - Pre-specify the similarity metric; log every attempt.
+    failure_conditions:
+      - Fewer independent episodes than needed for any inference.
+      - Signal fires in many non-peak periods with no subsequent underperformance.
+    kill_condition: >-
+      Peak similarity does not separate subsequent theme underperformance from non-peak periods across the
+      available independent episodes.
+    tail_exposure: >-
+      Underweighting a theme that keeps rising produces long, painful tracking error in speculative episodes.
+    implementation_complexity: high
+    grouped_variants: >-
+      Theme definition (classification or text), choice of similarity features, analogue weighting, look-back.
+    ranking:
+      economic_plausibility: 2
+      data_feasibility: 3
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  # ---------------------------------------------------------------------------------------------------
+  # C. Earnings
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-C01
+    name: Post-earnings-announcement drift
+    research_family: C_earnings
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Prices underreact to earnings news, so stocks with positive surprises continue to drift up and those with
+      negative surprises drift down for weeks after the announcement. Limited attention and anchoring are the
+      usual explanations; technology stocks have heavy announcement-day volume but also many small-cap names
+      with thin coverage.
+    counterparty: >-
+      Investors who anchor on prior expectations and trade against the announcement move, and those with
+      limited attention who do not process the news.
+    target_universe: >-
+      US-listed technology companies with dated earnings announcements, passing PIT liquidity filters
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, earnings_events, fundamentals_pit, analyst_estimates_pit]
+    availability_risks:
+      - Announcement timestamps must distinguish before-open and after-close releases.
+      - Consensus estimates used for surprises are subject to backfill; time-series surprises avoid this but are noisier.
+      - Restated earnings must not replace the originally announced figure.
+    signal_concept: >-
+      Standardised unexpected earnings (versus consensus or a seasonal random walk) and announcement-window
+      abnormal return, measured from the first tradable session after the release.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - market beta and sub-industry exposure
+      - price momentum
+      - announcement-window return alone
+    confounders:
+      - revenue surprise (TE-C02)
+      - guidance (TE-C03)
+      - momentum
+    transaction_costs: medium
+    cost_notes: >-
+      Event-driven turnover concentrated in earnings seasons; small-cap names carry high spreads.
+    validation_requirements:
+      - Entry no earlier than the first full session after the release timestamp.
+      - Results split by size and coverage, since drift is known to be concentrated in small names.
+      - Check decay over time given the anomaly's publicity.
+    failure_conditions:
+      - Drift confined to names too small or illiquid to trade.
+      - No drift beyond what momentum explains in the technology universe.
+    kill_condition: >-
+      Earnings surprises do not predict hedged drift after costs in the tradable part of the universe.
+    tail_exposure: >-
+      Crowded event-driven positioning can reverse quickly in market-wide deleveraging.
+    implementation_complexity: low
+    grouped_variants: >-
+      Consensus-based versus time-series surprise, announcement-return surprise, scaling choices, holding
+      window, size filters.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 3
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 1
+      leakage_safety: 3
+
+  - id: TE-C02
+    name: Revenue surprise in technology firms
+    research_family: C_earnings
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      For growth-oriented technology firms, revenue is harder to manage than earnings and carries more
+      information about demand. Investors focus on headline earnings and may underreact to the revenue
+      component. Revenue surprises, especially when they diverge from earnings surprises, should predict
+      subsequent returns.
+    counterparty: >-
+      Investors and screens keyed to headline earnings who underweight revenue-quality information.
+    target_universe: >-
+      US-listed technology companies with revenue consensus and dated announcements
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, earnings_events, analyst_estimates_pit, fundamentals_pit]
+    availability_risks:
+      - Revenue consensus histories are thinner and more prone to backfill than earnings consensus.
+      - Revenue recognition standard changes alter comparability across years.
+    signal_concept: >-
+      Standardised revenue surprise versus consensus, and its divergence from the earnings surprise, measured
+      at the announcement.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - earnings surprise drift (TE-C01)
+      - announcement-window return
+    confounders:
+      - earnings surprise
+      - guidance changes released with results
+    transaction_costs: medium
+    cost_notes: >-
+      Same turnover pattern as earnings drift; long-only implementation avoids borrow but carries market risk.
+    validation_requirements:
+      - Show incremental content over earnings surprise in the same regression.
+      - Control for revenue-recognition regime changes.
+    failure_conditions:
+      - Revenue surprise adds nothing to earnings surprise.
+      - Effect exists only where consensus coverage is backfilled.
+    kill_condition: >-
+      Revenue surprise has no incremental predictive content over earnings surprise on as-of consensus data.
+    tail_exposure: >-
+      Same crowded-unwind exposure as other earnings-drift strategies.
+    implementation_complexity: low
+    grouped_variants: >-
+      Revenue-only surprise, revenue minus earnings surprise, segment-level revenue surprise, scaling choices.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 4
+      distinctiveness: 2
+      leakage_safety: 3
+
+  - id: TE-C03
+    name: Management guidance surprise
+    research_family: C_earnings
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Management forward guidance conveys private information about pipeline and bookings. Guidance raised or
+      lowered relative to consensus is news that analysts take time to absorb into their own forecasts, so
+      prices may adjust gradually. In technology, guidance often matters more than the reported quarter.
+    counterparty: >-
+      Investors who wait for analyst revisions before acting and those focused on the reported quarter.
+    target_universe: >-
+      US-listed technology companies that issue quantitative guidance
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, guidance_events, analyst_estimates_pit, earnings_events]
+    availability_risks:
+      - Guidance databases record ranges and midpoints with inconsistent timestamps.
+      - Firms stop or start guiding; selection into guidance is itself informative.
+      - Consensus at the time of guidance must be captured as-of, not from later snapshots.
+    signal_concept: >-
+      Guidance midpoint minus prevailing consensus, scaled, measured at the release timestamp; separately for
+      revenue and earnings guidance.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - earnings surprise drift (TE-C01)
+      - revenue surprise (TE-C02)
+    confounders:
+      - reported-quarter surprise released at the same time
+      - selection of firms that guide
+    transaction_costs: medium
+    cost_notes: >-
+      Event-driven turnover around earnings seasons with moderate spreads.
+    validation_requirements:
+      - Guidance and consensus aligned at the same timestamp.
+      - Show incremental content over the same-day earnings and revenue surprise.
+      - Treat firms that stop guiding as a separate observable event.
+    failure_conditions:
+      - Guidance surprise is fully absorbed on announcement day.
+      - Effect disappears once same-day surprises are controlled.
+    kill_condition: >-
+      Guidance surprise does not predict drift beyond same-day earnings and revenue surprises.
+    tail_exposure: >-
+      Guidance cuts cluster in downturns, producing correlated gaps across the portfolio.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Revenue versus earnings guidance, midpoint versus range-width signals, initiations and withdrawals of
+      guidance.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-C04
+    name: Analyst revision breadth
+    research_family: C_earnings
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      The share of analysts revising up versus down captures how widely new information has spread among
+      forecasters, independent of the size of any one revision. Broad, one-sided revisions indicate a shift
+      in fundamentals that prices may not yet fully reflect.
+    counterparty: >-
+      Investors who react to the consensus level rather than to the direction and breadth of individual
+      revisions.
+    target_universe: >-
+      US-listed technology companies with several covering analysts at formation
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, analyst_estimates_pit, earnings_events]
+    availability_risks:
+      - Individual-analyst revision histories are the most backfill-prone estimate data.
+      - Stale estimates inflate the denominator; vendors differ on stale-estimate filters.
+    signal_concept: >-
+      Net share of upward minus downward revisions to forward estimates over a recent window, among active
+      estimates.
+    holding_horizon: "20-60 trading days"
+    horizon_bucket: months
+    baselines:
+      - peer-relative revisions (TE-A03)
+      - price momentum
+    confounders:
+      - revision magnitude
+      - earnings drift around announcements
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing with moderate turnover in covered, mostly liquid names.
+    validation_requirements:
+      - Individual estimates captured as of each formation date with a stale-estimate rule fixed in advance.
+      - Show incremental content over revision magnitude (TE-A03) and momentum.
+    failure_conditions:
+      - Breadth is redundant with revision magnitude.
+      - Results depend on stale-estimate filtering choices.
+    kill_condition: >-
+      Revision breadth adds nothing beyond revision magnitude and price momentum.
+    tail_exposure: >-
+      Shares the crowding and rotation risk of revision-momentum strategies.
+    implementation_complexity: low
+    grouped_variants: >-
+      Earnings versus revenue breadth, window length, fiscal-year versus forward-twelve-month estimates,
+      stale-estimate rules.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 4
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-C05
+    name: Analyst disagreement under short-sale constraints
+    research_family: C_earnings
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      When opinions diverge and short selling is costly, prices reflect optimists' valuations. High dispersion
+      of analyst forecasts is a proxy for divergence of opinion and should precede lower returns as
+      uncertainty resolves. Technology firms with uncertain product outcomes often show wide dispersion.
+    counterparty: >-
+      Optimistic investors whose views set the price because pessimists face short-sale costs.
+    target_universe: >-
+      US-listed technology companies with at least a few covering analysts
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, analyst_estimates_pit, borrow_availability]
+    availability_risks:
+      - Dispersion needs individual estimates as of each date; backfill alters it.
+      - Coverage thresholds change the sample composition over time.
+    signal_concept: >-
+      Cross-analyst standard deviation of forward earnings forecasts scaled by price or by absolute mean,
+      relative to sub-industry peers.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - idiosyncratic volatility
+      - short-sale constraint signal (TE-A02)
+      - size
+    confounders:
+      - idiosyncratic volatility
+      - distress
+      - small coverage counts
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing; the short leg is in high-uncertainty names that may be costly to borrow.
+    validation_requirements:
+      - Dispersion computed from as-of individual estimates.
+      - Control for idiosyncratic volatility and short interest.
+      - Test whether the effect is stronger where borrow is costly, as the mechanism requires.
+    failure_conditions:
+      - Effect explained by volatility or distress.
+      - No interaction with borrow constraints.
+    kill_condition: >-
+      Dispersion does not predict negative hedged returns after volatility controls, or the effect does not
+      strengthen with borrow constraints.
+    tail_exposure: >-
+      Short leg is exposed to squeezes in uncertain, story-driven names.
+    implementation_complexity: low
+    grouped_variants: >-
+      Earnings versus revenue dispersion, scaling choice, horizon of the forecast, coverage threshold.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 4
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-C06
+    name: Forward margin revisions
+    research_family: C_earnings
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Technology firms have high operating leverage: small revenue changes produce large margin changes.
+      Consensus revisions can be decomposed into revenue-driven and margin-driven parts. Investors may treat
+      margin-driven upgrades as less durable than they are, so revisions to forward operating margin should
+      predict returns beyond revenue revisions.
+    counterparty: >-
+      Investors who treat margin improvements as transitory and anchor valuation on revenue multiples.
+    target_universe: >-
+      US-listed technology companies with consensus for both revenue and operating income
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, analyst_estimates_pit, fundamentals_pit, earnings_events]
+    availability_risks:
+      - Operating-margin consensus is sparse historically and subject to definitional changes (adjusted versus reported).
+      - Backfilled consensus can create spurious decompositions.
+    signal_concept: >-
+      Change in consensus forward operating margin over a recent window, net of the part implied by revenue
+      revisions and fixed-cost leverage.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - earnings revisions (TE-A03)
+      - profitability (TE-E04)
+    confounders:
+      - earnings revisions
+      - changes in adjusted-earnings definitions
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing; long-only ranking avoids borrow.
+    validation_requirements:
+      - Margin consensus as-of, with a fixed definition across time.
+      - Show incremental content over total earnings revisions.
+    failure_conditions:
+      - Margin revisions are redundant with earnings revisions.
+      - Historical coverage too sparse for inference.
+    kill_condition: >-
+      Margin-driven revisions add no prediction beyond total earnings revisions.
+    tail_exposure: >-
+      Margin expectations collapse together in demand downturns.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Gross versus operating margin, adjusted versus reported basis, decomposition method, window length.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-C07
+    name: Earnings-call language
+    research_family: C_earnings
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Management tone, specificity and evasiveness in the question-and-answer part of earnings calls carry
+      information about future results that is not in the numbers. Processing long transcripts is costly, so
+      the information may enter prices slowly.
+    counterparty: >-
+      Investors who trade only on quantitative releases and do not process call content.
+    target_universe: >-
+      US-listed technology companies with dated earnings-call transcripts
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, earnings_call_text, earnings_events]
+    availability_risks:
+      - Transcript availability timestamps are often later than the call and vary by provider.
+      - Historical transcript coverage is incomplete and biased towards larger firms.
+      - Language models trained on recent text embed knowledge of later outcomes; scoring must avoid models trained after formation.
+    signal_concept: >-
+      Text-derived measures of tone, uncertainty and non-answer frequency, relative to the firm's own history
+      and to peers, available only after the transcript timestamp.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - earnings surprise drift (TE-C01)
+      - guidance surprise (TE-C03)
+    confounders:
+      - same-day quantitative surprises
+      - industry-wide tone shifts
+    transaction_costs: medium
+    cost_notes: >-
+      Event-driven turnover in earnings seasons, similar to other earnings strategies.
+    validation_requirements:
+      - Text scoring with dictionaries or models fixed before the evaluation window and not trained on later text.
+      - Signal timed from the transcript's availability timestamp.
+      - Show incremental content over quantitative surprises.
+    failure_conditions:
+      - Tone is fully explained by same-day surprises.
+      - Results depend on a text model that has seen the evaluation period.
+    kill_condition: >-
+      Call-language measures add nothing beyond same-day earnings, revenue and guidance surprises.
+    tail_exposure: >-
+      Moderate; mainly shares the crowding risk of earnings-event strategies.
+    implementation_complexity: high
+    grouped_variants: >-
+      Dictionary versus model-based tone, prepared remarks versus Q&A, evasiveness measures, change versus
+      level.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 1
+      research_cost: 1
+      implementation_simplicity: 2
+      distinctiveness: 3
+      leakage_safety: 1
+
+  # ---------------------------------------------------------------------------------------------------
+  # D. Innovation and technology diffusion across economic relationship graphs
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-D01
+    name: Foundry and chipmaker capex diffusion to equipment suppliers
+    research_family: D_diffusion
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Capital-expenditure plans announced by chipmakers and foundries are orders for equipment and materials
+      suppliers several quarters later. Investors in suppliers may not fully map customer capex guidance
+      into supplier revenue paths, especially for smaller suppliers with concentrated customer bases.
+    counterparty: >-
+      Supplier investors who wait for supplier-reported orders rather than reading customers' capex
+      disclosures.
+    target_universe: >-
+      US-listed semiconductor equipment and materials suppliers
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, semiconductor_supply_chain, relationship_graph, guidance_events, customer_concentration]
+    availability_risks:
+      - Supplier-customer links must be dated to first disclosure; vendor graphs encode ex-post discovery.
+      - Capex guidance is announced in calls and filings with inconsistent timestamps.
+      - Semiconductor supply-chain datasets have short, uneven history.
+    signal_concept: >-
+      Exposure-weighted change in announced customer capex guidance mapped to each supplier through dated
+      links, relative to the supplier's consensus revenue path.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - industry momentum (TE-E02)
+      - supplier's own revisions (TE-A03)
+      - semiconductor cycle indicators (TE-F04)
+    confounders:
+      - semiconductor cycle
+      - common price response of customers and suppliers on the same day
+    transaction_costs: low
+    cost_notes: >-
+      Quarterly signal in mostly liquid mid- and large-cap suppliers; low turnover.
+    validation_requirements:
+      - All links and capex announcements dated as first public.
+      - Show incremental content over supplier consensus revisions and industry momentum.
+      - Inference that respects the few independent capex cycles.
+    failure_conditions:
+      - Supplier prices react fully on the customer's announcement day.
+      - Signal is redundant with the semiconductor cycle.
+    kill_condition: >-
+      Customer capex changes do not predict supplier returns beyond supplier revisions and the cycle.
+    tail_exposure: >-
+      Export controls or abrupt capex cancellations hit the whole supplier group at once.
+    implementation_complexity: high
+    grouped_variants: >-
+      Capex measure (guidance, reported capex, equipment orders), link weights, lag structure, materials versus
+      equipment sub-groups.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 2
+
+  - id: TE-D02
+    name: Cloud and AI compute demand diffusion to infrastructure suppliers
+    research_family: D_diffusion
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Hyperscale cloud operators and AI model providers buy accelerators, memory, networking, storage and
+      servers. Their capex plans and adoption signals propagate to infrastructure suppliers over quarters.
+      Investors may price the most visible suppliers quickly but second-tier component and networking
+      suppliers slowly.
+    counterparty: >-
+      Investors who concentrate on the most visible beneficiaries and underweight less-followed second-tier
+      suppliers exposed to the same demand.
+    target_universe: >-
+      US-listed accelerator, memory, networking, storage, server and interconnect suppliers
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, cloud_capex, relationship_graph, developer_adoption, product_releases, customer_concentration]
+    availability_risks:
+      - Supplier exposure to cloud and AI demand is mapped with hindsight unless taken from dated disclosures.
+      - Developer-adoption and product-release data have short histories and unknown timestamping.
+      - The AI demand episode is short and unique, so very few independent observations exist.
+    signal_concept: >-
+      Exposure-weighted change in cloud capex guidance or AI adoption measures mapped to suppliers through
+      dated links, relative to supplier consensus.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - industry momentum (TE-E02)
+      - supplier revisions (TE-A03)
+      - size
+    confounders:
+      - single-theme momentum and crowding
+      - discount-rate shocks (TE-F01)
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover; long-only ranking but concentrated in a crowded theme.
+    validation_requirements:
+      - Links dated as first disclosed; exposure weights from PIT segment or customer disclosures.
+      - Results by sub-period; not dominated by a single demand episode.
+      - Adoption data used only from the date the vendor began capturing it live.
+    failure_conditions:
+      - Effect exists only in one recent episode.
+      - Second-tier suppliers react as fast as first-tier.
+    kill_condition: >-
+      Mapped compute demand changes do not predict supplier returns beyond momentum and revisions outside a
+      single episode.
+    tail_exposure: >-
+      Thematic crowding unwinds can cause large simultaneous drawdowns across all suppliers.
+    implementation_complexity: high
+    grouped_variants: >-
+      Cloud capex versus AI adoption signals, accelerator versus memory versus networking sub-groups, link
+      weighting, lag structure.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  - id: TE-D03
+    name: Security-incident diffusion to cybersecurity vendors
+    research_family: D_diffusion
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Disclosed security incidents and new disclosure rules in a customer industry raise security budgets in
+      that industry with a lag. Vendors with revenue concentrated in affected industries should see higher
+      demand, which investors may not map from incident news to vendor revenue.
+    counterparty: >-
+      Investors who treat security incidents as news about the victim, not as demand news for vendors.
+    target_universe: >-
+      US-listed cybersecurity software and services companies
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, regulatory_filings_text, segment_reporting, relationship_graph]
+    availability_risks:
+      - Incident disclosures before mandated reporting are inconsistent and dated unevenly.
+      - Vendor exposure to customer industries is rarely disclosed and may be inferred ex post.
+      - Small universe of listed security vendors with a short history.
+    signal_concept: >-
+      Count or severity of dated incident disclosures in customer industries, weighted by each vendor's
+      disclosed industry exposure.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - software sub-industry momentum
+      - vendor revisions (TE-A03)
+    confounders:
+      - general software spending cycle
+      - regulatory announcements affecting all vendors
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover in a small set of mostly liquid software names.
+    validation_requirements:
+      - Incidents and exposure weights dated as first public.
+      - Placebo using non-security software vendors.
+    failure_conditions:
+      - Too few vendors or incidents for inference.
+      - Placebo vendors respond equally.
+    kill_condition: >-
+      Exposure-weighted incident signals do not predict vendor returns beyond software momentum.
+    tail_exposure: >-
+      Sector-wide software derating hits all vendors regardless of demand.
+    implementation_complexity: high
+    grouped_variants: >-
+      Incident counts versus severity, rule-change events, exposure weighting, lag.
+    ranking:
+      economic_plausibility: 2
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  - id: TE-D04
+    name: Customer-industry conditions and vertical software vendors
+    research_family: D_diffusion
+    approach: relative_value
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Software vendors serving specific customer industries (vertical software) depend on those industries'
+      budgets. Customer-industry earnings and returns lead vendor bookings with a lag. Investors who analyse
+      vendors as generic software may underreact to customer-industry conditions.
+    counterparty: >-
+      Generalist software investors who do not track customer-industry fundamentals.
+    target_universe: >-
+      US-listed application software companies with identifiable customer-industry concentration
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, segment_reporting, customer_concentration, relationship_graph, fundamentals_pit]
+    availability_risks:
+      - Customer-industry exposures are often inferred from text or vendor data built after the fact.
+      - Segment disclosures change definitions across years.
+    signal_concept: >-
+      Exposure-weighted recent returns or earnings revisions of a vendor's customer industries, relative to
+      the vendor's sub-industry peers.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - customer-to-supplier lead-lag (TE-A05)
+      - industry momentum
+    confounders:
+      - broad economic cycle
+      - software sector factor
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing in mid-cap software names; moderate borrow needs.
+    validation_requirements:
+      - Exposures from dated disclosures only.
+      - Show content beyond TE-A05 and industry momentum.
+    failure_conditions:
+      - Redundant with customer-to-supplier lead-lag.
+      - Exposure mapping too noisy to rank vendors.
+    kill_condition: >-
+      Customer-industry signals do not predict vendor hedged returns beyond lead-lag and industry momentum.
+    tail_exposure: >-
+      Sector-wide software rotations dominate idiosyncratic customer-industry effects.
+    implementation_complexity: high
+    grouped_variants: >-
+      Return-based versus revision-based customer signals, exposure weighting, lag.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 2
+
+  - id: TE-D05
+    name: Data-centre build-out diffusion to power and thermal suppliers
+    research_family: D_diffusion
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Data-centre construction requires power distribution, cooling and electrical equipment, and grid
+      interconnection is a binding constraint. Announced data-centre capacity and power-procurement filings
+      lead supplier revenue. Investors focused on compute suppliers may underreact for power and thermal
+      equipment suppliers within or adjacent to the technology sector.
+    counterparty: >-
+      Investors who classify these suppliers as industrials and do not connect them to data-centre demand.
+    target_universe: >-
+      US-listed technology-hardware and adjacent electrical and thermal equipment suppliers with disclosed
+      data-centre exposure
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, cloud_capex, regulatory_filings_text, relationship_graph, macro_pit]
+    availability_risks:
+      - Data-centre exposure is identified with hindsight unless taken from dated disclosures.
+      - Interconnection queue and procurement filings have uneven historical timestamps.
+      - Very short history of the current build-out episode.
+    signal_concept: >-
+      Exposure-weighted change in announced data-centre capacity or power procurement, mapped to suppliers by
+      dated disclosures.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - cloud capex diffusion (TE-D02)
+      - industrial cycle (TE-F04)
+    confounders:
+      - general industrial cycle
+      - energy-price shocks (TE-F03)
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover in mostly liquid names; classification boundary issues complicate universe definition.
+    validation_requirements:
+      - Universe defined by a PIT rule, not by today's recognition of data-centre exposure.
+      - Show content beyond cloud capex and industrial cycle.
+    failure_conditions:
+      - Effect confined to one episode.
+      - Redundant with cloud capex diffusion.
+    kill_condition: >-
+      Data-centre power signals do not predict supplier returns beyond cloud capex and the industrial cycle.
+    tail_exposure: >-
+      A slowdown in data-centre spending would hit all exposed suppliers simultaneously.
+    implementation_complexity: high
+    grouped_variants: >-
+      Capacity announcements versus power procurement, supplier sub-groups, lag structure.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 4
+      leakage_safety: 1
+
+  - id: TE-D06
+    name: End-device product cycles and component suppliers
+    research_family: D_diffusion
+    approach: relative_value
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Launches and adoption of new end devices change demand for specific components (sensors, displays,
+      radio-frequency parts, memory). Product-adoption signals reach component suppliers' revenue with a lag
+      and component investors may not map device adoption to their holdings.
+    counterparty: >-
+      Component investors who wait for reported results rather than tracking end-device adoption.
+    target_universe: >-
+      US-listed electronic component and semiconductor suppliers to consumer and enterprise devices
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, product_releases, product_adoption, relationship_graph, customer_concentration]
+    availability_risks:
+      - Product-adoption data from third parties has unknown historical timestamping and survivorship.
+      - Component content per device is often known only after teardown reports, later than launch.
+      - Supplier links discovered ex post.
+    signal_concept: >-
+      Adoption momentum of end devices, mapped to component suppliers by dated content and customer links,
+      relative to sub-industry peers.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - customer-to-supplier lead-lag (TE-A05)
+      - industry momentum
+    confounders:
+      - customer price lead-lag
+      - semiconductor cycle
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing with moderate turnover; some small-cap suppliers have wide spreads.
+    validation_requirements:
+      - Content and links dated to first public availability.
+      - Show content beyond customer price lead-lag.
+    failure_conditions:
+      - Redundant with customer return lead-lag.
+      - Adoption data history too short.
+    kill_condition: >-
+      Device adoption signals do not predict supplier hedged returns beyond customer lead-lag.
+    tail_exposure: >-
+      Loss of a socket in a major device produces large idiosyncratic gaps.
+    implementation_complexity: high
+    grouped_variants: >-
+      Adoption measures, component categories, link weights, lag.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 1
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 3
+      leakage_safety: 1
+
+  # ---------------------------------------------------------------------------------------------------
+  # E. Factor
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-E01
+    name: Price momentum within technology
+    research_family: E_factor
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Stocks with high returns over the past year, skipping the most recent month, tend to continue
+      outperforming over the following months, usually attributed to underreaction and later overreaction.
+      This family is the reference point every other technology signal must beat, not a novel idea.
+    counterparty: >-
+      Investors who underreact to news and contrarian rebalancers who sell winners early.
+    target_universe: >-
+      US-listed technology companies passing PIT liquidity filters
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history]
+    availability_risks:
+      - Survivorship without delisting returns inflates momentum profits, especially among failed small-cap technology firms.
+      - Corporate actions must be applied as known at the time.
+    signal_concept: >-
+      Cumulative total return over an intermediate look-back, skipping the most recent month, ranked within the
+      technology universe.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - market beta
+      - equal-weighted technology universe
+    confounders:
+      - industry momentum (TE-E02)
+      - growth-versus-value cycles
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly turnover typical of momentum; long-only ranking avoids borrow.
+    validation_requirements:
+      - Delisting returns included.
+      - Results by sub-period, including known momentum-crash regimes, without tuning to them.
+    failure_conditions:
+      - No outperformance within technology after costs.
+    kill_condition: >-
+      Technology-universe momentum ranking does not beat the equal-weighted universe after costs.
+    tail_exposure: >-
+      Momentum crashes after sharp market rebounds and growth-to-value rotations.
+    implementation_complexity: low
+    grouped_variants: >-
+      Look-back and skip lengths, volatility scaling, weighting scheme.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 4
+      research_cost: 5
+      implementation_simplicity: 5
+      distinctiveness: 1
+      leakage_safety: 4
+
+  - id: TE-E02
+    name: Technology sub-industry momentum
+    research_family: E_factor
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Industry-wide news diffuses slowly across firms in a sub-industry, so sub-industries that have performed
+      well continue to do so. This is a between-industry effect, distinct from firm-specific momentum.
+    counterparty: >-
+      Investors who analyse firms individually and miss the common sub-industry component of news.
+    target_universe: >-
+      US-listed technology companies grouped by PIT sub-industry
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history]
+    availability_risks:
+      - Sub-industry classification must be point in time; today's classification embeds later reclassifications.
+      - Few sub-industries means few independent bets.
+    signal_concept: >-
+      Past return of each sub-industry over an intermediate look-back, used to tilt holdings across
+      sub-industries.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - price momentum (TE-E01)
+      - market beta
+    confounders:
+      - firm-level momentum
+      - macro exposures (TE-F01, TE-F04)
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover at sub-industry level; liquid names.
+    validation_requirements:
+      - PIT classification.
+      - Inference that accounts for the small number of sub-industries.
+    failure_conditions:
+      - Redundant with firm-level momentum.
+      - Too few sub-industries for reliable inference.
+    kill_condition: >-
+      Sub-industry momentum adds nothing to firm-level momentum within technology.
+    tail_exposure: >-
+      Concentrated sub-industry bets suffer in sharp sector rotations.
+    implementation_complexity: low
+    grouped_variants: >-
+      Look-back lengths, classification depth, weighting.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 4
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 1
+      leakage_safety: 4
+
+  - id: TE-E03
+    name: Short-term reversal
+    research_family: E_factor
+    approach: relative_value
+    mechanism_class: flow
+    sign: "-"
+    rationale: >-
+      Stocks with extreme returns over the past week or month tend to partly reverse because those returns
+      include temporary price pressure from liquidity demand. Liquidity providers are paid for absorbing it.
+    counterparty: >-
+      Investors demanding immediacy who pay a temporary price concession.
+    target_universe: >-
+      US-listed technology companies passing PIT liquidity filters
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, earnings_events]
+    availability_risks:
+      - Stale closing prices and bid-ask bounce create spurious reversal.
+      - Survivorship and delisting returns matter for extreme losers.
+    signal_concept: >-
+      Past-week or past-month return, ranked, excluding announcement-driven moves.
+    holding_horizon: "5-20 trading days"
+    horizon_bucket: days
+    baselines:
+      - market beta
+      - industry exposure
+    confounders:
+      - bid-ask bounce
+      - peer-spread reversion (TE-A01)
+    transaction_costs: high
+    cost_notes: >-
+      Very high turnover; costs may consume most of the predicted return.
+    validation_requirements:
+      - Skip one day between signal and entry.
+      - Costs from realistic spread models by size.
+    failure_conditions:
+      - Profits do not survive a one-day skip and costs.
+    kill_condition: >-
+      Reversal returns do not survive a one-day implementation lag and realistic costs.
+    tail_exposure: >-
+      Losses in trending markets and in liquidity crises.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Weekly versus monthly reversal, industry-adjusted versus raw, exclusion of event days.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 4
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 1
+      leakage_safety: 4
+
+  - id: TE-E04
+    name: Profitability and earnings quality
+    research_family: E_factor
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      More profitable firms with cash-backed earnings tend to earn higher subsequent returns than less
+      profitable firms, which investors may undervalue relative to growth stories. In technology, profitability
+      measures must deal with stock-based compensation and capitalised development costs.
+    counterparty: >-
+      Investors who favour growth narratives over current profitability.
+    target_universe: >-
+      US-listed technology companies with PIT fundamentals
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit]
+    availability_risks:
+      - Restatements overwrite originally reported fundamentals.
+      - Filing-date lags must be respected.
+    signal_concept: >-
+      Gross profit or cash-based operating profit scaled by assets, adjusted for stock-based compensation, with
+      an accruals component.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - market beta
+      - value factor
+    confounders:
+      - value
+      - size
+      - stock-based compensation accounting
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover; liquid names.
+    validation_requirements:
+      - As-first-reported fundamentals with filing-date lag.
+      - Compare with and without stock-based compensation adjustments, pre-specified.
+    failure_conditions:
+      - No outperformance within technology.
+    kill_condition: >-
+      Profitability ranking does not beat the technology universe after costs.
+    tail_exposure: >-
+      Underperforms in speculative growth rallies.
+    implementation_complexity: low
+    grouped_variants: >-
+      Gross versus operating profitability, accruals, stock-based compensation treatment, scaling.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 3
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 1
+      leakage_safety: 3
+
+  - id: TE-E05
+    name: Investment, issuance and stock-compensation dilution
+    research_family: E_factor
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      Firms that grow assets quickly or issue equity (including through stock-based compensation) tend to
+      underperform, consistent with managers timing issuance when shares are overvalued and investors
+      underweighting dilution. Technology firms dilute heavily through compensation, which may be
+      underweighted relative to headline issuance.
+    counterparty: >-
+      Investors who buy newly issued shares and ignore ongoing dilution.
+    target_universe: >-
+      US-listed technology companies with PIT fundamentals and share counts
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit]
+    availability_risks:
+      - Share counts must be as of filing dates; vendor histories may use later figures.
+      - Restated asset values change historical growth.
+    signal_concept: >-
+      Asset growth and net share issuance including dilution from compensation, relative to peers.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - investment factor
+      - value factor
+    confounders:
+      - value
+      - profitability
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover; short leg may include recently listed names with limited borrow.
+    validation_requirements:
+      - Share counts and assets as first reported.
+      - Show whether the compensation component adds beyond standard issuance.
+    failure_conditions:
+      - Compensation dilution adds nothing to standard issuance and investment.
+    kill_condition: >-
+      Dilution-inclusive issuance does not predict hedged returns beyond the standard investment factor.
+    tail_exposure: >-
+      Short leg exposed to growth rallies in issuing firms.
+    implementation_complexity: low
+    grouped_variants: >-
+      Asset growth, net issuance, compensation dilution, buyback adjustments.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 3
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 2
+      leakage_safety: 3
+
+  - id: TE-E06
+    name: Intangible-adjusted value
+    research_family: E_factor
+    approach: directional
+    mechanism_class: risk_premium
+    sign: "+"
+    rationale: >-
+      Book value understates the capital of technology firms because research and development and much of
+      selling expense are expensed. Capitalising these expenditures gives a value measure that is more
+      comparable across firms, so cheap firms on an intangible-adjusted basis may earn a value premium.
+    counterparty: >-
+      Investors who pay for growth without adjusting for the capital already embedded in the firm.
+    target_universe: >-
+      US-listed technology companies with PIT fundamentals
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit]
+    availability_risks:
+      - Capitalisation needs long expense histories; early-life firms have short histories.
+      - Restatements affect the stock of intangibles.
+    signal_concept: >-
+      Book value plus capitalised research and selling expenses (with depreciation), relative to market value;
+      variants adjust for expected growth.
+    holding_horizon: "120-500 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - book-to-market
+      - earnings yield
+    confounders:
+      - standard value factor
+      - profitability
+      - duration exposure (TE-F01)
+    transaction_costs: low
+    cost_notes: >-
+      Very low turnover; liquid names.
+    validation_requirements:
+      - Capitalisation rates fixed in advance.
+      - Show content beyond standard value factors.
+    failure_conditions:
+      - Redundant with standard value.
+    kill_condition: >-
+      Intangible-adjusted value adds nothing to standard value within technology.
+    tail_exposure: >-
+      Long periods of underperformance during growth rallies.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Capitalisation and depreciation rates, growth adjustments, value ratios.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 3
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 3
+
+  - id: TE-E07
+    name: Cash runway and balance-sheet strength
+    research_family: E_factor
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Cash-burning technology firms with short runway face dilution or distress, and investors may underweight
+      these costs. Longer runway and stronger balance sheets should predict higher returns relative to firms
+      that will need to raise capital soon.
+    counterparty: >-
+      Investors drawn to growth or lottery-like payoffs who underweight dilution and distress costs.
+    target_universe: >-
+      US-listed technology companies with PIT fundamentals
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fundamentals_pit]
+    availability_risks:
+      - Delisting returns essential; distressed firms often delist.
+      - Cash burn measured from restated statements misleads.
+    signal_concept: >-
+      Months of cash runway given recent operating and investing cash flows, combined with leverage and
+      liquidity ratios.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - distress risk factor
+      - profitability (TE-E04)
+    confounders:
+      - profitability
+      - size
+    transaction_costs: medium
+    cost_notes: >-
+      Low turnover, but weak-balance-sheet names are often small and illiquid.
+    validation_requirements:
+      - Delisting returns included.
+      - Content beyond profitability and size.
+    failure_conditions:
+      - Redundant with profitability and size.
+    kill_condition: >-
+      Runway does not predict returns beyond profitability, size and distress measures.
+    tail_exposure: >-
+      Speculative rallies in cash-burning firms.
+    implementation_complexity: low
+    grouped_variants: >-
+      Runway definitions, leverage ratios, distress measures.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 3
+      research_cost: 4
+      implementation_simplicity: 4
+      distinctiveness: 2
+      leakage_safety: 3
+
+  # ---------------------------------------------------------------------------------------------------
+  # F. Macro
+  # ---------------------------------------------------------------------------------------------------
+
+  - id: TE-F01
+    name: Discount-rate shocks and equity duration
+    research_family: F_macro
+    approach: relative_value
+    mechanism_class: behavioural
+    sign: "-"
+    rationale: >-
+      Long-duration technology equities, whose cash flows lie far in the future, are more sensitive to real
+      yields and policy-rate expectations. If benchmark-constrained investors adjust slowly, real-yield and
+      policy-path shocks may be reflected gradually in the relative prices of long- versus short-duration
+      firms.
+    counterparty: >-
+      Benchmark-constrained and slow-moving investors who rebalance duration exposure gradually.
+    target_universe: >-
+      US-listed technology companies sorted by an equity-duration proxy
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit, analyst_estimates_pit]
+    availability_risks:
+      - Duration proxies built from forecast cash flows inherit consensus backfill.
+      - Policy-expectation series must be taken as observed in markets at the time, not from revised data.
+      - Few independent rate regimes; strong multiple-testing risk across macro conditioning variables.
+    signal_concept: >-
+      Recent change in real yields or market-implied policy path, interacted with each firm's duration proxy.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - same-day response to rate changes
+      - value and growth factors
+    confounders:
+      - value factor
+      - profitability
+    transaction_costs: medium
+    cost_notes: >-
+      Moderate turnover; both legs mostly liquid.
+    validation_requirements:
+      - Macro data as observed at the time.
+      - Distinguish predictive lag from contemporaneous response.
+      - Inference that accounts for few independent rate regimes.
+    failure_conditions:
+      - Response is entirely contemporaneous.
+      - Effect confined to one rate regime.
+    kill_condition: >-
+      Discount-rate shocks predict no subsequent relative return of long- versus short-duration technology
+      stocks across regimes.
+    tail_exposure: >-
+      Abrupt policy reversals produce large losses in duration-tilted books.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Real-yield changes, policy-path surprises around scheduled announcements, duration proxies, look-back.
+    ranking:
+      economic_plausibility: 4
+      data_feasibility: 4
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-F02
+    name: Credit conditions and financing-dependent technology
+    research_family: F_macro
+    approach: relative_value
+    mechanism_class: risk_premium
+    sign: "-"
+    rationale: >-
+      Unprofitable, cash-burning technology firms depend on equity and convertible issuance to fund
+      operations. When credit spreads widen or lending standards tighten, their cost of external finance rises
+      and the probability of dilutive or distressed raises increases. If investors price this funding channel
+      slowly, financing-dependent firms should underperform self-funding peers after credit tightening.
+    counterparty: >-
+      Holders of speculative growth stocks who price product optionality but not refinancing risk, and who
+      sell only once a dilutive raise is announced.
+    target_universe: >-
+      US-listed technology companies sorted by PIT external-financing dependence (cash burn relative to cash
+      and market value)
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit]
+    availability_risks:
+      - Credit-spread series must be as observed at the time; lending-standards surveys must use first-release dates.
+      - Financing dependence uses as-first-reported cash-flow statements lagged to filing date.
+      - Few independent credit cycles, so macro conditioning invites overfitting.
+      - Distressed firms delist often; delisting returns are essential.
+    signal_concept: >-
+      Recent change in credit conditions (high-yield or convertible spreads, lending standards) interacted
+      with each firm's financing-dependence proxy, used to tilt from dependent towards self-funding firms.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - profitability (TE-E04)
+      - cash runway (TE-E07), unconditional
+      - market beta
+    confounders:
+      - discount-rate shocks (TE-F01), which move with credit
+      - size and idiosyncratic volatility
+      - unconditional distress effect
+    transaction_costs: medium
+    cost_notes: >-
+      Moderate turnover driven by macro changes; the short leg sits in speculative names with costly or
+      unavailable borrow.
+    validation_requirements:
+      - Macro inputs at first release or as observed in markets on the date.
+      - Must show conditional content beyond the unconditional runway and profitability signals.
+      - Control for contemporaneous real-yield changes.
+      - Inference that treats each credit cycle as a small number of observations.
+    failure_conditions:
+      - Conditioning on credit adds nothing to unconditional cash runway.
+      - Effect is a relabelled discount-rate response.
+      - Effect confined to one tightening episode.
+    kill_condition: >-
+      Credit tightening does not predict relative underperformance of financing-dependent technology firms
+      beyond discount-rate shocks and unconditional balance-sheet signals.
+    tail_exposure: >-
+      Liquidity-driven rallies in speculative names after policy easing can squeeze the short leg hard.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Credit measure (high-yield spreads, convertible spreads, lending standards), financing-dependence proxy,
+      look-back of the credit change.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 4
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-F03
+    name: Energy costs and data-centre-intensive firms
+    research_family: F_macro
+    approach: relative_value
+    mechanism_class: structural
+    sign: "-"
+    rationale: >-
+      Electricity is a large operating cost for data-centre operators, hosting providers and semiconductor
+      fabrication. Power contracts reprice with a lag, so an energy-price shock reaches reported margins one or
+      more quarters later. If investors wait for reported margins, energy-intensive technology firms should
+      underperform less energy-intensive peers after energy-price increases.
+    counterparty: >-
+      Investors who model technology firms on revenue growth and treat energy as a minor input, updating only
+      when margin pressure is reported.
+    target_universe: >-
+      US-listed technology companies sorted by PIT energy intensity (data-centre operators, hosting, fabs
+      versus asset-light software)
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit, segment_reporting, regulatory_filings_text]
+    availability_risks:
+      - Energy intensity is estimated from disclosures with lags and changing definitions; today's estimates embed later knowledge.
+      - Regional power-price series may not have been available as of the date in the form used.
+      - Contract structures (fixed versus floating power) are rarely disclosed, adding unobservable heterogeneity.
+    signal_concept: >-
+      Recent change in relevant wholesale power or fuel prices interacted with each firm's dated
+      energy-intensity proxy.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - market beta and sub-industry exposure
+      - data-centre build-out diffusion (TE-D05)
+    confounders:
+      - inflation and real-yield changes (TE-F01)
+      - industrial cycle
+      - demand growth for data-centre capacity that offsets costs
+    transaction_costs: medium
+    cost_notes: >-
+      Moderate turnover in a narrow universe; some energy-intensive names are mid-cap with moderate borrow
+      costs.
+    validation_requirements:
+      - Energy intensity from dated disclosures with a frozen proxy rule.
+      - Control for rates, inflation and the industrial cycle.
+      - Test whether subsequent margin surprises move in the predicted direction, not only returns.
+    failure_conditions:
+      - Energy intensity cannot be measured well enough to sort firms.
+      - Returns respond only contemporaneously to energy prices.
+      - Demand growth dominates cost effects throughout.
+    kill_condition: >-
+      Energy-price shocks do not predict relative returns or margin surprises of energy-intensive technology
+      firms after rate, inflation and cycle controls.
+    tail_exposure: >-
+      Energy shocks coincide with broad market stress, so the relative position can be dominated by
+      market-wide deleveraging.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Energy series (power, gas), regional weighting, intensity proxies, look-back of the price change.
+    ranking:
+      economic_plausibility: 2
+      data_feasibility: 3
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 2
+
+  - id: TE-F04
+    name: Semiconductor and industrial cycle rotation
+    research_family: F_macro
+    approach: relative_value
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Semiconductor demand is cyclical, driven by inventory swings at customers and tied to the broader
+      industrial cycle, while software revenue is more recurring. Public leading indicators (manufacturing new
+      orders, inventory-to-shipment ratios, semiconductor billings) turn before semiconductor earnings. If
+      investors extrapolate recent sector earnings, improving indicators should predict semiconductors
+      outperforming software.
+    counterparty: >-
+      Investors who extrapolate recent sector earnings trends and rotate only after reported results turn.
+    target_universe: >-
+      US-listed semiconductor and software companies, grouped by PIT classification
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, semiconductor_supply_chain, classification_history]
+    availability_risks:
+      - Industrial indicators are revised; first-release vintages and release dates are required.
+      - Industry billings data are published with lags and occasionally restated.
+      - Only a handful of independent semiconductor cycles exist in the available history.
+    signal_concept: >-
+      Direction and change of a pre-specified composite of first-release cycle indicators, used to tilt between
+      semiconductors and software.
+    holding_horizon: "60-250 trading days"
+    horizon_bucket: quarters
+    baselines:
+      - sub-industry momentum (TE-E02)
+      - semiconductor-versus-software price momentum
+    confounders:
+      - discount-rate shocks (TE-F01), since software is longer duration
+      - inventory cycle analogues (TE-B03)
+    transaction_costs: low
+    cost_notes: >-
+      Low turnover between two liquid groups; implementable with liquid baskets.
+    validation_requirements:
+      - First-release vintages aligned to release dates.
+      - Composite fixed before evaluation; every attempted indicator logged.
+      - Inference that respects the small number of cycles (block bootstrap over cycles).
+    failure_conditions:
+      - Indicators add nothing to relative price momentum.
+      - Effect relies on revised rather than first-release data.
+    kill_condition: >-
+      First-release cycle indicators do not predict the semiconductor-versus-software spread beyond its own
+      momentum.
+    tail_exposure: >-
+      Supply shocks and policy interventions (export controls, subsidies) can break the usual cycle relation
+      abruptly.
+    implementation_complexity: low
+    grouped_variants: >-
+      Indicator choice and composite weights, level versus change, look-back, tilt rule.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 3
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 2
+      leakage_safety: 2
+
+  - id: TE-F05
+    name: Currency moves and international revenue exposure
+    research_family: F_macro
+    approach: relative_value
+    mechanism_class: informational
+    sign: "-"
+    rationale: >-
+      Many technology firms earn a large share of revenue abroad. A stronger home currency reduces translated
+      revenue and earnings, but analysts often update forecasts only when companies report or guide on the
+      translation effect. If prices follow analysts, firms with high foreign revenue share should underperform
+      domestically focused peers after currency appreciation.
+    counterparty: >-
+      Analysts and investors who wait for reported translation effects instead of applying observed currency
+      moves to disclosed revenue mix.
+    target_universe: >-
+      US-listed technology companies with PIT geographic revenue disclosure
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, fx_rates, segment_reporting, analyst_estimates_pit, guidance_events]
+    availability_risks:
+      - Geographic segments are restated and defined inconsistently across firms and years.
+      - Hedging programmes are disclosed unevenly, so true exposure is unobserved.
+      - Consensus histories used to check the revision channel carry backfill risk.
+    signal_concept: >-
+      Recent change in a revenue-weighted trade-weighted currency index interacted with each firm's dated
+      foreign revenue share.
+    holding_horizon: "20-120 trading days"
+    horizon_bucket: months
+    baselines:
+      - market beta and size
+      - peer-relative revisions (TE-A03)
+    confounders:
+      - global growth shocks that move currencies and foreign demand together
+      - hedging programmes
+      - discount-rate shocks
+    transaction_costs: medium
+    cost_notes: >-
+      Moderate turnover in mostly liquid large and mid caps; borrow rarely binding.
+    validation_requirements:
+      - Segment data as first reported and lagged to filing date.
+      - Check the revision channel directly (subsequent consensus changes), not only returns.
+      - Control for global growth proxies.
+    failure_conditions:
+      - Currency effects are fully priced at the time of the move.
+      - Exposure measurement too noisy to sort firms.
+    kill_condition: >-
+      Currency moves interacted with foreign revenue share predict neither subsequent relative returns nor
+      consensus revisions.
+    tail_exposure: >-
+      Abrupt currency reversals and global growth shocks can swamp the translation effect.
+    implementation_complexity: medium
+    grouped_variants: >-
+      Currency basket weighting, exposure measure (revenue share, segment mix), look-back, revision-based
+      versus return-based outcome.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 3
+      implementation_simplicity: 3
+      distinctiveness: 3
+      leakage_safety: 3
+
+  - id: TE-F06
+    name: Volatility regimes and crowding unwinds
+    research_family: F_macro
+    approach: directional
+    mechanism_class: flow
+    sign: "-"
+    rationale: >-
+      Technology stocks are frequently held in common by leveraged and risk-targeting investors. When market
+      volatility rises, risk limits force these investors to cut exposure at the same time, so crowded names
+      fall more than fundamentals justify. A crowding measure combined with rising implied volatility should
+      predict underperformance of crowded names, which a long-only ranking can avoid.
+    counterparty: >-
+      Leveraged and volatility-targeting investors forced to deleverage, who sell regardless of price.
+    target_universe: >-
+      US-listed technology companies with PIT crowding proxies
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, options_implied_vol, short_interest, regulatory_filings_text]
+    availability_risks:
+      - Crowding measures from institutional holdings filings are published with long lags and must be dated to filing.
+      - Single-name implied-volatility histories are vendor products with uneven coverage.
+      - Crowding proxies are easy to tune after the fact around known unwind episodes.
+    signal_concept: >-
+      Crowding score (holdings concentration among leveraged investors, short interest on the other side,
+      return co-movement) interacted with the level or change of market implied volatility, used to underweight
+      crowded names.
+    holding_horizon: "5-60 trading days"
+    horizon_bucket: weeks
+    baselines:
+      - price momentum (TE-E01)
+      - market beta
+      - low-volatility tilt
+    confounders:
+      - momentum crashes
+      - market beta in high-volatility periods
+      - discount-rate shocks
+    transaction_costs: medium
+    cost_notes: >-
+      Turnover rises exactly when spreads widen in volatile regimes, raising effective costs.
+    validation_requirements:
+      - Holdings data lagged to publication dates.
+      - Crowding proxy frozen before evaluation; episodes not hand-picked.
+      - Show content beyond momentum and beta in high-volatility periods.
+    failure_conditions:
+      - Redundant with momentum or beta.
+      - Data lags make the signal arrive after the unwind.
+    kill_condition: >-
+      Crowding interacted with volatility does not predict underperformance beyond momentum and beta.
+    tail_exposure: >-
+      The signal may fail in the fastest unwinds if crowding data lag the event, leaving the portfolio fully
+      exposed.
+    implementation_complexity: high
+    grouped_variants: >-
+      Crowding measures (holdings, co-movement, short interest), volatility measures (level, change, term
+      structure), regime definitions.
+    ranking:
+      economic_plausibility: 3
+      data_feasibility: 2
+      research_cost: 2
+      implementation_simplicity: 2
+      distinctiveness: 3
+      leakage_safety: 2

@@ -1,0 +1,196 @@
+"""Technology-equity universe: categories, classification history and point-in-time eligibility.
+
+    builder = UniverseBuilder(master, prices, classes, rules, fundamentals=..., borrow=...)
+    snap = builder.snapshot(date(2008, 6, 30))         # members and, for every other candidate, why not
+
+**No hard-coded list.** Candidates on a day are the securities the ``SecurityMaster`` shows as listed and known on
+that day. A company that later failed or was acquired is a candidate before it left; one that listed later is not.
+
+**Classification is history, too.** A company's technology category is an interval with a ``known_from`` date. A
+reclassification published later (a vendor moving a company from "consumer internet" to "cloud infrastructure"
+after the fact) is not used before it was published, and ``known_from`` earlier than the interval's start is
+allowed only when the classification was public in advance.
+
+**Eligibility from data known at the close of the day.** Price, trailing dollar volume, market capitalisation
+(close × shares outstanding as known), trading history, corporate-action completeness, fundamental coverage and
+borrow availability are all evaluated with information available at that close. Every exclusion has a reason, so
+a snapshot can be audited. ``snapshot`` never reads a bar, action, fact or classification dated after its day.
+
+**Scope.** The default categories are US-listed technology sub-industries in this package's own taxonomy (vendor
+industry codes are licensed and may be mapped onto it). Listing currency is checked against the rules' currency:
+an international extension adds calendars, currencies and a currency rule, not a second universe framework.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from datetime import date
+
+import numpy as np
+
+from .errors import EquityDataError, IdentityError
+from .fundamentals import FundamentalStore
+from .identity import SecurityMaster
+from .prices import PriceBook
+
+TECH_CATEGORIES = (
+    "semiconductors", "semiconductor_equipment", "enterprise_software", "cloud_infrastructure", "cybersecurity",
+    "consumer_internet", "digital_advertising", "ecommerce", "ai_infrastructure", "data_centres", "networking",
+    "technology_hardware", "it_services", "emerging_technology",
+)
+
+
+@dataclass(frozen=True)
+class Classification:
+    company_id: str
+    category: str
+    start: date
+    end: date | None = None
+    known_from: date | None = None
+    source: str = ""
+
+    def __post_init__(self):
+        if self.category not in TECH_CATEGORIES and self.category != "non_technology":
+            raise EquityDataError(f"{self.company_id}: unknown category {self.category!r}")
+        if self.end is not None and self.end < self.start:
+            raise EquityDataError(f"{self.company_id}: classification ends before it starts")
+        if self.known_from is None:
+            object.__setattr__(self, "known_from", self.start)
+
+
+class ClassificationHistory:
+    def __init__(self, items=()):
+        self._items: list[Classification] = []
+        for c in items:
+            self.add(c)
+
+    def add(self, c: Classification) -> None:
+        for o in self._items:
+            if o.company_id == c.company_id and o.known_from == c.known_from and o.start <= (c.end or date.max) \
+                    and c.start <= (o.end or date.max) and o.category != c.category:
+                raise EquityDataError(f"{c.company_id}: two categories for one period from one publication")
+        self._items.append(c)
+
+    def category(self, company_id: str, on: date, *, as_known_at: date | None = None) -> str | None:
+        """The category in force on ``on`` according to records published by ``as_known_at`` (default ``on``); the
+        latest-published record wins when two cover the day."""
+        known = on if as_known_at is None else as_known_at
+        hits = [c for c in self._items if c.company_id == company_id and c.start <= on
+                and (c.end is None or on <= c.end) and c.known_from <= known]
+        if not hits:
+            return None
+        return max(hits, key=lambda c: (c.known_from, c.start)).category
+
+
+@dataclass(frozen=True)
+class EligibilityRules:
+    categories: tuple = TECH_CATEGORIES
+    security_types: tuple = ("common", "adr")
+    currency: str = "USD"
+    min_price: float = 5.0
+    min_dollar_volume: float = 5e6           # median daily dollar volume over adv_sessions
+    adv_sessions: int = 63
+    min_market_cap: float = 3e8
+    min_history_sessions: int = 252
+    require_action_complete: bool = True
+    required_metrics: tuple = ()             # fundamental metrics that must be known (and recent) at the date
+    metric_max_age_days: int = 200
+    require_borrow: bool = False             # for the short side of relative-value books
+    shares_metric: str = "shares_outstanding"
+
+    def hash(self) -> str:
+        return hashlib.sha256(json.dumps(self.__dict__, sort_keys=True, default=str).encode()).hexdigest()
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    day: date
+    members: tuple
+    excluded: dict = field(default_factory=dict)     # security_id -> tuple of reasons
+    categories: dict = field(default_factory=dict)   # member security_id -> category
+    rules_hash: str = ""
+
+    def membership_hash(self) -> str:
+        """SHA-256 of the day and the sorted members: a feature or a neutralisation that names this hash was
+        computed on this universe and no other."""
+        return hashlib.sha256(json.dumps([self.day.isoformat(), list(self.members)]).encode()).hexdigest()
+
+
+class UniverseBuilder:
+    def __init__(self, master: SecurityMaster, prices: PriceBook, classes: ClassificationHistory,
+                 rules: EligibilityRules, *, fundamentals: FundamentalStore | None = None, borrow=None):
+        self.master, self.prices, self.classes, self.rules = master, prices, classes, rules
+        self.fundamentals, self.borrow = fundamentals, borrow
+        if rules.required_metrics and fundamentals is None:
+            raise EquityDataError("rules require fundamental metrics but no fundamental store was given")
+        if rules.require_borrow and borrow is None:
+            raise EquityDataError("rules require borrow availability but no borrow book was given")
+
+    def snapshot(self, day: date) -> Snapshot:
+        r = self.rules
+        cal = self.prices.calendar
+        if not cal.is_session(day):
+            raise EquityDataError(f"{day} is not a session: a universe is formed at a close")
+        members, excluded, cats = [], {}, {}
+        for sid in self.master.listed(day):
+            why = []
+            sec = self.master.security(sid)
+            cat = self.classes.category(sec.company_id, day)
+            if cat not in r.categories:
+                why.append(f"category {cat}")
+            if sec.security_type not in r.security_types:
+                why.append(f"security type {sec.security_type}")
+            if sec.currency != r.currency:
+                why.append(f"currency {sec.currency}")
+            last = self.prices.last_traded(sid, day)
+            if last is None:
+                why.append("no traded price")
+                excluded[sid] = tuple(why)
+                continue
+            if last != day:
+                why.append(f"not traded on the day (last {last})")
+            bars = self.prices.bars(sid, date.min, day)
+            traded = [b for b in bars if b.status == "traded"]
+            close = traded[-1].close
+            if close < r.min_price:
+                why.append(f"price {close:.2f} below {r.min_price}")
+            if len(traded) < r.min_history_sessions:
+                why.append(f"history {len(traded)} sessions")
+            dv = self.prices.dollar_volume(sid, day, r.adv_sessions)
+            if dv.size < min(r.adv_sessions, r.min_history_sessions) or float(np.median(dv)) < r.min_dollar_volume:
+                why.append("dollar volume")
+            if self.fundamentals is not None:
+                sh = self.fundamentals.value(sec.company_id, r.shares_metric, day, max_age_days=r.metric_max_age_days)
+                if sh is None:
+                    why.append("shares outstanding unknown")
+                elif close * sh.value < r.min_market_cap:
+                    why.append("market capitalisation")
+                for m in r.required_metrics:
+                    if self.fundamentals.value(sec.company_id, m, day, max_age_days=r.metric_max_age_days) is None:
+                        why.append(f"{m} not known")
+            elif r.min_market_cap > 0:
+                why.append("market capitalisation unknown (no fundamental store)")
+            if r.require_action_complete and traded:
+                start = traded[max(0, len(traded) - r.min_history_sessions)].day
+                if not self.prices.corporate_action_complete(sid, start, day, as_of=day):
+                    why.append("corporate actions incomplete")
+            if r.require_borrow:
+                try:
+                    rec = self.borrow.status(sid, day)
+                    if not rec.available:
+                        why.append("not borrowable")
+                except EquityDataError:
+                    why.append("borrow unknown")
+            if why:
+                excluded[sid] = tuple(why)
+            else:
+                members.append(sid)
+                cats[sid] = cat
+        return Snapshot(day, tuple(sorted(members)), excluded, cats, r.hash())
+
+
+def assert_snapshot_for(snapshot: Snapshot, day: date) -> None:
+    """A computation at ``day`` must use the universe formed at ``day``, not a later (or earlier) one."""
+    if snapshot.day != day:
+        raise IdentityError(f"universe formed on {snapshot.day} used at {day}: future or stale membership")
