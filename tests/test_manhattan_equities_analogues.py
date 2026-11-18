@@ -8,11 +8,12 @@ import numpy as np
 import pytest
 
 from manhattan.equities import analogues as A
-from manhattan.equities.errors import EvidenceError, TemporalError
+from manhattan.equities.errors import EquityDataError, EvidenceError, TemporalError
 
 FEATS = ("rev_growth", "gross_margin", "op_margin", "rd_intensity")
 T = date(2010, 6, 30)
 H = 365
+POLICY = A.OutcomePolicy(30, "synthetic fixture: every outcome is published within 30 days of its window's end")
 
 
 def obs(cid, d, vals, *, lag=40, category="enterprise_software", in_universe=True, regime="calm"):
@@ -25,7 +26,7 @@ def obs(cid, d, vals, *, lag=40, category="enterprise_software", in_universe=Tru
 
 def pool_fixture(seed=0):
     rng = np.random.default_rng(seed)
-    p = A.AnaloguePool()
+    p = A.AnaloguePool(POLICY)
     for i in range(30):
         cid = f"C{i:02d}"
         base = rng.normal([0.25, 0.65, 0.05, 0.15], [0.15, 0.1, 0.1, 0.05])
@@ -84,7 +85,7 @@ def test_training_requires_outcomes_observable_by_T_and_thins_overlaps():
         ds.sort()
         assert all((b - a).days >= H for a, b in zip(ds, ds[1:]))
     assert len(res_t.matches) < len(res_d.matches)
-    assert res_t.excluded["overlapping_horizon"] > 0 and res_t.excluded["outcome_unobservable"] > 0
+    assert res_t.excluded["overlapping_horizon"] > 0 and res_t.excluded["not_settled"] > 0
     # an outcome that is fully observable only after T is excluded
     p.add(obs("LATE", date(2009, 9, 30), (0.3, 0.7, 0.04, 0.16)))
     p.add_outcome(A.Outcome("LATE", date(2009, 9, 30), date(2010, 9, 30), 9.9, date(2010, 10, 5)))
@@ -127,7 +128,7 @@ def test_normalisation_uses_only_eligible_candidates():
 
 
 def test_missing_features_are_handled_and_overlap_enforced():
-    p = A.AnaloguePool()
+    p = A.AnaloguePool(POLICY)
     full = obs("A", date(2008, 3, 31), (0.3, 0.7, 0.04, 0.16))
     p.add(full)
     p.add(A.Observation("B", date(2008, 3, 31), {"rev_growth": 0.35, "gross_margin": 0.6},
@@ -186,7 +187,7 @@ def test_growth_stage_labels():
 
 # ----------------------------------------------------------------------------- S8 correction round: regressions
 def _h2_pool(record_c5: bool):
-    p = A.AnaloguePool()
+    p = A.AnaloguePool(POLICY)
     for i in range(6):
         cid = f"C{i}"
         p.add(obs(cid, date(2008, 3, 31), (0.1 * i, 0.5, 0.1, 0.1)))
@@ -208,26 +209,108 @@ def test_s8_h2_missing_observable_outcome_fails_closed():
     assert "C5" in {m.company_id for m in A.match(_h2_pool(False), target(), T, k=10).matches}
 
 
-def test_s8_h2_outcomes_not_yet_due_are_excluded_not_errors():
-    p = A.AnaloguePool()
+def test_s8_h2_unsettled_observations_are_excluded_by_the_calendar_not_errors():
+    p = A.AnaloguePool(POLICY)
     p.add(obs("NEW", date(2009, 9, 30), (0.3, 0.7, 0.04, 0.16)))     # window ends 2010-09-30, after T
     for i in range(4):
         p.add(obs(f"OLD{i}", date(2008, 3, 31), (0.3 + 0.05 * i, 0.6 + 0.03 * i, 0.04 + 0.01 * i, 0.1 + 0.02 * i)))
         p.add_outcome(A.Outcome(f"OLD{i}", date(2008, 3, 31), date(2009, 3, 31), 0.1, date(2009, 4, 2)))
     res = A.match(p, target(), T, k=10, purpose="training", horizon_days=H)
     assert {m.company_id for m in res.matches} == {"OLD0", "OLD1", "OLD2", "OLD3"}
-    assert res.excluded["not_yet_observable"] == 1
-    # within the grace period after the window ends, a missing outcome is not yet an error
-    p2 = A.AnaloguePool()
-    p2.add(obs("RECENT", date(2009, 6, 15), (0.3, 0.7, 0.04, 0.16)))  # ends 2010-06-15; due 2010-07-15 > T
-    assert A.match(p2, target(), T, k=10, purpose="training", horizon_days=H).excluded["not_yet_observable"] == 1
+    assert res.excluded["not_settled"] == 1
+    # within the declared grace after the window ends, an observation is not yet settled (for every company alike)
+    p2 = A.AnaloguePool(POLICY)
+    p2.add(obs("RECENT", date(2009, 6, 15), (0.3, 0.7, 0.04, 0.16)))  # ends 2010-06-15; settles 2010-07-15 > T
+    assert A.match(p2, target(), T, k=10, purpose="training", horizon_days=H).excluded["not_settled"] == 1
+    p3 = A.AnaloguePool(A.OutcomePolicy(0, "test: outcomes published on the window's last day"))
+    p3.add(obs("RECENT", date(2009, 6, 15), (0.3, 0.7, 0.04, 0.16)))
     with pytest.raises(A.MissingOutcomeError):
-        A.match(p2, target(), T, k=10, purpose="training", horizon_days=H, outcome_grace_days=0)
+        A.match(p3, target(), T, k=10, purpose="training", horizon_days=H)
 
 
 def test_s8_h2_outcome_window_must_match_the_horizon():
-    p = A.AnaloguePool()
+    p = A.AnaloguePool(POLICY)
     p.add(obs("X", date(2008, 3, 31), (0.3, 0.7, 0.04, 0.16)))
     p.add_outcome(A.Outcome("X", date(2008, 3, 31), date(2008, 6, 30), 0.1, date(2008, 7, 2)))
     with pytest.raises(Exception, match="horizon"):
         A.match(p, target(), T, k=10, purpose="training", horizon_days=H)
+
+
+# ----------------------------------------------------------------------------- S8 final review: R1 and L7
+START, END = date(2008, 3, 31), date(2009, 3, 31)
+
+
+def _r1_pool(policy, failure_lag_days):
+    """Two survivors (+0.10, published 2 days after the window) and two failures (−1.00, published
+    ``failure_lag_days`` after it). The complete outcome set averages −0.45; survivors alone +0.10."""
+    p = A.AnaloguePool(policy)
+    feats = {"S1": (0.30, 0.70, 0.05, 0.15), "S2": (0.32, 0.68, 0.04, 0.16),
+             "F1": (0.31, 0.69, 0.06, 0.14), "F2": (0.29, 0.71, 0.05, 0.17)}
+    for cid, f in feats.items():
+        p.add(obs(cid, START, f))
+    for cid in ("S1", "S2"):
+        p.add_outcome(A.Outcome(cid, START, END, 0.10, END + timedelta(days=2)))
+    for cid in ("F1", "F2"):
+        p.add_outcome(A.Outcome(cid, START, END, -1.00, END + timedelta(days=failure_lag_days)))
+    return p
+
+
+def _mean_forecast(p, t_day):
+    t = obs("TGT", t_day, (0.30, 0.70, 0.05, 0.15))
+    res = A.match(p, t, t_day, k=10, purpose="training", horizon_days=H)
+    return A.forecast(p, res, bandwidth=1e9)["forecast"] if res.matches else None
+
+
+def test_s8_r1_case1_late_failure_outcomes_cannot_be_silently_excluded():
+    """S8 R1 case 1: failures' outcomes were recorded but published later than the survivors'; at T in between the
+    failures were excluded as 'outcome_unobservable' and the forecast was +0.10 instead of −0.45."""
+    # beyond the declared grace: refused when added, never silently censored later
+    with pytest.raises(A.LateOutcomeError):
+        _r1_pool(POLICY, failure_lag_days=200)
+    # within the grace: until every outcome is due, nobody is settled (calendar rule, not outcome presence)
+    pol = A.OutcomePolicy(60, "test: outcomes, including liquidation values, published within 60 days")
+    p = _r1_pool(pol, failure_lag_days=50)
+    assert _mean_forecast(p, END + timedelta(days=20)) is None           # survivors' alone is never the answer
+    assert _mean_forecast(p, END + timedelta(days=61)) == pytest.approx(-0.45)
+
+
+def test_s8_r1_case2_an_unbounded_grace_cannot_turn_failures_into_censoring():
+    """S8 R1 case 2: outcome_grace_days=4000 turned missing failure outcomes into 'not_yet_observable'."""
+    with pytest.raises(EquityDataError, match="grace"):
+        A.OutcomePolicy(4000, "anything")
+    with pytest.raises(EquityDataError, match="provenance"):
+        A.OutcomePolicy(30, " ")
+    with pytest.raises(TypeError):
+        A.match(_r1_pool(POLICY, 2), target(), T, k=10, purpose="training", horizon_days=H, outcome_grace_days=4000)
+    # failures with no recorded outcome at all: settled, so the match fails closed
+    p = A.AnaloguePool(POLICY)
+    for cid, f in {"S1": (0.30, 0.70, 0.05, 0.15), "S2": (0.32, 0.68, 0.04, 0.16),
+                   "F1": (0.31, 0.69, 0.06, 0.14), "F2": (0.29, 0.71, 0.05, 0.17)}.items():
+        p.add(obs(cid, START, f))
+    for cid in ("S1", "S2"):
+        p.add_outcome(A.Outcome(cid, START, END, 0.10, END + timedelta(days=2)))
+    with pytest.raises(A.MissingOutcomeError, match="F1"):
+        _mean_forecast(p, T)
+
+
+def test_s8_r1_training_needs_a_declared_policy_and_reports_assumed_outcomes():
+    p = A.AnaloguePool()
+    p.add(obs("S1", START, (0.3, 0.7, 0.05, 0.15)))
+    with pytest.raises(EquityDataError, match="OutcomePolicy"):
+        A.match(p, target(), T, k=5, purpose="training", horizon_days=H)
+    p2 = _r1_pool(POLICY, 2)
+    p2.add(obs("L1", START, (0.33, 0.67, 0.05, 0.15)))
+    p2.add_outcome(A.Outcome("L1", START, END, -1.0, END + timedelta(days=10), assumed=True))   # liquidation open
+    t = obs("TGT", T, (0.30, 0.70, 0.05, 0.15))
+    fc = A.forecast(p2, A.match(p2, t, T, k=10, purpose="training", horizon_days=H), bandwidth=1e9)
+    assert fc["assumed_outcomes"] == 1
+
+
+def test_s8_l7_conflicting_outcomes_are_refused_not_overwritten():
+    p = A.AnaloguePool(POLICY)
+    o = A.Outcome("X", START, END, 0.10, END + timedelta(days=2))
+    p.add_outcome(o)
+    p.add_outcome(o)                                                     # identical: a no-op
+    with pytest.raises(EquityDataError, match="never overwritten"):
+        p.add_outcome(A.Outcome("X", START, END, -0.90, END + timedelta(days=2)))
+    assert p.outcome("X", START, T).value == 0.10

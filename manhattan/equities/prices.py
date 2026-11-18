@@ -80,15 +80,20 @@ class CorporateAction:
     ex_date: date
     known_from: date                    # first day the action was public (declaration / announcement)
     ratio: float = 1.0                  # split or stock dividend: new shares per old share
-    amount: float = 0.0                 # cash per post-split share
+    amount: float = 0.0                 # cash per share outstanding on the ex-date: per POST-split share when a split
+    #                                     has the same or an earlier ex-date (the convention of ``total_returns``)
     currency: str | None = None
+    captured: date | None = None        # first day the action was in our data; None: capture history unknown
 
     def __post_init__(self):
         if self.kind not in ACTION_KINDS:
             raise CorporateActionError(f"unknown corporate action {self.kind!r}")
         if self.known_from > self.ex_date:
-            raise TemporalError(f"{self.security_id}: an action cannot become public after its ex-date "
-                                f"({self.known_from} > {self.ex_date}); record the late capture instead")
+            raise TemporalError(f"{self.security_id}: an action is announced on or before its ex-date "
+                                f"({self.known_from} > {self.ex_date}); a vendor that recorded it later states that "
+                                "in ``captured``, not by moving ``known_from``")
+        if self.captured is not None and self.captured < self.known_from:
+            raise TemporalError(f"{self.security_id}: an action captured before it was announced")
         if self.kind in ("split", "stock_dividend") and not (self.ratio > 0 and self.ratio != 1.0):
             raise CorporateActionError(f"{self.security_id}: a split needs a ratio other than 1")
         if self.kind in ("cash_dividend", "special_dividend", "return_of_capital"):
@@ -151,6 +156,15 @@ class SuspectedSplitError(CorporateActionError):
     counts, or ``confirm_move``)."""
 
 
+def action_known_day(a: CorporateAction) -> date:
+    """The first day research may apply an action: its announcement, or its capture if that was later."""
+    return a.known_from if a.captured is None else max(a.known_from, a.captured)
+
+
+# Order of actions on one ex-date: share changes before cash, so a same-day cash amount is per post-split share.
+_ACTION_ORDER = {"split": 0, "stock_dividend": 0, "cash_dividend": 1, "special_dividend": 1, "return_of_capital": 1}
+
+
 @dataclass
 class ReturnSeries:
     security_id: str
@@ -162,6 +176,7 @@ class ReturnSeries:
     delisting_assumed: bool = False
     as_of: date | None = None
     genuine_moves: tuple = ()           # split-like moves that share counts showed to be genuine
+    reconstructed: bool = False         # an applied action had no capture date (its knowledge day is a declaration)
 
     def __post_init__(self):
         if self.known is None:
@@ -227,8 +242,8 @@ class PriceBook:
         return [b[d] for d in sorted(b) if start <= d <= end]
 
     def actions_known(self, security_id: str, as_of: date) -> list[CorporateAction]:
-        return sorted((a for a in self._actions.get(security_id, []) if a.known_from <= as_of),
-                      key=lambda a: (a.ex_date, a.kind))
+        return sorted((a for a in self._actions.get(security_id, []) if action_known_day(a) <= as_of),
+                      key=lambda a: (a.ex_date, _ACTION_ORDER[a.kind], a.kind))
 
     def last_traded(self, security_id: str, as_of: date) -> date | None:
         days = [d for d, b in self._bars.get(security_id, {}).items() if d <= as_of and b.status == "traded"]
@@ -282,48 +297,66 @@ class PriceBook:
 
     def total_returns(self, security_id: str, start: date, end: date, *, as_of: date,
                       delisting: DelistingPolicy | None = None) -> ReturnSeries:
-        """Daily total returns for sessions in ``(start, end]`` known at the close of ``as_of`` (see module)."""
+        """Daily total returns for sessions in ``(start, end]`` known at the close of ``as_of`` (see module).
+
+        Each return runs from the **last traded close** before it, however long ago (a suspension, missing data, or
+        a ``start`` inside a suspension), and applies every action with an ex-date after that close and on or before
+        the return's session, including ex-dates on non-session days. Per share held at the last close::
+
+            h = product of split ratios,  c = sum of amount_i x (shares held on ex-date i),  r = (h P_t + c) / P_last - 1
+
+        so a split and a cash amount on one day give ``k (P + D) / P_last - 1`` (S8 L1; reverse splits have k < 1),
+        and a dividend paid during a suspension is in the return booked when trading resumes, which is flagged
+        ``multi_session`` whenever a session lies between the two closes (S8 L2)."""
         if end > as_of:
             raise TemporalError(f"{security_id}: returns up to {end} are not known at {as_of}")
         delisting = delisting or DelistingPolicy.require()
         allbars = self._bars.get(security_id, {})
-        sessions = self.calendar.sessions_between(start, end)
-        actions = [a for a in self.actions_known(security_id, as_of) if start < a.ex_date <= end]
         cur = self._currency.get(security_id)
         prev_close, prev_day = None, None
         before = [d for d, b in allbars.items() if d <= start and b.status == "traded"]
         if before:
             prev_day = max(before)
             prev_close = allbars[prev_day].close
-        days, rets, multi, genuine = [], [], [], []
-        pending_k, pending_d = 1.0, 0.0
-        gap = False
+        anchor = prev_day if prev_day is not None else start
+        sessions = [d for d in self.calendar.sessions_between(anchor, end) if d > anchor]
+        actions = [a for a in self.actions_known(security_id, as_of) if anchor < a.ex_date <= end]
+        for a in actions:
+            if a.currency and cur and a.currency != cur:
+                raise CurrencyError(f"{security_id}: {a.kind} in {a.currency}, priced in {cur}")
+        days, rets, multi, known, genuine = [], [], [], [], []
+        recon = False
+        h, c, ai, applied = 1.0, 0.0, 0, []
         for d in sessions:
-            if d == start:
-                continue
-            for a in actions:
-                if a.ex_date == d:
-                    if a.currency and cur and a.currency != cur:
-                        raise CurrencyError(f"{security_id}: {a.kind} in {a.currency}, priced in {cur}")
-                    if a.kind in ("split", "stock_dividend"):
-                        pending_k *= a.ratio
-                    else:
-                        pending_d += a.amount
+            while ai < len(actions) and actions[ai].ex_date <= d:
+                a = actions[ai]
+                if a.kind in ("split", "stock_dividend"):
+                    h *= a.ratio
+                else:
+                    c += h * a.amount
+                applied.append(a)
+                ai += 1
             bar = allbars.get(d)
             if bar is None or bar.status != "traded":
-                gap = True if prev_close is not None else gap
                 continue
-            if prev_close is not None:
-                r = (bar.close * pending_k + pending_d) / prev_close - 1.0
-                if self._check_move(security_id, d, r, pending_k, as_of, prev_day):
-                    genuine.append(d)
+            if prev_close is None:                      # first trade: actions before it change nothing held
+                prev_close, prev_day = bar.close, d
+                h, c, applied = 1.0, 0.0, []
+                continue
+            r = (h * bar.close + c) / prev_close - 1.0
+            if self._check_move(security_id, d, r, h, as_of, prev_day):
+                genuine.append(d)
+            if d > start:
                 days.append(d)
                 rets.append(r)
-                multi.append(gap)
+                multi.append(self.calendar.count_between(prev_day, d) > 1)
+                known.append(max([d] + [action_known_day(x) for x in applied]))
+                recon |= any(x.captured is None for x in applied)
             prev_close, prev_day = bar.close, d
-            pending_k, pending_d, gap = 1.0, 0.0, False
+            h, c, applied = 1.0, 0.0, []
         out = ReturnSeries(security_id, np.array(days, dtype=object), np.array(rets, dtype=float),
-                           np.array(multi, dtype=bool), as_of=as_of, genuine_moves=tuple(genuine))
+                           np.array(multi, dtype=bool), known=np.array(known, dtype=object), as_of=as_of,
+                           genuine_moves=tuple(genuine), reconstructed=recon)
         listed_to = self._listed_to(security_id)
         if listed_to is not None and start <= listed_to < end:
             out = self._append_delisting(out, security_id, listed_to, end, as_of, delisting)

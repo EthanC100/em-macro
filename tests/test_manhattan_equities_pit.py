@@ -398,10 +398,10 @@ def test_surprise_uses_only_estimates_before_release():
     book.add(Estimate("C1", "B1", "eps", p, 1.0, "USD", ny(date(2006, 4, 1), 8)))
     book.add(Estimate("C1", "B2", "eps", p, 1.2, "USD", ny(date(2006, 4, 3), 8)))
     ev = EarningsEvent("C1", p, released=ny(date(2006, 5, 2), 16, 5), time_of_day="after_close")
-    s0 = surprise(ev, 1.5, book, "eps")
+    s0 = surprise(ev, 1.5, book, "eps", abs_floor=0.01)
     # a revision published right after the release must not enter the surprise's consensus
     book.add(Estimate("C1", "B1", "eps", p, 1.5, "USD", ny(date(2006, 5, 2), 16, 30)))
-    assert surprise(ev, 1.5, book, "eps") == s0
+    assert surprise(ev, 1.5, book, "eps", abs_floor=0.01) == s0
     assert s0["consensus"] == pytest.approx(1.1) and s0["n"] == 2
 
 
@@ -579,3 +579,146 @@ def test_s8_low_no_fixed_offset_time_zone_substitute():
     from manhattan.equities.sessions import _zone
     with pytest.raises(TemporalError, match="unavailable"):
         _zone("Not/AZone")
+
+
+# ----------------------------------------------------------------------------- S8 final review: L1-L4, L9, R4
+def _ret_book(closes_by_day, actions=()):
+    b = PriceBook(CAL)
+    for d, c in closes_by_day:
+        b.add_bar(c if isinstance(c, Bar) else Bar("S", d, c, "USD"))
+    for a in actions:
+        b.add_action(a)
+    return b
+
+
+DAYS = CAL.sessions_between(date(2006, 2, 1), date(2006, 2, 10))        # 2006-02-01 .. 02-10, 8 sessions
+EX = date(2006, 2, 6)
+
+
+def _act(kind, ex=EX, **kw):
+    return CorporateAction("S", kind, ex, date(2006, 1, 20), captured=date(2006, 1, 20), **kw)
+
+
+def _r(book, day, start=DAYS[0]):
+    r = book.total_returns("S", start, DAYS[-1], as_of=DAYS[-1])
+    return r.returns[list(r.days).index(day)], r
+
+
+@pytest.mark.parametrize("ratio,close_after,div,expected", [
+    (2.0, 49.0, 1.0, 0.0),        # S8 L1: 2:1 split and a $1 (post-split) dividend the same day: k(P + D) = 100
+    (2.0, 50.0, 0.0, 0.0),        # split only
+    (None, 99.0, 1.0, 0.0),       # dividend only
+    (0.1, 999.0, 1.0, 0.0),       # 1:10 reverse split and a $1 (post-split) dividend: 0.1 (999 + 1) = 100
+    (0.1, 1000.0, 0.0, 0.0),      # reverse split only
+])
+def test_s8_l1_total_return_convention(ratio, close_after, div, expected):
+    acts = ([_act("split", ratio=ratio)] if ratio else []) + \
+        ([_act("cash_dividend", amount=div, currency="USD")] if div else [])
+    b = _ret_book([(d, 100.0 if d < EX else close_after) for d in DAYS], acts)
+    assert _r(b, EX)[0] == pytest.approx(expected, abs=1e-12)
+
+
+def test_s8_l1_split_and_dividend_on_one_day_was_minus_one_percent():
+    acts = [_act("split", ratio=2.0), _act("cash_dividend", amount=1.0, currency="USD")]
+    b = _ret_book([(d, 100.0 if d < EX else 49.0) for d in DAYS], acts)
+    r, _ = _r(b, EX)
+    assert r == pytest.approx(0.0) and r != pytest.approx((49.0 * 2 + 1.0) / 100 - 1)       # not −1.00%
+
+
+def test_s8_l2_dividend_during_a_suspension_spanning_the_window_start():
+    """S8 L2: start inside a suspension; the dividend paid during it was dropped (+4% instead of +6%) and the
+    return was not flagged multi_session."""
+    bars = []
+    for d in DAYS:
+        if d <= date(2006, 2, 2):
+            bars.append((d, 50.0))
+        elif d < date(2006, 2, 8):
+            bars.append((d, Bar("S", d, 1.0, "USD", status="suspended")))
+        else:
+            bars.append((d, 52.0))
+    b = _ret_book(bars, [_act("cash_dividend", amount=1.0, currency="USD")])
+    r, rs = _r(b, date(2006, 2, 8), start=date(2006, 2, 7))
+    assert r == pytest.approx(0.06) and rs.multi_session[0]
+
+
+def test_s8_l2_ex_date_on_a_non_session_day_is_applied():
+    b = _ret_book([(d, 100.0 if d < EX else 99.0) for d in DAYS],
+                  [_act("cash_dividend", ex=date(2006, 2, 4), amount=1.0, currency="USD")])      # a Saturday
+    assert _r(b, EX)[0] == pytest.approx(0.0)
+
+
+def test_s8_l9_action_captured_late_is_not_known_before_capture():
+    late = CorporateAction("S", "cash_dividend", EX, date(2006, 1, 20), amount=1.0, currency="USD",
+                           captured=date(2006, 3, 1))
+    b = _ret_book([(d, 100.0 if d < EX else 99.0) for d in DAYS], [late])
+    r = b.total_returns("S", DAYS[0], DAYS[-1], as_of=DAYS[-1])          # not captured yet: not applied
+    assert r.returns[list(r.days).index(EX)] == pytest.approx(-0.01)
+    b2 = _ret_book([(d, 100.0 if d < EX else 99.0) for d in DAYS],
+                   [CorporateAction("S", "cash_dividend", EX, date(2006, 1, 20), amount=1.0, currency="USD")])
+    r2 = b2.total_returns("S", DAYS[0], DAYS[-1], as_of=DAYS[-1])
+    assert r2.reconstructed                                                # no capture date: flagged
+    with pytest.raises(TemporalError, match="captured"):
+        CorporateAction("S", "split", EX, date(2006, 1, 20), ratio=2.0, captured=date(2006, 1, 10))
+
+
+def _fy_store():
+    fs = FundamentalStore(CAL)
+    for q, v in ((date(2005, 3, 31), 10.0), (date(2005, 6, 30), 11.0), (date(2005, 9, 30), 12.0)):
+        fs.add(Fact("C1", "revenue", q, "quarter", v, "USD", ny(q + timedelta(days=35), 8)))
+    fs.add(Fact("C1", "revenue", date(2005, 12, 31), "annual", 50.0, "USD", ny(date(2006, 2, 20), 8)))
+    return fs
+
+
+def test_s8_l3_annual_without_q4_derives_q4_without_double_counting():
+    fs = _fy_store()
+    d = fs.ttm_detail("C1", "revenue", date(2006, 3, 1))
+    assert d["value"] == pytest.approx(50.0) and d["derived_q4"] == (date(2005, 12, 31),)
+    assert fs.ttm("C1", "revenue", date(2006, 2, 1)) is None              # annual not yet filed: no TTM
+
+
+def test_s8_l3_reported_q4_and_annual_coexist_and_disagreement_is_reported():
+    fs = _fy_store()
+    fs.add(Fact("C1", "revenue", date(2005, 12, 31), "quarter", 20.0, "USD", ny(date(2006, 2, 20), 8)))
+    d = fs.ttm_detail("C1", "revenue", date(2006, 3, 1))
+    assert d["value"] == pytest.approx(53.0) and d["derived_q4"] == ()    # the reported Q4 is used, once
+    assert d["inconsistent_with_annual"] == (date(2005, 12, 31),)          # 53 vs 50: reported, not hidden
+    with pytest.raises(EquityDataError, match="ask for a kind"):
+        fs.value("C1", "revenue", date(2006, 3, 1))
+    assert fs.value("C1", "revenue", date(2006, 3, 1), kind="annual").value == 50.0
+
+
+def _eps_book(values, captured=True):
+    book = EstimateBook()
+    for i, v in enumerate(values):
+        t = ny(date(2006, 4, 3 + i), 8)
+        book.add(Estimate("C1", f"B{i}", "eps", date(2006, 3, 31), v, "USD", t, t if captured else None))
+    return book
+
+
+EV_REL = EarningsEvent("C1", date(2006, 3, 31), released=ny(date(2006, 5, 2), 16, 5), time_of_day="after_close")
+
+
+def test_s8_l4_near_zero_consensus_is_undefined_not_huge():
+    book = _eps_book([1e-12])                                               # one broker, consensus ~0, no dispersion
+    out = surprise(EV_REL, 0.01, book, "eps", abs_floor=0.01)
+    assert not out["defined"] and np.isnan(out["surprise"]) and "undefined" in out["reason"]
+    ok = surprise(EV_REL, 1.30, _eps_book([1.00, 1.10]), "eps", abs_floor=0.01)
+    assert ok["defined"] and np.isfinite(ok["surprise"])
+    big = surprise(EV_REL, 100.0, _eps_book([1.00, 1.10]), "eps", abs_floor=0.01, max_abs=10.0)
+    assert big["surprise"] == 10.0 and big["clipped"]
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), "1.2", True, None])
+def test_s8_l4_raw_actual_is_validated(bad):
+    with pytest.raises(TemporalError, match="finite number"):
+        surprise(EV_REL, bad, _eps_book([1.0, 1.1]), "eps", abs_floor=0.01)
+
+
+def test_s8_r4_estimates_without_capture_make_the_consensus_reconstructed():
+    book = _eps_book([1.0, 1.1], captured=False)
+    c = book.consensus("C1", "eps", date(2006, 3, 31), ny(date(2006, 4, 20), 12))
+    assert c.reconstructed and not c.evidence_eligible and book.reconstructed
+    out = surprise(EV_REL, 1.2, book, "eps", abs_floor=0.01)
+    assert out["reconstructed"]
+    c2 = _eps_book([1.0, 1.1]).consensus("C1", "eps", date(2006, 3, 31), ny(date(2006, 4, 20), 12))
+    assert c2.evidence_eligible

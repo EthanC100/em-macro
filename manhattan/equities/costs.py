@@ -9,6 +9,20 @@ close of ``day`` (published by then and not older than ``max_staleness_days``). 
 ``BorrowError``, never a free borrow. A hard-to-borrow security carries its fee; a recall probability per day turns
 into an expected forced-close cost.
 
+**Not modelled (S8 R5, M10) — nothing here implies these risks are handled:**
+
+* **Dividend withholding tax.** Long dividends are taken gross. Withholding on ADRs and foreign issuers (and
+  manufactured-dividend payments owed on shorts) is not deducted.
+* **Reg SHO Rule 201** (the short-sale price test after a 10% intraday decline). A short sale's feasibility on the
+  day of, and the day after, a large fall is not checked; the model assumes a short can always be opened at the
+  price used.
+* **Borrow quantity.** A ``BorrowRecord`` says whether a security is borrowable and at what fee, not how many shares;
+  a position larger than the available quantity is not refused.
+* **Recall timing.** Recall is an expected daily cost (``recall_prob_daily × recall_cost``); the date of a recall,
+  forced buy-ins at the worst moment and their correlation with squeezes are not simulated.
+* **Locate and hard-to-borrow fee changes** inside a holding period, short-interest rebates and margin are not
+  modelled beyond the annual fee and ``short_financing``.
+
 **A cost model that can price a short must name its borrow source.** ``EquityCostModel.check_book`` refuses a book
 with short positions when the model has no borrow book (the "borrow-cost omission").
 
@@ -69,7 +83,8 @@ class BorrowBook:
 @dataclass(frozen=True, kw_only=True)
 class EquityCostModel:
     """Every parameter is stated by the caller with a ``reference`` for where it came from (S8 M10): no default can
-    make a strategy look cheap by omission. Values are fractions (``half_spread=0.0005`` is 5 bp)."""
+    make a strategy look cheap by omission. Values are fractions (``half_spread=0.0005`` is 5 bp). See the module's
+    "Not modelled" list for the costs and constraints it leaves out."""
     half_spread: float                        # fraction of traded notional
     commission: float
     impact: float                             # coefficient on σ_daily · sqrt(participation)

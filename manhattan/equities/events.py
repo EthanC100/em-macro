@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
+import numpy as np
+
 from .errors import TemporalError
 from .estimates import EstimateBook
 from .sessions import MarketCalendar, require_aware
@@ -92,21 +94,41 @@ def scheduled_known(event: EarningsEvent, as_of: date) -> date | None:
 
 
 def surprise(event: EarningsEvent, actual: float, book: EstimateBook, metric: str, *, scale: str = "dispersion",
-             price: float | None = None, floor: float = 0.01) -> dict:
-    """Standardised surprise against the consensus just before the release."""
+             price: float | None = None, floor: float = 0.01, abs_floor: float, max_abs: float = 10.0) -> dict:
+    """Standardised surprise against the consensus just before the release (S8 L4).
+
+    ``actual`` must be a finite number (a reported value, not a string, a boolean or NaN). With ``scale="dispersion"``
+    the denominator is ``max(dispersion, floor · |consensus|)``; when that is below ``abs_floor`` — a consensus near
+    zero with no dispersion, the common case for EPS of break-even companies — the surprise is **undefined**
+    (``defined: False``, ``surprise`` NaN, with the reason), never a huge number such as 1e12. ``abs_floor`` is in the
+    metric's own units and has no default: a cent of EPS and a million of revenue are different scales. A defined
+    surprise is clipped to ``±max_abs`` and says so (``clipped``). It is a feature, not a predictive signal."""
     if event.released is None:
         raise TemporalError(f"{event.company_id}: a surprise needs the release time, not the scheduled date")
+    if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not np.isfinite(actual):
+        raise TemporalError(f"{event.company_id}: the reported value must be a finite number, not {actual!r}")
+    if isinstance(abs_floor, bool) or not isinstance(abs_floor, (int, float)) or not abs_floor > 0:
+        raise ValueError("abs_floor must be a positive number in the metric's units")
     before = event.released - timedelta(seconds=1)
     c = book.consensus(event.company_id, metric, event.period_end, before)
+    base = {"at": before, "defined": False, "clipped": False}
     if c is None:
-        return {"surprise": float("nan"), "n": 0, "consensus": float("nan"), "at": before}
+        return {**base, "surprise": float("nan"), "n": 0, "consensus": float("nan"), "reason": "no consensus",
+                "reconstructed": False}
     raw = actual - c.mean
     if scale == "dispersion":
-        den = max(c.std, floor * max(abs(c.mean), 1e-12))
+        den = max(c.std, floor * abs(c.mean))
+        if den < abs_floor:
+            return {**base, "surprise": float("nan"), "n": c.n, "consensus": c.mean, "dispersion": c.std,
+                    "reason": f"denominator {den:.3g} below abs_floor {abs_floor}: undefined, not extreme",
+                    "reconstructed": c.reconstructed}
     elif scale == "price":
         if price is None or price <= 0:
             raise TemporalError("a price-scaled surprise needs the last close known before the release")
         den = price
     else:
         raise ValueError("scale is 'dispersion' or 'price'")
-    return {"surprise": float(raw / den), "n": c.n, "consensus": c.mean, "dispersion": c.std, "at": before}
+    z = raw / den
+    clipped = abs(z) > max_abs
+    return {**base, "surprise": float(np.clip(z, -max_abs, max_abs)), "defined": True, "clipped": bool(clipped),
+            "n": c.n, "consensus": c.mean, "dispersion": c.std, "reconstructed": c.reconstructed}

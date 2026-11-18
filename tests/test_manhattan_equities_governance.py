@@ -97,8 +97,9 @@ def test_priority_order_is_deterministic_and_gated_by_leakage_and_data():
     cat = catalogue.load()
     order = [f["id"] for f in catalogue.prioritised(cat)]
     assert order == [f["id"] for f in catalogue.prioritised(catalogue.load())]
-    gates = [min(f["ranking"]["leakage_safety"], f["ranking"]["data_feasibility"]) for f in catalogue.prioritised(cat)]
-    assert gates == sorted(gates, reverse=True)
+    keys = [(catalogue.TIERS.index(catalogue.data_tier(f)[0]),
+             -min(f["ranking"]["leakage_safety"], f["ranking"]["data_feasibility"])) for f in catalogue.prioritised(cat)]
+    assert keys == sorted(keys)                      # affordable data tier first, then the leakage/data gate
 
 
 def test_rendered_catalogue_document_is_in_sync():
@@ -137,7 +138,7 @@ def test_s8_m9_method_name_only_objects_no_longer_satisfy_a_contract():
         return None
 
     good = types.SimpleNamespace(register_evaluation=register_evaluation)
-    assert integration.check("manhattan.access", "register_evaluation", module=good) == "match"
+    assert integration.check("manhattan.access", "register_evaluation", module=good) == "structural_match"
 
     def start(*, executable, family, batch, spec_hash, data_hash, window, role):     # the old Protocol's shape
         return "id"
@@ -148,15 +149,15 @@ def test_s8_m9_method_name_only_objects_no_longer_satisfy_a_contract():
     def classify(metadata, verifications=None, *, fence, config=None, protocol_hash=None):
         return None
     assert integration.check("manhattan.evidence", "classify",
-                             module=types.SimpleNamespace(classify=classify)) == "match"
+                             module=types.SimpleNamespace(classify=classify)) == "structural_match"
 
 
 def test_s8_m9_interfaces_on_this_checkout_are_absent_or_match_never_mismatch():
     """On main today #84 and #86 are absent; once either merges this test checks its interface is still the one
     the equities adapters expect."""
     res = integration.check_all()
-    assert all(v in ("absent", "match") for v in res.values()), res
-    assert set(integration.PINNED) == {"#84", "#86"}
+    assert all(v in ("absent", "structural_match") for v in res.values()), res
+    assert integration.PINNED == {"#86": "5aa643f", "#84": "1e86b33"}
 
 
 # ----------------------------------------------------------------------------- research gate (S8 H3, H4)
@@ -295,3 +296,69 @@ def test_s8_catalogue_data_tiers_separate_runnable_from_blocked():
         if {"analyst_estimates_pit", "borrow_availability"} & set(f["required_data"]):
             assert catalogue.data_tier(f)[0] == "needs_unavailable_history"
     assert sum(t == "prices_and_edgar" for t, _ in tiers.values()) >= 5
+
+
+# ----------------------------------------------------------------------------- S8 final review: R2 and R3
+def test_s8_r2_structure_is_not_runtime_integration():
+    import types
+    assert integration.runtime_integration() is False
+    reqs = {name for _, name, _ in integration.SEMANTIC_REQUIREMENTS}
+    assert {"bound_computation", "verified_fence", "config_sha256", "designated_reserve", "schema_v3",
+            "attempt_object", "issued"} <= reqs
+    # #86 restricts its runner-only paths to access/runner/data: equities pins and calls neither
+    assert not any(p.split(".")[-1] in ("run_bound", "forward_window") for _, p in integration.EXPECTED)
+
+    def verified_fence(commit, *, root=None, expected_sha256=None):
+        return None
+    mod = types.SimpleNamespace(verified_fence=verified_fence)
+    assert integration.check("manhattan.access", "verified_fence", module=mod) == "structural_match"
+    old = types.SimpleNamespace(SCHEMA="manhattan.evidence/2")
+    assert integration.check_constant("manhattan.evidence", "SCHEMA", module=old).startswith("mismatch")
+    assert integration.check_constant("manhattan.evidence", "SCHEMA",
+                                      module=types.SimpleNamespace(SCHEMA="manhattan.evidence/3")) == "structural_match"
+    md = integration.evidence_metadata_attempt("ab" * 32, "ledger")
+    assert md == {"attempt": {"id": "ab" * 32, "store": "ledger"}} and "attempt_id" not in md
+
+
+def test_s8_r3_priorities_follow_affordable_data_and_groups_are_declared_only():
+    cat = catalogue.load()
+    fams = {f["id"]: f for f in cat["families"]}
+    assert len(fams) == 39                                           # the denominator is complete
+    assert catalogue.data_tier(fams["TE-F01"])[0] == "prices_and_edgar"
+    assert fams["TE-F01"]["optional_data"] == ["analyst_estimates_pit"]
+    assert fams["TE-E07"]["shared_family"] == fams["TE-F02"]["shared_family"] == "SF-FINANCING"
+    assert fams["TE-B03"]["shared_family"] == fams["TE-F04"]["shared_family"] == "SF-SEMI-CYCLE"
+    order = catalogue.prioritised(cat)
+    tiers = [catalogue.data_tier(f)[0] for f in order]
+    assert tiers == sorted(tiers, key=catalogue.TIERS.index)
+    d = catalogue.family_draft(fams["TE-E07"])
+    assert d["shared_family_enforced"] is False
+    doc = (ROOT / "docs/manhattan/equities/HYPOTHESIS_CATALOGUE.md").read_text(encoding="utf-8")
+    assert "declared, not enforced" in doc and "Multiple-testing denominator" in doc
+
+
+def test_equities_never_references_86s_private_access_paths():
+    """PR #86 (5aa643f) fails its own test if any module outside its allowlist references these names (as an
+    identifier, attribute or exact string). The equities package must stay clean before and after #86 merges."""
+    private = {"_open_window", "_SEAL_KEY", "_seal", "_GRANTS", "_fields", "_guard", "_Meter", "_meter", "_open_read",
+               "_as_of", "_store", "_value", "_period", "diagnostic_window", "Window", "_CTX_KEY", "_PROOF_KEY", "_mac",
+               "_store_mac", "_sealed_write", "_MINTED", "_BOUND", "_COMMIT_PENDING", "_settle_failed_commit",
+               "_StoreBackend", "_LedgerBackend", "_completion_proof", "_mark_completed", "_backend",
+               "_require_active", "_ended", "CompletionProof", "verify_completion", "store_seal_ok", "run_bound",
+               "commit_results", "commit_failures", "commit_recovery", "forward_window", "record_evaluation",
+               "_append", "_index", "_starts", "_terminated", "_superseded", "_designated", "_append_local",
+               "_commit", "_push", "_transact", "_apply", "_verify_entry", "_reset_to_remote"}
+    for p in PKG.glob("*.py"):
+        refs = set()
+        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Name):
+                refs.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                refs.add(node.attr)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                refs.add(node.value)
+            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                refs.add(node.name)
+            elif isinstance(node, ast.alias):
+                refs.add(node.name.split(".")[-1])
+        assert not (refs & private), f"{p.name} references {sorted(refs & private)}"

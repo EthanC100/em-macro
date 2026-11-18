@@ -6,6 +6,7 @@ cannot see past its information boundary. They say nothing about whether any rea
 from __future__ import annotations
 
 from datetime import date
+from functools import partial
 
 import numpy as np
 import pytest
@@ -16,6 +17,9 @@ from manhattan.equities.errors import BorrowError, EquityDataError, TemporalErro
 from manhattan.equities.pairs import (Boundary, PairDiscovery, PairRules, beta_neutral_hedge, half_life, ols_hedge,
                                       out_of_sample, position_from_z, feasibility, residual_spread, rolling_hedge)
 
+CAL = syn.calendar()
+PD = partial(PairDiscovery, calendar=CAL)          # every discovery and diagnostic counts sessions on the exchange
+OOS = partial(out_of_sample, calendar=CAL)         # calendar (S8 M2)
 NOLINK = PairRules(require_link=False)
 COST = dict(half_spread=0.0005, commission=0.0001, impact=0.1, short_financing=0.0, long_financing=0.0,
             recall_cost=0.002, reference="test assumption")
@@ -29,10 +33,10 @@ def boundary(days):
 def classify(seed, **kw):
     days, y, x = syn.cointegrated_pair(seed, **kw)
     bd = boundary(days)
-    c = PairDiscovery(days, {"Y": y, "X": x}, bd, NOLINK).evaluate_pair("X", "Y")
+    c = PD(days, {"Y": y, "X": x}, bd, NOLINK).evaluate_pair("X", "Y")
     if not c.passed:
         return "rejected"
-    return "stable" if out_of_sample(c, days, {"Y": y, "X": x}).stable else "broken"
+    return "stable" if OOS(c, days, {"Y": y, "X": x}).stable else "broken"
 
 
 def test_stable_relationship_is_distinguished_from_a_structural_break():
@@ -53,7 +57,7 @@ def test_break_inside_formation_is_rejected_at_discovery():
     res = []
     for s in SEEDS:
         days, y, x = syn.cointegrated_pair(s, break_at=300, break_kind="random_walk")
-        c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+        c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
         res.append(c.passed)
     assert sum(res) <= 2
 
@@ -61,7 +65,7 @@ def test_break_inside_formation_is_rejected_at_discovery():
 def test_correlation_without_cointegration_is_rejected():
     for s in SEEDS:
         days, a, b = syn.correlated_walks(s, rho=0.9)
-        c = PairDiscovery(days, {"A": a, "B": b}, boundary(days), NOLINK).evaluate_pair("A", "B")
+        c = PD(days, {"A": a, "B": b}, boundary(days), NOLINK).evaluate_pair("A", "B")
         assert c.return_corr > 0.8
         assert not c.passed
 
@@ -69,13 +73,13 @@ def test_correlation_without_cointegration_is_rejected():
 def test_pair_selection_cannot_see_past_formation_end():
     days, y, x = syn.cointegrated_pair(5)
     bd = boundary(days)
-    base = PairDiscovery(days, {"Y": y, "X": x}, bd, NOLINK).candidates(include_failed=True)
+    base = PD(days, {"Y": y, "X": x}, bd, NOLINK).candidates(include_failed=True)
     y2, x2 = y.copy(), x.copy()
     y2[500:] = np.cumsum(np.ones(250)) + 50          # an absurd future
     x2[500:] = -x2[500:]
-    again = PairDiscovery(days, {"Y": y2, "X": x2}, bd, NOLINK).candidates(include_failed=True)
+    again = PD(days, {"Y": y2, "X": x2}, bd, NOLINK).candidates(include_failed=True)
     assert base == again
-    d = PairDiscovery(days, {"Y": y, "X": x}, bd, NOLINK)
+    d = PD(days, {"Y": y, "X": x}, bd, NOLINK)
     assert max(d.days) == bd.formation_end and all(len(v) == 500 for v in d.prices.values())
 
 
@@ -89,17 +93,17 @@ def test_boundary_requires_estimation_before_evaluation_with_embargo():
 def test_economic_link_is_required_by_default():
     days, y, x = syn.cointegrated_pair(1)
     with pytest.raises(EquityDataError, match="link"):
-        PairDiscovery(days, {"Y": y, "X": x}, boundary(days))
-    linked = PairDiscovery(days, {"Y": y, "X": x}, boundary(days),
+        PD(days, {"Y": y, "X": x}, boundary(days))
+    linked = PD(days, {"Y": y, "X": x}, boundary(days),
                            link=lambda a, b, t: "same category" if t <= date(2005, 12, 31) else None)
     assert linked.evaluate_pair("X", "Y") is not None
-    unlinked = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), link=lambda a, b, t: None)
+    unlinked = PD(days, {"Y": y, "X": x}, boundary(days), link=lambda a, b, t: None)
     assert unlinked.candidates(include_failed=True) == []
 
 
 def test_candidates_carry_zero_weight_and_a_formation_hash():
     days, y, x = syn.cointegrated_pair(2)
-    c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+    c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
     assert c.status == "candidate" and c.evidential_weight == 0 and len(c.formation_hash) == 64
 
 
@@ -148,7 +152,7 @@ def test_residual_spread_removes_a_shared_factor_with_formation_loadings_only():
 
 def test_short_leg_needs_borrow_and_its_cost():
     days, y, x = syn.cointegrated_pair(2)
-    c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+    c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
     pos = position_from_z(c, z=2.0, gross=1.0)        # spread rich: short the first leg
     assert pos.short == "X" and pos.long == "Y"
     day = date(2006, 3, 1)
@@ -172,8 +176,8 @@ def test_short_leg_needs_borrow_and_its_cost():
 
 def test_events_in_evaluation_window_are_counted():
     days, y, x = syn.cointegrated_pair(3)
-    c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
-    rep = out_of_sample(c, days, {"Y": y, "X": x}, events=[days[100], days[600], days[700]])
+    c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+    rep = OOS(c, days, {"Y": y, "X": x}, events=[days[100], days[600], days[700]])
     assert rep.events_in_window == 2
 
 
@@ -183,10 +187,10 @@ def _run(seed, mutate=None, **kw):
     if mutate is not None:
         y, x = mutate(y.copy(), x.copy())
     bd = boundary(days)
-    c = PairDiscovery(days, {"Y": y, "X": x}, bd, NOLINK).evaluate_pair("X", "Y")
+    c = PD(days, {"Y": y, "X": x}, bd, NOLINK).evaluate_pair("X", "Y")
     if not c.passed:
         return "rejected", c, None
-    r = out_of_sample(c, days, {"Y": y, "X": x})
+    r = OOS(c, days, {"Y": y, "X": x})
     return ("stable" if r.stable else "broken"), c, r
 
 
@@ -221,7 +225,7 @@ def test_s8_m1_formation_gaps_make_a_pair_insufficient_data():
     days, y, x = syn.cointegrated_pair(2)
     y = y.copy()
     y[100:130] = np.nan
-    d = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK)
+    d = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK)
     c = d.evaluate_pair("X", "Y")
     assert not c.passed and any("discontinuity" in r for r in c.reasons)
     assert d.attempts["insufficient_data"] == 1
@@ -231,10 +235,10 @@ def test_s8_m2_embargo_of_at_least_one_session_is_enforced():
     days, y, x = syn.cointegrated_pair(1)
     no_gap = Boundary(days[0], days[499], days[500], days[-1])        # adjacent: zero sessions in between
     with pytest.raises(TemporalError, match="embargo"):
-        PairDiscovery(days, {"Y": y, "X": x}, no_gap, NOLINK)
-    c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+        PD(days, {"Y": y, "X": x}, no_gap, NOLINK)
+    c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
     with pytest.raises(TemporalError, match="embargo"):
-        out_of_sample(c, days, {"Y": y, "X": x}, PairRules(require_link=False, embargo_sessions=10))
+        OOS(c, days, {"Y": y, "X": x}, PairRules(require_link=False, embargo_sessions=10))
     with pytest.raises(TemporalError):
         PairRules(embargo_sessions=0)
 
@@ -249,7 +253,7 @@ def test_s8_l8_every_pair_looked_at_is_counted():
     _, a, b = syn.correlated_walks(4)
     prices = {"Y": y, "X": x, "A": a, "B": b}
     link = lambda p, q, t: "same category" if {p, q} != {"A", "Y"} else None      # noqa: E731
-    d = PairDiscovery(days, prices, boundary(days), link=link)
+    d = PD(days, prices, boundary(days), link=link)
     passed = d.candidates()
     assert d.attempts["considered"] == 6 == len(d.attempt_log)
     assert d.attempts["no_link"] == 1 and d.attempts["passed"] == len(passed)
@@ -269,3 +273,30 @@ def test_s8_adversarial_slow_mean_reversion_is_rejected_not_overconfidently_acce
     for phi in (0.97, 0.99):
         res = [_run(s, phi=phi)[0] for s in SEEDS]
         assert res.count("rejected") >= 18, (phi, res)
+
+
+# ----------------------------------------------------------------------------- S8 final review: L6, M2
+def test_s8_l6_negative_hedge_ratio_is_rejected_not_mis_oriented():
+    """S8 L6: with β = −0.77 the position was built from |β| as a long/short pair, the wrong orientation."""
+    days, y, x = syn.cointegrated_pair(3, beta=-0.77)
+    c = PD(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("Y", "X")
+    assert c.beta < 0 and not c.passed and any("not positive" in r for r in c.reasons)
+    with pytest.raises(EquityDataError, match="hedge ratio"):
+        position_from_z(c, z=2.0, gross=1.0)
+
+
+def test_s8_m2_friday_to_monday_has_no_session_and_fails_a_one_session_embargo():
+    days, y, x = syn.cointegrated_pair(1)
+    fridays = [i for i, d in enumerate(days) if d.weekday() == 4 and 400 < i < 600 and days[i + 1].weekday() == 0]
+    i = fridays[0]
+    friday, monday = days[i], days[i + 1]
+    bd = Boundary(days[0], friday, monday, days[-1])                  # Sat and Sun are dates, not sessions
+    with pytest.raises(TemporalError, match="exchange sessions"):
+        PD(days, {"Y": y, "X": x}, bd, NOLINK)
+    # calendar days that are not sessions are refused outright
+    from datetime import timedelta
+    cal_days = np.array([days[0] + timedelta(days=k) for k in range(len(days))], dtype=object)
+    with pytest.raises(TemporalError, match="not sessions"):
+        PD(cal_days, {"Y": y, "X": x}, boundary(days), NOLINK)
+    # Friday to Tuesday: exactly one session (Monday) in between
+    PD(days, {"Y": y, "X": x}, Boundary(days[0], friday, days[i + 2], days[-1]), NOLINK)

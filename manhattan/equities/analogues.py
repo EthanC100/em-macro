@@ -19,13 +19,18 @@
 * **Training** eligibility further requires an outcome whose whole window ended, and whose value was observable
   (``known_from``), by ``T``; and keeps at most one observation per company per outcome horizon (the latest), so
   overlapping outcome windows of one company are not counted as independent analogues.
-* **A missing outcome fails closed (S8 H2).** An eligible observation whose outcome window ended at least
-  ``outcome_grace_days`` before ``T`` must have an outcome record. If it has none, ``MissingOutcomeError`` lists
-  them: dropping them would keep the companies whose outcomes happened to be recorded (typically the survivors) and
-  bias every training sample. A delisted company's outcome is its return including the delisting return. Missing
-  outcomes whose window has not had the grace period yet are excluded as ``not_yet_observable``; an outcome
-  recorded but not yet public (``known_from > T``) as ``outcome_unobservable``. An outcome whose window does not match
-  the horizon is refused.
+* **Outcome selection is by the calendar only, never by whether an outcome happens to be there (S8 H2, R1).** A
+  pool's ``OutcomePolicy`` declares one publication grace period (bounded by ``MAX_OUTCOME_GRACE_DAYS``) and where it
+  comes from. An observation is *settled* at ``T`` when ``as_of + horizon + grace <= T`` — the same rule for every
+  company, failed or not. Unsettled observations are excluded as ``not_settled`` (ordinary right-censoring by date).
+  A settled observation **must** have an outcome published by ``T``; otherwise ``MissingOutcomeError``. Excluding it
+  instead would drop exactly the companies whose outcomes arrive late or never — bankruptcies, liquidations,
+  delistings — and bias every training sample towards survivors. An outcome published later than its window end
+  plus the grace is refused when it is added (``LateOutcomeError``): the policy does not hold for that record. A
+  company whose final value takes longer to resolve (a liquidation) must be recorded within the grace with a
+  conservative provisional value (``Outcome.assumed=True``, for example −100%), which forecasts report.
+  Conflicting duplicate outcomes are refused (S8 L7). An outcome whose window does not match the horizon is
+  refused.
 * The matcher never sees outcomes. ``match`` reads only features; outcomes are attached afterwards by ``forecast``,
   which re-checks that each is known at ``T``. A feature whose name looks like an outcome
   (``OUTCOME_LIKE``) is refused.
@@ -58,8 +63,31 @@ METHODS = ("standardized", "mahalanobis", "trajectory")
 OUTCOME_LIKE = re.compile(r"(^|_)(fwd|forward|future|outcome|target|next|subsequent|realized|realised)(_|$)", re.I)
 
 
+MAX_OUTCOME_GRACE_DAYS = 90        # a hard bound: a longer "grace" turns missing failures into censoring (S8 R1)
+
+
 class MissingOutcomeError(EvidenceError):
     """Training analogues whose outcomes should be observable at T but are not recorded (survivorship hazard)."""
+
+
+class LateOutcomeError(EvidenceError):
+    """An outcome published later than its pool's declared grace allows (the policy does not hold for it)."""
+
+
+@dataclass(frozen=True)
+class OutcomePolicy:
+    """How long after an outcome window ends its value is published, for every company alike, and on what basis
+    (the outcome source's documented publication schedule, or the rule used to build provisional values)."""
+    grace_days: int
+    provenance: str
+
+    def __post_init__(self):
+        if isinstance(self.grace_days, bool) or not isinstance(self.grace_days, int) \
+                or not 0 <= self.grace_days <= MAX_OUTCOME_GRACE_DAYS:
+            raise EquityDataError(f"outcome grace is a whole number of days from 0 to {MAX_OUTCOME_GRACE_DAYS}; a "
+                                  "longer one would treat missing failed-company outcomes as censoring")
+        if not isinstance(self.provenance, str) or not self.provenance.strip():
+            raise EquityDataError("an outcome policy states the provenance of its publication grace")
 
 
 @dataclass(frozen=True)
@@ -90,10 +118,13 @@ class Outcome:
     end: date                        # end of the outcome window
     value: float
     known_from: date                 # first day the full outcome was observable (≥ end; delisting proceeds later)
+    assumed: bool = False            # a conservative provisional value (e.g. −100% for a liquidation still open)
 
     def __post_init__(self):
         if not self.start < self.end <= self.known_from:
             raise TemporalError(f"{self.company_id}: an outcome needs start < end <= known_from")
+        if isinstance(self.value, bool) or not isinstance(self.value, (int, float)) or not np.isfinite(self.value):
+            raise EquityDataError(f"{self.company_id}: an outcome value is a finite number")
 
 
 @dataclass(frozen=True)
@@ -123,7 +154,10 @@ class MatchResult:
 
 
 class AnaloguePool:
-    def __init__(self):
+    def __init__(self, outcome_policy: OutcomePolicy | None = None):
+        if outcome_policy is not None and not isinstance(outcome_policy, OutcomePolicy):
+            raise EquityDataError("outcome_policy must be an OutcomePolicy")
+        self.outcome_policy = outcome_policy
         self._obs: list[Observation] = []
         self._out: dict[tuple, Outcome] = {}
 
@@ -133,7 +167,18 @@ class AnaloguePool:
         self._obs.append(o)
 
     def add_outcome(self, o: Outcome) -> None:
-        self._out[(o.company_id, o.start)] = o
+        key = (o.company_id, o.start)
+        if key in self._out:
+            if self._out[key] != o:
+                raise EquityDataError(f"{o.company_id} {o.start}: a second, different outcome; outcomes are never "
+                                      "overwritten (record a correction explicitly instead)")
+            return
+        pol = self.outcome_policy
+        if pol is not None and (o.known_from - o.end).days > pol.grace_days:
+            raise LateOutcomeError(f"{o.company_id} {o.start}: published {(o.known_from - o.end).days} days after its "
+                                   f"window, beyond the declared grace of {pol.grace_days} ({pol.provenance}); record "
+                                   "a provisional value within the grace (assumed=True) or revise the policy")
+        self._out[key] = o
 
     def observations(self) -> list[Observation]:
         return list(self._obs)
@@ -150,17 +195,17 @@ class AnaloguePool:
 
     def eligible(self, target: Observation, T: date, *, purpose: str, horizon_days: int | None = None,
                  exclude_self: bool = True, category: bool = False, stage: bool = False,
-                 regime: bool = False, outcome_grace_days: int = 30) -> tuple[list[Observation], dict]:
+                 regime: bool = False) -> tuple[list[Observation], dict]:
         if purpose not in PURPOSES:
             raise EquityDataError(f"purpose is one of {PURPOSES}")
         if target.as_of != T:
             raise TemporalError(f"the target is observed at {target.as_of}, the prediction is at {T}")
         if purpose == "training" and not horizon_days:
             raise EquityDataError("training eligibility needs the outcome horizon")
-        if outcome_grace_days < 0:
-            raise EquityDataError("outcome_grace_days cannot be negative")
-        excl = {"future": 0, "self": 0, "not_in_universe": 0, "constraint": 0, "outcome_unobservable": 0,
-                "not_yet_observable": 0, "overlapping_horizon": 0}
+        if purpose == "training" and self.outcome_policy is None:
+            raise EquityDataError("training eligibility needs the pool's OutcomePolicy (a declared, bounded grace)")
+        excl = {"future": 0, "self": 0, "not_in_universe": 0, "constraint": 0, "not_settled": 0,
+                "overlapping_horizon": 0}
         keep, missing = [], []
         for o in self._obs:
             if o.as_of > T:
@@ -172,15 +217,12 @@ class AnaloguePool:
             elif (category and o.category != target.category) or (stage and o.stage != target.stage) \
                     or (regime and o.regime != target.regime):
                 excl["constraint"] += 1
+            elif purpose == "training" and \
+                    o.as_of + timedelta(days=horizon_days + self.outcome_policy.grace_days) > T:
+                excl["not_settled"] += 1                        # by the calendar, the same for every company
             elif purpose == "training" and self.outcome(o.company_id, o.as_of, T) is None:
                 rec = self._out.get((o.company_id, o.as_of))
-                due = o.as_of + timedelta(days=horizon_days + outcome_grace_days)
-                if rec is not None:
-                    excl["outcome_unobservable"] += 1           # recorded, not yet public at T
-                elif due <= T:
-                    missing.append((o.company_id, o.as_of))
-                else:
-                    excl["not_yet_observable"] += 1
+                missing.append((o.company_id, o.as_of, "not published by T" if rec is not None else "no record"))
             else:
                 if purpose == "training":
                     rec = self._out[(o.company_id, o.as_of)]
@@ -189,9 +231,9 @@ class AnaloguePool:
                                               f" days, horizon {horizon_days}")
                 keep.append(o)
         if missing:
-            raise MissingOutcomeError(f"{len(missing)} eligible observations have no outcome although it should be "
-                                      f"observable at {T}: {missing[:5]}; record their outcomes (with delisting "
-                                      "returns) instead of dropping them")
+            raise MissingOutcomeError(f"{len(missing)} settled observations have no outcome published by {T}: "
+                                      f"{missing[:5]}; record their outcomes (with delisting returns, or a "
+                                      "conservative provisional value) instead of dropping them")
         if purpose == "training":                   # one observation per company per horizon: the latest
             keep.sort(key=lambda o: (o.company_id, o.as_of), reverse=True)
             thinned, last = [], {}
@@ -256,16 +298,14 @@ def _pair_distance(zt: np.ndarray, zc: np.ndarray, names, *, min_overlap: int, c
 
 def match(pool: AnaloguePool, target: Observation, T: date, *, k: int = 10, purpose: str = "descriptive",
           method: str = "standardized", features=None, horizon_days: int | None = None, min_overlap: int = 3,
-          trajectory_len: int = 4, shrink: float = 0.2, outcome_grace_days: int = 30,
-          **constraints) -> MatchResult:
+          trajectory_len: int = 4, shrink: float = 0.2, **constraints) -> MatchResult:
     if method not in METHODS:
         raise EquityDataError(f"method is one of {METHODS}")
     names = sorted(features or target.features)
     for n in names:
         if OUTCOME_LIKE.search(n):
             raise EvidenceError(f"feature {n!r} looks like an outcome")
-    cands, excl = pool.eligible(target, T, purpose=purpose, horizon_days=horizon_days,
-                                outcome_grace_days=outcome_grace_days, **constraints)
+    cands, excl = pool.eligible(target, T, purpose=purpose, horizon_days=horizon_days, **constraints)
     centre, scale = robust_scale(cands, names)
     zt = _z(target, names, centre, scale)
     cov_inv = None
@@ -324,8 +364,9 @@ def forecast(pool: AnaloguePool, res: MatchResult, *, bandwidth: float | None = 
     if not vals:
         return {"forecast": float("nan"), "n": 0, "evidential_weight": 0}
     w = np.array(ws) / np.sum(ws)
+    assumed = sum(1 for m in res.matches if pool.outcome(m.company_id, m.as_of, res.T).assumed)
     return {"forecast": float(w @ np.array(vals)), "n": len(vals), "effective_n": float(1 / np.sum(w * w)),
-            "evidential_weight": 0}
+            "assumed_outcomes": assumed, "evidential_weight": 0}
 
 
 # ---------------------------------------------------------------- baselines on the same information

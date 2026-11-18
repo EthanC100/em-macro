@@ -104,16 +104,16 @@ class FundamentalStore:
                                 "(the history may have been backfilled)")
         facts = self._facts.setdefault((f.company_id, f.metric), [])
         for o in facts:
-            if o.period_end == f.period_end and o.public_time == f.public_time and o.value != f.value:
+            same = o.period_end == f.period_end and o.period_kind == f.period_kind
+            if same and o.public_time == f.public_time and o.value != f.value:
                 raise EquityDataError(f"{f.company_id} {f.metric} {f.period_end}: two values published at the same "
                                       "time")
-            if o.period_end == f.period_end and o.period_kind != f.period_kind:
-                raise EquityDataError(f"{f.company_id} {f.metric} {f.period_end}: period kind changes between vintages")
             if o.currency != f.currency and o.period_end == f.period_end:
-                raise CurrencyError(f"{f.company_id} {f.metric} {f.period_end}: vintages in different currencies")
-        if f.vintage == "original" and any(o.period_end == f.period_end and o.vintage == "original" for o in facts):
-            raise EquityDataError(f"{f.company_id} {f.metric} {f.period_end}: two originals; a later value is a "
-                                  "restatement")
+                raise CurrencyError(f"{f.company_id} {f.metric} {f.period_end}: values in different currencies")
+        if f.vintage == "original" and any(o.period_end == f.period_end and o.period_kind == f.period_kind
+                                           and o.vintage == "original" for o in facts):
+            raise EquityDataError(f"{f.company_id} {f.metric} {f.period_end} ({f.period_kind}): two originals; a "
+                                  "later value is a restatement")
         facts.append(f)
 
     def usable_from(self, f: Fact) -> date:
@@ -124,10 +124,11 @@ class FundamentalStore:
 
     def known(self, company_id: str, metric: str, as_of: date, *, vintage: str = "latest_known",
               kind: str | None = None) -> list[Known]:
-        """Per fiscal period, the value known at the close of ``as_of``, ordered by period end."""
+        """Per fiscal period (period end and kind), the value known at the close of ``as_of``, ordered by period end.
+        An annual figure and a fourth-quarter figure ending on the same day are two periods, never one."""
         if vintage not in QUERY_VINTAGES:
             raise EquityDataError(f"vintage is one of {QUERY_VINTAGES}")
-        best: dict[date, tuple] = {}
+        best: dict[tuple, tuple] = {}
         for f in self._facts.get((company_id, metric), []):
             if kind is not None and f.period_kind != kind:
                 continue
@@ -135,10 +136,10 @@ class FundamentalStore:
             if u > as_of:
                 continue
             key = (u, f.public_time, f.capture_time or f.public_time)
-            cur = best.get(f.period_end)
+            cur = best.get((f.period_end, f.period_kind))
             if cur is None or (key > cur[0] if vintage == "latest_known" else key < cur[0]):
-                best[f.period_end] = (key, Known(f.period_end, f.value, f.currency, u, f))
-        return [best[p][1] for p in sorted(best)]
+                best[(f.period_end, f.period_kind)] = (key, Known(f.period_end, f.value, f.currency, u, f))
+        return [best[p][1] for p in sorted(best, key=lambda p: (p[0], PERIOD_KINDS.index(p[1])))]
 
     def value(self, company_id: str, metric: str, as_of: date, *, vintage: str = "latest_known",
               kind: str | None = None, max_age_days: int | None = None) -> Known | None:
@@ -148,20 +149,53 @@ class FundamentalStore:
         if not k:
             return None
         last = k[-1]
+        tied = [x for x in k if x.period_end == last.period_end]
+        if len(tied) > 1:                       # an annual and a fourth quarter ending on the same day (S8 L3)
+            if len({x.value for x in tied}) > 1:
+                raise EquityDataError(f"{company_id} {metric} {last.period_end}: an annual and a "
+                                      f"{tied[0].fact.period_kind} value end on the same day and differ; ask for a kind")
+            last = tied[0]
         if max_age_days is not None and (as_of - last.period_end).days > max_age_days:
             return None
         return last
 
     def ttm(self, company_id: str, metric: str, as_of: date, *, vintage: str = "latest_known") -> float | None:
-        """Sum of the last four fiscal quarters known at ``as_of``; None unless they are consecutive."""
-        q = self.known(company_id, metric, as_of, vintage=vintage, kind="quarter")[-4:]
-        if len(q) < 4:
+        """Sum of the last four fiscal quarters known at ``as_of`` (a flow metric); None unless they are
+        consecutive. See ``ttm_detail``."""
+        d = self.ttm_detail(company_id, metric, as_of, vintage=vintage)
+        return None if d is None else d["value"]
+
+    def ttm_detail(self, company_id: str, metric: str, as_of: date, *, vintage: str = "latest_known") -> dict | None:
+        """The last four consecutive fiscal quarters known at ``as_of`` (S8 L3). Companies often report no separate
+        fourth quarter: only the annual figure. Then the fourth quarter is derived as annual minus the first three
+        quarters of that fiscal year, all as known at ``as_of``, and flagged ``derived_q4``. A reported fourth quarter
+        is always preferred; an annual figure is never added to quarters (no double counting), and when both exist
+        their disagreement beyond 1% is reported (``inconsistent_with_annual``), not hidden. For flow metrics only
+        (revenue, income, cash flow): a stock metric (assets, shares) has no trailing sum."""
+        quarters = {k.period_end: (k.value, False, k) for k in
+                    self.known(company_id, metric, as_of, vintage=vintage, kind="quarter")}
+        annual = self.known(company_id, metric, as_of, vintage=vintage, kind="annual")
+        inconsistent = []
+        for a in annual:
+            prior = [q for q in quarters if 0 < (a.period_end - q).days <= 290 and q != a.period_end]
+            prior = sorted(prior)[-3:]
+            if len(prior) != 3 or any(not 80 <= (b - c).days <= 100 for c, b in zip(prior, prior[1:] + [a.period_end])):
+                continue
+            three = sum(quarters[q][0] for q in prior)
+            if a.period_end in quarters:
+                total = three + quarters[a.period_end][0]
+                if abs(total - a.value) > 0.01 * max(abs(a.value), 1e-12):
+                    inconsistent.append(a.period_end)
+            else:
+                _same_currency([a] + [quarters[q][2] for q in prior])
+                quarters[a.period_end] = (a.value - three, True, a)
+        ends = sorted(quarters)[-4:]
+        if len(ends) < 4 or any(not 80 <= (b - c).days <= 100 for c, b in zip(ends, ends[1:])):
             return None
-        gaps = [(b.period_end - a.period_end).days for a, b in zip(q, q[1:])]
-        if any(not 80 <= g <= 100 for g in gaps):
-            return None
-        _same_currency(q)
-        return float(sum(k.value for k in q))
+        _same_currency([quarters[e][2] for e in ends])
+        return {"value": float(sum(quarters[e][0] for e in ends)), "periods": tuple(ends),
+                "derived_q4": tuple(e for e in ends if quarters[e][1]),
+                "inconsistent_with_annual": tuple(e for e in inconsistent if e in ends)}
 
     def growth(self, company_id: str, metric: str, as_of: date, *, lag: int = 4, kind: str = "quarter",
                vintage: str = "latest_known") -> float | None:

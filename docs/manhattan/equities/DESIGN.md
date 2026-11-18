@@ -259,12 +259,28 @@ recorded spreads; nothing here replaces that. Shorting costs are typically the b
 relative-value families in small and mid-cap technology names, and historical borrow data are the hardest data to
 obtain (DATA_ACQUISITION §3).
 
+**Not modelled, and not implied to be (S8 R5, M10):** dividend withholding tax (ADRs, foreign issuers, manufactured
+dividends on shorts); Reg SHO Rule 201 (the short-sale price test after a 10% intraday fall: shorts are assumed
+always possible at the price used); borrow **quantity** (a record says borrowable and the fee, not how many shares);
+recall **timing** (recall is an expected daily cost, not a dated forced buy-in correlated with squeezes); intra-period
+fee changes, locates and margin. Any result built on these models inherits those omissions and must say so.
+
+**Runner dependencies (S8 L10).** The candidate runner lock (`requirements-manhattan-runner.lock`) pins numpy and
+requests only. The equities package also needs scipy and statsmodels (pairs: ADF, Engle–Granger) and PyYAML (the
+catalogue). They are in `requirements.txt` (the tests workflow) but not in the runner lock. The lock file is not
+edited here: adding them is part of any future decision to run equities code on the runner, and needs owner review
+of the lock (its own header requires it).
+
 ## 8. Known limitations
 
 - **No real data has been seen.** Every behaviour is tested on synthetic fixtures; real data will expose formats,
   gaps and conventions the contracts do not yet name.
 - **Daily resolution.** Intraday reaction windows are reduced to closes; the conservative mapping costs some power
   around releases.
+- **Analogue outcomes need a declared policy.** Training analogues require an `OutcomePolicy` (a publication grace
+  of at most 90 days with its provenance). Selection is by the calendar; a settled observation without a published
+  outcome fails closed, and an outcome published beyond the grace is refused. Liquidations that take longer must be
+  recorded with a conservative provisional value, flagged.
 - **Pair and analogue filters are heuristics** with declared parameters, not tests; their synthetic hit rates
   (section 4) are retrospective classifications on one generator and do not transfer to markets.
 - **Slow mean reversion is rarely accepted** by the pair filter (low power, by design conservative).

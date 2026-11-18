@@ -15,7 +15,8 @@ Series names: ``eq.fund.<company>.<metric>`` (a fundamental's period end is its 
 product of every return up to ``t``, so it is available on the latest of their ``ReturnSeries.known`` days. A
 delisting return becomes available when the proceeds were known (``DelistingReturn.known_from``), which can be weeks
 after the last trade: before that day a read sees the index end at the last traded close. An assumed delisting
-value, or a fundamental without a vendor capture time, marks the store ``reconstructed`` (it can then never be
+value, a corporate action without a capture date (its knowledge day is only a declaration), or a fundamental
+without a vendor capture time, marks the store ``reconstructed`` (it can then never be
 confirmatory historical evidence: ``PitStore.require_historical_evidence``).
 
 A licensed source is refused (hard rule 7 applies to anything that could be written out), unless the caller states
@@ -78,6 +79,6 @@ def prices_to_pit(book: PriceBook, store: PitStore, contract: DataContract, secu
         if (known < days).any():
             raise ContractError(f"{s}: a return known before its own session")
         name = f"eq.px.{s}"
-        store.add(name, days, idx, available=known, reconstructed=bool(rs.delisting_assumed))
+        store.add(name, days, idx, available=known, reconstructed=bool(rs.delisting_assumed or rs.reconstructed))
         names.append(name)
     return names

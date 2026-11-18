@@ -79,7 +79,7 @@ class MarketCalendar:
         self._days = tuple(days)
         self._opens = tuple(s.open for s in sessions)
         self._closes = tuple(s.close for s in sessions)
-        self._index = {d: i for i, d in enumerate(days)}
+        self._pos = {d: i for i, d in enumerate(days)}
 
     @classmethod
     def synthetic(cls, name: str, start: date, end: date, *, holidays=(), half_days=(), tz: str = "America/New_York",
@@ -109,11 +109,11 @@ class MarketCalendar:
         return self._days
 
     def is_session(self, day: date) -> bool:
-        return day in self._index
+        return day in self._pos
 
     def session(self, day: date) -> Session:
         try:
-            return self._sessions[self._index[day]]
+            return self._sessions[self._pos[day]]
         except KeyError:
             raise TemporalError(f"{self.name}: {day} is not a session") from None
 
@@ -143,7 +143,7 @@ class MarketCalendar:
 
     def offset(self, day: date, n: int) -> date:
         """The session ``n`` sessions after (``n > 0``) or before (``n < 0``) session ``day``."""
-        i = self._index.get(day)
+        i = self._pos.get(day)
         if i is None:
             raise TemporalError(f"{self.name}: {day} is not a session")
         j = i + n

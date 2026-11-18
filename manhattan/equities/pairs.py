@@ -8,8 +8,9 @@
 **The boundary is enforced by construction.** ``PairDiscovery`` copies only the observations dated inside
 ``[formation_start, formation_end]``; it never holds a later price. Evaluation data are passed separately to
 ``out_of_sample``, which uses the hedge ratio, spread mean and spread standard deviation **frozen at formation**.
-At least ``rules.embargo_sessions`` sessions (one or more) must lie strictly between the two windows: both
-``PairDiscovery`` and ``out_of_sample`` count them in ``days`` and refuse otherwise (S8 M2).
+At least ``rules.embargo_sessions`` exchange sessions (one or more) must lie strictly between the two windows: both
+``PairDiscovery`` and ``out_of_sample`` count them on the exchange ``calendar`` they are given, require every
+observation day to be a session, and refuse otherwise (S8 M2).
 
 **Economic link first.** With ``rules.require_link`` (the default) a pair is considered only if ``link(a, b, t)``
 returns a reason at ``t = formation_end`` (same technology category, a supplier/customer edge in the relationship
@@ -17,7 +18,8 @@ graph usable at ``t`` ...). Statistics alone over all pairs of a few hundred sto
 
 **Correlation is not cointegration, and cointegration is not profit.** The filters are, in order: return
 correlation; the Engle–Granger test in **both** directions (the larger p-value is kept); a mean-reversion half-life
-within bounds; and stability across ``n_subperiods`` sub-windows of the formation window (hedge-ratio drift and a
+within bounds; a positive hedge ratio (a negative one is not a hedge and is refused: S8 L6); and stability across
+``n_subperiods`` sub-windows of the formation window (hedge-ratio drift and a
 per-window ADF test of the full-window spread). Before any of them, a pair with either leg missing on more than
 ``max_missing_frac`` of sessions or for more than ``max_gap_sessions`` in a row is ``insufficient_data``.
 Passing them makes a pair a *candidate*.
@@ -157,9 +159,19 @@ def missing_profile(y: np.ndarray, x: np.ndarray) -> dict:
             "trailing": trailing}
 
 
-def embargo_sessions(days, boundary: Boundary) -> int:
-    """Sessions in ``days`` strictly between the formation end and the evaluation start."""
-    return int(sum(1 for d in days if boundary.formation_end < d < boundary.evaluation_start))
+def embargo_sessions(calendar, boundary: Boundary) -> int:
+    """Exchange sessions strictly between the formation end and the evaluation start, counted on ``calendar`` (S8
+    M2): a Friday formation end and a Monday evaluation start have none, whatever dates a caller's array holds."""
+    n = calendar.count_between(boundary.formation_end, boundary.evaluation_start)     # sessions in (end, start]
+    return int(n - (1 if calendar.is_session(boundary.evaluation_start) else 0))
+
+
+def _check_days(days, calendar) -> None:
+    """Every observation day must be a session of ``calendar``: calendar days or weekends are not sessions."""
+    bad = [d for d in days if not calendar.is_session(d)]
+    if bad:
+        raise TemporalError(f"{len(bad)} observation days are not sessions of {calendar.name} (first: {bad[0]}); "
+                            "pairs are observed on exchange sessions only")
 
 
 # ---------------------------------------------------------------- primitives
@@ -263,16 +275,18 @@ class PairDiscovery:
     trading discontinuities), ``rejected`` (a statistical filter) or ``passed``; ``attempt_log`` lists them. The
     number of candidates that passed is meaningless without the number tried."""
 
-    def __init__(self, days, log_prices: dict, boundary: Boundary, rules: PairRules = PairRules(), *, link=None):
+    def __init__(self, days, log_prices: dict, boundary: Boundary, rules: PairRules = PairRules(), *, calendar,
+                 link=None):
         days = np.asarray(days, dtype=object)
         if len(days) > 1 and not all(a < b for a, b in zip(days, days[1:])):
             raise TemporalError("days must be strictly increasing")
+        _check_days(days, calendar)
         for k, v in log_prices.items():
             if len(v) != len(days):
                 raise EquityDataError(f"{k}: price array does not match the days")
-        if embargo_sessions(days, boundary) < rules.embargo_sessions:
-            raise TemporalError(f"only {embargo_sessions(days, boundary)} sessions between formation end and "
-                                f"evaluation start; the rules declare an embargo of {rules.embargo_sessions}")
+        if embargo_sessions(calendar, boundary) < rules.embargo_sessions:
+            raise TemporalError(f"only {embargo_sessions(calendar, boundary)} exchange sessions between formation end "
+                                f"and evaluation start; the rules declare an embargo of {rules.embargo_sessions}")
         m = np.array([boundary.formation_start <= d <= boundary.formation_end for d in days], dtype=bool)
         self.days = days[m]
         self.prices = {k: np.asarray(v, float)[m].copy() for k, v in sorted(log_prices.items())}
@@ -329,6 +343,9 @@ class PairDiscovery:
             reasons.append(f"Engle-Granger p {eg:.3f}")
         if not (r.min_half_life <= hl <= r.max_half_life):
             reasons.append(f"half-life {hl:.1f}")
+        if not beta > 0:
+            reasons.append(f"hedge ratio {beta:.2f} is not positive: unsupported (both legs would be bought or sold "
+                           "together, which doubles the common exposure instead of hedging it)")
         drift = (max(sub_b) - min(sub_b)) / abs(beta) if beta != 0 else float("inf")
         if not drift <= r.max_beta_drift:
             reasons.append(f"hedge ratio drift {drift:.2f} across formation sub-windows")
@@ -359,7 +376,7 @@ def _segment_flags(s: np.ndarray, c: PairCandidate, rules: PairRules) -> list[st
     return flags
 
 
-def out_of_sample(c: PairCandidate, days, log_prices: dict, rules: PairRules = PairRules(), *,
+def out_of_sample(c: PairCandidate, days, log_prices: dict, rules: PairRules = PairRules(), *, calendar,
                   events=()) -> StabilityReport:
     """Retrospective diagnostics of the candidate's spread over the evaluation window, with formation parameters
     frozen. ``events`` are dates of earnings releases or corporate actions of either leg (counted, never hidden).
@@ -367,8 +384,9 @@ def out_of_sample(c: PairCandidate, days, log_prices: dict, rules: PairRules = P
     are repeated on ``n_eval_segments`` consecutive segments so a late break is not averaged away."""
     days = np.asarray(days, dtype=object)
     bd = c.boundary
-    if embargo_sessions(days, bd) < rules.embargo_sessions:
-        raise TemporalError("the evaluation window starts inside the declared embargo")
+    _check_days(days, calendar)
+    if embargo_sessions(calendar, bd) < rules.embargo_sessions:
+        raise TemporalError("the evaluation window starts inside the declared embargo (counted in exchange sessions)")
     m = np.array([bd.evaluation_start <= d <= bd.evaluation_end for d in days], dtype=bool)
     y, x = np.asarray(log_prices[c.y], float)[m], np.asarray(log_prices[c.x], float)[m]
     mp = missing_profile(y, x)
@@ -424,8 +442,13 @@ class PairPosition:
 
 
 def position_from_z(c: PairCandidate, z: float, gross: float) -> PairPosition:
-    """Spread rich (z > 0): short y, long β·x; cheap (z < 0): the reverse. Legs scaled to total ``gross``."""
-    wy, wx = 1.0, abs(c.beta)
+    """Spread rich (z > 0): short y, long β·x; cheap (z < 0): the reverse. Legs scaled to total ``gross``.
+    Only for a positive hedge ratio (S8 L6): with β < 0 the hedge would be long (or short) both legs, so the
+    long/short orientation here would be wrong; such a candidate is refused, not silently flipped."""
+    if not c.beta > 0 or not c.passed:
+        raise EquityDataError(f"{c.y}/{c.x}: no position for a candidate with hedge ratio {c.beta:.2f} or failed "
+                              "filters")
+    wy, wx = 1.0, c.beta
     k = gross / (wy + wx)
     if z > 0:
         return PairPosition(c.x, c.y, wx * k, wy * k)

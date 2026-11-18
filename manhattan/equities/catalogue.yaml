@@ -12,7 +12,11 @@
 # shared_family (S8 correction round): entries that test overlapping mechanisms or near-identical signals are marked
 # as members of one shared hypothesis family. Their ids are kept (drafts; nothing is renumbered or removed), but if
 # they are ever frozen they are registered as hypotheses of ONE Manhattan family (or carry parent_family links) and
-# counted together for multiple testing: their evaluations are not independent evidence.
+# counted together for multiple testing: their evaluations are not independent evidence. A shared_family here is a
+# DECLARATION in a draft catalogue: nothing in freezing or attempt accounting enforces it today (S8 R3).
+#
+# optional_data: kinds used only by some grouped variants. They do not decide a family's data tier; a variant that
+# uses them inherits their availability problems (S8 R3, TE-F01).
 
 version: 1
 status: draft            # catalogue of untested hypothesis families; nothing here is evidence
@@ -661,7 +665,7 @@ families:
 
   - id: TE-B03
     name: Inventory and margin cycle analogues
-    shared_family: SF-ANALOGUES   # one hypothesis family with the other members; tests are not independent
+    shared_family: SF-SEMI-CYCLE   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: relative_value
     mechanism_class: behavioural
@@ -1900,6 +1904,7 @@ families:
 
   - id: TE-E07
     name: Cash runway and balance-sheet strength
+    shared_family: SF-FINANCING   # one hypothesis family with the other members; tests are not independent
     research_family: E_factor
     approach: directional
     mechanism_class: behavioural
@@ -1969,7 +1974,8 @@ families:
       Benchmark-constrained and slow-moving investors who rebalance duration exposure gradually.
     target_universe: >-
       US-listed technology companies sorted by an equity-duration proxy
-    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit, analyst_estimates_pit]
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit]
+    optional_data: [analyst_estimates_pit]   # only the forecast-based duration proxy variant; historical-fundamental and empirical rate-beta proxies need none
     availability_risks:
       - Duration proxies built from forecast cash flows inherit consensus backfill.
       - Policy-expectation series must be taken as observed in markets at the time, not from revised data.
@@ -2012,6 +2018,7 @@ families:
 
   - id: TE-F02
     name: Credit conditions and financing-dependent technology
+    shared_family: SF-FINANCING   # one hypothesis family with the other members; tests are not independent
     research_family: F_macro
     approach: relative_value
     mechanism_class: risk_premium
@@ -2141,6 +2148,7 @@ families:
 
   - id: TE-F04
     name: Semiconductor and industrial cycle rotation
+    shared_family: SF-SEMI-CYCLE   # one hypothesis family with the other members; tests are not independent
     research_family: F_macro
     approach: relative_value
     mechanism_class: informational

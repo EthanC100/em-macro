@@ -92,9 +92,10 @@ Record each answer in the source's `DataContract`: `coverage_verified=True` is a
 
 ## 5. What can run on prices and EDGAR alone
 
-`catalogue.data_tier` sorts the 39 families by what they need (HYPOTHESIS_CATALOGUE.md, "Data feasibility"): 12
-families need only a survivorship-free price source, EDGAR structured data and free public series; 2 also need
-EDGAR text parsed point in time; 25 need a history that is not affordable or not verifiably point in time (analyst
+`catalogue.data_tier` sorts the 39 families by what they **require** (HYPOTHESIS_CATALOGUE.md, "Data feasibility";
+data used only by some variants is `optional_data` and does not set the tier): 13 families need only a
+survivorship-free price source, EDGAR structured data and free public series; 2 also need EDGAR text parsed point in
+time; 24 need a history that is not affordable or not verifiably point in time (analyst
 estimate histories, borrow, implied volatility, call transcripts, relationship graphs, alternative data). The last
 group can be researched only through forward collection or after a data decision. Relative-value families in the
 first two groups still need borrow assumptions, flagged as such, for their short legs.

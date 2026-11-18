@@ -63,7 +63,7 @@ def discover_pairs(window, securities, boundary: pairs.Boundary, rules: pairs.Pa
     grid comes from ``calendar`` (an exchange calendar is published in advance: it is not data from the future)."""
     days = np.array(calendar.sessions_between(boundary.formation_start, boundary.evaluation_start), dtype=object)
     arr = _panel(window, securities, boundary.formation_end, days)
-    disc = pairs.PairDiscovery(days, arr, boundary, rules, link=link)
+    disc = pairs.PairDiscovery(days, arr, boundary, rules, calendar=calendar, link=link)
     disc.result = disc.candidates(include_failed=True)
     return disc
 
@@ -76,4 +76,4 @@ def evaluate_pair(window, candidate: pairs.PairCandidate, rules: pairs.PairRules
         raise EquityDataError("the window ends before the evaluation window: a retrospective diagnostic needs it all")
     days = np.array(calendar.sessions_between(bd.formation_end, bd.evaluation_end), dtype=object)
     arr = _panel(window, [candidate.y, candidate.x], bd.evaluation_end, days)
-    return pairs.out_of_sample(candidate, days, arr, rules, events=events)
+    return pairs.out_of_sample(candidate, days, arr, rules, calendar=calendar, events=events)

@@ -10,10 +10,16 @@ turns an entry into a Manhattan family spec and checks it with ``manhattan.spec.
 **not** registered or frozen (freezing is Ethan's: hard rule 4), and is marked ``status: draft``.
 
 **Rankings are qualitative.** Six 1–5 judgements (5 the favourable end) made before any data were examined.
-``priority`` orders families by a declared lexicographic rule: leakage safety and data feasibility gate first (a
-family that cannot be tested point in time is not a priority however plausible), then plausibility, distinctiveness,
-cost and simplicity. It is a research-ordering device, not an expected return, and it does not enter any
-statistical rule.
+``priority`` orders families by a declared lexicographic rule (S8 R3): first the **affordable data tier**
+(``data_tier``: prices and EDGAR, then EDGAR text, then unavailable history), so the order reflects what can
+actually be tested on the budget; then min(leakage safety, data feasibility), plausibility, distinctiveness, cost
+and simplicity. It is a research-ordering device, not an expected return, and it does not enter any statistical rule.
+
+**Declared, not enforced.** ``shared_family`` groups entries that test overlapping mechanisms. It is a declaration
+in a draft catalogue: ``family_draft`` carries it with ``shared_family_enforced: False``, and nothing in freezing or
+attempt accounting reads it today. Enforcing it (one Manhattan family per group, or ``parent_family`` links, and one
+multiple-testing count) is part of a future freeze, which is Ethan's. Grouping never removes an entry from the
+denominator: all 39 entries remain, and any attempt on any of them would count.
 """
 from __future__ import annotations
 
@@ -125,9 +131,11 @@ def validate(cat: dict) -> list[str]:
         for k in ("transaction_costs", "implementation_complexity"):
             if f.get(k) not in LEVELS:
                 errs.append(f"{fid}: {k} must be one of {LEVELS}")
-        bad = [d for d in f.get("required_data") or [] if d not in DATASET_KINDS]
+        bad = [d for d in (f.get("required_data") or []) + (f.get("optional_data") or []) if d not in DATASET_KINDS]
         if bad:
             errs.append(f"{fid}: unknown data kinds {bad} (declare them in manhattan.equities.sources)")
+        if set(f.get("optional_data") or []) & set(f.get("required_data") or []):
+            errs.append(f"{fid}: a kind is both required and optional")
         r = f.get("ranking") or {}
         if set(r) != set(RANKS):
             errs.append(f"{fid}: ranking must have exactly {RANKS}")
@@ -150,7 +158,7 @@ def validate(cat: dict) -> list[str]:
 def family_draft(f: dict) -> dict:
     """A Manhattan family spec built from a catalogue entry: a draft, never registered or frozen here. Members of a
     shared family carry ``shared_family`` so a freeze can register them as hypotheses of one family."""
-    extra = {"shared_family": f["shared_family"]} if f.get("shared_family") else {}
+    extra = {"shared_family": f["shared_family"], "shared_family_enforced": False} if f.get("shared_family") else {}
     return S.family(**extra, mechanism=" ".join(str(f["rationale"]).split()), mechanism_class=f["mechanism_class"],
                     sign=f["sign"], counterparty=" ".join(str(f["counterparty"]).split()),
                     kill_condition=" ".join(str(f["kill_condition"]).split()),
@@ -162,7 +170,7 @@ def family_draft(f: dict) -> dict:
 def priority_key(f: dict) -> tuple:
     r = f["ranking"]
     gate = min(r["leakage_safety"], r["data_feasibility"])
-    return (-gate, -r["economic_plausibility"], -r["distinctiveness"], -r["research_cost"],
+    return (TIERS.index(data_tier(f)[0]), -gate, -r["economic_plausibility"], -r["distinctiveness"], -r["research_cost"],
             -r["implementation_simplicity"], f["id"])
 
 
@@ -183,9 +191,12 @@ def render(cat: dict) -> str:
                f"{rf} {sum(1 for f in fams if f['research_family'] == rf)}" for rf in RESEARCH_FAMILIES)
            + f"; relative value {sum(1 for f in fams if f['approach'] == 'relative_value')}, directional "
            f"{sum(1 for f in fams if f['approach'] == 'directional')}.", "",
+           "**Multiple-testing denominator.** All " + str(len(fams)) + " entries remain (no id removed or renumbered). "
+           "Shared families group related entries; they never shrink the count of entries, and any attempt on any "
+           "entry would count.", "",
            "## Priority order", "",
-           "Lexicographic: min(leakage safety, data feasibility), then plausibility, distinctiveness, research cost, "
-           "simplicity.", "",
+           "Lexicographic: affordable data tier first (prices and EDGAR, then EDGAR text, then unavailable history), "
+           "then min(leakage safety, data feasibility), plausibility, distinctiveness, research cost, simplicity.", "",
            "| # | id | family | shared family | data tier | approach | sign | horizon | costs | plaus. | data | cost | "
            "simpl. | distinct. | leak-safe |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -201,9 +212,10 @@ def render(cat: dict) -> str:
         if f.get("shared_family"):
             shared.setdefault(f["shared_family"], []).append(f["id"])
     out += ["", "## Shared hypothesis families", "",
-            "Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts), but if "
-            "frozen they are registered as hypotheses of one Manhattan family (or linked by `parent_family`) and "
-            "counted together for multiple testing: their evaluations are not independent evidence.", "",
+            "Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts). "
+            "**This grouping is declared, not enforced:** nothing in freezing or attempt accounting reads it today. "
+            "If frozen, each group should be registered as one Manhattan family (or linked by `parent_family`) and "
+            "counted together for multiple testing; that enforcement is part of a future freeze (Ethan's).", "",
             "| shared family | members |", "|---|---|"]
     out += [f"| {g} | {', '.join(m)} |" for g, m in sorted(shared.items())]
     out += ["", "## Data feasibility", "",
@@ -236,7 +248,10 @@ def render(cat: dict) -> str:
                 f"**Universe.** {' '.join(str(f['target_universe']).split())}", "",
                 f"**Data.** {', '.join(f['required_data'])}", "",
                 "**Availability risks.** " + " ".join(f"({i}) {x}" for i, x in enumerate(f['availability_risks'], 1)),
-                "", f"**Signal concept.** {' '.join(str(f['signal_concept']).split())}", "",
+                "", f"**Signal concept.** {' '.join(str(f['signal_concept']).split())}", ""]
+        if f.get("optional_data"):
+            out += [f"**Optional data (variants only; not in the tier).** {', '.join(f['optional_data'])}", ""]
+        out += [
                 "**Baselines.** " + "; ".join(f["baselines"]), "",
                 "**Confounders.** " + "; ".join(f["confounders"]), "",
                 f"**Costs ({f['transaction_costs']}).** {' '.join(str(f['cost_notes']).split())}", "",

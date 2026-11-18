@@ -60,7 +60,9 @@ TIMESTAMP_SEMANTICS = (
     "event_time_tz",            # the time the information became public, with a zone (press release, filing)
     "filing_acceptance_time",   # a regulator's acceptance time stamp (e.g. an EDGAR acceptance datetime)
     "vendor_capture_time",      # the time the vendor first recorded the value (known only for captured history)
-    "date_only",                # a calendar date with no time of day: usable only at the next session's close
+    "date_only",                # a calendar date with no time of day. Nothing here converts it: the caller maps it to
+    #                             a timezone-aware time after that day's close (as events.usable_close does for an
+    #                             unknown time of day), so it is first usable at the next session's close
     "unknown",                  # nothing is known about when the value became public
 )
 REVISION_BEHAVIOURS = (

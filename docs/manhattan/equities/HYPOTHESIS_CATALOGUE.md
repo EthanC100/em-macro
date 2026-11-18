@@ -6,9 +6,11 @@ Generated from `manhattan/equities/catalogue.yaml` by `python -m manhattan.equit
 
 39 families: A_relative_value 8, B_analogues 5, C_earnings 7, D_diffusion 6, E_factor 7, F_macro 6; relative value 21, directional 18.
 
+**Multiple-testing denominator.** All 39 entries remain (no id removed or renumbered). Shared families group related entries; they never shrink the count of entries, and any attempt on any entry would count.
+
 ## Priority order
 
-Lexicographic: min(leakage safety, data feasibility), then plausibility, distinctiveness, research cost, simplicity.
+Lexicographic: affordable data tier first (prices and EDGAR, then EDGAR text, then unavailable history), then min(leakage safety, data feasibility), plausibility, distinctiveness, research cost, simplicity.
 
 | # | id | family | shared family | data tier | approach | sign | horizon | costs | plaus. | data | cost | simpl. | distinct. | leak-safe |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -16,53 +18,55 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 | 2 | TE-E01 | Price momentum within technology | SF-MOMENTUM | prices_and_edgar | directional | + | 20-120 trading days | medium | 3 | 4 | 5 | 5 | 1 | 4 |
 | 3 | TE-E02 | Technology sub-industry momentum | SF-MOMENTUM | prices_and_edgar | directional | + | 20-120 trading days | low | 3 | 4 | 4 | 4 | 1 | 4 |
 | 4 | TE-E05 | Investment, issuance and stock-compensation dilution |  | prices_and_edgar | relative_value | - | 60-250 trading days | low | 4 | 3 | 4 | 4 | 2 | 3 |
-| 5 | TE-C01 | Post-earnings-announcement drift | SF-EARNINGS-SURPRISE | needs_unavailable_history | relative_value | + | 5-60 trading days | medium | 4 | 3 | 4 | 4 | 1 | 3 |
-| 6 | TE-E04 | Profitability and earnings quality |  | prices_and_edgar | directional | + | 60-250 trading days | low | 4 | 3 | 4 | 4 | 1 | 3 |
-| 7 | TE-E07 | Cash runway and balance-sheet strength |  | prices_and_edgar | directional | + | 60-250 trading days | medium | 3 | 3 | 4 | 4 | 2 | 3 |
-| 8 | TE-A01 | Peer-spread reversion within technology sub-industries | SF-REVERSAL | prices_and_edgar | relative_value | - | 3-20 trading days | high | 3 | 4 | 4 | 3 | 2 | 3 |
-| 9 | TE-A07 | Residual (idiosyncratic) momentum | SF-MOMENTUM | prices_and_edgar | relative_value | + | 20-120 trading days | medium | 3 | 3 | 4 | 3 | 2 | 4 |
-| 10 | TE-E06 | Intangible-adjusted value | SF-VALUATION | prices_and_edgar | directional | + | 120-500 trading days | low | 3 | 3 | 3 | 3 | 2 | 3 |
-| 11 | TE-A06 | Parent-subsidiary and carve-out stub mispricing |  | needs_unavailable_history | relative_value | + | 60-500 trading days | medium | 4 | 2 | 2 | 2 | 4 | 3 |
-| 12 | TE-D01 | Foundry and chipmaker capex diffusion to equipment suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 2 | 2 | 2 | 4 | 2 |
-| 13 | TE-A02 | Short-sale-constrained overpricing in technology stocks | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-60 trading days | high | 4 | 2 | 3 | 3 | 3 | 2 |
-| 14 | TE-A08 | Index reconstitution flow in technology stocks |  | prices_and_edgar | relative_value | + | 5-30 trading days | medium | 4 | 2 | 3 | 2 | 3 | 3 |
-| 15 | TE-A05 | Customer-to-supplier price lead-lag | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 5-40 trading days | medium | 4 | 2 | 2 | 2 | 3 | 2 |
-| 16 | TE-C02 | Revenue surprise in technology firms | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 2 | 3 | 4 | 2 | 3 |
-| 17 | TE-A03 | Peer-relative consensus revisions | SF-REVISIONS | needs_unavailable_history | relative_value | + | 20-60 trading days | medium | 4 | 2 | 3 | 3 | 2 | 2 |
-| 18 | TE-F01 | Discount-rate shocks and equity duration |  | needs_unavailable_history | relative_value | - | 5-60 trading days | medium | 4 | 4 | 3 | 3 | 2 | 2 |
-| 19 | TE-D04 | Customer-industry conditions and vertical software vendors |  | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 2 | 2 | 2 | 4 | 2 |
-| 20 | TE-B02 | Implied growth versus historical base rates | SF-VALUATION | needs_unavailable_history | relative_value | - | 120-500 trading days | low | 3 | 2 | 3 | 3 | 3 | 2 |
-| 21 | TE-B03 | Inventory and margin cycle analogues | SF-ANALOGUES | needs_unavailable_history | relative_value | - | 60-250 trading days | low | 3 | 3 | 3 | 3 | 3 | 2 |
-| 22 | TE-F05 | Currency moves and international revenue exposure |  | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 3 | 3 | 3 |
-| 23 | TE-F06 | Volatility regimes and crowding unwinds |  | needs_unavailable_history | directional | - | 5-60 trading days | medium | 3 | 2 | 2 | 2 | 3 | 2 |
-| 24 | TE-C04 | Analyst revision breadth | SF-REVISIONS | needs_unavailable_history | directional | + | 20-60 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
-| 25 | TE-C05 | Analyst disagreement under short-sale constraints | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
-| 26 | TE-A04 | Fundamentals-implied valuation residual within peers | SF-VALUATION | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 2 | 3 | 3 | 2 | 3 |
-| 27 | TE-F02 | Credit conditions and financing-dependent technology |  | prices_and_edgar | relative_value | - | 20-120 trading days | medium | 3 | 4 | 3 | 3 | 2 | 2 |
-| 28 | TE-F04 | Semiconductor and industrial cycle rotation |  | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 3 | 3 | 3 | 2 | 2 |
-| 29 | TE-F03 | Energy costs and data-centre-intensive firms |  | prices_and_edgar_text | relative_value | - | 20-120 trading days | medium | 2 | 3 | 3 | 3 | 3 | 2 |
-| 30 | TE-D02 | Cloud and AI compute demand diffusion to infrastructure suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 1 | 2 | 2 | 4 | 1 |
-| 31 | TE-C03 | Management guidance surprise | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 1 | 2 | 3 | 3 | 2 |
-| 32 | TE-B04 | Business-model transition analogues | SF-ANALOGUES | needs_unavailable_history | directional | + | 120-500 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
-| 33 | TE-D05 | Data-centre build-out diffusion to power and thermal suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
-| 34 | TE-C06 | Forward margin revisions | SF-REVISIONS | needs_unavailable_history | directional | + | 20-120 trading days | medium | 3 | 1 | 2 | 3 | 3 | 2 |
-| 35 | TE-D06 | End-device product cycles and component suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 1 | 2 | 2 | 3 | 1 |
-| 36 | TE-C07 | Earnings-call language |  | needs_unavailable_history | directional | + | 5-60 trading days | medium | 3 | 1 | 1 | 2 | 3 | 1 |
-| 37 | TE-B01 | Growth-stage trajectory analogues | SF-ANALOGUES | prices_and_edgar | directional | + | 120-500 trading days | low | 2 | 2 | 2 | 2 | 4 | 1 |
-| 38 | TE-B05 | Thematic episode analogues | SF-ANALOGUES | prices_and_edgar_text | directional | - | 60-500 trading days | low | 2 | 3 | 2 | 2 | 4 | 1 |
+| 5 | TE-E04 | Profitability and earnings quality |  | prices_and_edgar | directional | + | 60-250 trading days | low | 4 | 3 | 4 | 4 | 1 | 3 |
+| 6 | TE-E07 | Cash runway and balance-sheet strength | SF-FINANCING | prices_and_edgar | directional | + | 60-250 trading days | medium | 3 | 3 | 4 | 4 | 2 | 3 |
+| 7 | TE-A01 | Peer-spread reversion within technology sub-industries | SF-REVERSAL | prices_and_edgar | relative_value | - | 3-20 trading days | high | 3 | 4 | 4 | 3 | 2 | 3 |
+| 8 | TE-A07 | Residual (idiosyncratic) momentum | SF-MOMENTUM | prices_and_edgar | relative_value | + | 20-120 trading days | medium | 3 | 3 | 4 | 3 | 2 | 4 |
+| 9 | TE-E06 | Intangible-adjusted value | SF-VALUATION | prices_and_edgar | directional | + | 120-500 trading days | low | 3 | 3 | 3 | 3 | 2 | 3 |
+| 10 | TE-A08 | Index reconstitution flow in technology stocks |  | prices_and_edgar | relative_value | + | 5-30 trading days | medium | 4 | 2 | 3 | 2 | 3 | 3 |
+| 11 | TE-F01 | Discount-rate shocks and equity duration |  | prices_and_edgar | relative_value | - | 5-60 trading days | medium | 4 | 4 | 3 | 3 | 2 | 2 |
+| 12 | TE-F02 | Credit conditions and financing-dependent technology | SF-FINANCING | prices_and_edgar | relative_value | - | 20-120 trading days | medium | 3 | 4 | 3 | 3 | 2 | 2 |
+| 13 | TE-B01 | Growth-stage trajectory analogues | SF-ANALOGUES | prices_and_edgar | directional | + | 120-500 trading days | low | 2 | 2 | 2 | 2 | 4 | 1 |
+| 14 | TE-F03 | Energy costs and data-centre-intensive firms |  | prices_and_edgar_text | relative_value | - | 20-120 trading days | medium | 2 | 3 | 3 | 3 | 3 | 2 |
+| 15 | TE-B05 | Thematic episode analogues | SF-ANALOGUES | prices_and_edgar_text | directional | - | 60-500 trading days | low | 2 | 3 | 2 | 2 | 4 | 1 |
+| 16 | TE-C01 | Post-earnings-announcement drift | SF-EARNINGS-SURPRISE | needs_unavailable_history | relative_value | + | 5-60 trading days | medium | 4 | 3 | 4 | 4 | 1 | 3 |
+| 17 | TE-A06 | Parent-subsidiary and carve-out stub mispricing |  | needs_unavailable_history | relative_value | + | 60-500 trading days | medium | 4 | 2 | 2 | 2 | 4 | 3 |
+| 18 | TE-D01 | Foundry and chipmaker capex diffusion to equipment suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 2 | 2 | 2 | 4 | 2 |
+| 19 | TE-A02 | Short-sale-constrained overpricing in technology stocks | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-60 trading days | high | 4 | 2 | 3 | 3 | 3 | 2 |
+| 20 | TE-A05 | Customer-to-supplier price lead-lag | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 5-40 trading days | medium | 4 | 2 | 2 | 2 | 3 | 2 |
+| 21 | TE-C02 | Revenue surprise in technology firms | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 2 | 3 | 4 | 2 | 3 |
+| 22 | TE-A03 | Peer-relative consensus revisions | SF-REVISIONS | needs_unavailable_history | relative_value | + | 20-60 trading days | medium | 4 | 2 | 3 | 3 | 2 | 2 |
+| 23 | TE-D04 | Customer-industry conditions and vertical software vendors |  | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 2 | 2 | 2 | 4 | 2 |
+| 24 | TE-B02 | Implied growth versus historical base rates | SF-VALUATION | needs_unavailable_history | relative_value | - | 120-500 trading days | low | 3 | 2 | 3 | 3 | 3 | 2 |
+| 25 | TE-B03 | Inventory and margin cycle analogues | SF-SEMI-CYCLE | needs_unavailable_history | relative_value | - | 60-250 trading days | low | 3 | 3 | 3 | 3 | 3 | 2 |
+| 26 | TE-F05 | Currency moves and international revenue exposure |  | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 3 | 3 | 3 |
+| 27 | TE-F06 | Volatility regimes and crowding unwinds |  | needs_unavailable_history | directional | - | 5-60 trading days | medium | 3 | 2 | 2 | 2 | 3 | 2 |
+| 28 | TE-C04 | Analyst revision breadth | SF-REVISIONS | needs_unavailable_history | directional | + | 20-60 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
+| 29 | TE-C05 | Analyst disagreement under short-sale constraints | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
+| 30 | TE-A04 | Fundamentals-implied valuation residual within peers | SF-VALUATION | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 2 | 3 | 3 | 2 | 3 |
+| 31 | TE-F04 | Semiconductor and industrial cycle rotation | SF-SEMI-CYCLE | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 3 | 3 | 3 | 2 | 2 |
+| 32 | TE-D02 | Cloud and AI compute demand diffusion to infrastructure suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 1 | 2 | 2 | 4 | 1 |
+| 33 | TE-C03 | Management guidance surprise | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 1 | 2 | 3 | 3 | 2 |
+| 34 | TE-B04 | Business-model transition analogues | SF-ANALOGUES | needs_unavailable_history | directional | + | 120-500 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
+| 35 | TE-D05 | Data-centre build-out diffusion to power and thermal suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
+| 36 | TE-C06 | Forward margin revisions | SF-REVISIONS | needs_unavailable_history | directional | + | 20-120 trading days | medium | 3 | 1 | 2 | 3 | 3 | 2 |
+| 37 | TE-D06 | End-device product cycles and component suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 1 | 2 | 2 | 3 | 1 |
+| 38 | TE-C07 | Earnings-call language |  | needs_unavailable_history | directional | + | 5-60 trading days | medium | 3 | 1 | 1 | 2 | 3 | 1 |
 | 39 | TE-D03 | Security-incident diffusion to cybersecurity vendors |  | needs_unavailable_history | directional | + | 60-250 trading days | low | 2 | 1 | 2 | 2 | 4 | 1 |
 
 ## Shared hypothesis families
 
-Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts), but if frozen they are registered as hypotheses of one Manhattan family (or linked by `parent_family`) and counted together for multiple testing: their evaluations are not independent evidence.
+Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts). **This grouping is declared, not enforced:** nothing in freezing or attempt accounting reads it today. If frozen, each group should be registered as one Manhattan family (or linked by `parent_family`) and counted together for multiple testing; that enforcement is part of a future freeze (Ethan's).
 
 | shared family | members |
 |---|---|
-| SF-ANALOGUES | TE-B01, TE-B03, TE-B04, TE-B05 |
+| SF-ANALOGUES | TE-B01, TE-B04, TE-B05 |
 | SF-EARNINGS-SURPRISE | TE-C01, TE-C02, TE-C03 |
+| SF-FINANCING | TE-E07, TE-F02 |
 | SF-MOMENTUM | TE-A07, TE-E01, TE-E02 |
 | SF-REVERSAL | TE-A01, TE-E03 |
 | SF-REVISIONS | TE-A03, TE-C04, TE-C06 |
+| SF-SEMI-CYCLE | TE-B03, TE-F04 |
 | SF-SHORT-CONSTRAINTS | TE-A02, TE-C05 |
 | SF-SUPPLY-CHAIN | TE-A05, TE-D01, TE-D02, TE-D05, TE-D06 |
 | SF-VALUATION | TE-A04, TE-B02, TE-E06 |
@@ -79,9 +83,9 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 | tier | families | blocked by |
 |---|---|---|
-| prices_and_edgar | 12: TE-A01, TE-A07, TE-A08, TE-B01, TE-E01, TE-E02, TE-E03, TE-E04, TE-E05, TE-E06, TE-E07, TE-F02 |  |
+| prices_and_edgar | 13: TE-A01, TE-A07, TE-A08, TE-B01, TE-E01, TE-E02, TE-E03, TE-E04, TE-E05, TE-E06, TE-E07, TE-F01, TE-F02 |  |
 | prices_and_edgar_text | 2: TE-B05, TE-F03 |  |
-| needs_unavailable_history | 25: TE-A02, TE-A03, TE-A04, TE-A05, TE-A06, TE-B02, TE-B03, TE-B04, TE-C01, TE-C02, TE-C03, TE-C04, TE-C05, TE-C06, TE-C07, TE-D01, TE-D02, TE-D03, TE-D04, TE-D05, TE-D06, TE-F01, TE-F04, TE-F05, TE-F06 | analyst_estimates_pit, borrow_availability, cloud_capex, developer_adoption, earnings_call_text, options_implied_vol, product_adoption, product_releases, relationship_graph, semiconductor_supply_chain |
+| needs_unavailable_history | 24: TE-A02, TE-A03, TE-A04, TE-A05, TE-A06, TE-B02, TE-B03, TE-B04, TE-C01, TE-C02, TE-C03, TE-C04, TE-C05, TE-C06, TE-C07, TE-D01, TE-D02, TE-D03, TE-D04, TE-D05, TE-D06, TE-F04, TE-F05, TE-F06 | analyst_estimates_pit, borrow_availability, cloud_capex, developer_adoption, earnings_call_text, options_implied_vol, product_adoption, product_releases, relationship_graph, semiconductor_supply_chain |
 
 ## Families
 
@@ -407,7 +411,7 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 ### TE-B03 Inventory and margin cycle analogues
 
-*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation medium; data tier needs_unavailable_history (blocked by semiconductor_supply_chain); shared family SF-ANALOGUES.*
+*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation medium; data tier needs_unavailable_history (blocked by semiconductor_supply_chain); shared family SF-SEMI-CYCLE.*
 
 **Rationale.** Hardware and semiconductor firms go through inventory build-ups that precede margin compression. Investors focusing on current revenue growth tend to miss the pattern. A firm whose inventory, receivables and gross-margin trajectory resembles past pre-downturn trajectories should underperform peers.
 
@@ -1111,7 +1115,7 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 ### TE-E07 Cash runway and balance-sheet strength
 
-*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low; data tier prices_and_edgar.*
+*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low; data tier prices_and_edgar; shared family SF-FINANCING.*
 
 **Rationale.** Cash-burning technology firms with short runway face dilution or distress, and investors may underweight these costs. Longer runway and stronger balance sheets should predict higher returns relative to firms that will need to raise capital soon.
 
@@ -1143,7 +1147,7 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 ### TE-F01 Discount-rate shocks and equity duration
 
-*F_macro, relative_value, mechanism class behavioural, sign -, horizon 5-60 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit).*
+*F_macro, relative_value, mechanism class behavioural, sign -, horizon 5-60 trading days, implementation medium; data tier prices_and_edgar.*
 
 **Rationale.** Long-duration technology equities, whose cash flows lie far in the future, are more sensitive to real yields and policy-rate expectations. If benchmark-constrained investors adjust slowly, real-yield and policy-path shocks may be reflected gradually in the relative prices of long- versus short-duration firms.
 
@@ -1151,11 +1155,13 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 **Universe.** US-listed technology companies sorted by an equity-duration proxy
 
-**Data.** security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit, analyst_estimates_pit
+**Data.** security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, macro_pit, fundamentals_pit
 
 **Availability risks.** (1) Duration proxies built from forecast cash flows inherit consensus backfill. (2) Policy-expectation series must be taken as observed in markets at the time, not from revised data. (3) Few independent rate regimes; strong multiple-testing risk across macro conditioning variables.
 
 **Signal concept.** Recent change in real yields or market-implied policy path, interacted with each firm's duration proxy.
+
+**Optional data (variants only; not in the tier).** analyst_estimates_pit
 
 **Baselines.** same-day response to rate changes; value and growth factors
 
@@ -1175,7 +1181,7 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 ### TE-F02 Credit conditions and financing-dependent technology
 
-*F_macro, relative_value, mechanism class risk_premium, sign -, horizon 20-120 trading days, implementation medium; data tier prices_and_edgar.*
+*F_macro, relative_value, mechanism class risk_premium, sign -, horizon 20-120 trading days, implementation medium; data tier prices_and_edgar; shared family SF-FINANCING.*
 
 **Rationale.** Unprofitable, cash-burning technology firms depend on equity and convertible issuance to fund operations. When credit spreads widen or lending standards tighten, their cost of external finance rises and the probability of dilutive or distressed raises increases. If investors price this funding channel slowly, financing-dependent firms should underperform self-funding peers after credit tightening.
 
@@ -1239,7 +1245,7 @@ Caveat: relative-value families in the first two tiers do not list borrow histor
 
 ### TE-F04 Semiconductor and industrial cycle rotation
 
-*F_macro, relative_value, mechanism class informational, sign +, horizon 60-250 trading days, implementation low; data tier needs_unavailable_history (blocked by semiconductor_supply_chain).*
+*F_macro, relative_value, mechanism class informational, sign +, horizon 60-250 trading days, implementation low; data tier needs_unavailable_history (blocked by semiconductor_supply_chain); shared family SF-SEMI-CYCLE.*
 
 **Rationale.** Semiconductor demand is cyclical, driven by inventory swings at customers and tied to the broader industrial cycle, while software revenue is more recurring. Public leading indicators (manufacturing new orders, inventory-to-shipment ratios, semiconductor billings) turn before semiconductor earnings. If investors extrapolate recent sector earnings, improving indicators should predict semiconductors outperforming software.
 

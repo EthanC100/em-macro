@@ -13,7 +13,10 @@ age), ``drop`` (coverage of that period or company stops: the broker leaves the 
 
 **Consensus at a moment** ``at`` (timezone-aware) uses, per broker, its latest estimate whose **effective time** is
 at or before ``at``: the effective time is ``max(published, captured)`` when the vendor's capture time is known, so a
-revision a vendor backfilled later — a "late revision" — is not in the consensus at ``at``. Estimates older than
+revision a vendor backfilled later — a "late revision" — is not in the consensus at ``at``. **An estimate without a
+capture time is unverifiable (S8 R4):** its publication time may have been reconstructed by the vendor. It is still
+usable for description, but every consensus it enters is flagged ``reconstructed`` and is never eligible as
+historical evidence (``Consensus.evidence_eligible``); ``require_capture=True`` refuses it at the door. Estimates older than
 ``max_age_days`` are stale and left out. A vendor history without capture times can be refused outright
 (``require_capture=True``): reconstructed consensus histories are a known source of look-ahead.
 
@@ -72,6 +75,12 @@ class Consensus:
     std: float
     brokers: tuple
     currency: str | None
+    reconstructed: bool = False          # a contributing estimate has no vendor capture time (S8 R4)
+
+    @property
+    def evidence_eligible(self) -> bool:
+        """A consensus with an estimate of unverifiable timing can never be historical evidence."""
+        return not self.reconstructed
 
 
 class EstimateBook:
@@ -112,7 +121,12 @@ class EstimateBook:
         v = np.array([e.value for e in live], dtype=float)
         return Consensus(company_id, metric, period_end, at, int(v.size), float(v.mean()), float(np.median(v)),
                          float(v.std(ddof=1)) if v.size > 1 else 0.0, tuple(sorted(e.broker_id for e in live)),
-                         curs.pop())
+                         curs.pop(), reconstructed=any(e.captured is None for e in live))
+
+    @property
+    def reconstructed(self) -> bool:
+        """True when any estimate in the book lacks a vendor capture time: its history may be backfilled."""
+        return any(e.captured is None for lst in self._est.values() for e in lst)
 
     def revisions(self, company_id: str, metric: str, period_end: date, start: datetime, end: datetime) -> dict:
         """Up and down revisions with effective time in ``(start, end]``, against each broker's estimate in force

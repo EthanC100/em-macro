@@ -52,7 +52,7 @@ def cointegrated_pair(seed: int = 0, n: int = 750, *, beta: float = 1.3, phi: fl
         y = 0.2 + np.where(np.arange(n) < break_at, beta * x, beta * x0 + new_beta * (x - x0)) + u
     else:
         y = 0.2 + b * x + u
-    days = np.array([date(2004, 1, 1) + timedelta(days=i) for i in range(n)], dtype=object)
+    days = _session_days(n)
     return days, y, x
 
 
@@ -62,8 +62,16 @@ def correlated_walks(seed: int = 0, n: int = 750, rho: float = 0.8, sd: float = 
     z1, z2 = rng.normal(0, sd, n), rng.normal(0, sd, n)
     a = np.cumsum(z1)
     b = np.cumsum(rho * z1 + np.sqrt(1 - rho ** 2) * z2)
-    days = np.array([date(2004, 1, 1) + timedelta(days=i) for i in range(n)], dtype=object)
+    days = _session_days(n)
     return days, 3.0 + a, 3.0 + b
+
+
+def _session_days(n: int) -> np.ndarray:
+    """The first ``n`` sessions of the synthetic calendar from 2004-01-02 (exchange sessions, not calendar days)."""
+    days = calendar().sessions_between(date(2004, 1, 2), date(2008, 12, 31))
+    if n > len(days):
+        raise ValueError(f"the synthetic calendar has {len(days)} sessions, not {n}")
+    return np.array(days[:n], dtype=object)
 
 
 def _ts(cal: MarketCalendar, d: date, hh: int = 7, mm: int = 0) -> datetime:
@@ -123,10 +131,10 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
         if sid == "S01":                                  # 2:1 split ex 2006-03-01: raw closes halve
             sp = date(2006, 3, 1)
             closes[days >= sp] /= 2.0
-            book_actions = [CorporateAction(sid, "split", sp, date(2006, 1, 20), ratio=2.0)]
+            book_actions = [CorporateAction(sid, "split", sp, date(2006, 1, 20), ratio=2.0, captured=date(2006, 1, 20))]
         elif sid == "S03":                                # special dividend
             book_actions = [CorporateAction(sid, "special_dividend", date(2007, 5, 15), date(2007, 4, 20),
-                                            amount=0.5, currency="USD")]
+                                            amount=0.5, currency="USD", captured=date(2007, 4, 20))]
             k = days >= date(2007, 5, 15)
             closes[k] *= 1 - 0.5 / price[np.argmax(k) - 1]  # raw closes drop by the distribution on the ex-date
         else:
