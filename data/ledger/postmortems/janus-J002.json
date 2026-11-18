@@ -1,0 +1,27 @@
+{
+ "book": "janus",
+ "id": "J002",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-17T23:14:08+00:00",
+ "postmortem": {
+  "thesis_right": "no",
+  "skill_or_luck": "mixed",
+  "what_happened": "J002 went long the 10y gilt at 5.21% on 10 Nov at a stated 50% probability, sized only to meet the old two-position floor. Over the next three sessions the 10y rose about 13bp to 5.34%: a hot US CPI on 10 Nov lifted Fed hike pricing, oil rebounded on 12 Nov when Trump said the US needs no Iran deal, and markets added to BoE hike bets, taking the 2y gilt above 5%. The first C08 review closed it on 13 Nov for a net loss of 0.21% of the account, before its 5.40% stop.",
+  "assessment": "The thesis (falling oil keeps pulling gilt yields lower) was already priced after a 33bp rally in a month, and The Opposition named the exact risks that hit it: US CPI spillover, an oil rebound and BoE repricing. The decision was weak as a process: it was a 50% view, so it had no expected edge and was taken only to meet a rule, and its change-of-mind level (5.30%) disagreed with its stop (5.40%). The short holding period means the loss is mostly noise, but taking a position with no edge was a choice, not luck; C08 has since removed both the position floor and the discretion.",
+  "do_differently": "1) Do not open a position with no stated edge just to meet a count rule; flag the rule instead (C08 has now done this). 2) When the base level follows a large one-month rally, treat mean reversion and catalysts the Opposition names (US CPI, oil headlines) as reasons to stay at or across 50. 3) Keep the stop and the change-of-mind level consistent.",
+  "sources": [
+   {
+    "title": "Trading Economics: UK Gilt Yields Climb on Expectations of Further BoE Rate Hikes",
+    "url": "https://tradingeconomics.com/united-kingdom/government-bond-yield/news/601112"
+   },
+   {
+    "title": "Newsquawk: money markets assign 10% probability of a 50bp Fed hike after hot US CPI",
+    "url": "https://www.newsquawk.com/headlines/market-update-money-markets-now-assign-a-10-probability-of-a-50bps-fed-hike-in-december-following-hot-us-cpi-and-commentary-from-fed-governor-waller-this-morning"
+   },
+   {
+    "title": "Khaleej Times: Global oil price gains 3% as US strikes on Iran add to peace deal uncertainty",
+    "url": "https://www.khaleejtimes.com/business/energy/global-oil-price-gains-3-as-us-military-strikes-on-iran-add-to-peace-deal-uncertainty"
+   }
+  ]
+ }
+}

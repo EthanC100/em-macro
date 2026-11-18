@@ -207,7 +207,7 @@ def source_definition(source: Source) -> dict:
     """Declared replay configuration, not proof of provider release history."""
     validate_capture_source(source)
     cal = TM.calendar(source.calendar)
-    return {"schema_version": 1, "source": asdict(source),
+    return {"schema_version": 2, "source": asdict(source),
             "calendar": {"name": cal.name, "tz": cal.tz, "close": cal.close.isoformat(),
                          "publish_sessions": cal.publish_sessions,
                          "publish_time": cal.publish_time.isoformat() if cal.publish_time else None}}
@@ -280,8 +280,15 @@ def first_seen(ledger: ST.Store, source_ids) -> FirstSeen:
         if tuple(rec["key"]) != ("capture", src.id, payload["sha256"]) \
                 or rec["provenance"].get("source") != src.id:
             raise ST.StoreError("capture source identities conflict")
-        if "source_definition" in payload and payload["source_definition"] != source_definition(src):
-            raise ST.StoreError("capture source definition differs from replay configuration")
+        if "source_definition" in payload:
+            recorded = payload["source_definition"]
+            version = recorded.get("schema_version") if isinstance(recorded, dict) else None
+            expected = source_definition(src)
+            if type(version) is not int or version != expected["schema_version"]:
+                raise ST.StoreError(f"capture schema version {version!r}; expected schema version "
+                                    f"{expected['schema_version']}")
+            if recorded != expected:
+                raise ST.StoreError("capture source definition differs from replay configuration")
         n += 1
         cal = TM.calendar(src.calendar)
         retrieved = TM.parse_time(rec["provenance"]["retrieved_utc"])

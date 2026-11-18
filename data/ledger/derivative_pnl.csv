@@ -5,3 +5,4 @@ date,id,pnl_pct,basis,mark_date,mark_source,proxy,can_act,note
 2026-11-11,D003,-0.5832,model estimate,2026-11-11,"Databento GLBX.MDP3 statistics, final settlement (NYMEX BZH7)",yes,yes,
 2026-11-12,D003,-0.307,model estimate,2026-11-12,"Databento GLBX.MDP3 statistics, final settlement (NYMEX BZH7)",yes,yes,
 2026-11-13,D003,-0.4068,model estimate,2026-11-13,"Databento GLBX.MDP3 statistics, final settlement (NYMEX BZH7)",yes,yes,
+2026-11-16,D003,-0.7584,model estimate,2026-11-16,"Databento GLBX.MDP3 statistics, final settlement (NYMEX BZH7)",yes,yes,

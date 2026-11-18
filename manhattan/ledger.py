@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from . import spec as S
 GENESIS = "0" * 64
 TYPES = ("batch_freeze", "critic_review", "evaluation_started", "evaluation", "rerun", "nondeterminism",
          "screening_decision", "eprocess_update", "tier_change", "dormancy", "window_retired", "correction",
-         "run_summary")
+         "run_summary", "attempt_failed", "attempt_aborted")
 FIELDS = ("seq", "ts_utc", "type", "writer", "protocol", "payload", "prev_hash")
 ROLES = ("exploration", "reserve", "forward")
 # keys that carry an outcome: never written to the public index
@@ -76,30 +77,70 @@ def read(path: Path) -> list[dict]:
 
 
 def verify(path: Path, anchor: str | None = None) -> list[str]:
-    """Problems found in a ledger file (empty when the chain is intact and, if given, ends at ``anchor``)."""
+    """Problems found in a ledger file; preserve the legacy optional-anchor API."""
+    try:
+        snapshot = path.read_bytes()
+    except FileNotFoundError:
+        snapshot = b""
+    return verify_snapshot(snapshot, anchor=anchor)[1]
+
+
+def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[dict], list[str]]:
+    """Parse and verify one immutable byte snapshot; return its records and problems.
+
+    Callers must process these returned records, rather than reopen the file.
+    ``verify`` retains its historic optional-anchor API.
+    """
     errs: list[str] = []
     prev = GENESIS
     recs = []
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines() if path.exists() else [], 1):
+    try:
+        lines = snapshot.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return [], ["ledger is not UTF-8"]
+    for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
-            return errs + [f"line {n}: not JSON"]
+            return recs, errs + [f"line {n}: not JSON"]
+        if not isinstance(rec, dict):
+            return recs, errs + [f"line {n}: record is not an object"]
         recs.append(rec)
         if rec.get("seq") != len(recs):
-            return errs + [f"line {n}: seq is {rec.get('seq')}, expected {len(recs)} (a record was removed, added or moved)"]
+            return recs, errs + [f"line {n}: seq is {rec.get('seq')}, expected {len(recs)} (a record was removed, added or moved)"]
         if rec.get("prev_hash") != prev:
-            return errs + [f"record {rec['seq']}: prev_hash does not match the record before it"]
+            return recs, errs + [f"record {rec['seq']}: prev_hash does not match the record before it"]
         if any(k not in rec for k in FIELDS) or rec.get("hash") != record_hash(rec):
-            return errs + [f"record {rec['seq']}: hash does not match its content (the record was edited)"]
+            return recs, errs + [f"record {rec['seq']}: hash does not match its content (the record was edited)"]
         if rec["type"] not in TYPES:
             errs.append(f"record {rec['seq']}: unknown type {rec['type']}")
         prev = rec["hash"]
     if anchor is not None and prev != anchor:
         errs.append(f"head hash is {prev}, but the anchor says {anchor} (records are missing or the file was replaced)")
-    return errs
+    return recs, errs
+
+
+def require_retry_code_identity(version) -> None:
+    """Retries require a known Git commit and an engine or Git-tree content digest.
+
+    Non-retry legacy evaluation APIs continue to accept their historical metadata.
+    This validates identity syntax, not authenticity of the claimed source code.
+    """
+    def git_hash(value):
+        return (isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) is not None
+                and set(value) != {"0"})
+
+    if not isinstance(version, dict) or not git_hash(version.get("commit")):
+        raise LedgerError("retry requires a known code identity: Git commit and content digest")
+    if not any(k in version for k in ("tree", "engine_sha256")):
+        raise LedgerError("retry requires a known code identity: content digest missing")
+    if ("tree" in version and not git_hash(version["tree"])) or (
+            "engine_sha256" in version and (not isinstance(version["engine_sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", version["engine_sha256"]) is None
+                or set(version["engine_sha256"]) == {"0"})):
+        raise LedgerError("retry requires a known code identity: malformed content digest")
 
 
 class Ledger:
@@ -161,15 +202,48 @@ class Ledger:
     def _evaluations(self) -> list[dict]:
         return [r for r in self._recs if r["type"] in ("evaluation", "rerun", "nondeterminism")]
 
-    def start_evaluation(self, payload: dict) -> dict:
-        """Written before a designated evaluation runs; a start with no finish is reported by ``unfinished``."""
-        return self.append("evaluation_started", {k: payload[k] for k in
-                                                  ("executable", "family", "batch", "spec_hash", "data_hash", "window")})
+    def start_evaluation(self, payload: dict, *, supersedes: str | None = None) -> dict:
+        """Register an execution; the returned start record's hash is its attempt ID.
+
+        Retries name an unfinished start and preserve it in the denominator.
+        This API does not authorize a PIT read.
+        """
+        fields = ("executable", "family", "batch", "spec_hash", "data_hash", "window")
+        p = {k: payload[k] for k in fields}
+        p.update({k: payload[k] for k in ("variant", "hypothesis", "role", "channel", "code_version") if k in payload})
+        if supersedes is not None:
+            old = self.active_attempt(supersedes)
+            require_retry_code_identity(p.get("code_version"))
+            require_retry_code_identity(old["payload"].get("code_version"))
+            if old["payload"] != p:
+                # Only the retry link itself may differ across repeated interruptions.
+                prior = {k: v for k, v in old["payload"].items() if k != "supersedes"}
+                if prior != p:
+                    raise LedgerError("retry identity differs from interrupted attempt")
+            p["supersedes"] = supersedes
+        return self.append("evaluation_started", p)
+
+    def active_attempt(self, attempt_id: str) -> dict:
+        starts = [r for r in self.records("evaluation_started") if r["hash"] == attempt_id]
+        if len(starts) != 1 or starts[0] not in self.unfinished():
+            raise LedgerError("attempt is not registered and unfinished")
+        if any(r["payload"].get("supersedes") == attempt_id for r in self.records("evaluation_started")):
+            raise LedgerError("attempt has been superseded")
+        return starts[0]
+
+    def end_attempt(self, attempt_id: str, *, status: str, reason: str) -> dict:
+        """Safe classified failure/abortion only; never exception text or outcomes."""
+        if status not in ("failed", "aborted"):
+            raise LedgerError("terminal status must be failed or aborted")
+        if reason not in ("execution_error", "data_unavailable", "interrupted", "cancelled", "validation_error"):
+            raise LedgerError("unknown attempt reason classification")
+        self.active_attempt(attempt_id)
+        return self.append("attempt_" + status, {"attempt_id": attempt_id, "reason": reason})
 
     def record_evaluation(self, *, executable: str, variant: str, hypothesis: str, family: str, batch: str,
                           channel: str, role: str, window: dict, designated: bool, spec_hash: str, data_hash: str,
                           code_version: dict, result_hash: str, n_obs: int, summary: dict, seed: int,
-                          reconstructed: bool = False) -> dict:
+                          reconstructed: bool = False, attempt_id: str | None = None) -> dict:
         """Record one evaluation, deciding by its key whether it is a new look, a rerun or a nondeterminism."""
         if role not in ROLES or channel not in S.CHANNELS:
             raise LedgerError("role must be exploration, reserve or forward; channel blind or adaptive")
@@ -179,6 +253,19 @@ class Ledger:
                    "result_hash": result_hash, "n_obs": n_obs, "summary": summary, "seed": seed,
                    "reconstructed": bool(reconstructed),
                    "evidential_weight": evidential_weight(channel, role, designated, reconstructed)}
+        if attempt_id is None:
+            candidates = [r for r in self.unfinished() if self.key(r["payload"]) == self.key(payload)
+                          and not any(t["payload"].get("supersedes") == r["hash"]
+                                      for t in self.records("evaluation_started"))]
+            if len(candidates) > 1:
+                raise LedgerError("ambiguous attempt: supply attempt_id")
+            if candidates:
+                attempt_id = candidates[0]["hash"]
+        if attempt_id is not None:
+            start = self.active_attempt(attempt_id)
+            if any(payload.get(k) != v for k, v in start["payload"].items() if k != "supersedes"):
+                raise LedgerError("completion identity differs from attempt")
+            payload["attempt_id"] = attempt_id
         same_key = [r for r in self._evaluations() if self.key(r["payload"]) == self.key(payload)]
         if same_key:
             first = same_key[0]
@@ -199,8 +286,14 @@ class Ledger:
         return len({self.key(r["payload"]) for r in self._evaluations()})
 
     def unfinished(self) -> list[dict]:
-        done = {self.key(r["payload"]) for r in self._evaluations()}
-        return [r for r in self.records("evaluation_started") if self.key(r["payload"]) not in done]
+        done = {r["payload"].get("attempt_id") for r in self._evaluations()
+                + self.records("attempt_failed") + self.records("attempt_aborted")}
+        # Compatibility for historic completions without explicit linkage only.
+        legacy = [r for r in self._evaluations() if "attempt_id" not in r["payload"]]
+        superseded = {r["payload"].get("supersedes") for r in self.records("evaluation_started")}
+        return [r for r in self.records("evaluation_started")
+                if r["hash"] not in done and (r["hash"] in superseded or not any(t["seq"] > r["seq"] and
+                    self.key(t["payload"]) == self.key(r["payload"]) for t in legacy))]
 
     def suspended_families(self) -> set[str]:
         """Families with a nondeterminism on record: no tier change until the cause is found."""
