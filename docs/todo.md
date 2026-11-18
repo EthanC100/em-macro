@@ -29,7 +29,8 @@ Edit it by hand; the next build picks it up.
 - [x] The Opposition (automated for every new Janus position; daily briefings still in the Claude app)
 - [x] Janus in Claude Code sessions (quick check hourly at :15 as a scheduled task, daily review after the US close; post-mortems in the daily review)
 - [x] Create the Janus quick-check scheduled task at :15 (hourly; its checks are in the Janus records from 17 Nov 2026)
-- [ ] Create the remaining scheduled tasks (Janus quick check at :45, Janus daily review, Ledger forecast resolver, Ledger monthly letters)
+- [x] Create the Janus daily-review scheduled task (about 23:07 UTC, after the US close; its runs are in the Janus records from 6 Nov 2026)
+- [ ] Create the remaining scheduled tasks (Janus quick check at :45, Ledger forecast resolver, Ledger monthly letters)
 - [ ] Delete the `ANTHROPIC_API_KEY` repository secret once the sessions-only branch is merged
 - [x] Stale-marks alert (`ledger-watchdog` and ledger-daily open "[ALERT] Ledger marks stale" after 2 days)
 
