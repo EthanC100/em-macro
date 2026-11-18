@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -76,30 +77,70 @@ def read(path: Path) -> list[dict]:
 
 
 def verify(path: Path, anchor: str | None = None) -> list[str]:
-    """Problems found in a ledger file (empty when the chain is intact and, if given, ends at ``anchor``)."""
+    """Problems found in a ledger file; preserve the legacy optional-anchor API."""
+    try:
+        snapshot = path.read_bytes()
+    except FileNotFoundError:
+        snapshot = b""
+    return verify_snapshot(snapshot, anchor=anchor)[1]
+
+
+def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[dict], list[str]]:
+    """Parse and verify one immutable byte snapshot; return its records and problems.
+
+    Callers must process these returned records, rather than reopen the file.
+    ``verify`` retains its historic optional-anchor API.
+    """
     errs: list[str] = []
     prev = GENESIS
     recs = []
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines() if path.exists() else [], 1):
+    try:
+        lines = snapshot.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return [], ["ledger is not UTF-8"]
+    for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
-            return errs + [f"line {n}: not JSON"]
+            return recs, errs + [f"line {n}: not JSON"]
+        if not isinstance(rec, dict):
+            return recs, errs + [f"line {n}: record is not an object"]
         recs.append(rec)
         if rec.get("seq") != len(recs):
-            return errs + [f"line {n}: seq is {rec.get('seq')}, expected {len(recs)} (a record was removed, added or moved)"]
+            return recs, errs + [f"line {n}: seq is {rec.get('seq')}, expected {len(recs)} (a record was removed, added or moved)"]
         if rec.get("prev_hash") != prev:
-            return errs + [f"record {rec['seq']}: prev_hash does not match the record before it"]
+            return recs, errs + [f"record {rec['seq']}: prev_hash does not match the record before it"]
         if any(k not in rec for k in FIELDS) or rec.get("hash") != record_hash(rec):
-            return errs + [f"record {rec['seq']}: hash does not match its content (the record was edited)"]
+            return recs, errs + [f"record {rec['seq']}: hash does not match its content (the record was edited)"]
         if rec["type"] not in TYPES:
             errs.append(f"record {rec['seq']}: unknown type {rec['type']}")
         prev = rec["hash"]
     if anchor is not None and prev != anchor:
         errs.append(f"head hash is {prev}, but the anchor says {anchor} (records are missing or the file was replaced)")
-    return errs
+    return recs, errs
+
+
+def require_retry_code_identity(version) -> None:
+    """Retries require a known Git commit and an engine or Git-tree content digest.
+
+    Non-retry legacy evaluation APIs continue to accept their historical metadata.
+    This validates identity syntax, not authenticity of the claimed source code.
+    """
+    def git_hash(value):
+        return (isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) is not None
+                and set(value) != {"0"})
+
+    if not isinstance(version, dict) or not git_hash(version.get("commit")):
+        raise LedgerError("retry requires a known code identity: Git commit and content digest")
+    if not any(k in version for k in ("tree", "engine_sha256")):
+        raise LedgerError("retry requires a known code identity: content digest missing")
+    if ("tree" in version and not git_hash(version["tree"])) or (
+            "engine_sha256" in version and (not isinstance(version["engine_sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", version["engine_sha256"]) is None
+                or set(version["engine_sha256"]) == {"0"})):
+        raise LedgerError("retry requires a known code identity: malformed content digest")
 
 
 class Ledger:
@@ -172,8 +213,8 @@ class Ledger:
         p.update({k: payload[k] for k in ("variant", "hypothesis", "role", "channel", "code_version") if k in payload})
         if supersedes is not None:
             old = self.active_attempt(supersedes)
-            if "code_version" not in p or "code_version" not in old["payload"]:
-                raise LedgerError("retry requires recorded code version")
+            require_retry_code_identity(p.get("code_version"))
+            require_retry_code_identity(old["payload"].get("code_version"))
             if old["payload"] != p:
                 # Only the retry link itself may differ across repeated interruptions.
                 prior = {k: v for k, v in old["payload"].items() if k != "supersedes"}

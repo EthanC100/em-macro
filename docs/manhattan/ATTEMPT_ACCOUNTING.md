@@ -125,3 +125,40 @@ The additional regression exercises that exact sequence.
 - Protected-path checks on all six paths and `git diff --check`: exit 0.
 
 These are local results. Remote CI status is reported separately on the draft PR.
+
+## Adversarial-review corrections
+
+Lifecycle reconciliation now captures the ledger once as immutable bytes. The
+shared `verify_snapshot` parser verifies that snapshot and supplies the exact
+records processed by reconciliation. Filesystem changes afterward cannot change
+that accounting result; the result describes the anchored snapshot, not a promise
+that the live file stays unchanged. A missing file fails closed.
+
+The reconciliation anchor must be a non-null, lowercase 64-character hexadecimal
+SHA-256 string. Omission raises a call error; malformed values raise `LedgerError`.
+The genesis anchor is allowed for an existing empty ledger. Callers remain
+responsible for retaining the anchor independently; syntax is not authenticity.
+The existing `verify(path, anchor=None)` API retains its optional-anchor behavior.
+
+Before counting evaluation/rerun/nondeterminism records as completed, reconciliation
+checks the required evaluation fields, nonempty identifiers, SHA-256 digest syntax, window structure,
+role/channel enums, metadata mappings, integer count/seed/weight and boolean flags.
+This is structural validation, not verification of private results or a new
+statistical decision rule. Legacy unlinked completions remain uncertified.
+
+Retries now require a known code identity on both starts: a full lowercase Git
+commit hash (40 or 64 hex characters), plus `tree` (40 or 64 hex) or
+`engine_sha256` (64 hex). Null, missing, abbreviated, unknown, zero sentinel and
+malformed identities fail closed in both creation and persisted reconciliation.
+Every supplied recognized digest must be valid, and exact identity matching still
+applies. Non-retry legacy writing APIs retain their existing metadata behavior.
+Tests use fabricated valid-format hashes only; no real data or code authentication
+is inferred from them.
+
+Correction validation: final lifecycle/schema/registry tests 165 passed, exit 0.
+The broader targeted PIT/engine/Q019 run passed 421 tests, exit 0, before the
+final digest-format regression additions. The single full-suite run on final code
+passed 1,972 tests with 131 skips and 248 warnings, exit 0, in 664.65 seconds.
+It used the existing offline wheelhouse and single-thread BLAS settings documented
+above. Protected-path, whitespace and pre-registration-hash checks passed, exit 0.
+Remote CI for the correction commit is reported separately on PR #80.
