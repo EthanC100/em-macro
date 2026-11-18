@@ -1,9 +1,10 @@
 # Evidence classification: module, integration contract and limits
 
-Module: `manhattan/evidence.py` (metadata schema `manhattan.evidence/2`). Tests: `tests/test_manhattan_evidence.py`
+Module: `manhattan/evidence.py` (metadata schema `manhattan.evidence/3`). Tests: `tests/test_manhattan_evidence.py`
 (synthetic fixtures only). Status: **a pure classifier, not wired into any runner, ledger or attempt path, and
-unable to authenticate anything today** (`TRUSTED_AUTHORITIES` is empty, so every classification is `unverified`).
-It changes no scientific rule, threshold, pre-registration, e-process or e-LOND code, and adds no statistical test.
+unable to authenticate anything today.** `TRUSTED_AUTHORITIES` is empty, so every classification is `unverified`. A
+clean-subprocess test pins that shipped value. The module changes no scientific rule, threshold, pre-registration,
+e-process or e-LOND code, and adds no statistical test.
 
 ## What it decides
 
@@ -11,135 +12,164 @@ Six axes, each decided separately and never inferred from another:
 
 | axis | values | decided from |
 |---|---|---|
-| provenance | `synthetic`, `historical_public`, `historical_licensed`, `captured_forward`, `unverified` | the closed metadata schema (source kind, vintage kind, capture block), with every required verifier result from a trusted authority and its facts equal to the metadata |
+| provenance | `synthetic`, `historical_public`, `historical_licensed`, `captured_forward`, `unverified` | the closed metadata schema (source kind, vintage kind, capture block); every required verifier result must come from a trusted authority, with facts equal to the metadata |
 | reconstruction | set of `backfilled`, `late`, `conservative_assumption` (`unknown` when unverified) | capture counts, monitoring start vs span, the publication contract's availability kind |
 | availability | `per_vintage_release`, `declared_daily_lag`, `first_seen_capture`, `conservative_assumption`, `generated`, `unknown` | the publication contract (`manhattan.availability.validate_source`) |
-| role | `exploration`, `reserve`, `forward`, `embargo` | **computed** with `manhattan.roles.role_of` on every day of the span, from the fence, the spec's freeze **and the spec's holding period**; a supplied label may only agree |
-| authorization | `exploration_open`, `reserve_designated_verified`, `forward_freeze_verified`, `unauthorized` | role, designation, `reserve.enabled` and the authoritative `runner_token` / `batch_freeze` results |
-| eligibility | `none`, `infrastructure_validation`, `descriptive`, `reserve_screening_candidate`, `forward_candidate` | the axes above; provenance can only disqualify |
+| role | `exploration`, `reserve`, `forward`, `embargo` | **computed** with `manhattan.roles.role_of` on every day of the span, from the fence, the freeze and the spec's holding period; a supplied label may only agree |
+| authorization | `exploration_open`, `reserve_designated_verified`, `forward_freeze_verified`, `unauthorized` | role, designation, `reserve.enabled` and the authoritative token, freeze and attempt results |
+| eligibility | `none`, `infrastructure_validation`, `descriptive`, `reserve_screening_candidate`, `forward_candidate` | the axes above; provenance and anchoring can only disqualify |
 
-Every result has `forward_elond_eligible = False`, `screening_eligible = False` and `promotion_authorized = False`;
-no input changes them. A *candidate* means only "not disqualified". `weight_ceiling` is the value of the unchanged
-`manhattan.ledger.evidential_weight` table (ARCHITECTURE 6.3) for a candidate and 0 otherwise; `cap_weight` lowers
-a recorded weight to it and never raises one. A forward candidate additionally needs an authoritative attempt
-binding (verified window and attempt identity); a reserve candidate needs an authoritative runner token.
+**Fixed outputs.** Every result has `forward_elond_eligible = False`, `screening_eligible = False` and
+`promotion_authorized = False`; no input changes them. A *candidate* means only "not disqualified".
 
-## Digests versus verified facts (S6 finding H2)
+**Weights.** `weight_ceiling` is the value of the unchanged `manhattan.ledger.evidential_weight` table (ARCHITECTURE
+6.3) for a candidate, and 0 otherwise.
 
-Two checks are made and kept apart:
+**Requirements for a candidate:**
+- an authoritative binding to a completed, non-superseded attempt;
+- the observed span inside that attempt's verified window;
+- anchors reported as **independently** anchored, which PR #86 never reports today, so no candidate is reachable
+  through it.
 
-- **Integrity (a digest).** Every `VerifierResult.subject` must equal `subject_digest(metadata)`, the SHA-256 of the
-  canonical metadata. Anyone holding the metadata can compute it. It shows only that a result is about exactly
-  these bytes, so an edit after verification is detected. It establishes no fact, and a mapping of digests is not
-  accepted as a verification at all.
-- **Authority (verified facts).** Facts are read only from `VerifierResult.facts` whose `authority` is in
-  `TRUSTED_AUTHORITIES`. Each verifier must state exactly its fact set, and every fact must equal the metadata
-  (same type and value), or the classification fails closed. Metadata alone never establish a fact.
+## Digests versus verified facts
 
-| verifier | facts it must state | existing code that must produce it |
+**Integrity.** `VerifierResult.subject` must equal `subject_digest(metadata)`. Anyone can compute that digest. It
+detects edits made after verification and establishes no fact; a mapping of digests is refused.
+
+**Authority.** Facts are read only from results whose `authority` is in `TRUSTED_AUTHORITIES`. Each verifier must
+state exactly its fact set, as scalars (N5: copied at construction into a read-only mapping). Every fact must equal
+the metadata in type and value. Results must be exactly the required set: missing, extra, duplicate, unknown or
+untrusted results fail closed.
+
+| verifier | facts | existing code that must produce it |
 |---|---|---|
-| `spec_registry` | `spec_hash`, `channel`, `domain`, `holding_periods` | the frozen spec in the registry |
-| `batch_freeze` | `spec_hash`, `freeze`, `manifest_hash` | `manhattan.freeze.verify_frozen` (signed tag, manifest hash, external timestamp) |
-| `runner_token` | `domain`, `window_id`, `manifest_hash` | a verified `roles.RunnerToken` naming this (domain, window) as unused and designated |
-| `attempt_binding` | `attempt_id`, `spec_hash`, `window_id` | the registered, anchored attempt (Phase 4B, PR #86) |
-| `capture_replay` | `source_id`, `capture_id`, `monitoring_start`, `backfill`, `late` | `manhattan.ops.data.first_seen` replay |
-| `store_anchor` | `capture_id`, `anchor` | `manhattan.ops.store.verify_chain` against an independently retained anchor |
+| `spec_registry` | `spec_hash`, `channel`, `domain`, `holding_periods` | the frozen spec |
+| `batch_freeze` | `spec_hash`, `batch`, `freeze`, `manifest_hash` | `manhattan.freeze.verify_frozen` |
+| `runner_token` | `domain`, `window_id`, `batch`, `manifest_hash`, `spec_hash` | a verified `roles.RunnerToken` (PR #86 snapshot: batch, manifest hash, spec in `token.specs`) naming this designated (domain, window) |
+| `attempt_binding` | `attempt_id`, `store`, `kind`, `spec_hash`, `role`, `designated`, `window_id`, `window_start`, `window_end`, `freeze`, `holding`, `terminal`, `superseded`, `assurance` | PR #86's anchored attempt history (start record, its `authorization`, its terminal, reconciliation assurance) |
+| `capture_replay` | `source_id`, `capture_id`, `monitoring_start`, `backfill`, `late`, `observed_start`, `observed_end` | `manhattan.ops.data.first_seen` |
+| `store_anchor` | `capture_id`, `anchor`, `assurance` | `manhattan.ops.store.verify_chain` and the reconciler's assurance level |
 | `publication_contract` | `source_id`, `contract_sha256` | `validate_source` on the recorded source definition |
-| `public_archive` / `licensed_snapshot` | `vintage_id`, `as_of` | the snapshot's SHA-256 (licensed: computed on the iMac, never in this repository) |
-| `synthetic_generator` | `vintage_id` | the generator definition and seed |
+| `public_archive` / `licensed_snapshot` | `vintage_id`, `as_of`, `observed_start`, `observed_end` | the snapshot's SHA-256 (licensed: computed on the iMac, never in this repository) |
+| `synthetic_generator` | `vintage_id`, `observed_start`, `observed_end` | the generator definition and seed |
 
-Required: `spec_registry` always, plus `synthetic_generator` (synthetic); `publication_contract` and
-`public_archive` / `licensed_snapshot` (historical); `publication_contract`, `capture_replay` and `store_anchor`
-(captured forward). Forward-role spans also need `batch_freeze`, designated reserve spans `runner_token`, and
-metadata naming an `attempt_id` `attempt_binding`. Results must be exactly this set: missing, extra, duplicate,
-unknown or untrusted results fail closed.
+**Required verifiers:**
+- `spec_registry`, always;
+- by provenance: synthetic needs `synthetic_generator`; historical needs `publication_contract` plus `public_archive` or
+  `licensed_snapshot`; captured forward needs `publication_contract`, `capture_replay` and `store_anchor`;
+- forward-role spans: `batch_freeze`;
+- designated reserve spans: `runner_token`, `batch_freeze` and `attempt_binding` (and the metadata must name the
+  attempt);
+- any metadata `attempt`: `attempt_binding`.
 
-**A forged freeze date no longer helps.** A forward role is computed from `spec.freeze`, and that date must equal
-the authoritative `batch_freeze.freeze`. Metadata relabelled with an earlier freeze contradicts the verified fact
-and fail closed (`test_forged_freeze_date_cannot_make_a_forward_candidate`).
+## Re-review corrections (head after `178c5bd`)
 
-## Holding-period embargo (S6 finding M1)
+**N1: shipped authority.**
+- `test_shipped_module_trusts_no_authority` imports the module file in a fresh `python -I` subprocess, where no
+  pytest fixture can patch it, and requires `TRUSTED_AUTHORITIES` to be an empty `frozenset` after the whole module
+  has run.
+- `test_shipped_authority_check_fails_on_a_non_empty_shipped_value` appends four mutations to a copy of the module and
+  shows the same check fails on each: a plain reassignment (S6's), `|=`, `globals()[...]` and a non-frozen set.
+- Done by hand as S6 did it, inserting a plain assignment into the real module: that test fails and the other 299 pass.
 
-`spec.holding_periods` (whole number, 0 to 2,520) is required and must equal the authoritative
-`spec_registry.holding_periods`. It is passed unchanged to `roles.role_of`, so the embargo is exactly that
-function's: the last `holding + 1` business days before the reserve starts (`<=`) and before it ends (`<`). There
-is no default. A missing, malformed or contradictory holding period fails closed. Tests compare the computed role
-with `roles.role_of` at reserve-start and reserve-end edges for holding periods 0, 5 and 20, and pin the regression:
-a span ending 10 business days before the reserve end is a reserve candidate for a 0-period spec and fails closed
-(span crosses into the embargo) for a 20-period spec.
+**N2: observed span.**
+- Every provenance verifier states `observed_start` and `observed_end`, which must equal the classified span.
+- `attempt_binding` states the attempt's verified window, and the span must lie inside it.
+- A cumulative forward window (PR #86: first observation to `asof` + 7 days) that contains the span is accepted.
 
-## Malformed inputs (S6 finding M2)
+**N3: reserve token.**
+- `runner_token` follows PR #86's token snapshot (batch, manifest hash, spec hash) plus domain and window.
+- Its batch and manifest must equal the authoritative `batch_freeze`, and its spec the classified spec.
+- A designated reserve span also needs an `engine_evaluation` attempt binding from the Ledger, with role `reserve`
+  and `designated: true`.
 
-`config` must be `None` or a mapping; `config.reserve` and `config.claims`, when present, must be mappings whose
-`enabled`, when present, is a boolean. `protocol_hash` must be `None` or a lowercase SHA-256. `fence` must be a
-`roles.Fence` with a date `exploration_end`, boolean `enabled` and well-formed reserve windows. Anything else gives
-`unverified`, weight 0. `classify` and `combine` never raise: an unforeseen exception inside also yields
-`unverified` with only its type named. Seeded fuzz tests cover malformed configuration, promotion settings and
-metadata mutations.
+**N4: forged classifications.**
+- `cap_weight` and `combine` accept only objects `classify` or `combine` returned, unchanged. They are checked by
+  object identity against a weak-reference registry, with a fingerprint taken at issue.
+- Caller-built objects, `dataclasses.replace` and `copy` copies, and objects mutated with `object.__setattr__` get
+  weight 0 and cannot be combined.
+- The registry is bookkeeping, not a security boundary: it never changes what `classify` returns.
 
-## Combining parts (S6 finding M3)
+**N5: verifier facts.**
+- `VerifierResult.facts` is copied at construction into a `MappingProxyType`.
+- Non-scalar values or a non-mapping become `None`, which fails closed.
+- Later changes to the caller's dict have no effect, and the proxy refuses assignment.
 
-`Classification.identity` carries spec hash, channel, domain, freeze, holding period, window id, span and attempt
-id (when given), and whether the window identity is verified. `combine` accepts only authenticated parts of **one**
-spec (same spec hash, channel, domain, freeze, holding period) with the same provenance, role, licence,
-availability and authorization. It rejects duplicates (same subject, same window, same attempt), overlapping spans,
-and attempt identities present on some parts only. It keeps every part (`parts`, `subjects`) and takes the weakest
-part's eligibility and ceiling. It never invents an attempt identity: absent attempt ids stay absent.
+Earlier fixes kept:
+- **M1:** the spec's holding period, never defaulted, passed to `role_of`, with boundary tests for 0, 5 and 20.
+- **M2:** malformed config, protocol hash and fence fail closed; seeded fuzz tests cover them.
+- **H2:** digests are integrity only, and facts must come from a trusted authority.
+- **M3:** `combine` checks identity, duplicates and overlaps.
 
-## Integration contract (for after PR #86 lands)
+## PR #86 integration contracts (checked against head `8615c69`)
 
-1. **Build `metadata` from persisted, anchored records only**:
-   - the Store's capture record (source, SHA-256, schema-v2 definition, retrieval time);
-   - the `FirstSeen` replay (monitoring start, backfill and late counts for exactly the observations in the span);
-   - the spec registry (spec hash, channel, holding period);
-   - the verified batch manifest (freeze);
-   - the attempt start record (attempt id, declared evaluation window id).
+1. **Authoritative holding periods.**
+   - Today PR #86 takes `holding` as a caller argument that defaults to 0; its forward-observation attempts pass none.
+   - The classifier requires `attempt_binding.holding == spec_registry.holding_periods == spec.holding_periods`. A
+     default-0 registration of a spec with a longer holding period fails closed
+     (`test_attempt_holding_must_be_the_specs_never_a_default`).
+   - Required of the integration: registration takes the holding period from the frozen spec, never a default.
+2. **Manifest freeze versus forward registration date.**
+   - PR #86 records a forward attempt's `freeze` as the prediction's `registration_utc` date. The batch manifest's
+     freeze (`batch_freeze.freeze`) is a different date.
+   - The classifier requires the registration date to be on or after the manifest freeze, and recomputes the role with
+     the registration date. A span that starts on or before it fails closed. `Identity.freeze` records the effective
+     (later) date.
+   - Neither date is taken from metadata alone.
+3. **Verified observation spans versus cumulative forward windows.**
+   - A forward-observation attempt declares a cumulative window from the first observation to `asof` + 7 days, while
+     it records only new days.
+   - The classified span must be the observed dates (`observed_start`/`observed_end` from `capture_replay`), and only
+     has to lie inside the window.
+   - Nightly parts combine only with disjoint spans, distinct window ids (`forward:<prediction>:<asof>`) and distinct
+     attempts.
+4. **Ledger versus Store attempt identifiers.**
+   - Ledger ids are start-record hashes (engine evaluations). Store ids are the SHA-256 of a canonical start payload
+     with a nonce (screening and forward observations).
+   - Metadata name `attempt: {id, store}`. The binding must state the same store, and the kind must belong to that
+     store (`STORE_OF_KIND`).
+   - `combine` rejects one id appearing twice, even across stores.
+5. **Completed, non-superseded attempts.** `attempt_binding.terminal` must be `"completed"` and `superseded` must be
+   `false`. Failed, aborted, unfinished and superseded attempts fail closed: PR #86's `supersedes` (Ledger) and
+   `retry_of` (Store) chains decide `superseded`.
+6. **Supplied-anchor checks versus independent certification.**
+   - PR #86 reports `checked_against_supplied_anchor` and never `independently_anchored` (D-7: no independent custody
+     configured).
+   - `store_anchor.assurance` and `attempt_binding.assurance` must name one of those two levels. Anything else fails
+     closed.
+   - A supplied-anchor check keeps evidence `descriptive` with weight 0. Only independent anchoring can support a
+     candidate, so no candidate is reachable while D-7 stands.
 
-   Never build it from file names, paths, environment variables, generator output or labels.
-2. **Build each `VerifierResult` at the integration boundary**, only after the named verifier has succeeded on these
-   records, with `subject = subject_digest(metadata)` and the facts read from the verifier's own output.
-3. **Add an authority to `TRUSTED_AUTHORITIES` only in a reviewed change**, once that boundary exists.
-   `manhattan/evidence.py` should then be added to the protected block of `.github/CODEOWNERS` (Ethan's edit; this
-   PR cannot touch that file).
-4. **Treat every `unverified`, every `none` and every `blockers` entry as refusal.** Record `cap_weight(c, w)`, never
-   `w` alone. Never read `eligibility` as authorization.
+Also required from PR #86:
+- `roles.role_of` keeps its signature and embargo semantics. PR #86 adds `RunnerToken.specs` and changes nothing
+  else in `roles`.
+- `ledger.evidential_weight`, `availability.validate_source` and `ops.promotion.status` stay unchanged.
 
-**PR #86 compatibility requirements.** Checked against its head `060d4e3`. With this module and its tests copied
-onto that head, `test_manhattan_evidence.py`, `test_manhattan_binding_access.py` and `test_manhattan_ops_attempts.py`
-gave 338 passed, exit 0. `git merge-tree` showed no textual conflict. The integration needs from PR #86:
+## Remaining activation blockers
 
-- `roles.role_of(day, domain, fence, freeze, holding)` keeps its signature and embargo semantics;
-  `ledger.evidential_weight`, `availability.validate_source` and `ops.promotion.status` stay unchanged.
-- The attempt start record's authorization (`freeze`, `holding`, declared window ids, fence snapshot) and identity
-  (`spec_hash`, `channel`, `window`, `role`) are the source of `batch_freeze.freeze`, `spec_registry.holding_periods`
-  and `attempt_binding.window_id`. A mismatch between that record and the frozen spec must fail closed, not be
-  repaired.
-- The attempt ID is the start record hash (64 lowercase hex). `attempt_binding` is minted only for an active or
-  completed, non-superseded attempt in an anchored history (PR #86's `attempts.reconcile`).
-- A forward-observation attempt is one night. Combining nights uses `combine` with one attempt per part, disjoint
-  spans and distinct window ids.
-
-**Gates that remain blockers in every forward candidate** (`UNIMPLEMENTED_GATES`), plus `promotion.status`:
-
-- enrolment (Protocol v3.1 section 6.8);
-- attempt binding wired to classified evidence;
-- guard and test-period construction (sections 6.1-6.7);
-- an adopted protocol hash and `claims.enabled: true` (both Ethan's).
-
-This module has no switch for forward e-LOND eligibility.
+1. **No trusted authority.** It must be added by a reviewed change, once a boundary exists that mints results from
+   anchored records, signed tags and the iMac's snapshot manifests.
+2. **No independent anchor custody.** PR #86's D-7 is open, so every candidate is downgraded to `descriptive`.
+3. **PR #86 is not merged and not wired.** The holding period from the spec (contract 1) and a minting boundary for
+   `attempt_binding` and `runner_token` are still needed.
+4. **The `UNIMPLEMENTED_GATES` and `promotion.status`:** enrolment (§6.8), guard and test-period construction
+   (§§6.1-6.7), an adopted protocol hash, and `claims.enabled: true` (Ethan's).
+5. **CODEOWNERS.** `manhattan/evidence.py` should be added to the protected block of `.github/CODEOWNERS` (Ethan's
+   edit) so that `TRUSTED_AUTHORITIES` cannot change without his review.
 
 ## Limitations
 
-- **Nothing is authenticated.** `TRUSTED_AUTHORITIES` is empty, so no result is accepted. Even after an authority
-  is added, the `authority` field is a string in an ordinary Python object: any code in the same process can build
-  one. The set is a code-review gate, not cryptography. Real authentication must come from the boundary that mints
-  results: anchored stores, signed tags, the iMac's private snapshot manifests. The tests run under a **simulated**
-  authority. They show the logic is right given authentic results, and nothing about whether any result is authentic.
-- The integrity digest detects edits after verification, not lies at verification time.
-- One call classifies one homogeneous span in one role. Signal warm-up history before a forward window (R-1) is not
-  classified separately.
-- Per-observation reconstruction is summarised by counts, which are trusted only as the `capture_replay` facts.
-- The monitoring-start check allows one day either side of the first retrieval's UTC date (market-zone close).
-- Session 1's files (`ledger.py`, `attempts.py`, `engine/pit.py`, `engine/evaluate.py`, `ops/runner.py`,
-  `ops/store.py`, `ops/data.py`) are not modified. This module only imports `roles`, `availability`,
-  `ledger.evidential_weight` and `ops.promotion`, read-only.
+- **Authentication.**
+  - `authority` is a string in an ordinary in-process Python object, so any code in the process can build one. The set
+    of trusted authorities is a code-review gate, not cryptography.
+  - The issued-object registry and the read-only facts likewise stop accidental or naive forgery, not hostile code in
+    the same process.
+  - The tests run under a **simulated** authority. They show the logic is right given authentic results, and nothing
+    about whether any result is authentic.
+- **Integrity digest.** It detects edits after verification, not a lie at verification time.
+- **Warm-up history.** Signal warm-up before a forward window (R-1) is not classified separately.
+- **Per-observation reconstruction** is summarised by counts, trusted only as `capture_replay` facts.
+- **Monitoring-start check.** It allows one day either side of the first retrieval's UTC date (market-zone close).
+- **Session 1's files are not modified**: `ledger.py`, `attempts.py`, `engine/pit.py`, `engine/evaluate.py`,
+  `ops/runner.py`, `ops/store.py`, `ops/data.py`, and `access.py` on PR #86. This module only imports `roles`,
+  `availability`, `ledger.evidential_weight` and `ops.promotion`, read-only.

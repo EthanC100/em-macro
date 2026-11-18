@@ -9,16 +9,15 @@ Six separate axes, each decided on its own and never inferred from another:
                     ``manhattan.availability``): per-vintage release dates, a declared daily lag, first-seen
                     capture, a conservative assumption, or generated (synthetic)
     role            exploration | reserve | forward | embargo, **computed** with ``manhattan.roles.role_of`` for every
-                    day of the span, from the fence, the spec's freeze and the spec's holding period; never a label
+                    day of the span, from the fence, the freeze and the spec's holding period; never a label
     authorization   what lets the observations be read in that role: open exploration, a verified designated
                     reserve token, a verified batch freeze; otherwise unauthorised
     eligibility     none | infrastructure_validation | descriptive | reserve_screening_candidate | forward_candidate
 
-A *candidate* is only "not disqualified by provenance". It is never a grant: ``forward_elond_eligible`` and
-``screening_eligible`` are False in every result this module can produce, because the gates they depend on
-(Protocol v3.1 sections 6.8 and 8, an adopted protocol, ``claims.enabled``, enrolment, and a binding of each
-observation to a registered attempt) are not implemented or not satisfied. ``promotion_authorized`` is False
-always: classification authorises nothing (``manhattan.ops.promotion`` is the only door, and it is shut).
+A *candidate* is only "not disqualified". It is never a grant: ``forward_elond_eligible`` and ``screening_eligible``
+are False in every result this module can produce, because the gates they depend on (Protocol v3.1 sections 6.8 and
+8, an adopted protocol, ``claims.enabled``, enrolment, and a binding of each observation to a registered attempt)
+are not implemented or not satisfied. ``promotion_authorized`` is False always.
 
 ``weight_ceiling`` is the most the existing table (``manhattan.ledger.evidential_weight``, ARCHITECTURE 6.3)
 could give such evidence; ``cap_weight`` only ever lowers a recorded weight to it, never raises one.
@@ -26,18 +25,23 @@ could give such evidence; ``cap_weight`` only ever lowers a recorded weight to i
 **Digests are not authentication.** Two different checks are made and kept apart:
 
 * *integrity*: every ``VerifierResult`` names ``subject_digest(metadata)``, the SHA-256 of the canonical metadata.
-  Anyone holding the metadata can compute it; it proves only that the result is about exactly these bytes, so an
-  edit after verification is detected. It establishes no fact.
-* *authority*: the facts a classification rests on (spec identity, holding period, freeze date, window identity,
-  capture identity, monitoring start, attempt identity) are taken only from ``VerifierResult.facts`` whose
-  ``authority`` is in ``TRUSTED_AUTHORITIES``, and are checked against the metadata field by field. Metadata alone
-  never establish a fact.
+  Anyone holding the metadata can compute it; it proves only that the result is about exactly these bytes.
+* *authority*: the facts a classification rests on (spec identity, holding period, freeze, batch, observed span,
+  window identity and boundaries, capture identity, monitoring start, attempt identity and status, anchor
+  assurance) are taken only from ``VerifierResult.facts`` whose ``authority`` is in ``TRUSTED_AUTHORITIES``, and are
+  checked against the metadata field by field. Metadata alone never establish a fact.
 
-``TRUSTED_AUTHORITIES`` is **empty**: no integration boundary that could mint verifier results exists yet (the
-binding attempt store of Phase 4B, PR #86, is not merged and is not wired here). Every classification is therefore
-``unverified`` today. Adding an authority is a reviewed code change, like ``promotion.ADOPTED_PROTOCOLS``. Even
-then this is a gate, not cryptography: an in-process Python object can be forged by any code in the process, so
-authority must be established at the boundary that builds the results (docs/manhattan/ops/EVIDENCE_CLASSIFICATION.md).
+``TRUSTED_AUTHORITIES`` is **empty**: no integration boundary that could mint verifier results exists yet. Every
+classification is therefore ``unverified`` today. Adding an authority is a reviewed code change. Even then this is a
+gate, not cryptography: any code in the process can forge an in-process Python object, so authority must be
+established at the boundary that builds the results (docs/manhattan/ops/EVIDENCE_CLASSIFICATION.md).
+
+**Issued classifications.** ``cap_weight`` and ``combine`` accept only ``Classification`` objects this module
+returned, unchanged (an identity-keyed registry of weak references with a fingerprint taken at issue). A
+caller-built, copied, ``replace``-d or mutated object gets weight 0 and cannot be combined. This guards against
+accidental or naive forgery only; it is bookkeeping, not a security boundary, and it never changes what
+``classify`` returns for given inputs.
+
 Anything unknown, missing, malformed or contradictory gives ``provenance = unverified``, ``eligibility = none`` and
 weight 0, with the problems listed. ``classify`` and ``combine`` never raise.
 """
@@ -46,8 +50,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import weakref
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from types import MappingProxyType
 from typing import Mapping
 
 import numpy as np
@@ -57,7 +63,7 @@ from manhattan.availability import AvailabilityError, validate_source
 from manhattan.ledger import evidential_weight
 from manhattan.ops import promotion
 
-SCHEMA = "manhattan.evidence/2"
+SCHEMA = "manhattan.evidence/3"
 
 SYNTHETIC, HISTORICAL_PUBLIC, HISTORICAL_LICENSED = "synthetic", "historical_public", "historical_licensed"
 CAPTURED_FORWARD, UNVERIFIED = "captured_forward", "unverified"
@@ -78,26 +84,42 @@ E_RESERVE, E_FORWARD = "reserve_screening_candidate", "forward_candidate"
 # Authorities whose verifier results are accepted. Empty: nothing can be authenticated yet (see module docstring).
 TRUSTED_AUTHORITIES: frozenset[str] = frozenset()
 
+# Anchor assurance levels, as PR #86's reconciler reports them. Only independent anchoring supports a candidate;
+# PR #86 never reports it (no independent custody is configured), so no candidate can be reached through it today.
+SUPPLIED_ANCHOR, INDEPENDENT_ANCHOR = "checked_against_supplied_anchor", "independently_anchored"
+ATTEMPT_STORES = ("ledger", "store")
+# PR #86: engine evaluations are registered in the Ledger (id = start record hash); screening and forward
+# observations in the Store (id = SHA-256 of the canonical start payload with a nonce). An id is meaningful only
+# together with its store.
+STORE_OF_KIND = {"engine_evaluation": "ledger", "screening": "store", "forward_observation": "store"}
+ATTEMPT_KINDS = {roles.EXPLORATION: ("engine_evaluation", "screening"),
+                 roles.RESERVE: ("engine_evaluation",),
+                 roles.FORWARD: ("engine_evaluation", "forward_observation")}
+
+_OBSERVED = {"observed_start", "observed_end"}
 # Each verifier, the existing code that must produce its result, and the facts it must state.
 VERIFIERS = {
     "spec_registry": ("the frozen spec in the registry: identity, channel, domain, holding period",
                       {"spec_hash", "channel", "domain", "holding_periods"}),
     "batch_freeze": ("manhattan.freeze.verify_frozen: signed tag, manifest hash, external timestamp",
-                     {"spec_hash", "freeze", "manifest_hash"}),
-    "synthetic_generator": ("the generator definition and seed that produced the values", {"vintage_id"}),
+                     {"spec_hash", "batch", "freeze", "manifest_hash"}),
+    "synthetic_generator": ("the generator definition and seed that produced the values", {"vintage_id"} | _OBSERVED),
     "publication_contract": ("manhattan.availability.validate_source on the recorded source definition",
                              {"source_id", "contract_sha256"}),
-    "public_archive": ("SHA-256 of the archived public snapshot", {"vintage_id", "as_of"}),
+    "public_archive": ("SHA-256 of the archived public snapshot, and the dates it holds for this span",
+                       {"vintage_id", "as_of"} | _OBSERVED),
     "licensed_snapshot": ("SHA-256 manifest of the private licensed snapshot (never in this repository)",
-                          {"vintage_id", "as_of"}),
+                          {"vintage_id", "as_of"} | _OBSERVED),
     "capture_replay": ("manhattan.ops.data.first_seen: raw hashes, byte counts, schema-v2 definition, counts",
-                       {"source_id", "capture_id", "monitoring_start", "backfill", "late"}),
-    "store_anchor": ("manhattan.ops.store.verify_chain against an independently retained head anchor",
-                     {"capture_id", "anchor"}),
-    "runner_token": ("a verified RunnerToken naming this (domain, window) as unused and designated",
-                     {"domain", "window_id", "manifest_hash"}),
-    "attempt_binding": ("the registered, anchored attempt the observations belong to (Phase 4B)",
-                        {"attempt_id", "spec_hash", "window_id"}),
+                       {"source_id", "capture_id", "monitoring_start", "backfill", "late"} | _OBSERVED),
+    "store_anchor": ("manhattan.ops.store.verify_chain against an anchor, with its assurance level",
+                     {"capture_id", "anchor", "assurance"}),
+    "runner_token": ("a verified RunnerToken (PR #86 contract: batch, manifest hash, spec in the manifest) naming "
+                     "this (domain, window) as unused and designated",
+                     {"domain", "window_id", "batch", "manifest_hash", "spec_hash"}),
+    "attempt_binding": ("the registered attempt the observations belong to (PR #86), read from an anchored history",
+                        {"attempt_id", "store", "kind", "spec_hash", "role", "designated", "window_id",
+                         "window_start", "window_end", "freeze", "holding", "terminal", "superseded", "assurance"}),
 }
 REQUIRED = {
     SYNTHETIC: {"spec_registry", "synthetic_generator"},
@@ -110,12 +132,12 @@ REQUIRED = {
 # protected protocol is adopted and the gate exists in code; this module can never clear them.
 UNIMPLEMENTED_GATES = (
     "enrolment gate (Protocol v3.1 section 6.8: enrolled at the first review as Promising or higher) not implemented",
-    "attempt binding (each observation tied to a registered, anchored attempt; Phase 4B interface) not integrated",
+    "attempt binding (each observation tied to a registered, anchored attempt; PR #86) not integrated",
     "guard and test-period construction (Protocol v3.1 sections 6.1-6.7) not wired to classified evidence",
 )
 
 _SHA = re.compile(r"[0-9a-f]{64}")
-_TOP = {"schema", "source", "domain", "span", "vintage", "capture", "spec", "window", "attempt_id", "designated",
+_TOP = {"schema", "source", "domain", "span", "vintage", "capture", "spec", "window", "attempt", "designated",
         "claimed_role", "claimed_provenance"}
 _SOURCE = {"id", "kind", "publication_contract"}
 _VINTAGE = {"kind", "id", "as_of"}
@@ -124,16 +146,27 @@ _RECON = {"backfill", "late"}
 _SPEC = {"spec_hash", "channel", "freeze", "holding_periods"}
 _MAX_SPAN_DAYS = roles.MAX_READ_DAYS
 _MAX_HOLDING = 2_520                       # ten years of weekdays: a sanity bound, not a rule
+_SCALARS = (str, int, bool, type(None))
 
 
 @dataclass(frozen=True)
 class VerifierResult:
     """What a verifier established about one metadata subject. ``subject`` is a digest (integrity only); ``facts``
-    count only when ``authority`` is trusted. Constructing one proves nothing: see the module docstring."""
+    count only when ``authority`` is trusted. Constructing one proves nothing: see the module docstring.
+
+    ``facts`` is copied at construction into a read-only mapping of scalars (text, whole numbers, booleans,
+    None); later changes to the caller's mapping do not reach it. Any other shape is stored as ``None`` and fails
+    closed when classified."""
     verifier: str
     authority: str
     subject: str
     facts: Mapping
+
+    def __post_init__(self):
+        f = self.facts
+        ok = isinstance(f, Mapping) and all(isinstance(k, str) for k in f) \
+            and all(type(v) in _SCALARS for v in f.values())
+        object.__setattr__(self, "facts", MappingProxyType(dict(f)) if ok else None)
 
 
 @dataclass(frozen=True)
@@ -147,7 +180,8 @@ class Identity:
     start: str
     end: str
     attempt_id: str | None
-    window_verified: bool = False      # stated by an authoritative runner_token or attempt_binding result
+    attempt_store: str | None = None
+    window_verified: bool = False      # window identity and boundaries stated by an authoritative attempt binding
 
 
 @dataclass(frozen=True)
@@ -180,6 +214,29 @@ class Classification:
         return tuple(p.subject for p in self.parts) if self.parts else (self.subject,)
 
 
+# ---------------------------------------------------------------- issued-object registry (N4)
+
+_ISSUED: dict = {}
+
+
+def _fingerprint(c: Classification) -> str:
+    return repr(c)
+
+
+def _issue(c: Classification) -> Classification:
+    key = id(c)
+    _ISSUED[key] = (weakref.ref(c, lambda _ref, k=key: _ISSUED.pop(k, None)), _fingerprint(c))
+    return c
+
+
+def issued(c) -> bool:
+    """True only for a Classification this module returned and that is unchanged since."""
+    if type(c) is not Classification:
+        return False
+    entry = _ISSUED.get(id(c))
+    return entry is not None and entry[0]() is c and entry[1] == _fingerprint(c)
+
+
 class EvidenceError(ValueError):
     """Raised only by the public helpers ``subject_digest`` and ``contract_digest`` on non-JSON input."""
 
@@ -205,8 +262,8 @@ def contract_digest(contract: Mapping) -> str:
 
 
 def _unverified(problems, subject=None, role=None) -> Classification:
-    return Classification(UNVERIFIED, False, frozenset({UNKNOWN}), AVAIL_UNKNOWN, role, AUTH_NONE, E_NONE, 0,
-                          False, False, False, ("provenance unverified",), tuple(problems), subject)
+    return _issue(Classification(UNVERIFIED, False, frozenset({UNKNOWN}), AVAIL_UNKNOWN, role, AUTH_NONE, E_NONE, 0,
+                                 False, False, False, ("provenance unverified",), tuple(problems), subject))
 
 
 def _fail(msg):
@@ -295,7 +352,7 @@ def classify(metadata: Mapping, verifications=None, *, fence: roles.Fence, confi
     subject = None
     try:
         subject = subject_digest(metadata) if isinstance(metadata, Mapping) else None
-        return _classify(metadata, verifications, fence, config, protocol_hash, subject)
+        return _issue(_classify(metadata, verifications, fence, config, protocol_hash, subject))
     except _Reject as exc:
         return _unverified([str(exc)], subject)
     except Exception as exc:          # a bug or an unforeseen shape: fail closed, never a default class
@@ -322,9 +379,9 @@ def _facts(verifications, subject, need) -> dict:
             _fail(f"{r.verifier} result is not from a trusted authority (none is configured: authentication "
                   "needs an integration boundary that does not exist yet)")
         expected = VERIFIERS[r.verifier][1]
-        if not isinstance(r.facts, Mapping) or set(r.facts) != expected:
-            _fail(f"{r.verifier} result must state exactly {sorted(expected)}")
-        out[r.verifier] = r.facts
+        if type(r.facts) is not MappingProxyType or set(r.facts) != expected:
+            _fail(f"{r.verifier} result must state exactly {sorted(expected)} as scalars")
+        out[r.verifier] = dict(r.facts)          # a private snapshot: nothing outside can change it now
     missing, extra = sorted(need - set(out)), sorted(set(out) - need)
     if missing:
         _fail(f"required verifier results missing: {missing}")
@@ -383,9 +440,12 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     _keys(win, {"id"}, {"id"}, "window")
     if not _text(win["id"]):
         _fail("window id is required")
-    attempt_id = md.get("attempt_id")
-    if "attempt_id" in md:
-        _sha(attempt_id, "attempt_id")
+    attempt = md.get("attempt")
+    if "attempt" in md:
+        _keys(attempt, {"id", "store"}, {"id", "store"}, "attempt")
+        _sha(attempt["id"], "attempt id")
+        if attempt["store"] not in ATTEMPT_STORES:
+            _fail("attempt store must be ledger or store (their attempt ids are derived differently)")
 
     # spec: identity, freeze and holding period (never defaulted)
     spec = md["spec"]
@@ -400,7 +460,8 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     role = _computed_role(md["domain"], start, end, fence, freeze, holding)
     if "claimed_role" in md and md["claimed_role"] != role:
         _fail(f"claimed role {md['claimed_role']!r} contradicts the computed role {role!r}")
-    if md["designated"] and role != roles.RESERVE:
+    designated = md["designated"]
+    if designated and role != roles.RESERVE:
         _fail("only a reserve evaluation can be designated")
 
     # provenance from the closed schema: never from dates, names or labels
@@ -429,9 +490,11 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     need = set(REQUIRED[provenance])
     if role == roles.FORWARD:
         need.add("batch_freeze")
-    if role == roles.RESERVE and md["designated"]:
-        need.add("runner_token")
-    if attempt_id is not None:
+    if designated:                                   # role is reserve (checked above)
+        if attempt is None:
+            _fail("a designated reserve evaluation must name its registered attempt")
+        need |= {"runner_token", "batch_freeze", "attempt_binding"}
+    if attempt is not None:
         need.add("attempt_binding")
     facts = _facts(verifications, subject, need)
     f = facts["spec_registry"]
@@ -442,18 +505,21 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     if "batch_freeze" in facts:
         f = facts["batch_freeze"]
         _agree(f["spec_hash"], spec["spec_hash"], "frozen spec identity")
-        _agree(f["freeze"], spec["freeze"], "freeze date")
+        _agree(f["freeze"], spec["freeze"], "freeze date (the manifest's)")
         _sha(f["manifest_hash"], "verified manifest hash")
+        if not _text(f["batch"]):
+            _fail("verified batch is required")
     if "runner_token" in facts:
-        f = facts["runner_token"]
+        f, frz = facts["runner_token"], facts["batch_freeze"]
         _agree(f["domain"], md["domain"], "token domain")
         _agree(f["window_id"], win["id"], "token window identity")
-        _sha(f["manifest_hash"], "token manifest hash")
-    if "attempt_binding" in facts:
-        f = facts["attempt_binding"]
-        _agree(f["attempt_id"], attempt_id, "attempt identity")
-        _agree(f["spec_hash"], spec["spec_hash"], "attempt spec identity")
-        _agree(f["window_id"], win["id"], "attempt window identity")
+        _agree(f["spec_hash"], spec["spec_hash"], "token spec (the manifest must name this spec)")
+        _agree(f["batch"], frz["batch"], "token batch (the frozen batch)")
+        _agree(f["manifest_hash"], frz["manifest_hash"], "token manifest (the frozen manifest)")
+    for v in ("synthetic_generator", "public_archive", "licensed_snapshot", "capture_replay"):
+        if v in facts:                               # the observed dates are the classified span (N2)
+            _agree(facts[v]["observed_start"], span["start"], "first observed date")
+            _agree(facts[v]["observed_end"], span["end"], "last observed date")
     if "synthetic_generator" in facts:
         _agree(facts["synthetic_generator"]["vintage_id"], vin["id"], "generator vintage")
     for v in ("public_archive", "licensed_snapshot"):
@@ -470,9 +536,50 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         _agree(f["monitoring_start"], capture["monitoring_start"], "monitoring start")
         _agree(f["backfill"], capture["reconstructed"]["backfill"], "backfill count")
         _agree(f["late"], capture["reconstructed"]["late"], "late count")
+    anchors_independent = True
     if "store_anchor" in facts:
-        _agree(facts["store_anchor"]["capture_id"], capture["capture_id"], "anchored capture identity")
-        _sha(facts["store_anchor"]["anchor"], "store anchor")
+        f = facts["store_anchor"]
+        _agree(f["capture_id"], capture["capture_id"], "anchored capture identity")
+        _sha(f["anchor"], "store anchor")
+        if f["assurance"] not in (SUPPLIED_ANCHOR, INDEPENDENT_ANCHOR):
+            _fail("unknown store anchor assurance")
+        anchors_independent &= f["assurance"] == INDEPENDENT_ANCHOR
+    effective_freeze = freeze
+    if "attempt_binding" in facts:
+        f = facts["attempt_binding"]
+        _agree(f["attempt_id"], attempt["id"], "attempt identity")
+        _agree(f["store"], attempt["store"], "attempt store")
+        _agree(f["spec_hash"], spec["spec_hash"], "attempt spec identity")
+        _agree(f["window_id"], win["id"], "attempt window identity")
+        _agree(f["role"], role, "attempt role")
+        _agree(f["designated"], designated, "attempt designation")
+        _agree(f["holding"], holding, "attempt holding period (must be the spec's, never a default)")
+        if f["kind"] not in ATTEMPT_KINDS.get(role, ()):
+            _fail(f"an attempt of kind {f['kind']!r} cannot carry {role} evidence")
+        if STORE_OF_KIND[f["kind"]] != attempt["store"]:
+            _fail(f"a {f['kind']} attempt is registered in the {STORE_OF_KIND[f['kind']]}, not the {attempt['store']}")
+        if f["terminal"] != "completed" or f["superseded"] is not False:
+            _fail("only a completed, non-superseded attempt carries evidence")
+        if f["assurance"] not in (SUPPLIED_ANCHOR, INDEPENDENT_ANCHOR):
+            _fail("unknown attempt history assurance")
+        anchors_independent &= f["assurance"] == INDEPENDENT_ANCHOR
+        w0, w1 = _date(f["window_start"], "verified window start"), _date(f["window_end"], "verified window end")
+        if not (w0 <= start and end <= w1):
+            _fail("the observed span lies outside the attempt's verified window")
+        if role == roles.FORWARD:
+            # the attempt's own freeze (PR #86: the prediction's registration date) can only move the start later
+            registered = _date(f["freeze"], "attempt freeze")
+            if freeze is None or registered < freeze:
+                _fail("the attempt's registration freeze precedes the manifest freeze")
+            effective_freeze = registered
+            try:
+                after = _computed_role(md["domain"], start, end, fence, effective_freeze, holding) == roles.FORWARD
+            except _Reject:
+                after = False
+            if not after:
+                _fail("the observed span is not after the attempt's registration freeze")
+        elif f["freeze"] is not None and f["freeze"] != spec["freeze"]:
+            _fail("verified attempt freeze contradicts the metadata")
 
     # reconstruction and availability, each explicit
     if akind == "conservative":
@@ -488,7 +595,7 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     # authorization (what lets these dates be read in this role)
     if role == roles.EXPLORATION:
         authorization = AUTH_OPEN
-    elif role == roles.RESERVE and md["designated"] and config["reserve"].get("enabled") is True and fence.enabled:
+    elif role == roles.RESERVE and designated and config["reserve"].get("enabled") is True and fence.enabled:
         authorization = AUTH_RESERVE
     elif role == roles.FORWARD:
         authorization = AUTH_FREEZE           # an authoritative batch_freeze result was required above
@@ -497,6 +604,7 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
 
     # eligibility: provenance can only disqualify
     reconstructed = bool(recon)
+    bound = "attempt_binding" in facts
     blockers: list[str] = []
     if provenance == SYNTHETIC:
         eligibility = E_INFRA
@@ -513,6 +621,10 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
             eligibility = E_DESCRIPTIVE
             blockers.append("a reserve screening candidate needs blind-channel, per-vintage historical data "
                             "with no reconstruction")
+        elif not anchors_independent:
+            eligibility = E_DESCRIPTIVE
+            blockers.append("the attempt history is checked against a supplied anchor only, not independently "
+                            "anchored")
         else:
             eligibility = E_RESERVE
             blockers.append("a reserve result is screening evidence at most, never independent forward confirmation")
@@ -523,15 +635,19 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         elif reconstructed or availability != AVAIL_FIRST_SEEN:
             eligibility = E_DESCRIPTIVE
             blockers.append(f"reconstructed forward observations carry weight 0: {sorted(recon)}")
-        elif "attempt_binding" not in facts:
+        elif not bound:
             eligibility = E_DESCRIPTIVE
             blockers.append("forward observations without an authoritative attempt binding have no verified "
                             "window or attempt identity")
+        elif not anchors_independent:
+            eligibility = E_DESCRIPTIVE
+            blockers.append("the capture or attempt history is checked against a supplied anchor only, not "
+                            "independently anchored")
         else:
             eligibility = E_FORWARD
             blockers.append("captured-forward provenance is necessary, not sufficient, for forward e-LOND")
 
-    ceiling = evidential_weight(channel, role, md["designated"], reconstructed) \
+    ceiling = evidential_weight(channel, role, designated, reconstructed) \
         if eligibility in (E_RESERVE, E_FORWARD) else 0
     enabled, reason = promotion.status(protocol_hash, config)
     if not enabled:
@@ -540,9 +656,10 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         blockers.extend(UNIMPLEMENTED_GATES)
     if eligibility == E_RESERVE:
         blockers.append("screening is not implemented and is out of scope for classification")
-    ident = Identity(spec["spec_hash"], channel, md["domain"], spec["freeze"], holding, win["id"],
-                     span["start"], span["end"], attempt_id,
-                     "runner_token" in facts or "attempt_binding" in facts)
+    ident = Identity(spec["spec_hash"], channel, md["domain"],
+                     None if effective_freeze is None else effective_freeze.isoformat(), holding, win["id"],
+                     span["start"], span["end"], None if attempt is None else attempt["id"],
+                     None if attempt is None else attempt["store"], bound)
     return Classification(provenance, kind == "licensed", frozenset(recon), availability, role, authorization,
                           eligibility, ceiling, False, False, False, tuple(blockers), (), subject, ident, True)
 
@@ -580,8 +697,9 @@ def _capture_reconstruction(capture, vin, start: date, as_of: date) -> set:
 
 
 def cap_weight(c: Classification, recorded_weight: int) -> int:
-    """A recorded evidential weight, lowered to the classification's ceiling. Never raises a weight."""
-    if type(c) is not Classification or type(recorded_weight) is not int or recorded_weight not in (0, 1) \
+    """A recorded evidential weight, lowered to the classification's ceiling. Never raises a weight. A
+    classification this module did not issue, or one changed since, gives 0."""
+    if not issued(c) or type(recorded_weight) is not int or recorded_weight not in (0, 1) \
             or type(c.weight_ceiling) is not int:
         return 0
     return max(0, min(recorded_weight, c.weight_ceiling))
@@ -593,16 +711,17 @@ _RANK = {E_NONE: 0, E_INFRA: 1, E_DESCRIPTIVE: 2, E_RESERVE: 3, E_FORWARD: 3}
 def combine(parts) -> Classification:
     """One result for evidence assembled from several classified parts of **one spec's** record.
 
-    Fails closed on: a failed or unauthenticated part; a part of another spec, channel, domain, freeze or holding
-    period; mixed provenance, role, licence, availability or authorization; a duplicate (same subject, window or
-    attempt); overlapping spans; or attempt identities present on some parts and absent on others. The result keeps
-    every part (and so every subject and individual provenance) and takes the weakest part's eligibility."""
+    Fails closed on: a part this module did not issue (or that changed since); a failed or unauthenticated part; a
+    part of another spec, channel, domain, freeze or holding period; mixed provenance, role, licence, availability
+    or authorization; a duplicate (same subject, window or attempt); overlapping spans; or attempt identities
+    present on some parts only. The result keeps every part (and so every subject and individual provenance) and
+    takes the weakest part's eligibility. Freezes are compared after each part's attempt registration."""
     try:
         parts = tuple(parts)
     except Exception:
         return _unverified(["parts are not iterable"])
-    if not parts or not all(type(p) is Classification for p in parts):
-        return _unverified(["nothing (or something unclassified) to combine"])
+    if not parts or not all(issued(p) for p in parts):
+        return _unverified(["nothing to combine, or a part this module did not issue (or that has changed)"])
     if any(p.provenance == UNVERIFIED or not p.authenticated or p.identity is None for p in parts):
         return _unverified(["a part is unverified"] + [q for p in parts for q in p.problems])
     ids = [p.identity for p in parts]
@@ -615,19 +734,19 @@ def combine(parts) -> Classification:
     for what, vals in (("subject", [p.subject for p in parts]), ("window", [i.window_id for i in ids])):
         if len(set(vals)) != len(vals):
             return _unverified([f"duplicate {what} among parts"])
-    attempts = [i.attempt_id for i in ids]
-    if any(a is None for a in attempts) and any(a is not None for a in attempts):
+    attempts = [(i.attempt_store, i.attempt_id) for i in ids]
+    if any(a[1] is None for a in attempts) and any(a[1] is not None for a in attempts):
         return _unverified(["attempt identity present on some parts only"])
-    present = [a for a in attempts if a is not None]
-    if len(set(present)) != len(present):
-        return _unverified(["duplicate attempt among parts"])
+    present = [a for a in attempts if a[1] is not None]
+    if len({a[1] for a in present}) != len(present):
+        return _unverified(["duplicate attempt among parts (in either store)"])
     spans = sorted((i.start, i.end) for i in ids)
     if any(b[0] <= a[1] for a, b in zip(spans, spans[1:])):
         return _unverified(["evidence spans overlap"])
     first = parts[0]
     worst = min(parts, key=lambda p: (_RANK[p.eligibility], p.weight_ceiling))
     recon = frozenset().union(*(p.reconstruction for p in parts))
-    return Classification(first.provenance, first.licensed, recon, first.availability, first.role,
-                          first.authorization, worst.eligibility, min(p.weight_ceiling for p in parts),
-                          False, False, False, tuple(dict.fromkeys(b for p in parts for b in p.blockers)), (), None,
-                          None, True, parts)
+    return _issue(Classification(first.provenance, first.licensed, recon, first.availability, first.role,
+                                 first.authorization, worst.eligibility, min(p.weight_ceiling for p in parts),
+                                 False, False, False, tuple(dict.fromkeys(b for p in parts for b in p.blockers)),
+                                 (), None, None, True, parts))

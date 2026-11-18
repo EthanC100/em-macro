@@ -1,16 +1,21 @@
 """Evidence classification (manhattan/evidence.py). Synthetic fixtures only: no market data is read.
 
-Most tests run under a **simulated** authority (``TEST_AUTHORITY`` patched into ``TRUSTED_AUTHORITIES``) so that
-the classification logic can be exercised. That proves the logic given authentic verifier results; it proves
-nothing about the authenticity of any verifier result. With the module as shipped no authority is trusted and
-every classification is unverified (``test_shipped_module_trusts_no_authority``).
+Most tests run under a **simulated** authority (``TEST_AUTHORITY`` patched into ``TRUSTED_AUTHORITIES``) so that the
+classification logic can be exercised. That proves the logic given authentic verifier results; it proves nothing
+about the authenticity of any verifier result. The shipped value is checked in a clean subprocess, where no fixture
+can patch it (``test_shipped_module_trusts_no_authority``), and a mutation test shows that check fails on a
+non-empty shipped value.
 """
 import ast
 import copy
+import dataclasses
 import hashlib
 import inspect
 import random
+import subprocess
+import sys
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -18,6 +23,7 @@ import pytest
 from manhattan import evidence as E, roles
 from manhattan.ledger import evidential_weight
 
+ROOT = Path(__file__).resolve().parents[1]
 FENCE = roles.Fence(exploration_end=date(2019, 12, 31),
                     reserve={"fx_daily": (date(2020, 3, 2), date(2024, 12, 31))}, enabled=True)
 CONFIG = {"reserve": {"enabled": True}, "claims": {"enabled": False}}
@@ -27,6 +33,7 @@ FWD0 = ("spec_registry", "publication_contract", "capture_replay", "store_anchor
 FWD = FWD0 + ("attempt_binding",)
 PUB = ("spec_registry", "publication_contract", "public_archive")
 LIC = ("spec_registry", "publication_contract", "licensed_snapshot")
+RES = LIC + ("runner_token", "batch_freeze", "attempt_binding")
 SYN = ("spec_registry", "synthetic_generator")
 
 
@@ -49,61 +56,81 @@ def spec(channel="blind", freeze="2026-06-01", holding=0):
     return {"spec_hash": H("spec"), "channel": channel, "freeze": freeze, "holding_periods": holding}
 
 
-def base(kind, start, end, vintage, **kw):
-    md = {"schema": E.SCHEMA, "source": {"id": "src", "kind": kind, "publication_contract": contract()},
-          "domain": "fx_daily", "span": {"start": start, "end": end}, "vintage": vintage,
-          "spec": spec(), "window": {"id": "w1"}, "designated": False}
-    md.update(kw)
-    return md
+def base(kind, start, end, vintage):
+    return {"schema": E.SCHEMA, "source": {"id": "src", "kind": kind, "publication_contract": contract()},
+            "domain": "fx_daily", "span": {"start": start, "end": end}, "vintage": vintage,
+            "spec": spec(), "window": {"id": "w1"}, "designated": False}
 
 
 def synthetic(**kw):
-    md = base("synthetic", "2010-01-04", "2010-12-31",
-              {"kind": "generated", "id": H("gen"), "as_of": "2010-12-31"})
+    md = base("synthetic", "2010-01-04", "2010-12-31", {"kind": "generated", "id": H("gen"), "as_of": "2010-12-31"})
     md.update(kw)
     return md
 
 
 def historical(kind="public", start="2005-01-03", end="2019-12-31", avail="release_dates", **kw):
-    md = base(kind, start, end, {"kind": "snapshot", "id": H("snap"), "as_of": "2026-11-01"}, **kw)
+    md = base(kind, start, end, {"kind": "snapshot", "id": H("snap"), "as_of": "2026-11-01"})
     md["source"]["publication_contract"] = contract(kind=avail)
+    md.update(kw)
     return md
 
 
-def reserve(**kw):
-    return historical("licensed", start="2021-01-04", end="2023-12-29", designated=True, **kw)
+def reserve(start="2021-01-04", end="2023-12-29", **kw):
+    kw.setdefault("attempt", {"id": H("reserve attempt"), "store": "ledger"})
+    kw.setdefault("designated", True)
+    return historical("licensed", start=start, end=end, **kw)
 
 
 def captured(start="2026-07-01", end="2026-10-30", backfill=0, late=0, monitoring="2026-06-15", **kw):
-    kw.setdefault("attempt_id", H("attempt:" + start))
-    md = base("public", start, end, {"kind": "first_seen_capture", "id": H("cap"), "as_of": "2026-11-01"}, **kw)
+    kw.setdefault("attempt", {"id": H("attempt:" + start), "store": "store"})
+    md = base("public", start, end, {"kind": "first_seen_capture", "id": H("cap"), "as_of": "2026-11-01"})
     md["capture"] = {"capture_id": H("cap"), "schema_version": 2, "monitoring_start": monitoring,
                      "first_retrieved_utc": monitoring + "T22:30:00+00:00",
                      "reconstructed": {"backfill": backfill, "late": late}}
+    md.update(kw)
     return md
+
+
+def _role(md, fence=FENCE):
+    try:
+        sp = md["spec"]
+        freeze = None if sp["freeze"] is None else date.fromisoformat(sp["freeze"])
+        return roles.role_of(date.fromisoformat(md["span"]["start"]), md["domain"], fence, freeze,
+                             sp["holding_periods"])
+    except Exception:
+        return None
 
 
 def facts_for(md):
     """What honest verifiers would state about ``md`` (built from the fixture, as a real verifier would not)."""
     sp, vin, cap = md.get("spec") or {}, md.get("vintage") or {}, md.get("capture") or {}
-    rec = cap.get("reconstructed") or {}
-    snap = {"vintage_id": vin.get("id"), "as_of": vin.get("as_of")}
+    rec, span, win = cap.get("reconstructed") or {}, md.get("span") or {}, md.get("window") or {}
+    att, role = md.get("attempt") or {}, _role(md)
+    observed = {"observed_start": span.get("start"), "observed_end": span.get("end")}
+    snap = {"vintage_id": vin.get("id"), "as_of": vin.get("as_of"), **observed}
     return {
         "spec_registry": {"spec_hash": sp.get("spec_hash"), "channel": sp.get("channel"), "domain": md.get("domain"),
                           "holding_periods": sp.get("holding_periods")},
-        "batch_freeze": {"spec_hash": sp.get("spec_hash"), "freeze": sp.get("freeze"), "manifest_hash": H("m")},
-        "synthetic_generator": {"vintage_id": vin.get("id")},
+        "batch_freeze": {"spec_hash": sp.get("spec_hash"), "batch": "batch-0001", "freeze": sp.get("freeze"),
+                         "manifest_hash": H("m")},
+        "synthetic_generator": {"vintage_id": vin.get("id"), **observed},
         "publication_contract": {"source_id": md["source"]["id"],
                                  "contract_sha256": E.contract_digest(md["source"].get("publication_contract"))},
         "public_archive": snap, "licensed_snapshot": dict(snap),
         "capture_replay": {"source_id": md["source"]["id"], "capture_id": cap.get("capture_id"),
                            "monitoring_start": cap.get("monitoring_start"), "backfill": rec.get("backfill"),
-                           "late": rec.get("late")},
-        "store_anchor": {"capture_id": cap.get("capture_id"), "anchor": H("anchor")},
-        "runner_token": {"domain": md.get("domain"), "window_id": (md.get("window") or {}).get("id"),
-                         "manifest_hash": H("m")},
-        "attempt_binding": {"attempt_id": md.get("attempt_id"), "spec_hash": sp.get("spec_hash"),
-                            "window_id": (md.get("window") or {}).get("id")},
+                           "late": rec.get("late"), **observed},
+        "store_anchor": {"capture_id": cap.get("capture_id"), "anchor": H("anchor"),
+                         "assurance": E.INDEPENDENT_ANCHOR},
+        "runner_token": {"domain": md.get("domain"), "window_id": win.get("id"), "batch": "batch-0001",
+                         "manifest_hash": H("m"), "spec_hash": sp.get("spec_hash")},
+        "attempt_binding": {"attempt_id": att.get("id"), "store": att.get("store"),
+                            "kind": "forward_observation" if role == roles.FORWARD else "engine_evaluation",
+                            "spec_hash": sp.get("spec_hash"), "role": role, "designated": md.get("designated"),
+                            "window_id": win.get("id"), "window_start": span.get("start"),
+                            "window_end": span.get("end"), "freeze": sp.get("freeze"),
+                            "holding": sp.get("holding_periods"), "terminal": "completed", "superseded": False,
+                            "assurance": E.INDEPENDENT_ANCHOR},
     }
 
 
@@ -115,8 +142,8 @@ def results(md, names, authority=TEST_AUTHORITY, subject=None, override=None):
     return [E.VerifierResult(n, authority, subject, facts[n]) for n in names]
 
 
-def run(md, names, fence=FENCE, config=CONFIG, **kw):
-    return E.classify(md, results(md, names), fence=fence, config=config, **kw)
+def run(md, names, fence=FENCE, config=CONFIG, override=None, **kw):
+    return E.classify(md, results(md, names, override=override), fence=fence, config=config, **kw)
 
 
 def assert_closed(c):
@@ -131,40 +158,77 @@ def assert_no_grant(c):
     assert c.blockers
 
 
-# ---------------------------------------------------------------- H2: authority, not digests
+# ---------------------------------------------------------------- N1: the shipped authority set, unpatched
 
-def test_shipped_module_trusts_no_authority(monkeypatch):
-    tree = ast.parse(inspect.getsource(E))
-    shipped = [n.value for n in ast.walk(tree) if isinstance(n, ast.AnnAssign)
-               and getattr(n.target, "id", None) == "TRUSTED_AUTHORITIES"]
-    assert len(shipped) == 1 and ast.unparse(shipped[0]) == "frozenset()"
-    monkeypatch.setattr(E, "TRUSTED_AUTHORITIES", frozenset())        # as shipped
-    for md, names in ((captured(), FWD), (reserve(), LIC + ("runner_token",)), (synthetic(), SYN)):
+_PROBE = """
+import importlib.util, sys
+sys.path.insert(0, sys.argv[2])
+spec = importlib.util.spec_from_file_location("shipped_evidence_probe", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+value = mod.TRUSTED_AUTHORITIES
+print(type(value).__name__, len(value))
+"""
+
+
+def shipped_authorities(module_path: Path) -> tuple[str, int]:
+    """Import the module file in a clean, isolated interpreter (no pytest, no fixtures) and report the type and
+    size of its ``TRUSTED_AUTHORITIES`` after the whole module has executed."""
+    out = subprocess.run([sys.executable, "-I", "-c", _PROBE, str(module_path), str(ROOT)],
+                         capture_output=True, text=True, timeout=120, check=True)
+    kind, size = out.stdout.split()
+    return kind, int(size)
+
+
+def assert_ships_no_authority(module_path: Path) -> None:
+    assert shipped_authorities(module_path) == ("frozenset", 0), "a trusted authority ships enabled"
+
+
+def test_shipped_module_trusts_no_authority():
+    assert_ships_no_authority(Path(E.__file__))
+
+
+@pytest.mark.parametrize("mutation", [
+    'TRUSTED_AUTHORITIES = frozenset({"anyone"})\n',                     # a plain reassignment (S6's mutation)
+    'TRUSTED_AUTHORITIES |= {"anyone"}\n',
+    'globals()["TRUSTED_AUTHORITIES"] = frozenset({"anyone"})\n',
+    'TRUSTED_AUTHORITIES = {"anyone"}\n',                                # a non-frozen set
+])
+def test_shipped_authority_check_fails_on_a_non_empty_shipped_value(tmp_path, mutation):
+    mutant = tmp_path / "evidence_mutant.py"
+    mutant.write_text(Path(E.__file__).read_text(encoding="utf-8") + "\n" + mutation, encoding="utf-8")
+    with pytest.raises(AssertionError, match="ships enabled"):
+        assert_ships_no_authority(mutant)
+
+
+def test_classification_is_unverified_with_the_shipped_set(monkeypatch):
+    monkeypatch.setattr(E, "TRUSTED_AUTHORITIES", frozenset())
+    for md, names in ((captured(), FWD), (reserve(), RES), (synthetic(), SYN)):
         c = E.classify(md, results(md, names), fence=FENCE, config=CONFIG)
         assert_closed(c)
         assert "not from a trusted authority" in c.problems[0]
 
 
+# ---------------------------------------------------------------- H2: authority, not digests
+
 def test_digest_alone_is_not_a_verification():
     md = captured()
     d = E.subject_digest(md)
-    assert_closed(E.classify(md, {n: d for n in FWD}, fence=FENCE, config=CONFIG))   # the old interface
-    assert_closed(E.classify(md, [d] * 5, fence=FENCE, config=CONFIG))
+    assert_closed(E.classify(md, {n: d for n in FWD}, fence=FENCE, config=CONFIG))
+    assert_closed(E.classify(md, [d] * 6, fence=FENCE, config=CONFIG))
 
 
 def test_untrusted_authority_is_rejected():
     md = captured()
-    c = E.classify(md, results(md, FWD, authority="caller-said-so"), fence=FENCE, config=CONFIG)
-    assert_closed(c)
+    assert_closed(E.classify(md, results(md, FWD, authority="caller-said-so"), fence=FENCE, config=CONFIG))
 
 
 def test_forged_freeze_date_cannot_make_a_forward_candidate():
-    # historical data from 2026 relabelled as frozen earlier: the authority states the real freeze
     md = captured(spec=spec(freeze="2026-06-01"))
     assert run(md, FWD).eligibility == E.E_FORWARD
     forged = captured(spec=spec(freeze="2026-01-01"))
-    c = E.classify(forged, results(forged, FWD, override={("batch_freeze", "freeze"): "2026-06-01"}),
-                   fence=FENCE, config=CONFIG)
+    c = run(forged, FWD, override={("batch_freeze", "freeze"): "2026-06-01"})
     assert_closed(c)
     assert "freeze date" in c.problems[0]
 
@@ -172,26 +236,15 @@ def test_forged_freeze_date_cannot_make_a_forward_candidate():
 @pytest.mark.parametrize("verifier,key,value", [
     ("spec_registry", "spec_hash", H("other")), ("spec_registry", "channel", "adaptive"),
     ("spec_registry", "domain", "rates"), ("spec_registry", "holding_periods", 5),
-    ("batch_freeze", "spec_hash", H("other")), ("batch_freeze", "manifest_hash", "x"),
+    ("batch_freeze", "spec_hash", H("other")), ("batch_freeze", "manifest_hash", "x"), ("batch_freeze", "batch", ""),
     ("capture_replay", "capture_id", H("other")), ("capture_replay", "monitoring_start", "2026-06-01"),
     ("capture_replay", "backfill", 1), ("capture_replay", "late", 2), ("capture_replay", "source_id", "other"),
     ("store_anchor", "capture_id", H("other")), ("store_anchor", "anchor", "short"),
+    ("store_anchor", "assurance", "trust me"),
     ("publication_contract", "contract_sha256", H("other")), ("publication_contract", "source_id", "other"),
 ])
 def test_verified_facts_must_match_metadata(verifier, key, value):
-    md = captured()
-    c = E.classify(md, results(md, FWD, override={(verifier, key): value}), fence=FENCE, config=CONFIG)
-    assert_closed(c)
-
-
-@pytest.mark.parametrize("verifier,key,value", [
-    ("runner_token", "window_id", "w2"), ("runner_token", "domain", "rates"),
-    ("licensed_snapshot", "vintage_id", H("x")), ("licensed_snapshot", "as_of", "2026-10-01")])
-def test_verified_reserve_facts_must_match(verifier, key, value):
-    md = reserve()
-    c = E.classify(md, results(md, LIC + ("runner_token",), override={(verifier, key): value}),
-                   fence=FENCE, config=CONFIG)
-    assert_closed(c)
+    assert_closed(run(captured(), FWD, override={(verifier, key): value}))
 
 
 def test_verification_bound_to_other_metadata_is_rejected():
@@ -203,7 +256,7 @@ def test_verification_bound_to_other_metadata_is_rejected():
     assert "integrity" in c.problems[0]
 
 
-@pytest.mark.parametrize("names", [FWD[:-2] + FWD[-1:], FWD[1:], FWD + ("runner_token",), FWD + ("batch_freeze",),
+@pytest.mark.parametrize("names", [FWD0[:-1] + FWD[-1:], FWD[1:], FWD + ("runner_token",), FWD + ("batch_freeze",),
                                    FWD + ("synthetic_generator",)])
 def test_missing_extra_or_duplicate_results(names):
     assert_closed(run(captured(), names))
@@ -218,24 +271,223 @@ def test_result_with_wrong_fact_set_or_unknown_verifier():
     assert_closed(E.classify(md, rs, fence=FENCE, config=CONFIG))
 
 
-def test_attempt_identity_needs_attempt_binding():
-    md = captured(attempt_id=H("attempt"))
-    assert_closed(run(md, FWD0))
-    c = run(md, FWD)
-    assert c.eligibility == E.E_FORWARD and c.identity.attempt_id == H("attempt") and c.identity.window_verified
-    c = E.classify(md, results(md, FWD, override={("attempt_binding", "window_id"): "w9"}),
-                   fence=FENCE, config=CONFIG)
+# ---------------------------------------------------------------- N5: verifier facts are immutable
+
+def test_facts_are_copied_and_read_only():
+    md = captured()
+    facts = facts_for(md)
+    live = facts["batch_freeze"]
+    rs = [E.VerifierResult(n, TEST_AUTHORITY, E.subject_digest(md), facts[n]) for n in FWD]
+    live["freeze"] = "2020-01-01"                                   # the caller's dict changes afterwards
+    assert run(md, FWD) == E.classify(md, rs, fence=FENCE, config=CONFIG)
+    assert E.classify(md, rs, fence=FENCE, config=CONFIG).eligibility == E.E_FORWARD
+    with pytest.raises(TypeError):
+        rs[0].facts["spec_hash"] = H("other")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        rs[0].facts = {}
+
+
+@pytest.mark.parametrize("value", [[1], {"a": 1}, 1.5, b"x", {1, 2}, (1,)])
+def test_non_scalar_facts_fail_closed(value):
+    c = run(captured(), FWD, override={("store_anchor", "anchor"): value})
     assert_closed(c)
-    assert_closed(run(captured(attempt_id="not-a-hash"), FWD))
+    assert "as scalars" in c.problems[0]
+
+
+def test_non_mapping_facts_fail_closed():
+    md = captured()
+    rs = results(md, FWD)
+    rs[0] = E.VerifierResult("spec_registry", TEST_AUTHORITY, rs[0].subject, [("spec_hash", H("spec"))])
+    assert rs[0].facts is None
+    assert_closed(E.classify(md, rs, fence=FENCE, config=CONFIG))
+
+
+# ---------------------------------------------------------------- N4: forged Classification objects
+
+def test_issued_classification_caps_and_combines():
+    c = run(captured(), FWD)
+    assert E.issued(c) and E.cap_weight(c, 1) == 1
+
+
+def _forged():
+    ident = E.Identity(H("spec"), "blind", "fx_daily", "2026-06-01", 0, "w1", "2026-07-01", "2026-10-30",
+                       H("a"), "store", True)
+    return E.Classification(E.CAPTURED_FORWARD, False, frozenset(), E.AVAIL_FIRST_SEEN, roles.FORWARD,
+                            E.AUTH_FREEZE, E.E_FORWARD, 1, False, False, False, ("x",), (), H("s"), ident, True)
+
+
+def test_caller_constructed_classification_gets_no_weight():
+    forged = _forged()
+    assert not E.issued(forged) and E.cap_weight(forged, 1) == 0
+    assert_closed(E.combine([forged]))
+    genuine = run(captured(start="2026-07-01", end="2026-07-31", window={"id": "w1"}), FWD)
+    assert_closed(E.combine([genuine, forged]))
+
+
+@pytest.mark.parametrize("derive", [
+    lambda c: dataclasses.replace(c, weight_ceiling=1),
+    lambda c: dataclasses.replace(c),
+    copy.copy, copy.deepcopy,
+])
+def test_copies_of_issued_classifications_get_no_weight(derive):
+    c = run(captured(late=1), FWD)                                  # ceiling 0
+    d = derive(c)
+    assert E.cap_weight(d, 1) == 0
+    assert_closed(E.combine([d]))
+
+
+def test_mutated_issued_classification_gets_no_weight():
+    c = run(captured(late=1), FWD)
+    assert E.issued(c)
+    object.__setattr__(c, "weight_ceiling", 1)
+    object.__setattr__(c, "eligibility", E.E_FORWARD)
+    assert not E.issued(c) and E.cap_weight(c, 1) == 0
+    assert_closed(E.combine([c]))
+
+
+def test_registry_does_not_change_outputs_or_leak():
+    import gc
+    md = captured()
+    before = len(E._ISSUED)
+    for _ in range(50):
+        assert run(md, FWD) == run(copy.deepcopy(md), FWD)
+    gc.collect()
+    assert len(E._ISSUED) <= before + 2
+
+
+# ---------------------------------------------------------------- N2: observed span inside a verified window
+
+@pytest.mark.parametrize("verifier", ["capture_replay"])
+@pytest.mark.parametrize("key,value", [("observed_start", "2026-07-02"), ("observed_end", "2026-10-29"),
+                                       ("observed_start", "2026-06-30")])
+def test_observed_dates_must_be_the_span(verifier, key, value):
+    c = run(captured(), FWD, override={(verifier, key): value})
+    assert_closed(c)
+    assert "observed date" in c.problems[0]
+
+
+@pytest.mark.parametrize("make,names,verifier", [
+    (lambda: historical(), PUB, "public_archive"), (lambda: reserve(), RES, "licensed_snapshot"),
+    (lambda: synthetic(), SYN, "synthetic_generator")])
+def test_observed_dates_bind_every_provenance(make, names, verifier):
+    assert_closed(run(make(), names, override={(verifier, "observed_end"): "2009-01-01"}))
+
+
+@pytest.mark.parametrize("w0,w1,ok", [
+    ("2026-07-01", "2026-10-30", True), ("2026-06-02", "2026-11-06", True),       # cumulative window (PR #86)
+    ("2026-07-02", "2026-10-30", False), ("2026-07-01", "2026-10-29", False), ("2026-08-01", "2026-09-01", False)])
+def test_span_must_lie_inside_the_verified_window(w0, w1, ok):
+    c = run(captured(), FWD, override={("attempt_binding", "window_start"): w0,
+                                       ("attempt_binding", "window_end"): w1})
+    if ok:
+        assert c.eligibility == E.E_FORWARD and c.identity.window_verified
+    else:
+        assert_closed(c)
+        assert "outside the attempt's verified window" in c.problems[0]
+
+
+def test_reserve_span_must_lie_inside_the_verified_window():
+    assert_closed(run(reserve(), RES, override={("attempt_binding", "window_end"): "2023-06-30"}))
+
+
+# ---------------------------------------------------------------- N3: reserve token bound to spec and batch
+
+def test_designated_reserve_candidate_needs_token_freeze_and_attempt():
+    c = run(reserve(), RES)
+    assert (c.role, c.authorization, c.eligibility, c.weight_ceiling) == (
+        roles.RESERVE, E.AUTH_RESERVE, E.E_RESERVE, 1)
+    for drop in ("runner_token", "batch_freeze", "attempt_binding"):
+        assert_closed(run(reserve(), tuple(n for n in RES if n != drop)))
+    md = reserve()
+    del md["attempt"]
+    c = run(md, RES)
+    assert_closed(c)
+    assert "must name its registered attempt" in c.problems[0]
+
+
+@pytest.mark.parametrize("key,value", [("spec_hash", H("another spec")), ("batch", "batch-0002"),
+                                       ("manifest_hash", H("another manifest")), ("window_id", "w2"),
+                                       ("domain", "rates")])
+def test_token_of_another_spec_batch_or_window_is_rejected(key, value):
+    c = run(reserve(), RES, override={("runner_token", key): value})
+    assert_closed(c)
+    assert "token" in c.problems[0]
+
+
+@pytest.mark.parametrize("key,value", [("kind", "screening"), ("kind", "forward_observation"),
+                                       ("designated", False), ("role", roles.FORWARD), ("spec_hash", H("x")),
+                                       ("store", "store"), ("attempt_id", H("other attempt"))])
+def test_reserve_attempt_binding_must_match(key, value):
+    assert_closed(run(reserve(), RES, override={("attempt_binding", key): value}))
+
+
+# ---------------------------------------------------------------- PR #86 contracts
+
+@pytest.mark.parametrize("terminal,superseded", [("failed", False), ("aborted", False), (None, False),
+                                                 ("completed", True), ("completed", None)])
+def test_only_completed_non_superseded_attempts_carry_evidence(terminal, superseded):
+    c = run(captured(), FWD, override={("attempt_binding", "terminal"): terminal,
+                                       ("attempt_binding", "superseded"): superseded})
+    assert_closed(c)
+
+
+def test_attempt_holding_must_be_the_specs_never_a_default():
+    md = captured(spec=spec(holding=5))
+    assert run(md, FWD).eligibility == E.E_FORWARD
+    c = run(md, FWD, override={("attempt_binding", "holding"): 0})       # PR #86's default
+    assert_closed(c)
+    assert "never a default" in c.problems[0]
+
+
+def test_registration_freeze_after_the_manifest_moves_the_forward_start():
+    md = captured(start="2026-07-01")
+    c = run(md, FWD, override={("attempt_binding", "freeze"): "2026-06-20"})
+    assert c.eligibility == E.E_FORWARD and c.identity.freeze == "2026-06-20"
+    c = run(md, FWD, override={("attempt_binding", "freeze"): "2026-07-15"})        # registered after the span starts
+    assert_closed(c)
+    assert "registration freeze" in c.problems[0]
+    c = run(md, FWD, override={("attempt_binding", "freeze"): "2026-05-01"})        # before the manifest freeze
+    assert_closed(c)
+    assert "precedes the manifest freeze" in c.problems[0]
+    assert_closed(run(md, FWD, override={("attempt_binding", "freeze"): None}))
+
+
+def test_ledger_and_store_attempt_ids_are_namespaced():
+    # PR #86: engine evaluations live in the Ledger, forward observations and screening in the Store
+    md = captured(attempt={"id": H("a"), "store": "ledger"})
+    assert run(md, FWD, override={("attempt_binding", "kind"): "engine_evaluation"}).eligibility == E.E_FORWARD
+    c = run(md, FWD)                                                # a forward_observation claimed from the Ledger
+    assert_closed(c)
+    assert "registered in the store" in c.problems[0]
+    c = run(captured(), FWD, override={("attempt_binding", "kind"): "engine_evaluation"})
+    assert_closed(c)
+    assert "registered in the ledger" in c.problems[0]
+    assert_closed(run(captured(), FWD, override={("attempt_binding", "store"): "ledger"}))
+    assert_closed(run(captured(attempt={"id": H("a"), "store": "both"}), FWD))
+    assert_closed(run(captured(attempt={"id": H("a")}), FWD))
+
+
+@pytest.mark.parametrize("verifier", ["store_anchor", "attempt_binding"])
+def test_supplied_anchor_is_not_independent_certification(verifier):
+    c = run(captured(), FWD, override={(verifier, "assurance"): E.SUPPLIED_ANCHOR})
+    assert c.provenance == E.CAPTURED_FORWARD and c.eligibility == E.E_DESCRIPTIVE and c.weight_ceiling == 0
+    assert any("supplied anchor" in b for b in c.blockers)
+    c = run(reserve(), RES, override={("attempt_binding", "assurance"): E.SUPPLIED_ANCHOR})
+    assert c.eligibility == E.E_DESCRIPTIVE and c.weight_ceiling == 0
 
 
 def test_forward_capture_without_attempt_binding_is_descriptive_only():
     md = captured()
-    del md["attempt_id"]
+    del md["attempt"]
     c = run(md, FWD0)
     assert c.provenance == E.CAPTURED_FORWARD and c.genuine_capture and not c.identity.window_verified
     assert c.eligibility == E.E_DESCRIPTIVE and c.weight_ceiling == 0
     assert any("attempt binding" in b for b in c.blockers)
+
+
+def test_attempt_identity_needs_attempt_binding():
+    assert_closed(run(captured(), FWD0))
+    assert_closed(run(captured(attempt={"id": "not-a-hash", "store": "store"}), FWD))
 
 
 # ---------------------------------------------------------------- legitimate classification (simulated authority)
@@ -271,27 +523,30 @@ def test_historical_licensed_is_high_quality_but_not_forward_evidence():
 
 
 def test_licensed_designated_reserve_is_a_screening_candidate_only():
-    c = run(reserve(), LIC + ("runner_token",))
-    assert (c.role, c.authorization, c.eligibility) == (roles.RESERVE, E.AUTH_RESERVE, E.E_RESERVE)
+    c = run(reserve(), RES)
     assert c.weight_ceiling == evidential_weight("blind", "reserve", True, False) == 1
     assert any("never independent forward confirmation" in b for b in c.blockers)
     assert_no_grant(c)
 
 
 @pytest.mark.parametrize("change,avail", [({"spec": spec("adaptive")}, "release_dates"),
-                                          ({"designated": False}, "release_dates"),
                                           ({}, "daily_lag"), ({}, "conservative")])
 def test_reserve_candidate_requirements(change, avail):
-    md = historical("licensed", start="2021-01-04", end="2023-12-29", avail=avail, designated=True)
-    md.update(change)
-    names = LIC + (("runner_token",) if md["designated"] else ())
-    c = run(md, names)
+    md = reserve(**change)
+    md["source"]["publication_contract"] = contract(kind=avail)
+    c = run(md, RES)
     assert c.provenance == E.HISTORICAL_LICENSED
-    assert c.eligibility in (E.E_DESCRIPTIVE, E.E_NONE) and c.weight_ceiling == 0
+    assert c.eligibility == E.E_DESCRIPTIVE and c.weight_ceiling == 0
+
+
+def test_undesignated_reserve_read_is_unauthorised():
+    md = reserve(designated=False)
+    c = run(md, LIC + ("attempt_binding",))
+    assert c.role == roles.RESERVE and c.authorization == E.AUTH_NONE and c.eligibility == E.E_NONE
 
 
 def test_reserve_disabled_in_config_authorises_nothing():
-    c = run(reserve(), LIC + ("runner_token",), config={"reserve": {"enabled": False}})
+    c = run(reserve(), RES, config={"reserve": {"enabled": False}})
     assert c.authorization == E.AUTH_NONE and c.eligibility == E.E_NONE and c.weight_ceiling == 0
 
 
@@ -335,16 +590,15 @@ def _edge_days(h):
     start, end = date(2020, 6, 1), date(2020, 11, 30)
     days = {start, end, date(2020, 5, 29)}
     for k in (h, h + 1, h + 2):
-        days.add(_bday(start, -k))          # before the reserve starts
-        days.add(_bday(end, -k))            # before the reserve ends
+        days.add(_bday(start, -k))
+        days.add(_bday(end, -k))
     return sorted(days)
 
 
 @pytest.mark.parametrize("h", [0, 5, 20])
 def test_holding_period_embargo_matches_role_of_at_every_edge(h):
     for day in _edge_days(h):
-        md = historical("licensed", start=day.isoformat(), end=day.isoformat(), spec=spec(holding=h),
-                        designated=False)
+        md = historical("licensed", start=day.isoformat(), end=day.isoformat(), spec=spec(holding=h))
         expected = roles.role_of(day, "fx_daily", BOUND_FENCE, date(2026, 6, 1), h)
         c = run(md, LIC, fence=BOUND_FENCE)
         assert c.role == expected, (h, day)
@@ -356,25 +610,20 @@ def test_holding_period_embargo_matches_role_of_at_every_edge(h):
 def test_holding_period_designated_reserve_edges(h):
     end = date(2020, 11, 30)
     for k in range(0, 25):
-        day = _bday(end, -k)
-        md = historical("licensed", start=day.isoformat(), end=day.isoformat(), spec=spec(holding=h),
-                        designated=True)
-        c = run(md, LIC + ("runner_token",), fence=BOUND_FENCE)
-        embargoed = roles.role_of(day, "fx_daily", BOUND_FENCE, date(2026, 6, 1), h) == roles.EMBARGO
+        day = _bday(end, -k).isoformat()
+        c = run(reserve(start=day, end=day, spec=spec(holding=h)), RES, fence=BOUND_FENCE)
+        embargoed = roles.role_of(_bday(end, -k), "fx_daily", BOUND_FENCE, date(2026, 6, 1), h) == roles.EMBARGO
         if embargoed:
-            assert_closed(c)                # 'designated' outside the reserve is contradictory
+            assert_closed(c)
         else:
             assert c.eligibility == E.E_RESERVE and c.weight_ceiling == 1
         assert embargoed == (k < h + 1), (h, k)
 
 
 def test_regression_holding_zero_no_longer_assumed():
-    # 10 business days before the reserve ends: reserve for a 0-period spec, embargo for a 20-period spec.
     day = _bday(date(2024, 12, 31), -10).isoformat()
-    md0 = reserve(span={"start": "2021-01-04", "end": day}, spec=spec(holding=0))
-    md20 = reserve(span={"start": "2021-01-04", "end": day}, spec=spec(holding=20))
-    assert run(md0, LIC + ("runner_token",)).eligibility == E.E_RESERVE
-    c = run(md20, LIC + ("runner_token",))
+    assert run(reserve(end=day, spec=spec(holding=0)), RES).eligibility == E.E_RESERVE
+    c = run(reserve(end=day, spec=spec(holding=20)), RES)
     assert_closed(c)
     assert "several roles" in c.problems[0]
 
@@ -383,19 +632,17 @@ def test_regression_holding_zero_no_longer_assumed():
 def test_unknown_or_malformed_holding_fails_closed(bad):
     md = captured()
     md["spec"]["holding_periods"] = bad
-    assert_closed(run(md, FWD))
+    assert_closed(E.classify(md, [], fence=FENCE, config=CONFIG))
 
 
 def test_missing_holding_fails_closed():
     md = captured()
     del md["spec"]["holding_periods"]
-    assert_closed(run(md, FWD))
+    assert_closed(E.classify(md, [], fence=FENCE, config=CONFIG))
 
 
 def test_contradictory_holding_fails_closed():
-    md = reserve(spec=spec(holding=0))
-    c = E.classify(md, results(md, LIC + ("runner_token",), override={("spec_registry", "holding_periods"): 20}),
-                   fence=FENCE, config=CONFIG)
+    c = run(reserve(), RES, override={("spec_registry", "holding_periods"): 20})
     assert_closed(c)
     assert "holding period" in c.problems[0]
 
@@ -410,7 +657,7 @@ BAD_CONFIGS = [{"reserve": True}, {"reserve": None}, {"reserve": []}, {"reserve"
 
 @pytest.mark.parametrize("cfg", BAD_CONFIGS)
 def test_malformed_config_fails_closed(cfg):
-    for md, names in ((captured(), FWD), (reserve(), LIC + ("runner_token",)), (synthetic(), SYN)):
+    for md, names in ((captured(), FWD), (reserve(), RES), (synthetic(), SYN)):
         assert_closed(run(md, names, config=cfg))
 
 
@@ -456,8 +703,9 @@ def _leaves(obj, path=()):
 
 def test_fuzz_metadata_mutations_never_raise_or_grant():
     rng = random.Random(86)
-    for make, names in ((captured, FWD), (reserve, LIC + ("runner_token",)), (synthetic, SYN)):
+    for make, names in ((captured, FWD), (reserve, RES), (synthetic, SYN)):
         original = make()
+        baseline = run(original, names)
         paths = [p for p in _leaves(original) if p]
         for _ in range(250):
             md = copy.deepcopy(original)
@@ -478,10 +726,10 @@ def test_fuzz_metadata_mutations_never_raise_or_grant():
             c = E.classify(md, rs, fence=FENCE, config=CONFIG)
             assert type(c) is E.Classification
             assert_no_grant(c)
-            if md != original:
-                # facts were stated about the original: any effective change must not survive
-                assert c.provenance == E.UNVERIFIED or c.eligibility in (E.E_NONE, E.E_INFRA, E.E_DESCRIPTIVE) \
-                    or c.identity == run(original, names).identity
+            if md != original and c.eligibility in (E.E_RESERVE, E.E_FORWARD):
+                # verified facts were stated about the original: only a change they do not cover may survive,
+                # and it may not change the identity or the ceiling
+                assert c.identity == baseline.identity and c.weight_ceiling == baseline.weight_ceiling, path
 
 
 # ---------------------------------------------------------------- reconstructed / backfilled
@@ -515,7 +763,7 @@ def test_backfill_reported_honestly_is_flagged_not_rejected():
 def test_snapshot_vintage_with_capture_block_fails_closed():
     md = captured()
     md["vintage"]["kind"] = "snapshot"
-    assert_closed(run(md, PUB + ("batch_freeze",)))
+    assert_closed(run(md, PUB + ("batch_freeze", "attempt_binding")))
 
 
 def test_capture_vintage_without_capture_block():
@@ -548,7 +796,7 @@ def test_missing_source_definition():
 def test_invalid_publication_contract(mutate):
     md = captured()
     mutate(md["source"]["publication_contract"])
-    assert_closed(run(md, FWD))
+    assert_closed(E.classify(md, [], fence=FENCE, config=CONFIG))
 
 
 @pytest.mark.parametrize("mutate", [
@@ -596,7 +844,7 @@ def test_forged_provenance_label():
 
 @pytest.mark.parametrize("extra", [{"evidential_weight": 1}, {"eligible": True}, {"filename": "captured_forward.csv"},
                                    {"provenance": E.CAPTURED_FORWARD}, {"tier": "formally_supported"},
-                                   {"holding_periods": 0}])
+                                   {"holding_periods": 0}, {"attempt_id": H("a")}])
 def test_unknown_fields_fail_closed(extra):
     md = historical()
     md.update(extra)
@@ -604,7 +852,7 @@ def test_unknown_fields_fail_closed(extra):
 
 
 def test_designated_outside_reserve_is_forged():
-    assert_closed(run(captured(designated=True), FWD + ("runner_token",)))
+    assert_closed(run(captured(designated=True), RES))
 
 
 @pytest.mark.parametrize("mutate", [
@@ -622,7 +870,7 @@ def test_ambiguous_vintage(mutate):
 
 @pytest.mark.parametrize("drop", [
     lambda m: m.pop("source"), lambda m: m.pop("span"), lambda m: m.pop("vintage"), lambda m: m.pop("designated"),
-    lambda m: m.pop("schema"), lambda m: m.update(schema="manhattan.evidence/1"), lambda m: m.pop("spec"),
+    lambda m: m.pop("schema"), lambda m: m.update(schema="manhattan.evidence/2"), lambda m: m.pop("spec"),
     lambda m: m.pop("window"), lambda m: m["window"].update(id=""),
     lambda m: m["capture"].pop("reconstructed"), lambda m: m["capture"]["reconstructed"].pop("late"),
     lambda m: m["capture"]["reconstructed"].update(late=-1), lambda m: m["spec"].pop("freeze"),
@@ -656,7 +904,7 @@ def test_span_across_fence_fails_closed():
 
 def _part(start, end, window, attempt=None, **kw):
     if attempt:
-        kw["attempt_id"] = attempt
+        kw["attempt"] = {"id": attempt, "store": "store"}
     return run(captured(start=start, end=end, window={"id": window}, **kw), FWD)
 
 
@@ -665,15 +913,24 @@ def test_combine_disjoint_parts_of_one_spec_keeps_every_part():
     c = E.combine([a, b])
     assert c.eligibility == E.E_FORWARD and c.parts == (a, b) and c.subjects == (a.subject, b.subject)
     assert [p.provenance for p in c.parts] == [E.CAPTURED_FORWARD] * 2
+    assert E.issued(c) and E.cap_weight(c, 1) == 1
     assert_no_grant(c)
 
 
 def test_combine_rejects_duplicates():
     a = _part("2026-07-01", "2026-07-31", "w1")
     assert_closed(E.combine([a, a]))
-    assert_closed(E.combine([a, _part("2026-08-03", "2026-08-31", "w1")]))             # same window
+    assert_closed(E.combine([a, _part("2026-08-03", "2026-08-31", "w1")]))
     x, y = _part("2026-07-01", "2026-07-31", "w1", H("a")), _part("2026-08-03", "2026-08-31", "w2", H("a"))
-    assert_closed(E.combine([x, y]))                                                   # same attempt
+    assert_closed(E.combine([x, y]))
+
+
+def test_combine_rejects_the_same_attempt_id_across_stores():
+    x = _part("2026-07-01", "2026-07-31", "w1", H("a"))
+    md = captured(start="2026-08-03", end="2026-08-31", window={"id": "w2"}, attempt={"id": H("a"), "store": "ledger"})
+    y = run(md, FWD, override={("attempt_binding", "kind"): "engine_evaluation"})
+    assert y.eligibility == E.E_FORWARD
+    assert_closed(E.combine([x, y]))
 
 
 def test_combine_rejects_overlapping_spans():
@@ -693,8 +950,7 @@ def test_combine_rejects_other_specs_channels_freezes_holdings(other):
 
 def test_combine_rejects_other_domain():
     a = run(historical(start="2005-01-03", end="2009-12-31"), PUB)
-    md = historical(start="2010-01-04", end="2014-12-31", window={"id": "w2"}, domain="rates")
-    b = run(md, PUB)
+    b = run(historical(start="2010-01-04", end="2014-12-31", window={"id": "w2"}, domain="rates"), PUB)
     assert b.provenance == E.HISTORICAL_PUBLIC
     assert_closed(E.combine([a, b]))
 
@@ -704,7 +960,7 @@ def test_combine_attempt_identity_all_or_none():
     b = _part("2026-08-03", "2026-08-31", "w2", H("a2"))
     assert E.combine([a, b]).eligibility == E.E_FORWARD
     md = captured(start="2026-08-03", end="2026-08-31", window={"id": "w2"})
-    del md["attempt_id"]
+    del md["attempt"]
     assert_closed(E.combine([a, run(md, FWD0)]))
 
 
@@ -725,14 +981,14 @@ def test_combine_takes_the_weakest_part():
     c = E.combine([good, recon])
     assert c.provenance == E.CAPTURED_FORWARD and E.LATE in c.reconstruction
     assert c.eligibility == E.E_DESCRIPTIVE and c.weight_ceiling == 0
-    assert c.parts[0].weight_ceiling == 1                     # parts keep their own classification
+    assert c.parts[0].weight_ceiling == 1
 
 
 # ---------------------------------------------------------------- weight and purity
 
 CASES = [
     lambda: run(synthetic(), SYN), lambda: run(historical(), PUB), lambda: run(historical("licensed"), LIC),
-    lambda: run(reserve(), LIC + ("runner_token",)), lambda: run(captured(), FWD),
+    lambda: run(reserve(), RES), lambda: run(captured(), FWD),
     lambda: run(captured(late=1), FWD), lambda: run(captured(), ()),
 ]
 
@@ -776,8 +1032,8 @@ def test_module_is_pure():
     tree = ast.parse(inspect.getsource(E))
     mods = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     mods |= {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-    assert mods <= {"__future__", "hashlib", "json", "re", "dataclasses", "datetime", "typing", "numpy",
-                    "manhattan", "manhattan.availability", "manhattan.ledger", "manhattan.ops"}, mods
+    assert mods <= {"__future__", "hashlib", "json", "re", "weakref", "dataclasses", "datetime", "types", "typing",
+                    "numpy", "manhattan", "manhattan.availability", "manhattan.ledger", "manhattan.ops"}, mods
     calls = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     assert not calls & {"open", "exec", "eval", "__import__"}
 
