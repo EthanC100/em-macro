@@ -38,6 +38,9 @@ IDENTITY_FIELDS = ("executable", "variant", "hypothesis", "family", "batch", "ro
 ATTEMPT_SCHEMA = 2
 TERMINAL_REASONS = ("execution_error", "data_unavailable", "interrupted", "cancelled", "validation_error")
 COMPLETIONS = ("evaluation", "rerun", "nondeterminism")
+# Written only through their own methods (start_evaluation, record_evaluation, end_attempt), never by append (S7 M5)
+LIFECYCLE_TYPES = ("evaluation_started", *COMPLETIONS, "attempt_failed", "attempt_aborted")
+PROTECTED_ROLES = ("reserve", "forward")
 # keys that carry an outcome: never written to the public index
 OUTCOME_KEYS = frozenset({"summary", "returns", "return_series", "result", "results", "p_value", "p", "e_value",
                           "wealth", "sharpe", "mean", "pnl", "t_stat", "tstat", "posterior", "pi", "outcome",
@@ -201,6 +204,18 @@ def same_identity(start: dict, completion: dict) -> bool:
     return True
 
 
+def _designated_domain(p: dict) -> str | None:
+    """The evaluation domain of a schema-2 designated reserve start, else None."""
+    if p.get("attempt_schema") != ATTEMPT_SCHEMA or p.get("role") != "reserve" or p.get("designated") is not True:
+        return None
+    auth = p.get("authorization")
+    windows = auth.get("windows") if isinstance(auth, dict) else None
+    for w in windows if isinstance(windows, list) else []:
+        if isinstance(w, dict) and w.get("purpose") == "evaluation" and isinstance(w.get("domain"), str):
+            return w["domain"]
+    return None
+
+
 def _safe_key(p) -> tuple | None:
     try:
         k = (p["spec_hash"], p["data_hash"], p["window"]["id"])
@@ -231,6 +246,7 @@ class Ledger:
         self._evals_by_key: dict[tuple, list] = {}
         self._evals: list[dict] = []
         self._legacy_last: dict[tuple, int] = {}      # key -> seq of the latest unlinked completion
+        self._designated: dict[tuple, list] = {}      # (batch, domain) -> designated reserve schema-2 starts
         for rec in read(self.path):
             self._index(rec)
 
@@ -246,6 +262,9 @@ class Ledger:
                 self._starts_by_key.setdefault(k, []).append(rec)
             if isinstance(p.get("supersedes"), str):
                 self._superseded.add(p["supersedes"])
+            dom = _designated_domain(p)
+            if dom is not None:
+                self._designated.setdefault((p.get("batch"), dom), []).append(rec["hash"])
         elif t in COMPLETIONS:
             self._evals.append(rec)
             if k is not None:
@@ -270,6 +289,13 @@ class Ledger:
 
     # ---- writing
     def append(self, type_: str, payload: dict, ts_utc: str | None = None) -> dict:
+        """Append one record of a non-lifecycle type. Starts, completions and terminals are written only by
+        ``start_evaluation``, ``record_evaluation`` and ``end_attempt``, which apply their rules (Phase 4B, S7 M5)."""
+        if type_ in LIFECYCLE_TYPES:
+            raise LedgerError(f"{type_} records are written by the lifecycle methods only")
+        return self._append(type_, payload, ts_utc)
+
+    def _append(self, type_: str, payload: dict, ts_utc: str | None = None) -> dict:
         """Append one record. The line is flushed and ``fsync``ed before this returns, so a registration that
         returned survives a crash of the process (Phase 4B)."""
         if type_ not in TYPES:
@@ -339,7 +365,7 @@ class Ledger:
                 if prior != p:
                     raise LedgerError("retry identity differs from interrupted attempt")
             p["supersedes"] = supersedes
-        return self.append("evaluation_started", p)
+        return self._append("evaluation_started", p)
 
     def active_attempt(self, attempt_id: str) -> dict:
         start = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
@@ -375,15 +401,25 @@ class Ledger:
             payload["data_read"] = data_read
         elif data_read is not None:
             raise LedgerError("legacy attempts carry no data_read flag")
-        return self.append("attempt_" + status, payload)
+        return self._append("attempt_" + status, payload)
 
     def record_evaluation(self, *, executable: str, variant: str, hypothesis: str, family: str, batch: str,
                           channel: str, role: str, window: dict, designated: bool, spec_hash: str, data_hash: str,
                           code_version: dict, result_hash: str, n_obs: int, summary: dict, seed: int,
-                          reconstructed: bool = False, attempt_id: str | None = None) -> dict:
-        """Record one evaluation, deciding by its key whether it is a new look, a rerun or a nondeterminism."""
+                          reconstructed: bool = False, attempt_id: str | None = None, proof=None) -> dict:
+        """Record one evaluation, deciding by its key whether it is a new look, a rerun or a nondeterminism.
+
+        A reserve or forward completion (owner decision D-5, S7 M5) needs ``proof``: the one-use
+        ``access.CompletionProof`` that only ``engine.evaluate`` obtains, from the active attempt that read its
+        window, for this result. An attempt ID alone never writes a protected result."""
         if role not in ROLES or channel not in S.CHANNELS:
             raise LedgerError("role must be exploration, reserve or forward; channel blind or adaptive")
+        if role in PROTECTED_ROLES:
+            from manhattan import access
+            start = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
+            if start is None or start["payload"].get("attempt_schema") != ATTEMPT_SCHEMA:
+                raise LedgerError("a reserve or forward completion needs a registered (schema 2) attempt")
+            access.verify_completion(proof, attempt_id=attempt_id, result_hash=result_hash, ledger=self)
         payload = {"executable": executable, "variant": variant, "hypothesis": hypothesis, "family": family,
                    "batch": batch, "channel": channel, "role": role, "window": window, "designated": bool(designated),
                    "spec_hash": spec_hash, "data_hash": data_hash, "code_version": code_version,
@@ -409,15 +445,22 @@ class Ledger:
             first = same_key[0]
             if all(r["payload"]["result_hash"] == result_hash for r in same_key):
                 payload.update(evidential_weight=0, first_seq=first["seq"])
-                return self.append("rerun", payload)
+                return self._append("rerun", payload)
             payload.update(evidential_weight=0, first_seq=first["seq"], first_result_hash=first["payload"]["result_hash"])
-            return self.append("nondeterminism", payload)
+            return self._append("nondeterminism", payload)
         earlier = [r for r in self._evals if r["type"] == "evaluation" and r["payload"]["spec_hash"] == spec_hash
                    and r["payload"]["window"]["id"] == window["id"]]
         if earlier:
             of_record = next((r for r in earlier if r["payload"]["designated"]), earlier[0])
             payload.update(data_changed=True, designated=False, evidential_weight=0, result_of_record_seq=of_record["seq"])
-        return self.append("evaluation", payload)
+        return self._append("evaluation", payload)
+
+    def designated_reserve_starts(self, batch: str, domain: str) -> list[str]:
+        """Attempt IDs of the registered designated reserve evaluations of (batch, domain) (D-6)."""
+        return list(self._designated.get((batch, domain), []))
+
+    def is_superseded(self, attempt_id: str) -> bool:
+        return attempt_id in self._superseded
 
     def looks(self) -> int:
         """Distinct evaluations (reruns are the same look and count once)."""

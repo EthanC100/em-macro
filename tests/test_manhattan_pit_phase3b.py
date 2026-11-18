@@ -201,6 +201,12 @@ def test_compiler_checks_sources_on_compile_and_rebuild():
 def test_reconstructed_flag_is_recorded_and_forward_weight_is_zero(tmp_path, monkeypatch):
     from test_manhattan_registry import ev
     book = ledger.Ledger(tmp_path / "ledger.jsonl", writer="fixture", protocol="0" * 64)
-    rec = book.record_evaluation(**ev(reconstructed=True))
+    rec = book.record_evaluation(**ev(reconstructed=True))                     # exploration (storage-level)
     assert rec["payload"]["reconstructed"] is True
     assert rec["payload"]["evidential_weight"] == 0
+    # Phase 4B / D-5: a reconstructed reserve or forward record cannot be written by the storage API at all (the
+    # engine refuses reconstructed reserve and forward windows before computing), and its weight would be 0
+    for role in ("reserve", "forward"):
+        with pytest.raises(ledger.LedgerError):
+            book.record_evaluation(**ev(reconstructed=True, role=role, spec_hash="b" * 64))
+        assert ledger.evidential_weight("blind", role, designated=True, reconstructed=True) == 0

@@ -153,7 +153,8 @@ def measure_ledger(n: int) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         remote = Path(tmp) / "ledger.git"
         subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
-        intents = [ST.Intent("observation", ("observation", f"AP-{i:016x}", "2026-11-16"),
+        # a diagnostic record of an observation's size; evidence types are written through manhattan.access only
+        intents = [ST.Intent("capacity_probe", ("capacity_probe", f"AP-{i:016x}", "2026-11-16"),
                              {"net": round(float(rng.normal(0, 0.01)), 12),
                               "exposure": [round(float(e), 12) for e in rng.normal(0, 0.2, 6)], "evidential_weight": 1})
                    for i in range(n)]

@@ -19,7 +19,10 @@ its terminal states. Nothing here decides a statistical question.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
+import secrets
+import weakref
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -33,6 +36,7 @@ PROTECTED = pit.PROTECTED_ROLES
 KINDS = ("engine_evaluation", "screening", "forward_observation")
 WINDOW_PURPOSES = ("evaluation", "signal_warmup")
 _CTX_KEY = object()
+_PROOF_KEY = secrets.token_bytes(32)        # completion proofs (Ledger) and sealed writes (Store); never persisted
 
 
 def _day(v) -> date:
@@ -180,26 +184,42 @@ def check_declaration(kind: str, identity: dict, windows: tuple, *, caller: str,
         raise AccessError("only forward observations declare a signal warm-up")
     if ev.role in PROTECTED and caller != roles.RUNNER:
         raise AccessError(f"{ev.role} windows are the runner's")
+    if ev.role == roles.RESERVE:
+        # S7 M6: the token is bound to the attempt it authorizes: its batch, a manifest, the specification and the
+        # declared (domain, window) pair (the last also checked by roles.check_read).
+        if not isinstance(token, roles.RunnerToken) or token.verified is not True:
+            raise AccessError("a reserve attempt needs a verified batch token")
+        if token.batch != identity["batch"]:
+            raise AccessError("the reserve token's batch is not the attempt's batch")
+        if not isinstance(token.manifest_hash, str) or re.fullmatch(r"[0-9a-f]{64}", token.manifest_hash) is None:
+            raise AccessError("the reserve token names its manifest hash")
+        if identity["spec_hash"] not in token.specs:
+            raise AccessError("the reserve token does not name this specification")
+        if (ev.domain, ev.id) not in token.designated:
+            raise AccessError("the reserve token does not name this (domain, window)")
+    elif token is not None:
+        raise AccessError("only a reserve attempt carries a batch token")
     for w in windows:
         _role_now(kind, w, caller=caller, fence=fence, freeze=freeze, holding=holding, token=token)
 
 
-def _token_snapshot(token) -> dict | None:
+def _token_snapshot(token, identity: dict) -> dict | None:
     if token is None:
         return None
-    return {"batch": str(token.batch), "manifest_hash": str(token.manifest_hash)}
+    return {"batch": str(token.batch), "manifest_hash": str(token.manifest_hash), "spec_hash": identity["spec_hash"]}
 
 
-def authorization(kind, windows, *, caller, fence, freeze, holding, token) -> dict:
+def authorization(kind, windows, *, caller, fence, freeze, holding, token, identity: dict) -> dict:
     domain = next(w.domain for w in windows if w.purpose == "evaluation")
     return {"caller": caller, "windows": [w.as_dict() for w in windows], "fence": fence_snapshot(fence, domain),
             "freeze": None if freeze is None else freeze.isoformat(), "holding": holding,
-            "token": _token_snapshot(token)}
+            "token": _token_snapshot(token, identity)}
 
 
 def check_recorded(kind: str, identity: dict, auth: dict) -> None:
     """Re-validate a persisted authorization from its own fence snapshot (the reconciler's check). The recorded
-    token cannot be re-verified here, so a reserve window is checked for role and fence only."""
+    token's signature or tag cannot be re-verified here: a reserve window is checked for role, fence, and the
+    token's recorded binding to the attempt's batch, specification and window."""
     if not isinstance(auth, dict) or set(auth) != {"caller", "windows", "fence", "freeze", "holding", "token"}:
         raise AccessError("malformed authorization")
     if not isinstance(auth["windows"], list) or not auth["windows"]:
@@ -214,7 +234,10 @@ def check_recorded(kind: str, identity: dict, auth: dict) -> None:
         t = auth["token"]
         if not isinstance(t, dict):
             raise AccessError("a reserve attempt records its batch token")
-        token = roles.RunnerToken(t.get("batch"), t.get("manifest_hash"), True, frozenset({(ev.domain, ev.id)}))
+        if set(t) != {"batch", "manifest_hash", "spec_hash"}:
+            raise AccessError("malformed reserve token record")
+        token = roles.RunnerToken(t["batch"], t["manifest_hash"], True, frozenset({(ev.domain, ev.id)}),
+                                  frozenset({t["spec_hash"]}))
     freeze = None if auth["freeze"] is None else _day(auth["freeze"])
     check_declaration(kind, identity, windows, caller=auth["caller"], fence=fence, freeze=freeze,
                       holding=auth["holding"], token=token)
@@ -233,6 +256,7 @@ class AttemptContext:
         self._identity, self._windows = dict(identity), {w.id: w for w in windows}
         self.caller, self._fence, self._freeze, self._holding, self._token = caller, fence, freeze, holding, token
         self._meter = pit._Meter()
+        self._meter.alive = self.active             # every protected read re-checks this (S7 H2)
         self._ended = False
 
     # ---- facts
@@ -311,6 +335,16 @@ class AttemptContext:
                                 purpose="forward_observation", attempt_id=self.attempt_id, window_id=dw.id,
                                 signal_start=dw.start, meter=self._meter)
 
+    def _completion_proof(self, result_hash: str) -> CompletionProof:
+        """For ``engine.evaluate`` only: the attempt is active and has read its window."""
+        if self.kind != "engine_evaluation" or not isinstance(self._backend, _LedgerBackend):
+            raise AccessError("only an engine evaluation completes in the Ledger")
+        self._require_active()
+        if not self.data_read:
+            raise AccessError("an attempt that read nothing cannot complete")
+        return CompletionProof(_key=_CTX_KEY, attempt_id=self.attempt_id, result_hash=result_hash,
+                               ledger_id=id(self._backend.ledger))
+
     def check_evaluation_window(self, window: pit.Window) -> None:
         """The window an evaluation is about to run on is this attempt's declared evaluation window."""
         self._require_active()
@@ -339,6 +373,55 @@ class AttemptContext:
 
 
 # ---------------------------------------------------------------- the Ledger (engine evaluations)
+
+def _one_designated(ledger: L.Ledger, batch: str, dws: tuple, supersedes: str | None) -> None:
+    """D-6, conservatively: one designated reserve evaluation per (batch, domain). A second registration is refused
+    unless it retries (``supersedes``) the one unfinished earlier attempt of that pair; a failed, aborted or
+    completed designated attempt consumes the designation. Relaxing this for attempts that never read data is an
+    owner decision, not taken here."""
+    domain = next(w.domain for w in dws if w.purpose == "evaluation")
+    prior = ledger.designated_reserve_starts(batch, domain)
+    if not prior:
+        return
+    if supersedes is not None and supersedes in prior and all(
+            h == supersedes or ledger.is_superseded(h) for h in prior):
+        return
+    raise AccessError(f"batch {batch} already has its designated reserve evaluation for {domain} (D-6)")
+
+
+class CompletionProof:
+    """What ``Ledger.record_evaluation`` needs to write a reserve or forward completion: minted only by an active
+    attempt that has read its window, for one result, and used once (S7 M5). An attempt ID alone is not enough."""
+    __slots__ = ("attempt_id", "result_hash", "ledger_id", "mac", "used")
+
+    def __init__(self, *, _key, attempt_id: str, result_hash: str, ledger_id: int):
+        if _key is not _CTX_KEY:
+            raise AccessError("completion proofs are minted by an attempt only")
+        self.attempt_id, self.result_hash, self.ledger_id, self.used = attempt_id, result_hash, ledger_id, False
+        self.mac = _mac("completion", attempt_id, result_hash, ledger_id)
+
+    def __reduce_ex__(self, protocol):
+        raise AccessError("a completion proof cannot be serialized")
+
+    def __copy__(self):
+        raise AccessError("a completion proof cannot be copied")
+
+    def __deepcopy__(self, memo):
+        raise AccessError("a completion proof cannot be copied")
+
+
+def _mac(*parts) -> str:
+    return hmac.new(_PROOF_KEY, repr(parts).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verify_completion(proof, *, attempt_id: str | None, result_hash: str, ledger: L.Ledger) -> None:
+    """Called by ``Ledger.record_evaluation`` for every reserve or forward completion; consumes the proof."""
+    if (not isinstance(proof, CompletionProof) or proof.used or attempt_id is None
+            or (proof.attempt_id, proof.result_hash, proof.ledger_id) != (attempt_id, result_hash, id(ledger))
+            or not hmac.compare_digest(proof.mac, _mac("completion", attempt_id, result_hash, id(ledger)))):
+        raise L.LedgerError("a reserve or forward completion needs its attempt's completion proof (engine.evaluate)")
+    proof.used = True
+
 
 class _LedgerBackend:
     def __init__(self, ledger: L.Ledger):
@@ -388,7 +471,9 @@ def register_evaluation(ledger: L.Ledger, *, identity: dict, windows, caller: st
     check_declaration("engine_evaluation", ident, dws, caller=caller, fence=fence, freeze=freeze, holding=holding,
                       token=token)
     auth = authorization("engine_evaluation", dws, caller=caller, fence=fence, freeze=freeze, holding=holding,
-                         token=token)
+                         token=token, identity=ident)
+    if ident["role"] == roles.RESERVE and ident["designated"]:
+        _one_designated(ledger, ident["batch"], dws, supersedes)
     rec = ledger.start_evaluation({**ident, "attempt_schema": L.ATTEMPT_SCHEMA, "kind": "engine_evaluation",
                                    "authorization": auth}, supersedes=supersedes)
     return AttemptContext(_key=_CTX_KEY, backend=_LedgerBackend(ledger), attempt_id=rec["hash"],
@@ -408,8 +493,8 @@ def store_attempt_id(payload: dict) -> str:
 
 
 class _StoreBackend:
-    def __init__(self, store):
-        self.store = store
+    def __init__(self, store, require_lock: bool = False):
+        self.store, self.require_lock = store, require_lock
 
     def is_active(self, attempt_id: str) -> bool:
         return self.store.get((STORE_START, attempt_id)) is not None and \
@@ -417,8 +502,89 @@ class _StoreBackend:
 
     def terminal(self, attempt_id, status, reason, data_read):
         it = terminal_intent(attempt_id, status, reason=reason, data_read=data_read)
-        self.store.write([it], f"attempt {status} {attempt_id[:12]}")
+        _sealed_write(self.store, [it], f"attempt {status} {attempt_id[:12]}", self.require_lock)
         return self.store.get((STORE_TERMINAL, attempt_id))
+
+
+# ---- sealed writes: the only way a protected record type reaches the Store through its public API (S7 M5)
+
+def _store_mac(intents, label: str) -> str:
+    return _mac("store", label, [S.canonical_bytes(it.as_dict()).decode("utf-8") for it in intents])
+
+
+def store_seal_ok(seal, intents, label: str) -> bool:
+    """Called by ``Store.write`` when a batch holds a protected record type."""
+    return isinstance(seal, str) and hmac.compare_digest(seal, _store_mac(intents, label))
+
+
+def _sealed_write(store, intents: list, label: str, require_lock: bool) -> dict:
+    return store.write(intents, label, sealed=_store_mac(intents, label), require_lock=require_lock)
+
+
+_MINTED: dict[int, tuple] = {}                     # completions minted by ``completion``, until committed
+
+
+def epoch_intent():
+    """The record after which every protected Store result must be linked to a registered attempt."""
+    from manhattan.ops import store as ST
+    return ST.Intent("accounting_epoch", ("accounting_epoch", str(L.ATTEMPT_SCHEMA)),
+                     {"attempt_schema": L.ATTEMPT_SCHEMA})
+
+
+def commit_recovery(store, *, kinds: tuple = ("forward_observation",), epoch: bool = False,
+                    require_lock: bool = True) -> int:
+    """Write the recovery terminals of ``recover_interrupted`` (and the accounting epoch once). Returns how many
+    attempts were closed. With ``require_lock`` the write is refused unless this run still holds the Store lock."""
+    its = recover_interrupted(store, kinds)
+    if epoch and store.get(("accounting_epoch", str(L.ATTEMPT_SCHEMA))) is None:
+        its = its + [epoch_intent()]
+    if its:
+        _sealed_write(store, its, "attempt recovery", require_lock)
+    return sum(1 for it in its if it.type == "attempt_aborted")
+
+
+def commit_failures(store, ctxs: list, *, require_lock: bool = False) -> int:
+    """Close every listed attempt still without a terminal as ``failed: execution_error`` (reason class only)."""
+    its = [terminal_intent(c.attempt_id, "failed", reason="execution_error", data_read=c.data_read)
+           for c in ctxs if store.get((STORE_TERMINAL, c.attempt_id)) is None]
+    for c in ctxs:
+        c._ended = True
+    if its:
+        _sealed_write(store, its, "attempts failed", require_lock)
+    return len(its)
+
+
+def commit_results(store, results: list, completions: list, label: str, *, require_lock: bool = False) -> dict:
+    """Write results and their attempts' completions in one journalled write, after checking that every protected
+    result in the batch is linked, with its exact content, by exactly one completion minted here, and that every
+    new or conflicting link names a result of the batch. A crash leaves both or neither."""
+    from manhattan.ops import store as ST
+    linked: dict[tuple, str] = {}
+    for c in completions:
+        rec = _MINTED.get(id(c))
+        if rec is None or rec[0] != S.canonical_bytes(c.as_dict()):
+            raise AccessError("a completion was not minted by access.completion, or was altered")
+        for link in c.payload["results"]:
+            k = tuple(link["key"])
+            if k in linked:
+                raise AccessError("a result is linked by two completions")
+            linked[k] = link["content_hash"]
+    batch = {}
+    for it in results:
+        if it.type not in ST.PROTECTED_TYPES or it.type.startswith("attempt_") or it.type == "accounting_epoch":
+            raise AccessError("commit_results writes result records only")
+        h = ST.content_hash(it.type, it.key, ST._canon(it.payload))
+        if linked.get(tuple(it.key)) != h:
+            raise AccessError("a result is not linked, with this content, by a completion of the batch")
+        batch[tuple(it.key)] = h
+    for c in completions:
+        for link in c.payload["results"]:
+            if link["disposition"] in ("new", "conflict") and tuple(link["key"]) not in batch:
+                raise AccessError("a completion links a new result that is not in the batch")
+    out = _sealed_write(store, list(results) + list(completions), label, require_lock)
+    for c in completions:
+        _MINTED.pop(id(c), None)
+    return out
 
 
 @dataclass(frozen=True)
@@ -445,7 +611,7 @@ def start_payload(a: StoreAttempt, *, fence: roles.Fence, run_id: str, run_attem
                       token=None)
     payload = {"attempt_schema": L.ATTEMPT_SCHEMA, "kind": a.kind, "identity": ident, "subject": dict(a.subject),
                "authorization": authorization(a.kind, dws, caller=a.caller, fence=fence, freeze=a.freeze,
-                                              holding=a.holding, token=None),
+                                              holding=a.holding, token=None, identity=ident),
                "run": {"run_id": str(run_id), "run_attempt": int(run_attempt)}, "nonce": nonce,
                "retry_of": retry_of}
     return payload, dws
@@ -470,9 +636,11 @@ def retry_candidates(store) -> dict:
 
 
 def register_store_attempts(store, attempts: list[StoreAttempt], *, fence: roles.Fence | None = None,
-                            label: str = "attempts") -> list[AttemptContext]:
+                            label: str = "attempts", require_lock: bool = False) -> list[AttemptContext]:
     """Validate every declaration, then write all starts in one journalled write, verified on the remote before
-    this returns. A later execution of an interrupted attempt's exact identity names it in ``retry_of``."""
+    this returns. A later execution of an interrupted attempt's exact identity names it in ``retry_of``. With
+    ``require_lock`` (the nightly runner) every write of these attempts is refused unless the run still holds the
+    Store lock."""
     from manhattan.ops import blinding
     from manhattan.ops import store as ST
     fence = _fence(fence)
@@ -488,8 +656,9 @@ def register_store_attempts(store, attempts: list[StoreAttempt], *, fence: roles
         intents.append(ST.Intent(STORE_START, (STORE_START, aid), payload, source="runner"))
         made.append((aid, a, payload, dws))
     if intents:
-        store.write(intents, label)
-    return [AttemptContext(_key=_CTX_KEY, backend=_StoreBackend(store), attempt_id=aid, kind=a.kind,
+        _sealed_write(store, intents, label, require_lock)
+    backend = _StoreBackend(store, require_lock)
+    return [AttemptContext(_key=_CTX_KEY, backend=backend, attempt_id=aid, kind=a.kind,
                            identity=payload["identity"], windows=dws, caller=a.caller, fence=fence,
                            freeze=a.freeze, holding=a.holding, token=None)
             for aid, a, payload, dws in made]
@@ -513,25 +682,57 @@ def terminal_intent(attempt_id: str, status: str, *, reason: str | None = None, 
     return ST.Intent(STORE_TERMINAL_TYPES[status], (STORE_TERMINAL, attempt_id), payload, source="runner")
 
 
+RESULT_TYPES = {"forward_observation": ("observation", "missed_observation"), "screening": ("screening",)}
+
+
+def result_fits(kind: str, key, payload: dict, start: dict) -> bool:
+    """A result belongs to its attempt (``start`` is the attempt's start payload): its subject and executable, its
+    data identity, and a date or window inside the declared evaluation window. Used when a completion is minted
+    and again by the reconciler (S7 M1)."""
+    ident, subj = start["identity"], start["subject"]
+    ev = next(w for w in start["authorization"]["windows"] if w["purpose"] == "evaluation")
+    key = tuple(key)
+    if kind not in RESULT_TYPES[start["kind"]] or not isinstance(payload, dict):
+        return False
+    if kind in ("observation", "missed_observation"):
+        d = payload.get("date")
+        ok = (isinstance(d, str) and ev["start"] < d <= subj["asof"] and payload.get("prediction") == subj["prediction"]
+              and key == (kind, subj["prediction"], d))
+        if kind == "observation":
+            ok = ok and payload.get("executable") == ident["executable"] and payload.get("role") == "forward"
+        return ok
+    return (key == ("screening", ident["spec_hash"], subj["window"])
+            and payload.get("executable") == ident["executable"] and payload.get("hypothesis") == ident["hypothesis"]
+            and payload.get("data_hash") == ident["data_hash"] and payload.get("role") == ident["role"]
+            and payload.get("window") == {"start": ev["start"], "end": ev["end"]})
+
+
 def completion(ctx: AttemptContext, store, result_intents: list):
     """The completed terminal of ``ctx``, linking each result by key, content hash and disposition (``new``,
     ``duplicate`` or ``conflict`` against what the Store already holds). Write it in the same ``Store.write`` as
-    the results: one journal entry, so a crash leaves both or neither."""
+    the results through ``commit_results``: one journal entry, so a crash leaves both or neither."""
     from manhattan.ops import store as ST
     if not isinstance(ctx, AttemptContext) or ctx.kind not in ("screening", "forward_observation"):
         raise AccessError("an operational completion belongs to an operational attempt")
     ctx._require_active()
     if not ctx.data_read:
         raise AccessError("an attempt that read nothing cannot complete")
+    start = store.get((STORE_START, ctx.attempt_id))["payload"]
     links = []
     for it in result_intents:
+        if not result_fits(it.type, it.key, ST._canon(it.payload), start):
+            raise AccessError("a result does not belong to this attempt (subject, executable, data or window)")
         h = ST.content_hash(it.type, it.key, ST._canon(it.payload))
         have = store.get(it.key)
         disp = "new" if have is None else (
             "duplicate" if ST.content_hash(have["type"], have["key"], have["payload"]) == h else "conflict")
         links.append({"key": [str(k) for k in it.key], "type": it.type, "content_hash": h, "disposition": disp})
     ctx._mark_completed()
-    return terminal_intent(ctx.attempt_id, "completed", data_read=True, results=links)
+    it = terminal_intent(ctx.attempt_id, "completed", data_read=True, results=links)
+    key = id(it)
+    _MINTED[key] = (S.canonical_bytes(it.as_dict()), ctx.attempt_id)
+    weakref.finalize(it, _MINTED.pop, key, None)
+    return it
 
 
 def recover_interrupted(store, kinds: tuple = ("forward_observation",)) -> list:

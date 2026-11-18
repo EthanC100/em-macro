@@ -309,11 +309,23 @@ def test_storage_api_refuses_escalated_or_implicit_completion(tmp_path):
                 family=ident["family"], batch=ident["batch"], channel=ident["channel"], window=ident["window"],
                 spec_hash=ident["spec_hash"], data_hash=ident["data_hash"], code_version=ident["code_version"],
                 result_hash="c" * 64, n_obs=1, summary={}, seed=0)
-    with pytest.raises(L.LedgerError, match="identity"):
+    with pytest.raises(L.LedgerError, match="completion proof"):     # an attempt ID alone writes nothing (D-5)
         b.record_evaluation(**base, role="reserve", designated=True, attempt_id=ctx.attempt_id)
-    with pytest.raises(L.LedgerError, match="own attempt_id"):
+    with pytest.raises(L.LedgerError, match="completion proof"):     # the right identity, still no proof
+        b.record_evaluation(**base, role="forward", designated=False, attempt_id=ctx.attempt_id)
+    with pytest.raises(L.LedgerError, match="registered"):           # no attempt at all
         b.record_evaluation(**base, role="forward", designated=False)
-    assert b.records()[-1]["type"] == "evaluation_started"
+    assert b.records()[-1]["type"] == "evaluation_started" and ctx.active()
+    # an exploration attempt cannot be completed implicitly by key either
+    ex = F.register(b, st, domain=DOM, start=date(2009, 11, 2), end=date(2009, 11, 30), role="exploration",
+                    fence=FWD_FENCE, caller="session")
+    e = ex.identity
+    with pytest.raises(L.LedgerError, match="own attempt_id"):
+        b.record_evaluation(**{**base, "window": e["window"], "data_hash": e["data_hash"]}, role="exploration",
+                            designated=False)
+    for kind in L.LIFECYCLE_TYPES:                                    # nor through the public append
+        with pytest.raises(L.LedgerError, match="lifecycle"):
+            b.append(kind, {"attempt_id": ctx.attempt_id})
 
 
 def test_wrong_ledger_or_running_code_is_refused(tmp_path):
@@ -352,10 +364,13 @@ def test_reserve_designated_evaluation_and_its_report(tmp_path):
     r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
     assert r["access_reconciled"] and r["designated_reserve_completions"] == {"AB-0001|test": 1}
     reconstructed = store(reconstructed=True)                     # Q019/PIT: no reconstructed reserve evidence
-    ctx2 = reserve_ctx(b, reconstructed, wid="test:reserve2")
+    # another batch (D-6 allows one designated reserve evaluation per batch and domain)
+    ctx2 = F.register(b, reconstructed, domain=DOM, start=date(2010, 1, 4), end=date(2010, 1, 15), role="reserve",
+                      window_id="test:reserve2", fence=RESERVE_FENCE, batch="AB-0002", designated=True,
+                      token=F.reserve_token(DOM, "test:reserve2", batch="AB-0002"))
     with pytest.raises(pit.PitError, match="reconstructed"):
-        evaluate.evaluate(ctx2.window(reconstructed), hold(), ledger=b, **F.spec_kwargs(designated=True),
-                          attempt=ctx2)
+        evaluate.evaluate(ctx2.window(reconstructed), hold(), ledger=b,
+                          **F.spec_kwargs(designated=True, batch="AB-0002"), attempt=ctx2)
 
 
 def test_crash_after_registration_then_retry(tmp_path):
@@ -506,7 +521,7 @@ def test_evidential_weight_inconsistency_is_reported(tmp_path):
     ctx2 = forward_ctx(b, st, end=date(2010, 1, 14))
     forged = {**rec["payload"], "attempt_id": ctx2.attempt_id, "window": ctx2.identity["window"],
               "reconstructed": True}                               # weight 1 kept although reconstructed
-    b.append("evaluation", forged)                                 # hash-valid: a writer bug or forgery
+    F.forge(b, "evaluation", forged)                               # hash-valid: a writer bug or forgery
     r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
     assert not r["access_reconciled"]
     assert [v["code"] for v in r["violations"]] == ["evidential_weight_mismatch"]
@@ -516,17 +531,19 @@ def test_unregistered_protected_evaluations_and_forged_authorizations(tmp_path):
     b, st = book(tmp_path), store()
     ctx = forward_ctx(b, st)
     ident = ctx.identity
-    b.record_evaluation(executable=ident["executable"], variant=ident["variant"], hypothesis=ident["hypothesis"],
-                        family=ident["family"], batch="AB-0001", channel="blind", role="reserve",
-                        window={"id": "x", "start": "2010-01-04", "end": "2010-01-05", "frequency": "daily"},
-                        designated=True, spec_hash="a" * 64, data_hash="d" * 64, code_version=ident["code_version"],
-                        result_hash="c" * 64, n_obs=1, summary={}, seed=0)   # the legacy storage API
+    F.forge(b, "evaluation", dict(executable=ident["executable"], variant=ident["variant"],
+                                  hypothesis=ident["hypothesis"], family=ident["family"], batch="AB-0001",
+                                  channel="blind", role="reserve",
+                                  window={"id": "x", "start": "2010-01-04", "end": "2010-01-05", "frequency": "daily"},
+                                  designated=True, spec_hash="a" * 64, data_hash="d" * 64,
+                                  code_version=ident["code_version"], result_hash="c" * 64, n_obs=1, summary={},
+                                  seed=0, reconstructed=False, evidential_weight=1))   # bypassing every API
     start = b.records("evaluation_started")[0]["payload"]
     forged = json.loads(json.dumps(start))
     forged["role"] = "exploration"                                 # forward dates relabelled exploration
     for w in forged["authorization"]["windows"]:
         w["role"] = "exploration"
-    b.append("evaluation_started", forged)
+    F.forge(b, "evaluation_started", forged)
     r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
     codes = sorted(v["code"] for v in r["violations"])
     assert "unregistered_protected_evaluation" in codes and "invalid_identity_or_authorization" in codes
@@ -567,3 +584,253 @@ def test_exploration_cutoff_is_unchanged_for_open_reads():
     st = store(start=date(2019, 11, 1))
     with pytest.raises(roles.RoleError):
         pit.Reader(st, caller="session", domain=DOM, fence=fence).window(date(2019, 12, 2), date(2020, 1, 3))
+
+
+# ================================================================== S7 audit corrections (each failed before)
+
+import copy
+import multiprocessing
+import pickle
+import subprocess
+import sys
+
+
+# ---- H1: the runner imports and runs without PyYAML (the hash-locked runner environment)
+
+def test_runner_imports_without_pyyaml():
+    code = ("import sys; sys.modules['yaml'] = None; sys.path.insert(0, %r); "
+            "from manhattan.ops import runner as R; from manhattan import roles; "
+            "from datetime import date; f = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}); "
+            "cfg = R.RunConfig(ledger_dir='x', remote='x', batches_dir='x', asof=date(2026, 1, 2), fence=f); "
+            "assert R.run_fence(cfg) is f; assert 'manhattan.config' not in sys.modules" % str(ROOT))
+    r = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+
+
+# ---- H2: a protected window reads only while its attempt is registered and active
+
+def test_no_read_after_abort_and_data_read_stays_true(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    w = ctx.window(st)
+    ctx.abort("cancelled")
+    assert b.records()[-1]["payload"]["data_read"] is False
+    with pytest.raises(pit.AccessError, match="not registered and active"):
+        backtest.run(w, hold())
+    with pytest.raises(pit.AccessError):
+        w.as_of("A", date(2010, 1, 8))
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert r["completed"] == 0 and r["terminals_by_data_read"]["aborted_unread"] == 1
+    ctx2 = forward_ctx(b, st, end=date(2010, 1, 14))               # a read, then an abort: data_read is true
+    ctx2.window(st).as_of("A", date(2010, 1, 8))
+    ctx2.abort("cancelled")
+    assert b.records()[-1]["payload"]["data_read"] is True
+
+
+@pytest.mark.parametrize("ending", ["identity_failure", "execution_failure", "completion", "superseded_retry"])
+def test_no_read_after_any_ending(tmp_path, ending):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    w = ctx.window(st)
+    if ending == "identity_failure":
+        with pytest.raises(pit.AccessError):
+            evaluate.evaluate(w, hold(), ledger=b, **F.spec_kwargs(designated=True), attempt=ctx)
+    elif ending == "execution_failure":
+        bad = Strategy((Instrument("A", "A"),), lambda v: 1 / 0, rebalance="D", lag=0)
+        with pytest.raises(ZeroDivisionError):
+            evaluate.evaluate(w, bad, ledger=b, **F.spec_kwargs(), attempt=ctx)
+    elif ending == "completion":
+        evaluate.evaluate(w, hold(), ledger=b, **F.spec_kwargs(), attempt=ctx)
+    else:                                                             # a retry supersedes the attempt
+        forward_ctx(b, st, supersedes=ctx.attempt_id)
+    with pytest.raises(pit.AccessError, match="not registered and active"):
+        backtest.run(w, hold())
+
+
+# ---- H3: windows are not copied, serialized, altered or inherited
+
+def test_windows_cannot_be_copied_serialized_or_altered(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    open_w = pit.Reader(st, caller="session", domain=DOM, fence=FWD_FENCE).window(date(2009, 11, 2),
+                                                                                   date(2009, 12, 31))
+    for w in (ctx.window(st), open_w):
+        for clone in (copy.copy, copy.deepcopy, lambda x: pickle.loads(pickle.dumps(x))):
+            with pytest.raises(pit.AccessError):
+                clone(w)
+    assert not ctx.data_read
+    for field, value in (("end", date(2010, 1, 29)), ("role", "forward"), ("start", date(2009, 1, 2)),
+                         ("purpose", "diagnostic"), ("attempt_id", "a" * 64)):
+        w = pit.Reader(st, caller="session", domain=DOM, fence=FWD_FENCE).window(date(2009, 11, 2),
+                                                                                  date(2009, 12, 31))
+        object.__setattr__(w, field, value)                          # widening through the back door
+        with pytest.raises(pit.AccessError, match="not opened in this process"):
+            w.as_of("A", date(2010, 1, 29))
+
+
+def _read_in_child(window, q):
+    try:
+        window.as_of("A", date(2010, 1, 8))
+        q.put("read")
+    except Exception as exc:                                         # noqa: BLE001 - reported to the parent
+        q.put(type(exc).__name__)
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="fork start method")
+def test_a_forked_child_cannot_read_an_inherited_window(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    w = ctx.window(st)
+    mp = multiprocessing.get_context("fork")
+    q = mp.Queue()
+    child = mp.Process(target=_read_in_child, args=(w, q))
+    child.start()
+    child.join(60)
+    assert q.get(timeout=10) == "AccessError" and not ctx.data_read
+    with pytest.raises(pit.AccessError):                              # and spawn needs pickling, which is refused
+        multiprocessing.get_context("spawn").Process(target=_read_in_child, args=(w, q)).start()
+
+
+# ---- M3: the running code identity is computed, never taken from the caller
+
+def test_fabricated_matching_version_is_refused(tmp_path):
+    b, st = book(tmp_path), store()
+    fake = {"commit": "a" * 40, "engine_sha256": "b" * 64}
+    ctx = forward_ctx(b, st, version=fake)
+    with pytest.raises(pit.AccessError, match="running code"):
+        evaluate.evaluate(ctx.window(st), hold(), ledger=b, **F.spec_kwargs(), attempt=ctx, version=fake)
+    assert b.records()[-1]["type"] == "attempt_failed"
+    ctx2 = forward_ctx(b, st, end=date(2010, 1, 14), version=fake)  # no version given: the running one is used
+    with pytest.raises(pit.AccessError, match="registered identity"):
+        evaluate.evaluate(ctx2.window(st), hold(), ledger=b, **F.spec_kwargs(), attempt=ctx2)
+    assert attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))["completed"] == 0
+
+
+# ---- M4: every completion is validated, linked or not
+
+@pytest.mark.parametrize("bad", ["exploration_weight_1", "invalid_role", "no_writer", "rerun_without_first"])
+def test_invalid_unlinked_completions_never_reconcile(tmp_path, bad):
+    from test_manhattan_attempts import ev
+    b = book(tmp_path)
+    p = {**ev(designated=False, role="exploration"), "reconstructed": False, "evidential_weight": 0}
+    kind, writer = "evaluation", None
+    if bad == "exploration_weight_1":
+        p["evidential_weight"] = 1
+    elif bad == "invalid_role":
+        p["role"] = "admin"
+    elif bad == "no_writer":
+        writer = ""
+    else:
+        kind = "rerun"
+    F.forge(b, kind, p, writer=writer)
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert r["violations"] and not r["access_reconciled"]
+    assert r["legacy"]["unlinked_exploration"] == 0                  # never reclassified as open exploration
+
+
+# ---- M5 (D-5): a protected completion needs the attempt's own proof
+
+def test_completion_proofs_are_single_use_bound_and_require_a_read(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    with pytest.raises(pit.AccessError, match="read nothing"):
+        ctx._completion_proof("c" * 64)
+    ctx.window(st).as_of("A", date(2010, 1, 8))
+    proof = ctx._completion_proof("c" * 64)
+    i = ctx.identity
+    kw = dict(executable=i["executable"], variant=i["variant"], hypothesis=i["hypothesis"], family=i["family"],
+              batch=i["batch"], channel=i["channel"], role="forward", window=i["window"], designated=False,
+              spec_hash=i["spec_hash"], data_hash=i["data_hash"], code_version=i["code_version"], n_obs=1,
+              summary={}, seed=0, attempt_id=ctx.attempt_id)
+    with pytest.raises(L.LedgerError, match="completion proof"):     # bound to its result
+        b.record_evaluation(**kw, result_hash="d" * 64, proof=proof)
+    with pytest.raises(L.LedgerError, match="completion proof|registered"):     # bound to its ledger
+        book(tmp_path, "other.jsonl").record_evaluation(**kw, result_hash="c" * 64, proof=proof)
+    for clone in (copy.copy, copy.deepcopy, lambda x: pickle.loads(pickle.dumps(x))):
+        with pytest.raises(pit.AccessError):
+            clone(proof)
+    with pytest.raises(pit.AccessError):
+        access.CompletionProof(_key=object(), attempt_id=ctx.attempt_id, result_hash="c" * 64, ledger_id=id(b))
+
+
+# ---- M6: reserve tokens are bound to the attempt they authorize
+
+@pytest.mark.parametrize("mismatch", ["batch", "spec", "window", "unverified", "manifest", "token_on_forward"])
+def test_reserve_token_must_match_the_attempt(tmp_path, mismatch):
+    b, st = book(tmp_path), store()
+    wid = "test:reserve"
+    tok = F.reserve_token(DOM, wid)
+    if mismatch == "batch":
+        tok = dataclasses.replace(tok, batch="AB-9999")
+    elif mismatch == "spec":
+        tok = dataclasses.replace(tok, specs=frozenset({"e" * 64}))
+    elif mismatch == "window":
+        tok = dataclasses.replace(tok, designated=frozenset({(DOM, "test:other")}))
+    elif mismatch == "unverified":
+        tok = dataclasses.replace(tok, verified=False)
+    elif mismatch == "manifest":
+        tok = dataclasses.replace(tok, manifest_hash="not-a-hash")
+    if mismatch == "token_on_forward":
+        with pytest.raises(pit.AccessError):
+            forward_ctx(b, st, token=tok)
+    else:
+        with pytest.raises((pit.AccessError, roles.RoleError)):
+            F.register(b, st, domain=DOM, start=date(2010, 1, 4), end=date(2010, 1, 15), role="reserve",
+                       window_id=wid, fence=RESERVE_FENCE, token=tok, designated=True)
+    assert len(b) == 0
+
+
+def test_a_recorded_token_for_another_batch_or_spec_is_a_violation(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = reserve_ctx(b, st)
+    start = json.loads(json.dumps(b.records("evaluation_started")[0]["payload"]))
+    start["authorization"]["token"]["batch"] = "AB-9999"
+    start["batch"] = "AB-0001"
+    F.forge(b, "evaluation_started", start)
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert "invalid_identity_or_authorization" in [v["code"] for v in r["violations"]]
+    assert ctx.active()
+
+
+# ---- D-6: one designated reserve evaluation per batch and domain, conservatively
+
+def test_one_designated_reserve_evaluation_per_batch_and_domain(tmp_path):
+    b, st = book(tmp_path), store()
+    first = reserve_ctx(b, st, wid="test:r1")
+    with pytest.raises(pit.AccessError, match="D-6"):                # even while the first is unfinished
+        reserve_ctx(b, st, wid="test:r2", end=date(2010, 1, 14))
+    del first
+    b = book(tmp_path)                                                # crash; the retry of the same attempt is allowed
+    retry = reserve_ctx(b, st, wid="test:r1", supersedes=b.unfinished()[0]["hash"])
+    retry.fail("execution_error")                                     # a failed designated attempt consumes it
+    with pytest.raises(pit.AccessError, match="D-6"):
+        reserve_ctx(b, st, wid="test:r3", end=date(2010, 1, 13))
+    other = F.register(b, st, domain=DOM, start=date(2010, 1, 4), end=date(2010, 1, 15), role="reserve",
+                       window_id="test:r4", fence=RESERVE_FENCE, batch="AB-0002", designated=True,
+                       token=F.reserve_token(DOM, "test:r4", batch="AB-0002"))
+    assert other.active()                                             # another batch is another designation
+
+
+def test_a_forged_second_designated_reserve_attempt_is_a_violation(tmp_path):
+    b, st = book(tmp_path), store()
+    reserve_ctx(b, st)
+    twin = json.loads(json.dumps(b.records("evaluation_started")[0]["payload"]))
+    twin["window"]["id"] = "test:twin"
+    for w in twin["authorization"]["windows"]:
+        w["id"] = "test:twin"
+    F.forge(b, "evaluation_started", twin)
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert "designated_reserve_reused" in [v["code"] for v in r["violations"]]
+
+
+# ---- D-7: assurance levels are reported, never conflated
+
+def test_reconciliation_never_claims_independent_certification(tmp_path):
+    b, st = book(tmp_path), store()
+    ctx = forward_ctx(b, st)
+    evaluate.evaluate(ctx.window(st), hold(), ledger=b, **F.spec_kwargs(), attempt=ctx)
+    r = attempts.reconcile(ledger_path=b.path, ledger_anchor=anchor(b))
+    assert r["access_reconciled"] and r["independently_certified"] is False
+    assert r["assurance"] == {"internally_consistent": True, "checked_against_supplied_anchor": True,
+                              "independently_anchored": False}
+    assert r["independent_statistical_tests"] is None

@@ -36,8 +36,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
+import weakref
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 
@@ -61,11 +63,20 @@ class AccessError(roles.RoleError):
 
 
 class _Meter:
-    """Counts reads through the windows of one authorization, so a terminal can say whether data were read."""
-    __slots__ = ("reads",)
+    """Counts reads through the windows of one authorization, so a terminal can say whether data were read, and
+    holds the authorization's liveness check: a bound window reads only while ``alive()`` says its attempt is
+    registered and active (set by ``manhattan.access.AttemptContext``)."""
+    __slots__ = ("reads", "alive")
 
     def __init__(self):
         self.reads = 0
+        self.alive = None
+
+
+# Every window this process minted, by object identity: its sealed fields and the minting process. A read is
+# allowed only through a window found here unchanged, so copies, deep copies, unpickled objects, windows altered
+# with object.__setattr__ and windows inherited by a forked child are refused (Phase 4B correction, S7 H3).
+_GRANTS: dict[int, tuple] = {}
 
 
 def _days(x) -> np.ndarray:
@@ -295,14 +306,43 @@ class Window:
             raise AccessError("a Window is opened by a Reader or a registered attempt; it is never constructed "
                               "or copied directly")
 
+    # A window is a capability of this process: it is never copied, deep-copied or serialized.
+    def __copy__(self):
+        raise AccessError("a Window cannot be copied; open another through its Reader or attempt")
+
+    def __deepcopy__(self, memo):
+        raise AccessError("a Window cannot be copied; open another through its Reader or attempt")
+
+    def __reduce_ex__(self, protocol):
+        raise AccessError("a Window cannot be serialized or sent to another process")
+
+    def __getstate__(self):
+        raise AccessError("a Window cannot be serialized or sent to another process")
+
+    def _fields(self) -> tuple:
+        return (id(self._store), self.start, self.end, self.role, self.domain, self.caller, self.purpose,
+                self.attempt_id, self.window_id, self.signal_start, self._version, id(self._meter), self._seal)
+
     @property
     def bound(self) -> bool:
-        """Whether this window belongs to a registered attempt or carries a protected role."""
-        return self.attempt_id is not None or self.role in PROTECTED_ROLES
+        """Whether this window belongs to a registered attempt or carries a protected role (diagnostic windows on
+        synthetic stores excepted)."""
+        return self.attempt_id is not None or (self.role in PROTECTED_ROLES and self.purpose != "diagnostic")
 
     def _guard(self) -> None:
-        if self.bound and self._store._version != self._version:
-            raise PitError("the store changed after this window was authorized (data identity)")
+        """Checked at every read, not only when the window is opened: the window is the one minted here (not a
+        copy, an unpickled or an altered object), in this process; and a bound window's store is unchanged and its
+        attempt still registered and active."""
+        grant = _GRANTS.get(id(self))
+        if grant is None or grant[0] != self._fields() or grant[1] != os.getpid():
+            raise AccessError("this window was not opened in this process as it now stands (copied, deserialized, "
+                              "altered or inherited)")
+        if self.bound:
+            if self._store._version != self._version:
+                raise PitError("the store changed after this window was authorized (data identity)")
+            alive = self._meter.alive
+            if alive is None or not alive():
+                raise AccessError("the window's attempt is not registered and active (ended, failed or superseded)")
 
     def as_of(self, series: str, t, n: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         """(periods, values) of ``series`` as known at the close of day ``t``: for each period in the window, the
@@ -326,10 +366,9 @@ class Window:
 
     def _known(self, series: str, t):
         self._guard()
+        self._meter.reads += 1                                 # counted before any value can leave
         t = min(_day(t), _day(self.end))                       # nothing after the window's end is ever known here
-        out = self._store._as_of(series, t, _day(self.start), _day(self.end))
-        self._meter.reads += 1
-        return out
+        return self._store._as_of(series, t, _day(self.start), _day(self.end))
 
     @property
     def reads(self) -> int:
@@ -347,6 +386,7 @@ class Window:
         return self._store.data_hash()
 
     def has(self, series: str) -> bool:
+        self._guard()
         return series in self._store
 
 
@@ -378,8 +418,12 @@ def _open_window(store: PitStore, start, end, role: str, domain: str, caller: st
     meter = meter or _Meter()
     seal = _seal(store, s, e, role, domain, caller, purpose, attempt_id, window_id, signal_start, store._version,
                  meter)
-    return Window(store, s, e, role, domain, caller, purpose, attempt_id, window_id, signal_start, store._version,
-                  meter, seal)
+    w = Window(store, s, e, role, domain, caller, purpose, attempt_id, window_id, signal_start, store._version,
+               meter, seal)
+    key = id(w)
+    _GRANTS[key] = (w._fields(), os.getpid())
+    weakref.finalize(w, _GRANTS.pop, key, None)
+    return w
 
 
 def diagnostic_window(store: PitStore, start, end, *, role: str, domain: str, caller: str = roles.RUNNER) -> Window:

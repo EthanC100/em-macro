@@ -48,5 +48,22 @@ def reserve_fence(domain: str, start: date, end: date, exploration_end: date) ->
     return roles.Fence(exploration_end=exploration_end, reserve={domain: (start, end)}, enabled=True)
 
 
-def reserve_token(domain: str, window_id: str, batch: str = "AB-0001") -> roles.RunnerToken:
-    return roles.RunnerToken(batch, "f" * 64, True, frozenset({(domain, window_id)}))
+def reserve_token(domain: str, window_id: str, batch: str = "AB-0001", specs: dict = SPECS) -> roles.RunnerToken:
+    return roles.RunnerToken(batch, "f" * 64, True, frozenset({(domain, window_id)}),
+                             frozenset({spec.spec_hash(specs["executable"])}))
+
+
+def forge(book, type_: str, payload: dict, *, writer: str | None = None) -> dict:
+    """A hostile or buggy writer with file access: append a hash-valid record without any API rule (the public
+    ``Ledger.append`` refuses lifecycle types). Only the reconciler can catch what this writes."""
+    import json
+    from datetime import datetime, timezone
+    from manhattan import ledger as L
+    rec = {"seq": len(book) + 1, "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "type": type_,
+           "writer": book.writer if writer is None else writer, "protocol": book.protocol, "payload": json.loads(spec.canonical_bytes(payload)),
+           "prev_hash": book.head}
+    rec["hash"] = L.record_hash(rec)
+    with book.path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
+    book._index(rec)
+    return rec

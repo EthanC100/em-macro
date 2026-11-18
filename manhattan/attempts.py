@@ -71,11 +71,11 @@ def reconcile_lifecycle(path: Path, *, anchor: str) -> dict:
             'access_reconciled': False}
 
 
-def _validate_completion(p: dict) -> None:
+def _validate_completion(p: dict, linked: bool = True) -> None:
     """Validate record structure only; never decide or publish a statistical outcome."""
     strings = ("executable", "variant", "hypothesis", "family", "batch", "spec_hash", "data_hash", "result_hash")
     required = set(strings) | {"channel", "role", "window", "designated", "code_version", "n_obs",
-                               "summary", "seed", "reconstructed", "evidential_weight", "attempt_id"}
+                               "summary", "seed", "reconstructed", "evidential_weight"} | ({"attempt_id"} if linked else set())
     if not required <= p.keys():
         raise L.LedgerError("incomplete evaluation completion schema")
     window = p["window"]
@@ -155,6 +155,7 @@ class _Audit:
         self.legacy = {"starts": 0, "unlinked_exploration": 0, "protected_records": 0}
         self.observations = 0
         self.designated: dict[str, int] = {}
+        self.designated_chains: dict[tuple, int] = {}
 
     def v(self, code: str, store: str, seq) -> None:
         self.violations.append({"code": code, "store": store, "seq": seq})
@@ -215,14 +216,41 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                     if audit.scoped(p):
                         audit.counts["retries"] += 1
             starts[r["hash"]] = (seq, p)
+            dom = L._designated_domain(p)
+            if dom is not None and p.get("supersedes") is None:
+                chains = audit.designated_chains
+                chains[(p.get("batch"), dom)] = chains.get((p.get("batch"), dom), 0) + 1
+                if chains[(p.get("batch"), dom)] > 1:
+                    audit.v("designated_reserve_reused", "ledger", seq)
             if audit.scoped(p):
                 audit.counts["registered_executions"] += 1
                 if isinstance(p.get("spec_hash"), str):
                     audit.specs.add(p["spec_hash"])
         elif kind in L.COMPLETIONS:
+            # S7 M4: every completion, linked or not, legacy or new, is validated: structure, role, provenance and
+            # the evidential weight recomputed with the canonical function. A failure is a violation, never a
+            # reclassification as exploration.
             aid = p.get("attempt_id")
+            try:
+                _validate_completion(p, linked=aid is not None)
+                if not all(isinstance(r.get(k), str) and r[k].strip() for k in ("writer", "protocol", "ts_utc")):
+                    raise L.LedgerError("provenance")
+            except L.LedgerError:
+                audit.v("malformed_completion", "ledger", seq)
+                continue
+            expected = 0 if (kind != "evaluation" or p.get("data_changed")) else \
+                L.evidential_weight(p["channel"], p["role"], p["designated"], p["reconstructed"])
+            invalid = False
+            if p["evidential_weight"] != expected:
+                audit.v("evidential_weight_mismatch", "ledger", seq)
+                invalid = True
+            if kind != "evaluation" and not isinstance(p.get("first_seq"), int):
+                audit.v("malformed_completion", "ledger", seq)
+                invalid = True
+            if aid is None and invalid:
+                continue                                          # reported; never counted as open exploration
             if aid is None:
-                if p.get("role") in PROTECTED:
+                if p["role"] in PROTECTED:
                     audit.v("unregistered_protected_evaluation", "ledger", seq)
                 else:
                     audit.legacy["unlinked_exploration"] += 1
@@ -235,28 +263,18 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                 continue
             start = starts[aid][1]
             terminal[aid] = "completed"
-            try:
-                _validate_completion(p)
-            except L.LedgerError:
-                audit.v("malformed_completion", "ledger", seq)
-                continue
             if not L.same_identity(start, p):
                 audit.v("identity_or_role_escalation", "ledger", seq)
-            expected = 0 if (kind != "evaluation" or p.get("data_changed")) else \
-                L.evidential_weight(p["channel"], p["role"], p["designated"], p["reconstructed"])
-            if p["evidential_weight"] != expected:
-                audit.v("evidential_weight_mismatch", "ledger", seq)
             if start.get("attempt_schema") != L.ATTEMPT_SCHEMA and p["role"] in PROTECTED:
                 audit.legacy["protected_records"] += 1
             if audit.scoped(start):
                 audit.ended("completed", True)
                 audit.keys.add(("ledger", p["spec_hash"], p["data_hash"], p["window"]["id"]))
                 if kind == "evaluation" and p["role"] == "reserve" and p["designated"] and not p.get("data_changed"):
-                    auth = start.get("authorization") if isinstance(start.get("authorization"), dict) else {}
-                    dom = next((w.get("domain") for w in auth.get("windows", []) if isinstance(w, dict)
-                                and w.get("purpose") == "evaluation"), "unknown")
-                    k = f"{p['batch']}|{dom}"
+                    k = f"{p['batch']}|{L._designated_domain(start) or 'unknown'}"
                     audit.designated[k] = audit.designated.get(k, 0) + 1
+                    if audit.designated[k] > 1:
+                        audit.v("designated_reserve_reused", "ledger", seq)
         elif kind in ("attempt_failed", "attempt_aborted"):
             aid = p.get("attempt_id")
             if not isinstance(aid, str) or aid not in starts or aid in superseded or aid in terminal:
@@ -312,6 +330,8 @@ def _store_pass(records: list, audit: _Audit) -> set:
             except (KeyError, TypeError, L.LedgerError, PermissionError):
                 audit.v("invalid_identity_or_authorization", "store", seq)
                 continue
+            if p["kind"] == "forward_observation" and not _registration_matches(p, seq, by_key):
+                audit.v("registration_mismatch", "store", seq)
             ident_key = S.canonical_bytes(A.comparable(p))
             prior = p.get("retry_of")
             if prior is not None:
@@ -358,8 +378,17 @@ def _store_pass(records: list, audit: _Audit) -> set:
             if audit.scoped(sp["identity"]):
                 audit.ended(status, p["data_read"])
     # results: unregistered protected evaluations and evidential weight (canonical function)
+    from .ops import store as ST
     for r in records:
         kind, p, seq = r["type"], r["payload"], r["seq"]
+        if kind == "conflict":
+            # S7 M2: a contradiction on evidence or accounting (a second terminal, a different observation value)
+            # is never reconciled away, whoever wrote it.
+            target = p.get("key") if isinstance(p, dict) else None
+            first = target[0] if isinstance(target, list) and target else None
+            if first in ST.PROTECTED_TYPES or first in (A.STORE_START, A.STORE_TERMINAL):
+                audit.v("conflict_on_protected_record", "store", seq)
+            continue
         if kind == "observation":
             k = tuple(r["key"])
             if epoch_seq is None or seq < epoch_seq:
@@ -395,12 +424,37 @@ def _store_pass(records: list, audit: _Audit) -> set:
     return set(starts)
 
 
+def _registration_matches(p: dict, seq: int, by_key: dict) -> bool:
+    """S7 M1: a forward-observation attempt matches a registration of its prediction recorded before it: the same
+    specification, executable, batch and channel, first observation (= the evaluation window's start) and freeze
+    (= the registration day), with the observation night inside the evaluation window."""
+    ident, subj, auth = p["identity"], p["subject"], p["authorization"]
+    ev = next(w for w in auth["windows"] if w["purpose"] == "evaluation")
+    if not ev["start"] < subj["asof"] <= ev["end"]:
+        return False
+    for status in ("provisional", "witnessed"):
+        reg = by_key.get(("registration", subj["prediction"], status))
+        if reg is None or reg["seq"] > seq:
+            continue
+        rp = reg["payload"]
+        if (rp.get("spec_hash"), rp.get("executable"), rp.get("batch"), rp.get("channel", "blind"),
+                rp.get("first_observation"), str(rp.get("registration_utc", ""))[:10]) == (
+                ident["spec_hash"], ident["executable"], ident["batch"], ident["channel"], ev["start"],
+                auth["freeze"]):
+            return True
+    return False
+
+
 def _check_links(p, aid, sseq, sp, tseq, writer, by_key, linked, audit) -> None:
     """A ``new`` result was written by the same writer as its terminal (one journal entry: the attempt's own run,
-    or the later run whose journal recovery finished that entry), after the start and before the terminal."""
+    or the later run whose journal recovery finished that entry), after the start and before the terminal; every
+    linked result fits its attempt (subject, executable, data, declared window); a conflicting result is a
+    violation, not a reconciled outcome."""
+    from . import access as A
     from .ops import store as ST
-    allowed = {"forward_observation": ("observation", "missed_observation"), "screening": ("screening",)}[sp["kind"]]
+    allowed = A.RESULT_TYPES[sp["kind"]]
     for link in p["results"]:
+        code = "result_linkage_mismatch"
         try:
             key = tuple(link["key"])
             have = by_key.get(key)
@@ -420,14 +474,14 @@ def _check_links(p, aid, sseq, sp, tseq, writer, by_key, linked, audit) -> None:
                           == writer)
                     if ok:
                         linked[key] = aid
+                if ok and not A.result_fits(link["type"], have["key"], have["payload"], sp):
+                    ok, code = False, "result_outside_attempt_identity_or_window"
             elif ok:
-                conflict = by_key.get(("conflict", *key, link["content_hash"][:16]))
-                ok = (conflict is not None and conflict["payload"].get("rejected_content_hash") == link["content_hash"]
-                      and sseq < conflict["seq"] < tseq)
-        except (KeyError, TypeError):
+                ok, code = False, "result_conflict"
+        except (KeyError, TypeError, StopIteration):
             ok = False
         if not ok:
-            audit.v("result_linkage_mismatch", "store", tseq)
+            audit.v(code, "store", tseq)
 
 
 def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_anchor=None,
@@ -470,11 +524,18 @@ def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_a
     for aid in ids.get("ledger", set()) & ids.get("store", set()):
         audit.v("cross_store_attempt_collision", "both", None)
     legacy_blocks = audit.legacy["starts"] + audit.legacy["protected_records"]
-    return {"stores_covered": covered, "boundary": boundary, "batch": batch, **audit.counts,
+    reconciled = not audit.violations and not legacy_blocks and audit.counts["unfinished"] == 0
+    return {"stores_covered": covered, "boundary": boundary, "batch": batch,
+            # D-7: three levels, never conflated. The chains verified (internally consistent); they reached the
+            # anchors supplied (checked against a supplied anchor); independent custody of those anchors is not
+            # configured, so nothing here is independently anchored or certified.
+            "assurance": {"internally_consistent": True, "checked_against_supplied_anchor": True,
+                          "independently_anchored": False},
+            "independently_certified": False, **audit.counts,
             "terminals_by_data_read": audit.read,
             "distinct_specifications": len(audit.specs), "completed_evaluation_keys": len(audit.keys),
             "repeated_observations": audit.observations, "independent_statistical_tests": None,
             "legacy": audit.legacy, "designated_reserve_completions": audit.designated,
             "violations": audit.violations,
-            "access_reconciled": not audit.violations and not legacy_blocks and audit.counts["unfinished"] == 0,
+            "access_reconciled": reconciled,
             "limitations": list(LIMITATIONS)}

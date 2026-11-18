@@ -171,8 +171,14 @@ def flow(root: Path, crash: bool) -> dict:
         s = ST.Store(workdir=root / "rt-overwrite/private/ledger", remote=str(remote), run_id="900", run_attempt=2,
                      commit="c" * 40, clock=clock).open()
         first = s.of_type("observation")[0]
-        out["overwrite"] = s.write([ST.Intent("observation", tuple(first["key"]), {**first["payload"], "net": "0.5"})],
-                                   "overwrite attempt")
+        before_overwrite = len(s.records)
+        try:                                     # Phase 4B: evidence is written through manhattan.access only
+            s.write([ST.Intent("observation", tuple(first["key"]), {**first["payload"], "net": "0.5"})],
+                    "overwrite attempt")
+            out["overwrite"] = "written"
+        except ST.StoreError:
+            out["overwrite"] = "refused"
+        out["overwrite_records"] = (before_overwrite, len(s.records))
         # a run that fails inside evaluation, with a performance value in the exception message
         clock.at("2026-11-18T23:30:00Z")
         value = float(first["payload"]["net"]) if float(first["payload"]["net"]) else 0.012345678901
@@ -232,7 +238,8 @@ def test_ten_synthetic_families_through_every_stage(runs):
     assert len(fam_specs) == 10 and all("SYNTHETIC" in f["mechanism"] for f in fam_specs)
     f = r["final"]
     types = {x["type"] for x in f.records}
-    assert {"screening", "capture", "registration", "observation", "missed_run", "heartbeat", "conflict"} <= types
+    assert {"screening", "capture", "registration", "observation", "missed_run", "heartbeat"} <= types
+    assert "conflict" not in types        # Phase 4B: the overwrite attempt is refused before it reaches the chain
     scr = f.of_type("screening")
     assert len(scr) == r["prep"]["executables"]
     assert all(x["payload"]["role"] == "exploration" and x["payload"]["evidential_weight"] == 0 for x in scr)
@@ -285,7 +292,7 @@ def test_records_are_immutable(runs):
     for r in runs.values():
         after = [json.dumps(x, sort_keys=True) for x in r["final"].records]
         assert after[: len(r["after_cycle1"])] == r["after_cycle1"]
-        assert r["overwrite"]["conflict"] == 1 and r["overwrite"]["appended"] == 0
+        assert r["overwrite"] == "refused" and r["overwrite_records"][0] == r["overwrite_records"][1]
     c = runs["crash"]
     assert [json.dumps(x, sort_keys=True) for x in c["final"].records][: len(c["after_crash"])] == c["after_crash"]
 

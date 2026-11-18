@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from manhattan import access as A
 from manhattan import attempts, roles
+from manhattan import config as MC
 from manhattan import ledger as L
 from manhattan.engine import pit
 from manhattan.ops import data as D
@@ -91,7 +92,7 @@ def test_observations_need_an_active_forward_attempt(setup):
     led2 = ST.Store(workdir=led.workdir.parent / "w2", remote=led.remote, run_id="t", commit="c" * 40).open()
     (ctx,) = A.register_store_attempts(led2, [R.forward_attempt(reg, exe, date(2026, 11, 17), store.data_hash(),
                                                                 R.code_identity("c" * 40))],
-                                       fence=roles.Fence.from_config(R.MC.load()))
+                                       fence=roles.Fence.from_config(MC.load()))
     with pytest.raises(pit.AccessError):                       # declared for another night
         R.observation_intents(led2, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
     ctx.fail("cancelled")
@@ -176,10 +177,10 @@ def test_crash_during_result_commit_keeps_results_and_terminals_together(setup, 
     first_night(s)
     real = ST.Store.write
 
-    def write(self, intents, label, files=None):
+    def write(self, intents, label, files=None, **kw):
         if label.startswith("observations to"):
             self.crash_at = stage
-        return real(self, intents, label, files)
+        return real(self, intents, label, files, **kw)
 
     monkeypatch.setattr(ST.Store, "write", write)
     with pytest.raises(ST.SimulatedCrash):
@@ -241,8 +242,37 @@ def _forger(led):
     return ST.Store(workdir=led.workdir.parent / "forger", remote=led.remote, run_id="forger", commit="c" * 40).open()
 
 
+def hostile(f: ST.Store, intents: list) -> dict:
+    """A writer holding the deploy key: hash-valid records pushed without any API rule (the public Store.write
+    refuses evidence and attempt types unless manhattan.access sealed them). Only the reconciler can catch these."""
+    out = f._append_local(intents)
+    f._commit("forged")
+    assert f._push()
+    return out
+
+
+def forged_attempt(start: dict, *, asof: str | None = None, **identity) -> tuple[str, dict]:
+    """A copy of a real forward attempt's start, re-keyed (new nonce and run), optionally for another night or with
+    a different identity; its attempt ID recomputes."""
+    p = json.loads(json.dumps(start["payload"]))
+    p.update(nonce="1" * 32, run={"run_id": "forger", "run_attempt": 1}, retry_of=None)
+    if asof is not None:
+        p["subject"]["asof"] = asof
+        ev = next(w for w in p["authorization"]["windows"] if w["purpose"] == "evaluation")
+        ev["end"] = p["identity"]["window"]["end"] = "2026-12-31"
+    p["identity"].update(identity)
+    return A.store_attempt_id(p), p
+
+
+def linked(aid: str, intents: list) -> ST.Intent:
+    links = [{"key": list(it.key), "type": it.type, "disposition": "new",
+              "content_hash": ST.content_hash(it.type, it.key, ST._canon(it.payload))} for it in intents]
+    return A.terminal_intent(aid, "completed", data_read=True, results=links)
+
+
 FORGERIES = ["unregistered_observation", "attempt_id_mismatch", "unknown_terminal", "bad_link", "bad_retry",
-             "weight", "escalation"]
+             "weight", "escalation", "outside_window", "wrong_executable", "registration_mismatch",
+             "conflicting_observation", "second_terminal"]
 
 
 @pytest.mark.parametrize("forgery", FORGERIES)
@@ -251,26 +281,31 @@ def test_hash_valid_store_forgeries_are_reported(setup, forgery):
     first_night(s)
     s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
     f = _forger(s["ledger"]())
-    start = f.of_type("attempt_started")[0]
     obs = f.of_type("observation")[-1]
+    pred = obs["payload"]["prediction"]
+    start = next(r for r in f.of_type("attempt_started") if r["payload"]["subject"]["prediction"] == pred)
     new_obs = dict(obs["payload"], date="2026-11-30")
-    key = ("observation", obs["payload"]["prediction"], "2026-11-30")
+    key = ("observation", pred, "2026-11-30")
     expect = {"unregistered_observation": "unregistered_protected_evaluation",
               "attempt_id_mismatch": "attempt_id_mismatch", "unknown_terminal": "terminal_without_attempt",
               "bad_link": "result_linkage_mismatch", "bad_retry": "invalid_retry",
-              "weight": "evidential_weight_mismatch", "escalation": "invalid_identity_or_authorization"}[forgery]
+              "weight": "evidential_weight_mismatch", "escalation": "invalid_identity_or_authorization",
+              "outside_window": "result_outside_attempt_identity_or_window",
+              "wrong_executable": "result_outside_attempt_identity_or_window",
+              "registration_mismatch": "registration_mismatch",
+              "conflicting_observation": "conflict_on_protected_record",
+              "second_terminal": "conflict_on_protected_record"}[forgery]
     if forgery == "unregistered_observation":
-        f.write([ST.Intent("observation", key, new_obs)], "forged")
+        hostile(f, [ST.Intent("observation", key, new_obs)])
     elif forgery == "attempt_id_mismatch":
-        f.write([ST.Intent(A.STORE_START, (A.STORE_START, "f" * 64), start["payload"])], "forged")
+        hostile(f, [ST.Intent(A.STORE_START, (A.STORE_START, "f" * 64), start["payload"])])
     elif forgery == "unknown_terminal":
-        f.write([A.terminal_intent("e" * 64, "failed", reason="execution_error", data_read=False)], "forged")
+        hostile(f, [A.terminal_intent("e" * 64, "failed", reason="execution_error", data_read=False)])
     elif forgery in ("bad_link", "bad_retry", "escalation"):
-        p = {**start["payload"], "nonce": "1" * 32, "run": {"run_id": "forger", "run_attempt": 1}}
+        aid, p = forged_attempt(start)
         if forgery == "bad_retry":
             p["retry_of"] = start["key"][1]                         # a completed attempt is never retried
         if forgery == "escalation":
-            p = json.loads(json.dumps(p))
             p["identity"]["role"] = "exploration"
             for w in p["authorization"]["windows"]:
                 w["role"] = "exploration"
@@ -279,23 +314,46 @@ def test_hash_valid_store_forgeries_are_reported(setup, forgery):
         if forgery == "bad_link":
             its.append(A.terminal_intent(aid, "completed", data_read=True, results=[
                 {"key": list(key), "type": "observation", "content_hash": "0" * 64, "disposition": "new"}]))
-        f.write(its, "forged")
-    else:                                                           # weight 1 on a reconstructed observation
-        f.write([ST.Intent("observation", key, dict(new_obs, reconstructed=True, evidential_weight=1))], "forged")
+        hostile(f, its)
+    elif forgery == "weight":                                       # weight 1 on a reconstructed observation
+        hostile(f, [ST.Intent("observation", key, dict(new_obs, reconstructed=True, evidential_weight=1))])
+    elif forgery == "outside_window":                               # observed after the attempt's night
+        aid, p = forged_attempt(start)
+        o = ST.Intent("observation", key, new_obs)
+        hostile(f, [ST.Intent(A.STORE_START, (A.STORE_START, aid), p), o, linked(aid, [o])])
+    elif forgery == "wrong_executable":                             # inside the window, another executable
+        aid, p = forged_attempt(start, asof="2026-11-30")
+        o = ST.Intent("observation", key, dict(new_obs, executable="AX-0000000000000000"))
+        hostile(f, [ST.Intent(A.STORE_START, (A.STORE_START, aid), p), o, linked(aid, [o])])
+    elif forgery == "registration_mismatch":                        # a specification the prediction never had
+        aid, p = forged_attempt(start, asof="2026-11-30", spec_hash="a" * 64)
+        o = ST.Intent("observation", key, new_obs)
+        hostile(f, [ST.Intent(A.STORE_START, (A.STORE_START, aid), p), o, linked(aid, [o])])
+    elif forgery == "conflicting_observation":
+        hostile(f, [ST.Intent("observation", tuple(obs["key"]), dict(obs["payload"], net=0.5))])
+    else:
+        aid = f.of_type("attempt_completed")[0]["key"][1]
+        res = hostile(f, [A.terminal_intent(aid, "failed", reason="execution_error", data_read=True)])
+        assert res["conflict"] == 1 and res["appended"] == 0
     r = audit(_forger(f))
-    assert expect in codes(r) and not r["access_reconciled"]
+    assert expect in codes(r) and not r["access_reconciled"], codes(r)
 
 
-def test_a_second_terminal_is_refused_as_a_conflict(setup):
+def test_contradictions_through_the_public_api_are_refused(setup):
+    """S7 M2/M5: the public Store API cannot write a second terminal, a different observation value, or any
+    evidence or attempt record at all without manhattan.access; nothing reaches the chain."""
     s = setup
     first_night(s)
     s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
     f = _forger(s["ledger"]())
+    before = len(f.records)
     aid = f.of_type("attempt_completed")[0]["key"][1]
-    res = f.write([A.terminal_intent(aid, "failed", reason="execution_error", data_read=True)], "contradiction")
-    assert res["conflict"] == 1 and res["appended"] == 0
-    r = audit(_forger(f))
-    assert r["access_reconciled"] and f.get((A.STORE_TERMINAL, aid))["type"] == "attempt_completed"
+    obs = f.of_type("observation")[-1]
+    for its in ([A.terminal_intent(aid, "failed", reason="execution_error", data_read=True)],
+                [ST.Intent("observation", tuple(obs["key"]), dict(obs["payload"], net=0.5))]):
+        with pytest.raises(ST.StoreError, match="manhattan.access"):
+            f.write(its, "contradiction")
+    assert len(_forger(f).records) == before and audit(_forger(f))["access_reconciled"]
 
 
 @pytest.mark.parametrize("damage", ["delete", "alter", "truncate", "replace", "stale_anchor_head"])
@@ -380,10 +438,134 @@ def test_screening_is_registered_and_linked(tmp_path):
                                                             tuple(ident["authorization"]["windows"]),
                                                             ident["subject"], caller="session")], fence=fence)
     assert A.recover_interrupted(led) == []
-    led.write(A.recover_interrupted(led, kinds=("screening",)), "operator screening recovery")
+    assert A.commit_recovery(led, kinds=("screening",), require_lock=False) == 1
     assert not ctx.active()
     r = audit(led)
     assert r["access_reconciled"] and r["terminals_by_data_read"]["aborted_unknown"] == 1
     with pytest.raises(L.LedgerError):                               # screening also needs a known code identity
         R.screen(ST.Store(workdir=tmp_path / "w2", remote=str(remote), run_id="901").open(), exes, st, fence,
                  date(2007, 1, 2), date(2008, 12, 31))
+
+
+# ================================================================== S7 audit corrections (each failed before)
+
+def _one_ctx(s, asof=date(2026, 11, 16)):
+    """One registered forward-observation attempt on a fresh clone, with its prediction, executable and store."""
+    led = s["ledger"]()
+    reg = sorted(R.registrations(led).items())[0][1]
+    manifest, specs = R.load_batch(s["cfg"](asof).batches_dir, 1)
+    exe = next(x for x in R.batch_executables(specs) if R.prediction_id(R.S.spec_hash(manifest), x.spec_hash)
+               == reg["prediction"])
+    fs = D.first_seen(led, ("synthetic",))
+    store = fs.pit_store()
+    w = ST.Store(workdir=led.workdir.parent / f"ctx-{asof}", remote=led.remote, run_id="ctx", commit="c" * 40).open()
+    (ctx,) = A.register_store_attempts(w, [R.forward_attempt(reg, exe, asof, store.data_hash(),
+                                                             R.code_identity("c" * 40))],
+                                       fence=roles.Fence.from_config(MC.load()))
+    return w, ctx, reg, exe, fs, store
+
+
+@pytest.mark.parametrize("ending", ["fail", "complete", "recover"])
+def test_store_window_reads_only_while_its_attempt_is_active(setup, ending):
+    """S7 H2 for the Store: a forward window read after its attempt ended is refused."""
+    s = setup
+    first_night(s)
+    w, ctx, reg, exe, fs, store = _one_ctx(s)
+    win = ctx.forward_window(store)
+    win.as_of(exe.universe.instruments[0][1], date(2026, 11, 16))
+    if ending == "fail":
+        ctx.fail("execution_error")
+        assert w.get((A.STORE_TERMINAL, ctx.attempt_id))["payload"]["data_read"] is True
+    elif ending == "complete":
+        A.completion(ctx, w, [])
+    else:
+        assert A.commit_recovery(w, require_lock=False) == 1
+    with pytest.raises(pit.AccessError, match="not registered and active"):
+        win.as_of(exe.universe.instruments[0][1], date(2026, 11, 16))
+
+
+def test_store_completions_need_a_read_and_cover_exactly_their_results(setup):
+    """S7 M5 for the Store: no completion without a read; commit_results writes only minted, unaltered completions
+    that link every result of the batch with its exact content."""
+    s = setup
+    first_night(s)
+    from manhattan.ops import timing as TM
+    cap = s["ledger"]()                                                # a capture that no attempt has observed yet
+    it, files = D.capture_intent(D.SOURCES["synthetic"], D.synthetic_csv(date(2026, 11, 16)),
+                                 TM.parse_time("2026-11-16T23:30:00Z"))
+    cap.write([it], "capture", files=files)
+    w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
+    with pytest.raises(pit.AccessError, match="read nothing"):
+        A.completion(ctx, w, [])
+    its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
+    assert its and all(w.get(it.key) is None for it in its)             # new results
+    outside = ST.Intent("observation", ("observation", reg["prediction"], "2026-11-20"),
+                        dict(its[0].payload, date="2026-11-20"))
+    with pytest.raises(pit.AccessError, match="does not belong"):       # after the attempt's night
+        A.completion(ctx, w, its + [outside])
+    assert ctx.active()
+    done = A.completion(ctx, w, its)
+    extra = ST.Intent("observation", ("observation", reg["prediction"], "2026-11-12"), dict(its[0].payload))
+    altered = ST.Intent(done.type, done.key, json.loads(json.dumps(done.payload)))
+    altered.payload["results"][0]["disposition"] = "duplicate"
+    for results, comps in ((its + [extra], [done]),                          # a result nobody linked
+                           (its, [altered]),                                  # a completion not minted here
+                           (its, [A.terminal_intent(ctx.attempt_id, "completed", data_read=True,
+                                                    results=done.payload["results"])]),
+                           (its[:-1], [done])):                               # a linked new result missing
+        with pytest.raises(pit.AccessError):
+            A.commit_results(w, results, comps, "observations")
+    before = len(w.records)
+    A.commit_results(w, its, [done], "observations")
+    assert len(w.records) == before + len(its) + 1
+
+
+def test_a_run_whose_lock_was_broken_cannot_write_its_results(setup, monkeypatch):
+    """S7 M2, the 75-minute case: run A is still alive when run B (A's lock expired) breaks the lock and recovers
+    A's attempts. A's later write is refused, so its results never reach the chain without a valid terminal."""
+    s = setup
+    first_night(s)
+    real = R.observation_intents
+    seen = {}
+
+    def slow(ledger, fs, pit_, reg, exe, asof, *, attempt):
+        if not seen:                                        # A's first prediction: B takes over meanwhile
+            seen["b"] = True
+            b = ST.Store(workdir=ledger.workdir.parent / "run-b", remote=ledger.remote, run_id="B",
+                         commit="c" * 40, clock=lambda: s["clock"].t + timedelta(hours=2)).open()
+            assert b.acquire()["broken"] == 1
+            b.reconcile()
+            assert A.commit_recovery(b, require_lock=True) > 0
+        return real(ledger, fs, pit_, reg, exe, asof, attempt=attempt)
+
+    monkeypatch.setattr(R, "observation_intents", slow)
+    h = s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
+    assert h["status"] == "locked"
+    led = s["ledger"]()
+    assert led.of_type("observation") == [] and led.of_type("attempt_completed") == []
+    assert led.of_type("conflict") == []
+    r = audit(led)
+    assert r["access_reconciled"], r["violations"]
+    assert r["aborted"] == r["registered_executions"] > 0
+
+
+def test_a_pending_entry_pushed_under_the_lock_is_finished_before_recovery(setup, monkeypatch):
+    """The other side of the race: A pushed its results entry while it still held the lock, then died. B finishes
+    that entry under its own lock before it recovers anything, so A's attempts complete instead of being aborted."""
+    s = setup
+    first_night(s)
+    real = ST.Store.write
+
+    def write(self, intents, label, files=None, **kw):
+        if label.startswith("observations to"):
+            self.crash_at = "after_journal_push"
+        return real(self, intents, label, files, **kw)
+
+    monkeypatch.setattr(ST.Store, "write", write)
+    with pytest.raises(ST.SimulatedCrash):
+        s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
+    monkeypatch.undo()
+    h = s["night"](date(2026, 11, 16), "2026-11-17T02:00:00Z")
+    assert h["status"] == "ok" and h["attempts_recovered"] == 0
+    r = audit(s["ledger"]())
+    assert r["access_reconciled"] and r["aborted"] == 0

@@ -77,10 +77,15 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
         if not isinstance(attempt._backend, access._LedgerBackend) or attempt._backend.ledger is not ledger:
             raise AccessError("the attempt is registered in a different ledger")
         attempt.check_evaluation_window(window)
+        # S7 M3: the running code's identity is computed here, never taken from the caller. A caller-supplied
+        # version must equal it, or the evaluation is refused.
+        running = code_version()
+        if version is not None and version != running:
+            attempt.fail("validation_error")
+            raise AccessError("the supplied code version is not the running code")
         now = _identity_now(window, executable=executable, variant=variant, hypothesis=hypothesis, family=family,
                             batch=batch, channel=channel, designated=designated,
-                            window_id=window_id or attempt.evaluation_window.id,
-                            version=version or code_version())
+                            window_id=window_id or attempt.evaluation_window.id, version=running)
         if now != attempt.identity:
             attempt.fail("validation_error")
             raise AccessError("the evaluation differs from its registered identity (or the running code does)")
@@ -107,9 +112,16 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
             attempt.abort("interrupted")
         raise
     s = result.summary()
+    proof = None
     if bound:
         win = attempt.identity["window"]
         version = attempt.identity["code_version"]
+        try:
+            proof = attempt._completion_proof(result.result_hash()) if window.role in PROTECTED_ROLES else None
+        except AccessError:
+            if attempt.active():
+                attempt.fail("validation_error")
+            raise
     else:
         win = {"id": window_id or f"{window.domain}:{window.start}:{window.end}", "start": window.start,
                "end": window.end, "frequency": "daily"}
@@ -121,7 +133,7 @@ def evaluate(window: Window, strategy: backtest.Strategy, *, ledger: L.Ledger, e
         code_version=version, result_hash=result.result_hash(), n_obs=s["n_obs"],
         summary={k: (round(v, 10) if isinstance(v, float) and v == v else (None if isinstance(v, float) else v))
                  for k, v in s.items()}, seed=seed, reconstructed=window.reconstructed,
-        attempt_id=attempt.attempt_id if bound else None)
+        attempt_id=attempt.attempt_id if bound else None, proof=proof)
     if bound:
         attempt._mark_completed()
     if window.role == roles.EXPLORATION and rec["type"] == "evaluation":

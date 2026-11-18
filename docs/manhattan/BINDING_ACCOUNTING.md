@@ -15,14 +15,33 @@ change to `looks()`, and no edit of a protected path (`.github/CODEOWNERS`) or o
 
 ## 1. Trust boundary
 
-What this phase can enforce is bounded by ARCHITECTURE §8. Stated plainly:
+What this phase can enforce is bounded by ARCHITECTURE §8. **The intended guarantee is correct behaviour through the
+supported Manhattan APIs.** It is not a sandbox. Stated plainly:
 
-| claim | how it holds | where it stops |
+- **PIT window authorization is not a general-purpose data-access sandbox.** It controls how Manhattan code turns a
+  `PitStore` into values a strategy sees. It does not control the store's own memory, the raw capture files
+  (`raw/<sha256>.bin` in the private Store clone), the public FRED source, the em-macro-data clone, or any code that
+  reads those directly. Raw captures and the Store's files have their own access controls (who holds the private
+  repository and its deploy key), which this phase neither changes nor certifies.
+- **Deliberate hostile Python code is outside the structural boundary.** Code in the same process can import private
+  names (`pit._open_window`, `pit._GRANTS`, `pit._SEAL_KEY`, `access._PROOF_KEY`), edit module state, or write files
+  directly. An AST scan test pins which Manhattan modules may touch the private access names, so a bypass inside
+  Manhattan must be explicit and reviewable. A writer holding a store's credential (the Ledger file, the Store's
+  deploy key) can write any hash-valid record; only the reconciler can detect what such a writer does, and only
+  as far as the records are internally inconsistent.
+- **A caller-supplied `synthetic=True` does not prove provenance.** `PitStore(synthetic=True)` is a declaration by the
+  code that builds the store. It confines `diagnostic_window` to stores so declared and keeps diagnostic windows out
+  of every evaluation and observation path; it does not make a store synthetic.
+- **Public Store and Ledger APIs** refuse evidence and attempt records unless they come through `manhattan.access`
+  (sealed writes, completion proofs), but they are not an authentication boundary against a holder of the credential.
+
+| claim, through supported APIs | how it holds | where it stops |
 |---|---|---|
-| No Manhattan code path opens a reserve or forward window without a durable, active registered attempt | `Window` can be created only with a seal minted inside `manhattan.engine.pit`; protected seals are minted only for an `AttemptContext` whose start record is already durable in its authoritative store | In-process Python is not a security boundary against code that deliberately imports private names (`pit._open_window`, `pit._SEAL_KEY`). A static scan test pins the modules allowed to touch them, so a bypass must be explicit and reviewable |
-| The window read is the window authorized | the seal binds store object, store version, dates, role, domain, caller, purpose, attempt ID and window ID; `dataclasses.replace` or direct construction fails; a store mutated after authorization refuses protected reads | reads of a `PitStore`'s private arrays (`_period`, `_value`, `_as_of`) from outside `pit`/`lookahead` are excluded by the same static scan, not by the language |
-| Every protected statistical evaluation has a start, an identity and exactly one terminal | registration before exposure; terminals written by the context; the reconciler re-derives the lifecycle from the persisted, anchored records | a process that never runs Manhattan code (e.g. a notebook reading FRED directly) leaves no record: ARCHITECTURE §8 item 3 |
-| Deletion or alteration of either store's history is detected | both hash chains are re-verified from immutable snapshots against **independently retained** anchors (record count + head hash) | an anchor that was not retained independently (or was retained by the same writer that can rewrite the chain) authenticates nothing; anchor custody is an owner decision (D-7) |
+| No reserve or forward window is opened without a durable, active registered attempt | a `Window` is minted only inside `pit` (seal over every field), for an `AttemptContext` whose start is durable; reserve tokens are bound to batch, specification and window | private names, as above |
+| A protected window reads only while its attempt is registered and active | every read re-checks the attempt (liveness on the shared read meter), the store version, and that the object is the one minted here, unchanged, in this process; copies, deep copies, pickling, `object.__setattr__` widening and fork inheritance are refused | the liveness check sees the attempt's own `Ledger`/`Store` object in this process; another process's terminal is enforced at write time (Store lock compare-and-swap; single-writer Ledger) and by reconciliation |
+| A terminal's `data_read` is true whenever a value was read | reads are counted before any value leaves, and refused after the terminal | as above |
+| Every protected statistical evaluation has a start, an identity and exactly one terminal | registration before exposure; protected completions need a one-use completion proof (Ledger) or a sealed, linkage-checked commit (Store) | a process that never runs Manhattan code leaves no record (ARCHITECTURE §8 item 3) |
+| Deletion or alteration of either store's history is detected | chains re-verified from immutable snapshots against a supplied anchor `{records, head}` | a supplied anchor is not independent custody (D-7, section 10) |
 
 The exploration role stays open (ARCHITECTURE §6.1): exploration windows need no registration and exploratory reads
 are not logged. Registration is optional for exploration evaluations; when present it binds them the same way.
@@ -144,7 +163,9 @@ side file, never a complete record. The interrupted attempt then shows as unfini
    run (results and terminals together), or leaves nothing, in which case the starts remain unfinished.
 
 Terminal records use one key per attempt (`("attempt_terminal", id)`), so the Store's own idempotency rule makes a
-second, different terminal a `conflict` record instead of a second terminal. Result idempotency is the existing
+second, different terminal a `conflict` record instead of a second terminal (and, since the S7 correction, the
+public `Store.write` refuses an unsealed terminal outright, while any conflict on an evidence or attempt record makes
+the history unreconciled). Result idempotency is the existing
 key rule: a re-execution that reproduces an existing observation is a `duplicate` (no new evidence); a different value
 is a `conflict` and the first record stands. The terminal lists each linked result key, its content hash and its
 disposition (`new`, `duplicate`, `conflict`), so the reconciler can check the linkage.
@@ -181,26 +202,41 @@ numbers only (no values). It detects:
   eligibility gate (factored into one function, rules unchanged);
 - attempt IDs registered in both stores (cross-store collision).
 
-`access_reconciled` is `true` only if: every supplied store verified against its anchor, there are no violations,
-no unfinished attempts, no legacy (pre-schema-2 or pre-epoch) protected records in the boundary, and every protected
-result is linked. It speaks only for the stores supplied (`stores_covered`) and for Manhattan code paths (section 1).
+**What `access_reconciled: true` means, exactly.** For the stores supplied (`stores_covered`) and the boundary each
+anchor marks: both chains verified; each reached the supplied anchor; the audit found no violation of any code above
+(including conflicts on evidence or attempt records, results outside their attempt's identity or window, reused
+designations); no attempt is unfinished; no legacy protected record (pre-schema-2 start, unlinked or pre-epoch
+protected result) is in the boundary; and every protected result is linked to the completion of a registered
+attempt. It is a statement about the records' internal consistency **checked against the supplied anchors**. It
+does not say the anchors were independently held (`assurance.independently_anchored` is always false until custody is
+configured, D-7), that the records' writer was honest beyond what consistency shows, or anything about reads
+outside Manhattan code. `independent_statistical_tests` stays `null` until it is scientifically defined (D-1).
+
+Three assurance levels are reported separately and never conflated:
+
+| level | meaning | where |
+|---|---|---|
+| internally consistent | the hash chain verifies | `ledger.verify`, `ST.verify_chain`, `assurance.internally_consistent` |
+| checked against a supplied anchor | the chain reaches `{records, head}` given by the caller | `assurance.checked_against_supplied_anchor` |
+| independently anchored and certified | the anchor's custody is independent of the stores' writing credential | **not configured**: `assurance.independently_anchored` and `independently_certified` are always `false` |
 
 The pass is linear in the number of records (dictionaries keyed by attempt ID and record key). The `Ledger`'s
 in-memory lifecycle queries, which 4A-1a computed by rescanning (quadratic over a run), are indexed.
 
-## 10. Unresolved scientific and owner decisions
+## 10. Scientific and owner decisions
 
-Work affected by each is stopped or kept fail-closed; nothing below is decided by this phase.
+Work affected by an open decision is stopped or kept fail-closed. Decisions taken by the owner in the S1 correction
+round (after the S7 audit) are marked **decided**.
 
-| # | decision needed | what this phase does meanwhile |
+| # | decision | status and what the code does |
 |---|---|---|
-| D-1 | Which counting unit (registered executions, distinct specifications, completed keys) enters any multiple-testing denominator, and how retries and failed-after-read attempts count | reports all units separately; `independent_statistical_tests: null`; `looks()` unchanged |
-| D-2 | Confirm that a nightly forward execution is an accounting unit, not a test, and that its observations are repeated observations of one registered prediction | implemented that way; no statistical consumer changed |
-| D-3 | May a forward strategy's signal warm-up read dates inside (or in the embargo margin of) a configured reserve window? | refused (fail closed); no reserve window is configured today |
-| D-4 | Disposition of legacy records (pre-schema-2 starts, unlinked completions, pre-epoch observations): may certification start at an accounting epoch? | readable, counted, never certified; their presence keeps `access_reconciled` false |
-| D-5 | Should the low-level `Ledger.record_evaluation` refuse unlinked reserve/forward writes outright? (Existing fixtures and tests use it directly.) | the engine boundary (`evaluate`, `Window`) refuses; the storage API stays compatible; the reconciler flags any unlinked protected record |
-| D-6 | ARCHITECTURE §6.2 "one designated evaluation per (batch, domain), then retired" is not enforced by any writer | not enforced (a scientific rule); the reconciler reports designated reserve completions per `(batch, domain)` without judging them |
-| D-7 | Custody of anchors: which independent record (public `run_summary`, health `ledger_head`, external timestamp, mirror) authenticates each batch boundary | the reconciler requires an anchor argument and verifies it; it cannot know where the caller got it |
+| D-1 | Which counting unit (registered executions, distinct specifications, completed keys) enters any multiple-testing denominator, and how retries and failed-after-read attempts count | open: all units reported separately; `independent_statistical_tests: null`; `looks()` unchanged |
+| D-2 | Confirm that a nightly forward execution is an accounting unit, not a test | open: implemented that way; no statistical consumer changed |
+| D-3 | May a forward strategy's signal warm-up read dates inside (or in the embargo margin of) a configured reserve window? | open: refused (fail closed); no reserve window is configured today |
+| D-4 | Disposition of legacy records: may certification start at an accounting epoch? | open: readable, counted, never certified; their presence keeps `access_reconciled` false |
+| D-5 | Must protected completions require a registered attempt and a completion path that establishes authorization and accounting? | **decided (yes)**: `Ledger.record_evaluation` writes a reserve/forward completion only with the attempt's one-use completion proof (minted by `engine.evaluate` after a read); `Ledger.append` refuses lifecycle types; `Store.write` refuses evidence and attempt types unless sealed by `manhattan.access`, whose results commit checks linkage. Historical records stay readable and are never certified |
+| D-6 | One designated reserve evaluation per (batch, domain) | **decided (enforce conservatively)**: a second designated reserve registration for a (batch, domain) is refused unless it retries (`supersedes`) the one unfinished earlier attempt; a failed, aborted or completed designated attempt consumes the designation; the reconciler reports any reuse. Whether a designated attempt that never read data should release the designation is not decided here |
+| D-7 | Custody of anchors | **decided (no false certification)**: an anchor held by the same writing credential is not independent. No independent custody is configured, so the reconciler reports `checked_against_supplied_anchor` only and never `independently_certified`. No external service is implemented |
 
 ---
 
@@ -241,13 +277,18 @@ Behaviour that changed for existing callers (each is the binding rule, not a sid
 | `AttemptContext.window` | engine: any; screening: exploration | n/a | active attempt, data identity, role re-derived from the fence | `test_data_identity_is_checked_when_opening_and_while_reading`, `test_reserve_designated_evaluation_and_its_report` |
 | `data.forward_window` / `AttemptContext.forward_window` (R-1, warm-up) | forward | unchecked adapter | registered forward-observation attempt; strengthened R-1; warm-up never in a configured reserve (D-3) | `test_forward_adapter_needs_a_forward_observation_attempt`, `test_observations_need_an_active_forward_attempt`, `test_warmup_overlapping_a_configured_reserve_is_refused` |
 | `Window(...)`, `dataclasses.replace`, forged seal | any | allowed | refused | `test_windows_cannot_be_constructed_or_copied` |
+| `copy.copy`, `copy.deepcopy`, `pickle`, `object.__setattr__`, a forked child, spawn | any | allowed (S7 H3) | refused at copy/serialize time, or at the next read | `test_windows_cannot_be_copied_serialized_or_altered`, `test_a_forked_child_cannot_read_an_inherited_window` |
+| reading a window after its attempt ended (abort, failure, completion, retry, recovery) | reserve, forward, attempt-bound exploration | allowed (S7 H2) | refused at every read | `test_no_read_after_abort_and_data_read_stays_true`, `test_no_read_after_any_ending`, `test_store_window_reads_only_while_its_attempt_is_active` |
+| `Ledger.append` of lifecycle types | any | allowed (S7 M4/M5) | refused | `test_storage_api_refuses_escalated_or_implicit_completion` |
+| `Store.write` of evidence or attempt types | any | allowed (S7 M2/M5) | refused unless sealed by `manhattan.access` | `test_evidence_and_attempt_records_need_access_sealing`, `test_contradictions_through_the_public_api_are_refused` |
 | `pit.diagnostic_window` (`ops/capacity.py`) | any label | used the forward adapter | synthetic stores only; never evidence | `test_diagnostic_windows_are_synthetic_only_and_never_evidence`, capacity tests |
 | `lookahead.tampered_after` / `shifted` | copies of a store | unchanged | unchanged; a copy's data identity differs, so it cannot be opened under an attempt | `test_a_tampered_lookahead_copy_cannot_be_opened_under_the_attempt`, existing look-ahead tests |
 | `engine.evaluate` | any | recorded only | protected needs its attempt, identity and running code; classified terminals | `test_completion_cannot_escalate_designation_or_identity`, `test_wrong_ledger_or_running_code_is_refused`, `test_failures_are_classified_and_never_completed` |
 | `runner.observation_intents` | forward | adapter | attempt required | `test_forward_night_registers_before_reading_and_reconciles`, `test_observations_need_an_active_forward_attempt` |
 | `runner.screen` | exploration | Reader | registered screening attempts, linked results | `test_screening_is_registered_and_linked`, end-to-end |
 | `factors/reproduce.py` | exploration | Reader + evaluate | unchanged (open exploration, unregistered by design) | `test_manhattan_factors.py`, `test_exploration_stays_open_and_unregistered_exploration_is_not_a_violation` |
-| `Ledger.record_evaluation` called directly | any | allowed | allowed (storage API, D-5); implicit completion of a registered attempt refused; any unlinked reserve/forward completion is a reconciliation violation | `test_storage_api_refuses_escalated_or_implicit_completion`, `test_unregistered_protected_evaluations_and_forged_authorizations` |
+| `Ledger.record_evaluation` called directly | reserve, forward | allowed (S7 M5) | refused without the attempt's one-use completion proof (D-5) | `test_storage_api_refuses_escalated_or_implicit_completion`, `test_completion_proofs_are_single_use_bound_and_require_a_read` |
+| `Ledger.record_evaluation` called directly | exploration | allowed | allowed; implicit completion of a registered attempt refused | `test_storage_api_refuses_escalated_or_implicit_completion` |
 | private names (`_open_window`, `_SEAL_KEY`, `_as_of`, `_store`, `_value`, `_period`, `_CTX_KEY`, `Window(`) | any | convention | pinned to named modules by an AST scan | `test_private_access_paths_are_used_only_where_allowed` |
 | code outside Manhattan (em_macro, nightshift explorer, notebooks) | n/a | out of scope | out of scope (ARCHITECTURE §8 item 3); the Q019 loader and sandbox are untouched | Q019 suites |
 
@@ -262,7 +303,9 @@ Behaviour that changed for existing callers (each is the binding rule, not a sid
 | Store | inside the starts' write (`mid_chain_write`) | pending journal entry | journal reconcile finishes it, then attempt recovery | end-to-end `test_recovery_is_exact` |
 | Store | inside the results-and-terminals write: `after_journal_local`, `after_journal_push`, `mid_chain_write`, `after_chain_commit_local`, `after_chain_push` | pending or partial entry | journal reconcile writes results and terminals together, or neither and attempt recovery closes the starts | `test_crash_during_result_commit_keeps_results_and_terminals_together` (5 stages) |
 | Store | handled failure while observing | `attempt_failed: execution_error`, no results, no exception text | none needed; if that write fails, recovery | `test_handled_failure_closes_attempts_without_private_text` |
-| Store | a second, different terminal | refused as a `conflict` record | the first terminal stands | `test_a_second_terminal_is_refused_as_a_conflict` |
+| Store | a second, different terminal | refused by the public API; if written by a credential holder, a `conflict` record that makes the history unreconciled | the first terminal stands | `test_contradictions_through_the_public_api_are_refused`, `test_hash_valid_store_forgeries_are_reported[second_terminal]` |
+| Store | a run still alive after its lock expired and was broken (the 75-minute case) | its later writes are refused (`Locked`); its attempts were aborted by the new run's recovery | none needed | `test_a_run_whose_lock_was_broken_cannot_write_its_results` |
+| Store | a results entry pushed under the lock, then the run died | the next run finishes that entry under its own lock **before** recovery, so the attempts complete | none needed | `test_a_pending_entry_pushed_under_the_lock_is_finished_before_recovery` |
 
 Not changed: the Store's journal, lock, mirror and idempotency (their existing crash tests still pass). A record
 finished by a later run's journal recovery carries that run's provenance; the reconciler links results to the writer
@@ -270,37 +313,55 @@ of their terminal (the same journal entry), and binds each start to its own run 
 
 ## 14. Reconciliation guarantees and explicit limitations
 
-Established by adversarial tests (both stores, hash-valid forgeries included): detection of unregistered protected
-evaluations (Ledger and Store), attempt IDs that do not recompute, malformed identities, authorizations inconsistent
-with their own recorded fence (role relabelling), completion identity or designation escalation, missing terminals,
-contradictory terminals (Ledger: reported; Store: refused), invalid retries, result linkage mismatches, evidential
-weight recomputed with the canonical function, deleted, altered, truncated or replaced history against the anchor, and
-malformed or wrong anchors. `access_reconciled` is true in the tests only for clean, complete, schema-2 histories.
+Established by adversarial tests, both stores, hash-valid forgeries by a credential holder included:
+- unregistered protected evaluations (Ledger and Store);
+- attempt IDs that do not recompute; malformed identities;
+- authorizations inconsistent with their own recorded fence or token (role relabelling, another batch's or
+  specification's token);
+- completion identity or designation escalation; designated reserve reuse;
+- forward attempts inconsistent with their prediction's registration (specification, executable, batch, channel,
+  first observation, freeze);
+- results outside their attempt's subject, executable, data identity or declared window;
+- missing, duplicate or contradictory terminals, and conflicts on evidence or attempt records;
+- invalid retries; result-linkage mismatches;
+- every completion, linked or not, legacy or new, validated for structure, role, provenance and evidential weight
+  (recomputed with the canonical function);
+- deleted, altered, truncated or replaced history against the supplied anchor; malformed or wrong anchors.
+
+`access_reconciled` is true in the tests only for clean, complete, schema-2 histories.
 
 Limitations (also returned in every report's `limitations`):
 
 1. Manhattan code paths only; a read outside Manhattan code leaves no record (ARCHITECTURE §8 item 3).
-2. In-process enforcement is structural: deliberate use of private names can bypass it; the AST scan makes that
-   visible in review, not impossible.
-3. An anchor authenticates a boundary only if it was retained independently of the store's writer (D-7).
-4. The reserve token is recorded (batch, manifest hash) but not re-verified by the reconciler.
+2. Not a sandbox: hostile code in the process, or a holder of a store's credential, is outside the structural
+   boundary (section 1). The AST scan makes a bypass inside Manhattan visible in review, not impossible.
+3. Anchors are checked, not independently held (D-7): no independent certification is claimed.
+4. The reserve token is recorded with its binding (batch, manifest hash, specification) but its signature or tag is
+   not re-verified by the reconciler.
 5. The ops code identity's content digest covers `manhattan/engine` only (the existing `engine_sha256` contract);
    the runner's own modules are covered by the commit alone (D-9).
 6. Exploratory (open) reads are not logged, by design; unregistered exploration evaluations are counted, not flagged.
 7. Legacy records are never certified, so a store with legacy protected records never reconciles (D-4).
 8. Cross-store reconciliation checks attempt-ID disjointness and combines counts; no scientific rule links the two
    stores' evidence, and none is invented here.
+9. A window's liveness check sees its attempt's own `Ledger` or `Store` object. A terminal written by another
+   process (or another object on the same file) is enforced when that process tries to write (the Store lock
+   compare-and-swap; the Ledger is single-writer) and by reconciliation, not on the in-memory read.
+10. Registration records (`registration`, from the merge time and witness) are written by the existing registration
+    path; this phase checks attempts against them but does not re-authenticate them.
 
 ## 15. Remaining integration decisions
 
-D-1 to D-7 (section 10) stand. Found during implementation:
+D-1 to D-4 (section 10) stay open; D-5 to D-7 are decided. Found during implementation:
 
 | # | decision | meanwhile |
 |---|---|---|
-| D-8 | Screening takes no lock, so its interrupted attempts are not recovered automatically | an operator runs `access.recover_interrupted(store, kinds=("screening",))` while no screening runs |
+| D-8 | Screening takes no lock, so its interrupted attempts are not recovered automatically | an operator runs `access.commit_recovery(store, kinds=("screening",), require_lock=False)` while no screening runs |
 | D-9 | Extend the code-identity contract with a digest of `manhattan/ops` (a new key the contract does not yet know) | `engine_sha256` plus the commit; a dirty runner checkout is not detected by the digest |
 | D-10 | Whether `factors/reproduce.py` and other exploration evaluations should register attempts | unchanged: open exploration |
 | D-11 | Whether `attempts_registered` and `attempts_recovered` may appear in the public health record | added as integer counts (like `observations_new`); remove them from `HEALTH_SCHEMA` if not wanted |
+| D-12 | The candidate hash-locked runner environment has no PyYAML. A locked run with predictions to observe needs the fence injected (`RunConfig.fence`) or PyYAML added to the lock; neither is done here | the runner imports and runs without PyYAML; with predictions and no injected fence it reads `config/manhattan.yaml` lazily, and fails closed at the evaluate stage if PyYAML is absent. The live workflow installs `requirements.txt` (PyYAML included) and is unchanged |
+| D-13 | Whether a designated reserve attempt that failed or was aborted without reading data should release its designation (D-6) | not released: conservative |
 
 ## 16. Test evidence (local; remote CI is reported on the draft PR)
 
@@ -331,3 +392,53 @@ Environment: Python 3.13; `scipy` was missing at first (a collection failure tha
 `requirements.txt` and `requirements-manhattan.txt` were installed. Checks: `python -m nightshift.protected <every
 changed path>` exit 0; `git diff --check` exit 0; `docs/manhattan/SIM_PREREG.md` and `SIM_PREREG_v2.md` match their
 recorded SHA-256 files. No protected path, `config/manhattan.yaml`, workflow, threshold or protocol file changed.
+
+## 17. S1 correction round after the independent S7 audit
+
+S7 (read-only, independent) reproduced the defects below on PR #86 at `060d4e3`. Each was reproduced again in this
+session before any fix (a scratch script; every case **vulnerable**); each now has a regression test that **fails
+on `060d4e3`** (run there in a scratch worktree with the new tests copied in) and passes on the corrected code.
+
+| S7 | defect | fix | regression tests |
+|---|---|---|---|
+| H1 | `runner.py` imported `manhattan.config` (PyYAML) at module level; the hash-locked runner environment has no PyYAML; remote CI failed `test_hash_locked_runner_in_clean_environment` | the fence is injected (`RunConfig.fence`) or read lazily by `run_fence` only when predictions must be observed; the lock is unchanged and the probe still asserts PyYAML is absent (D-12) | `test_runner_imports_without_pyyaml`; the exact CPython 3.12 locked test |
+| H2 | a protected window stayed readable after its attempt was aborted, failed or completed; `data_read` could stay false after a read; reconciliation then said true | every read re-checks the attempt's liveness, store version and grant; reads are counted before any value leaves; a read after a terminal raises | `test_no_read_after_abort_and_data_read_stays_true`, `test_no_read_after_any_ending` (identity failure, execution failure, completion, superseding retry), `test_store_window_reads_only_while_its_attempt_is_active` (fail, complete, recover) |
+| H3 | `copy.deepcopy` and pickle produced readable protected windows outside the read counter; `object.__setattr__` widened an exploration window to forward dates | windows refuse `copy`, `deepcopy` and serialization; a per-process grant registry admits a read only through the minted object, unchanged, in the minting process (so altered, unpickled and fork-inherited windows fail) | `test_windows_cannot_be_copied_serialized_or_altered`, `test_a_forked_child_cannot_read_an_inherited_window` |
+| M1 | a Store observation outside its attempt's window, or of another executable or specification, reconciled true | the reconciler checks every forward attempt against its prediction's registration (specification, executable, batch, channel, first observation, freeze) and every linked result against its attempt (subject, executable, data, date inside the declared window); `access.completion` refuses such results at write time | `test_hash_valid_store_forgeries_are_reported[outside_window, wrong_executable, registration_mismatch]`, `test_store_completions_need_a_read_and_cover_exactly_their_results` |
+| M2 | a second terminal and a conflicting observation value existed as `conflict` records while the history reconciled true; an old runner alive after lock expiry could still write | any conflict on an evidence or attempt record is a violation; the public API refuses such writes; runner writes carry `require_lock`, checked inside the journal transaction (git fast-forward compare-and-swap), and the next run finishes pushed entries before recovery | `test_hash_valid_store_forgeries_are_reported[conflicting_observation, second_terminal]`, `test_contradictions_through_the_public_api_are_refused`, `test_a_run_whose_lock_was_broken_cannot_write_its_results`, `test_a_pending_entry_pushed_under_the_lock_is_finished_before_recovery`; the round-1 test that expected a second terminal to reconcile is corrected |
+| M3 | `evaluate` used `version or code_version()`, so a fabricated matching version completed and reconciled | for attempt-bound evaluations the running identity is always computed; a supplied version must equal it | `test_fabricated_matching_version_is_refused` |
+| M4 | unlinked completions with an invalid role or a wrong weight were counted as exploration and reconciled | every completion, linked or not, is validated (structure, role, provenance, weight, rerun linkage); an invalid one is a violation and is never counted as open exploration | `test_invalid_unlinked_completions_never_reconcile` (4 cases) |
+| M5 (D-5) | a public API could manufacture a weight-1 protected completion from an attempt ID | `Ledger.record_evaluation` needs a one-use `CompletionProof` for reserve/forward (minted only after a read, bound to attempt, result and ledger); `Ledger.append` refuses lifecycle types; `Store.write` refuses evidence and attempt types unless `manhattan.access` sealed the batch, and `access.commit_results` checks every result is linked, with its exact content, by a minted completion | `test_completion_proofs_are_single_use_bound_and_require_a_read`, `test_storage_api_refuses_escalated_or_implicit_completion`, `test_evidence_and_attempt_records_need_access_sealing`, `test_store_completions_need_a_read_and_cover_exactly_their_results` |
+| M6 | a reserve token for another batch registered silently | the token must be verified and name the attempt's batch, a manifest hash, the specification (`RunnerToken.specs`, new) and the (domain, window); the recorded binding is re-checked by the reconciler | `test_reserve_token_must_match_the_attempt` (6 cases), `test_a_recorded_token_for_another_batch_or_spec_is_a_violation` |
+| D-6 | a second designated reserve evaluation for a (batch, domain) succeeded | refused at registration (except a retry of the unfinished one); reuse reported by the reconciler | `test_one_designated_reserve_evaluation_per_batch_and_domain`, `test_a_forged_second_designated_reserve_attempt_is_a_violation` |
+| D-7 | an anchor from the same writer could read as certification | the report separates internally consistent / checked against a supplied anchor / independently anchored, and never claims the last | `test_reconciliation_never_claims_independent_certification` |
+
+**Before and after** (the reproduction script, same cases; "before" at `060d4e3`):
+
+| counterexample | before | after |
+|---|---|---|
+| read a forward window after `abort` (recorded `data_read: false`), then reconcile | returns forward data; reconciles true | `AccessError` at the read |
+| read after the evaluation failed identity validation | returns forward data | `AccessError` |
+| `copy.deepcopy(window)` | readable, original counter unchanged | `AccessError` (copy refused) |
+| pickle round trip | readable | `AccessError` (serialization refused) |
+| `object.__setattr__(window, "end", ...)` on an exploration window | forward dates returned | `AccessError` at the read |
+| fabricated matching `version` | completes, reconciles true | `AccessError`; attempt failed |
+| unlinked completion with role `admin` / exploration with weight 1 | reconciles true | violations; not reconciled |
+| weight-1 forward completion from an attempt ID, no read | written, reconciles true | `LedgerError` (no completion proof) |
+| unlinked weight-1 reserve completion through the storage API | written | `LedgerError` (no registered attempt) |
+| reserve token of another batch | registers | `AccessError` |
+| second designated reserve evaluation, same batch and domain | both complete, reconcile true | `AccessError` (D-6) |
+| Store: observation outside the window / another executable / another specification | reconciles true | violations (regression tests above) |
+| Store: second terminal / conflicting observation | conflict records, reconciles true | refused by the public API; violations when forced |
+| CPython 3.12 locked runner | `ModuleNotFoundError: yaml` | passes |
+
+Existing tests changed in this round, each because the old expectation encoded a defect or the old storage API:
+- The 4A lifecycle tests (`test_manhattan_attempts.py`, `test_manhattan_registry.py`) now use the exploration role.
+  Their rerun, nondeterminism and retry mechanics are role-independent, and D-5 forbids the old reserve writes.
+  Their file-level forgeries use `forge`.
+- The registry test asserts that the old reserve write is refused.
+- The phase 3B reconstructed-weight test asserts that the storage API refuses a protected reconstructed record.
+- The Store mechanics tests use a neutral record type.
+- The end-to-end overwrite attempt is now refused instead of recorded as a conflict.
+- The round-1 test expecting a second terminal to reconcile is corrected.
+- The capacity harness's ledger benchmark writes a neutral record type.

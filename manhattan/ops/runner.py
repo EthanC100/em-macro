@@ -37,7 +37,6 @@ from pathlib import Path
 from typing import Callable
 
 from manhattan import access as A
-from manhattan import config as MC
 from manhattan import ledger as L
 from manhattan import roles
 from manhattan import spec as S
@@ -71,6 +70,20 @@ class RunConfig:
     lock_ttl_minutes: int = 75
     crash_at: str | None = None
     extra: dict = field(default_factory=dict)
+    fence: roles.Fence | None = None    # injected; otherwise read from config/manhattan.yaml when first needed
+
+
+def run_fence(cfg: RunConfig) -> roles.Fence:
+    """The fence for forward-observation attempts: the injected one, else ``config/manhattan.yaml``. The config
+    module (PyYAML) is imported only here, when a run has predictions to observe, so the runner imports and runs
+    without PyYAML otherwise (the hash-locked runner environment; S7 H1). A locked environment that must observe
+    predictions needs the fence injected or PyYAML added to its lock (owner decision D-12)."""
+    if cfg.fence is not None:
+        if not isinstance(cfg.fence, roles.Fence):
+            raise TypeError("RunConfig.fence is a roles.Fence")
+        return cfg.fence
+    from manhattan import config as MC
+    return roles.Fence.from_config(MC.load())
 
 
 # ---------------------------------------------------------------- the frozen batches (public specs)
@@ -233,19 +246,14 @@ def missed_run_intents(ledger: ST.Store, asof: date, cal: TM.Calendar) -> list[S
 
 # ---------------------------------------------------------------- the nightly run
 
-EPOCH_KEY = ("accounting_epoch", str(L.ATTEMPT_SCHEMA))
-
-
-def _fail_attempts(s: ST.Store, ctxs: list) -> None:
+def _fail_attempts(s: ST.Store, ctxs: list, require_lock: bool = False) -> None:
     """Close every attempt of a failed batch as ``failed: execution_error`` (no result of the batch was written).
-    Best effort: when this write fails too, the attempts stay unfinished and the next run's recovery aborts them."""
-    fails = [A.terminal_intent(c.attempt_id, "failed", reason="execution_error", data_read=c.data_read)
-             for c in ctxs if s.get((A.STORE_TERMINAL, c.attempt_id)) is None]
-    if fails:
-        try:
-            s.write(fails, "attempts failed")
-        except Exception:                                       # noqa: BLE001 - recovery covers it
-            traceback.print_exc()
+    Best effort: when this write fails too (or the lock is gone), the attempts stay unfinished and the next run's
+    recovery aborts them."""
+    try:
+        A.commit_failures(s, ctxs, require_lock=require_lock)
+    except Exception:                                           # noqa: BLE001 - recovery covers it
+        traceback.print_exc()
 
 def _counts(health: dict, **kw) -> None:
     for k, v in kw.items():
@@ -279,14 +287,10 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
             health["lock_status"], health["locks_broken"] = lk["status"], lk["broken"]
             health["checkpoints"].append("lock")
             stage = "attempts"
-            # The lock is held and nothing is registered yet: every unfinished forward attempt is a dead run's
-            # and can never finish (Phase 4B, BINDING_ACCOUNTING.md section 8).
-            recovered = A.recover_interrupted(s)
-            epoch = [] if s.get(EPOCH_KEY) is not None else [
-                ST.Intent("accounting_epoch", EPOCH_KEY, {"attempt_schema": L.ATTEMPT_SCHEMA})]
-            if recovered or epoch:
-                s.write(recovered + epoch, "attempt recovery")
-            health["attempts_recovered"] = len(recovered)
+            # Finish, under the lock, any entry an earlier run pushed while it still held its lock; then every
+            # unfinished forward attempt is a dead run's and can never finish (BINDING_ACCOUNTING.md section 8).
+            health["journal_reconciled"] += s.reconcile()
+            health["attempts_recovered"] = A.commit_recovery(s, epoch=True, require_lock=True)
             health["checkpoints"].append("attempts")
             stage = "missed"
             missed = missed_run_intents(s, cfg.asof, TM.calendar(cfg.run_calendar))
@@ -346,7 +350,7 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                 version, data_hash = code_identity(cfg.commit), pit.data_hash()
                 ctxs = A.register_store_attempts(
                     s, [forward_attempt(reg, x, cfg.asof, data_hash, version) for reg, x in plans],
-                    fence=roles.Fence.from_config(MC.load()), label=f"forward attempts {cfg.asof}")
+                    fence=run_fence(cfg), label=f"forward attempts {cfg.asof}", require_lock=True)
             health["attempts_registered"] = len(ctxs)
             intents, terminals = [], []
             try:
@@ -356,13 +360,14 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                     terminals.append(A.completion(ctx, s, its))
                     _counts(health, observations_new=c["new"], observations_reconstructed=c["reconstructed"],
                             missed_observations=c["missed"], observations_expected=c["expected"])
+                before = len(s.of_type("conflict"))
+                if intents or terminals:
+                    # Results and their attempts' terminals: one journal entry, so a crash leaves both or neither;
+                    # refused (Locked) if another run has broken this run's lock meanwhile.
+                    A.commit_results(s, intents, terminals, f"observations to {cfg.asof}", require_lock=True)
             except Exception:
-                _fail_attempts(s, ctxs)
+                _fail_attempts(s, ctxs, require_lock=True)
                 raise
-            before = len(s.of_type("conflict"))
-            if intents or terminals:
-                # Results and their attempts' terminals: one journal entry, so a crash leaves both or neither.
-                s.write(intents + terminals, f"observations to {cfg.asof}")
             health["conflicts"] = len(s.of_type("conflict")) - before
             health["batches"] = len({r["batch"] for r in regs.values()})
             health["predictions_registered"] = len(regs)
@@ -557,10 +562,10 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
             intents.append(it)
             terminals.append(A.completion(ctx, ledger, [it]))
             out.setdefault(S.spec_hash(x.hypothesis), []).append(res.returns)
+        A.commit_results(ledger, intents, terminals, f"screening {start}:{end}")
     except Exception:
         _fail_attempts(ledger, ctxs)
         raise
-    ledger.write(intents + terminals, f"screening {start}:{end}")
     return {h: np.column_stack(v) for h, v in out.items()}
 
 
