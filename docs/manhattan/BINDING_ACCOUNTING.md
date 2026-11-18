@@ -563,3 +563,17 @@ forward or reserve result may count as evidence.
 This infrastructure is not a sandbox (section 1). Its guarantees hold through the supported Manhattan APIs and are
 checked from the persisted records; they do not hold against hostile code in the process or against a holder of the
 stores' credentials who rewrites records, captures and raw files consistently.
+
+**Test evidence for this round (code at `cb0cdaf`).**
+
+| run | result | exit |
+|---|---|---|
+| S7 counterexamples, before (`5aa643f`) / after | F1, F2, flipped `reconstructed` and omission: vulnerable / all blocked | n/a |
+| new regression tests on `5aa643f` | 12 of 12 fail | 1 |
+| focused access, attempts, Store, Ledger, runner, PIT and integration suites (19 files), including the N8 crash matrix and the N1 regressions | 683 passed (the Phase 4B files: 178 collected) | 0 |
+| exact locked-runner test, CPython 3.12.3 | 1 passed | 0 |
+| PR #84 compatibility: its `manhattan/evidence.py` and tests (`e1882be`) copied into a `cb0cdaf` worktree and registered with `git add -N`, run with the engine access tests | 458 passed; `git merge-tree` reports no conflict; `evidence.py` reads none of the changed fields | 0 |
+| local full suite, `cb0cdaf` (a first run hit the 30-minute background limit at 94% and was restarted) | 2,157 passed, 131 skipped, **1 error** (the pre-existing Q019 `E2BIG` case, section 16), 1,842 s | **1** |
+| remote CI, `cb0cdaf` (CPython 3.12.16, includes the locked-runner test) | 2,157 passed, 132 skipped, 0 failed: **success** | 0 |
+
+Checks: protected paths exit 0; `git diff --check` exit 0; both pre-registration hash files verify.
