@@ -38,7 +38,7 @@ from pathlib import Path
 
 from . import criteria as cr
 from . import criteria_v2 as cr2
-from . import hb_v2, metrics, metrics_v2, run, runlog, world
+from . import hb, hb_v2, metrics, metrics_v2, run, runlog, world
 
 GROUP_DEVELOPMENT = "development"
 HELD_OUT_V1 = world.HELD_OUT                      # SIM_PREREG section 3.2
@@ -102,6 +102,16 @@ def _gaps(have: set, need: int) -> str:
     return ", ".join(out)
 
 
+READ_AT = hb_v2.REVIEW_STEP
+
+
+def hb_ok(r: dict) -> bool:
+    """An HB record that may be read: reviewed every 63 days (SIM_PREREG_v2 amendment 1) and read at years 2, 4, 7
+    and 10 (SIM_PREREG section 5, V6 and V8 at 4 and 10). ``MANHATTAN_SIM_EVAL_YEARS`` can change the years a
+    record is read at, and the metric code does not check them: such records are treated here as other records."""
+    return r.get("review_step") == hb_v2.REVIEW_STEP and tuple(r.get("eval_years") or ()) == hb.EVAL_YEARS
+
+
 def inventory(out: Path) -> list[dict]:
     """One entry per run of the development plan under version 2: what is on file, by code, and its state."""
     entries = []
@@ -112,19 +122,19 @@ def inventory(out: Path) -> list[dict]:
         need = cr2.replications(scenario, size)
         now = run.code_hash(size, version=version)
         hb = size == "HB" and version == "v2"
-        usable = [r for r in rows if r.get("code") == now and (not hb or r.get("review_step") == hb_v2.REVIEW_STEP)]
+        usable = [r for r in rows if r.get("code") == now and (not hb or hb_ok(r))]
         current = _one_per_rep([r for r in usable if isinstance(r.get("rep"), int) and 0 <= r["rep"] < need])
         by_code: dict = {}
         used = {id(r) for r in usable}
         for r in rows:
             if id(r) in used:
                 continue
-            key = (r.get("code"), r.get("review_step") if hb else None)
+            key = (r.get("code"), (READ_AT if hb_ok(r) else r.get("review_step")) if hb else None)
             by_code.setdefault(key, set()).add(r.get("rep"))
         others = [{"code": c, "review_step": s, "replications": len(reps)} for (c, s), reps in
                   sorted(by_code.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]
         n = len(current)
-        stale_full = [o for o in others if o["replications"] >= need and (not hb or o["review_step"] == hb_v2.REVIEW_STEP)]
+        stale_full = [o for o in others if o["replications"] >= need and (not hb or o["review_step"] == READ_AT)]
         if n >= need:
             state = "complete"
         elif n > 0:
@@ -142,7 +152,7 @@ def inventory(out: Path) -> list[dict]:
                         "missing_current": _gaps({r["rep"] for r in current}, need), "state": state,
                         "other_code": others, "files": _digest(path), "_current": current,
                         "_stale": _one_per_rep([r for r in rows if stale_full and r.get("code") == stale_full[0]["code"]
-                                                and (not hb or r.get("review_step") == hb_v2.REVIEW_STEP)])
+                                                and (not hb or hb_ok(r))])
                         if stale_full and n < need else []})
     return entries
 

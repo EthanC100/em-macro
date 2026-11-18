@@ -125,7 +125,7 @@ def test_dev_status_on_an_empty_directory_decides_nothing(tmp_path):
 def test_records_of_other_code_are_never_decided(tmp_path):
     """A full run of HB records made by other code is shown as other code only, and never as complete."""
     path = run.reps_path("D01", "HB", 0, tmp_path, "v2")
-    _write(path, [{"rep": i, "code": "0000000000000000", "scenario": "D01", "size": "HB", "review_step": 63}
+    _write(path, [{"rep": i, "code": "0000000000000000", "scenario": "D01", "size": "HB", "review_step": 63, "eval_years": [2, 4, 7, 10]}
                   for i in range(400)])
     e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D01", "HB"))
     assert e["state"] == "other code only" and e["on_file_current"] == 0
@@ -190,3 +190,14 @@ def test_the_model_reads_evidential_weight_with_its_default_reconstructed_flag()
             assert evidential_weight(channel, "reserve", designated) == before
     src = (ROOT / "manhattan/stats/hier_analytic.py").read_text(encoding="utf-8")
     assert 'evidential_weight(str(c), "reserve", bool(d))' in src
+
+
+def test_hb_records_read_at_other_years_do_not_count(tmp_path):
+    """MANHATTAN_SIM_EVAL_YEARS can move the years V6 and V8 are read at; the metric code does not check them, so
+    the status does: such records never count as the current code's."""
+    code = run.code_hash("HB", version="v2")
+    path = run.reps_path("D05", "HB", 0, tmp_path, "v2")
+    _write(path, [{"rep": i, "code": code, "scenario": "D05", "size": "HB", "review_step": 63, "eval_years": [2, 7]}
+                  for i in range(400)])
+    e = next(e for e in dev_status.inventory(tmp_path) if (e["scenario"], e["size"]) == ("D05", "HB"))
+    assert e["on_file_current"] == 0 and e["state"] != "complete"

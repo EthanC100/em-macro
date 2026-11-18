@@ -177,6 +177,8 @@ made". These gaps were found, and none is repaired in those files (they are the 
 
    `cr.SELECTION_MARGIN` is never used in any computation. The selection rule is not implemented in code, which is
    correct at this stage.
+4. **V8 hides which side of the bound a pilot is on** (H1 in section 4.3), and **nothing checks the years at which
+   HB records are read** (H2).
 
 ### 2.2 What was added: `python -m manhattan.sim.dev_status` (read-only)
 
@@ -339,7 +341,53 @@ The hierarchical model, tiers and dormancy are in section 4.3.
 
 ### 4.3 Hierarchical model, tiers and dormancy
 
-HIER_AUDIT_PLACEHOLDER
+**Verified as matching:**
+
+- **Closed form and grid.** The closed form of §7.1 and the six models S0–S5 of §7.2(e) are implemented as
+  written. The grid matches Appendix B: μ_A has 121 nodes from −0.9 to 1.5; τ_A, ψ, ν, μ_ρ, σ_ρ and ρ are as
+  written, with pruning at e^18 and a cell cut at 1e-10.
+- **The common share r.** It is floored at 0 and capped at 0.9: identical series give 0.9, opposite series give 0,
+  and `Data(r_F=0.95)` raises.
+- **The grid gate.** It is "≤ 1% mass on the end nodes of μ_A", and a review needs all six fits. Extreme data gave
+  mass 0.0458 and failed the gate; ordinary data gave 0 and passed.
+- **M12** counts all 40 reviews. A failure at a review that is not a read date gives FAIL at 400 replications.
+- **Dormancy** (§9.1, `dormancy.py`). Inputs (0, 0.5, 0.25) give p^F = (0.0062, 0.9938, 0.5), and p^F is 1 before
+  252 forward days. That is a correct one-sided p-value for "θ ≥ θ_min". Also checked:
+  - the two-consecutive-reviews streak, and its reset;
+  - a review that is "model not computed" changes nothing;
+  - at the last date there is no forecast, and the family is reactivated at p^F = 0.15 but not at 0.149;
+  - 200 forecast draws.
+- **Tiers.** Π^min is the element-wise minimum over the six models. The §8.2 entry checks behave as written:
+  Π^min 0.7999 refused; 503 forward days refused, 504 allowed; with Romano-Wolf, 251 refused and 252 allowed;
+  a non-positive forward mean refused; the integrity flag refused.
+- **V14**: the reserve weight comes only through `ledger.evidential_weight`.
+- **Constants**: every threshold and count matches the frozen text, and V6 and V8 are decided only at years 4
+  and 10.
+
+**Findings, documented and not repaired:**
+
+| # | severity | finding | evidence |
+|---|---|---|---|
+| H1 | reporting | Below its count, V8 prints only "pilot: not decided" (`metrics.py:269`); every other criterion adds "(within/outside threshold so far)". The pilot of record had D08 year 4, Promising, candidate (i) **outside** (−0.288, −0.415 to −0.198), and the progress prose cites only year 10. Run `43467828524`'s HB records show the same row at −0.274 (−0.295 to −0.254), outside at full count. | deterministic check: synthetic records with bias −0.3 read "pilot: not decided" at R = 12 and FAIL at R = 400 |
+| H2 | robustness | `MANHATTAN_SIM_EVAL_YEARS` (`hb.py:58`) can change the years a record is read at. The metric code does not check them: 400 records read at (2, 7) produce no V6 or V8 row at all, and records with mixed years would be pooled. Every record of run `43467828524` has (2, 4, 7, 10). | `dev_status` now treats such records as other records: `test_hb_records_read_at_other_years_do_not_count` |
+| H3 | reading | **r**: "sample correlation … over their common dates". The code standardises each series by its own full-record mean and standard deviation (version 1's estimate, which SIM_PREREG_v2 names). | two series overlapping on 200 days: 0.5351 in code, 0.4965 for the literal reading |
+| H4 | documentation | The figures in PROTOCOL_v3.1 §7.2(d) for D08 (ECE 0.101 and 112 of 113) are from the earlier pilot; the quarterly pilot shows 0.0998 and 116 of 117. The conclusion is unchanged. | `MANHATTAN_PROGRESS.md:1085` |
+| H5 | reading | The small-groups rule is applied to the Π^min and tier groups and to the ECE bins, not to M8's denominator. | `SIM_PREREG.md:222` |
+
+**The known hierarchical calibration concern (D08).**
+
+- **Not weakened anywhere.** The ECE bound is version 1's 0.10, there is no D08 exception in criteria, metrics or
+  report code, the untried two-group prior (`hier_spike.py`) is imported by nothing, and the estimator matches
+  M7's definition.
+- **The pilot was at the bound.** Its value was 0.0998 (0.0357 to 0.1356), and the diagnosis is structural: one
+  hump cannot fit two groups.
+- **At 400 replications it is over the bound.** The HB records of run `43467828524` (other code, not decided) give
+  **0.114 (0.106 to 0.122)**. The consequence is fixed in advance: no posterior-based tiers (SIM_PREREG_v2 §5).
+- **D5 is the owner's decision.** Whether to ask for a two-group prior in a new protocol version (ETHAN_ACTIONS
+  21(b), option (ii)) or to keep the tiers off (option (iii)).
+
+**Not confirmed:** the accuracy of the S5 forecast approximation in `support_probability`, declared in §9.1; and
+`cluster_ci.py` and `hier.py` (§7.4), which decide nothing and were not reviewed in depth.
 
 ### 4.4 Screening-method selection gates
 
@@ -379,5 +427,5 @@ confirmation run.
 | **D3** | D07a V3 fails on development. Choose between revising the SPA test (a new protocol version, then a retest; the threshold does not move: §8.1 rule 1) and accepting that candidate (i) and the within-family SPA claims stay off. Under §7 this also decides whether the comparison of step 2 can ever arise. | a protocol-level consequence; must not be repaired silently |
 | **D4** | Fix the held-out draw protocol (G1–G4) and answer the per-scenario questions of `heldout_spec.py` **before** any held-out value is drawn: an addition to `SIM_PREREG_AMENDMENTS.md` (§8.4: correcting a scenario's description) or a new pre-registration version. Also decide whether the missing-data path (H10), "not cheap" (H09) and the multi-factor hedge layer (H12) are built as pipeline code under a new code hash. | every answer is researcher discretion |
 | **D5** | The hierarchical results on the HB records, if D1 lets them count: V6 in D08 (item 21(b), option (ii): a two-group prior in a new protocol version, or (iii): the posterior tiers stay off) and V8 in D05, D08 and D10. | a failing component is not switched on (§8.1 rule 2); revising the model is a new version |
-| **D6** | Whether forward criteria (M2) and V8 rows should be marked "reported" for the non-selected candidate in the report of record (reading R2), and whether M4's "0 if none" reading (R1) stands. | readings of frozen text |
+| **D6** | Whether forward criteria (M2) and V8 rows should be marked "reported" for the non-selected candidate in the report of record (reading R2), and whether M4's "0 if none" reading (R1) stands. Whether to fix the report-of-record gaps of section 2.1 and H1/H2: those files' code is not hashed, but they are the reports of record. | readings of frozen text |
 | **D7** | Tag `manhattan-sim-confirm-1` only after D0–D5 are settled and every required development criterion is met (§8.1 rule 4). | the tag is the confirmation switch |
