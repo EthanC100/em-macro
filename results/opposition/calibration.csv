@@ -40,3 +40,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-18,queue,Q031,78,advisory,claude-opus-5-5,,,
 2026-11-18,queue,Q025,72,advisory,claude-opus-5-5,,,
 2026-11-18,queue,Q026,85,advisory,claude-opus-5-5,,,
+2026-11-18,pr,88,80,advisory,claude-opus-5-5,,,
