@@ -363,35 +363,50 @@ D-1 to D-4 (section 10) stay open; D-5 to D-7 are decided. Found during implemen
 | D-12 | The candidate hash-locked runner environment has no PyYAML. A locked run with predictions to observe needs the fence injected (`RunConfig.fence`) or PyYAML added to the lock; neither is done here | the runner imports and runs without PyYAML; with predictions and no injected fence it reads `config/manhattan.yaml` lazily, and fails closed at the evaluate stage if PyYAML is absent. The live workflow installs `requirements.txt` (PyYAML included) and is unchanged |
 | D-13 | Whether a designated reserve attempt that failed or was aborted without reading data should release its designation (D-6) | not released: conservative |
 
-## 16. Test evidence (local; remote CI is reported on the draft PR)
+## 16. Test evidence
 
-New adversarial tests: `tests/test_manhattan_binding_access.py` (66: engine, PIT, Ledger, static scan) and
-`tests/test_manhattan_ops_attempts.py` (28: Store, crash stages, recovery, forgeries, screening, both stores), with
-synthetic fixtures in `tests/manhattan_attempt_fixtures.py`. No Monte Carlo or simulation run.
+Local runs are on Python 3.13 unless stated; remote CI runs CPython 3.12.16. **Local and remote results are reported
+separately, and a nonzero exit code is never described as green.**
+
+**Round 1 (PR head `060d4e3`).**
+
+| run | result | exit |
+|---|---|---|
+| local full suite | 2,065 passed, 131 skipped, 1 error (Q019 `E2BIG`, below) | 1 |
+| remote CI | 2,064 passed, 132 skipped, **1 failed**: `test_hash_locked_runner_in_clean_environment`, `ModuleNotFoundError: yaml` | 1 |
+
+That CI failure was a **genuine regression** (S7 H1), separate from the local Q019 error.
+
+**S1 correction round (`fea1d6c`).**
 
 | run | command | result | exit |
 |---|---|---|---|
-| new Ledger/engine tests | `python -m pytest -q tests/test_manhattan_binding_access.py` | 66 passed | 0 |
-| new Store tests | `python -m pytest -q tests/test_manhattan_ops_attempts.py` | 27 passed; the 28th (same-run-identity recovery) and the operator screening recovery added after, 2 passed | 0 |
-| end-to-end ops | `python -m pytest -q tests/test_manhattan_ops_e2e.py` | 10 passed | 0 |
-| targeted Manhattan + Q019 | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/test_manhattan_*.py tests/test_q019_*.py -p no:cacheprovider` | 1,001 passed, 2 skipped, 1 error | 1 |
-| full suite, final code | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,065 passed, 131 skipped, 30 warnings, 1 error, 1,353 s | 1 |
+| S7 counterexamples, before | scratch reproduction script at `060d4e3` | 11 of 11 engine/Ledger cases vulnerable (the Store cases M1/M2 are reproduced by regression tests) | n/a |
+| new regression tests on the old code | the new tests copied into a `060d4e3` worktree | every S7 regression test fails (33 + 4 M4 cases + the Store sealing test at collection); the 7 round-1 forgery cases pass there, as before | 1 |
+| S7 counterexamples, after | the same script | every case blocked (table in section 17) | n/a |
+| Phase 4B tests, original and new | `pytest tests/test_manhattan_binding_access.py tests/test_manhattan_ops_attempts.py` | 129 collected, all passed (inside the next run) | 0 |
+| targeted and integration | the two files above plus `ops_e2e`, `ops_runner`, `ops_store`, `pit_phase3b`, `pit_phase3c`, `pit_integrity`, `engine`, `factors`, `registry`, `attempts`, `ops_capacity`, `ops_blinding`, `ops_hardening_patch`, `ops_compiler`, `capture_v2` | 608 passed | 0 |
+| exact locked-runner test, CPython 3.12.3 | `python3.12 -m pytest tests/test_manhattan_ops_lock_install.py` with `MANHATTAN_RUNNER_WHEELHOUSE` built from the unchanged lock | before the fix: 1 failed (`yaml`); after: 1 passed | 1 → 0 |
+| local full suite | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,108 passed, 131 skipped, **1 error**, 1,464 s | **1** |
+| remote CI (`pytest` workflow, PR #86) | `python -m pytest -q -p no:cacheprovider` under `bash -eo pipefail` | 2,108 passed, 132 skipped, 0 failed; conclusion **success** | 0 |
 
-**The one error is environmental and pre-existing.** It is
-`test_q019_collect_refuses_late_dated_oversized_or_binary_tables[big.csv-...]` at setup:
-`OSError: [Errno 7] Argument list too long: 'git'`. The case's parameter (2.2 MB) is part of its test ID, which pytest
-exports as `PYTEST_CURRENT_TEST`, so the fixture's `git` subprocess exceeds the exec limit. On unmodified main
-(`f5f8045`, in a scratch worktree) the same file gives the same result: 85 passed, 1 error. The other 85 Q019 tests pass
-here. Remote CI may differ.
+**The local error is pre-existing, environmental and local-only.** The test is
+`test_q019_collect_refuses_late_dated_oversized_or_binary_tables[big.csv-...]`, which fails at setup with
+`OSError: [Errno 7] Argument list too long: 'git'`. Its 2.2 MB parameter is part of the test ID, which pytest exports
+as `PYTEST_CURRENT_TEST`, so the fixture's `git` subprocess exceeds this machine's exec limit. Unmodified main
+(`f5f8045`) gives the same result here: 85 passed, 1 error. Remote CI passes it. Because of this error, the local
+full suite is not green.
 
-Skips (131) are the existing environment-gated ones: no private Norgate snapshot or `EM_MACRO_DATA`, shallow clone
-without the pinned commits, `MANHATTAN_SLOW_TESTS`, `EM_MACRO_VERIFY_V1`, `Q009_FULL_SWEEP`, the CPython 3.12-only
-wheel-lock test, and model tests without their sampler.
+Skips are the existing environment-gated ones: no private Norgate snapshot or `EM_MACRO_DATA`; a shallow clone
+without the pinned commits; `MANHATTAN_SLOW_TESTS`; `EM_MACRO_VERIFY_V1`; `Q009_FULL_SWEEP`; and locally, the
+CPython 3.12-only lock test, which was run separately under 3.12 as shown above.
 
-Environment: Python 3.13; `scipy` was missing at first (a collection failure that also happens on unmodified main), so
-`requirements.txt` and `requirements-manhattan.txt` were installed. Checks: `python -m nightshift.protected <every
-changed path>` exit 0; `git diff --check` exit 0; `docs/manhattan/SIM_PREREG.md` and `SIM_PREREG_v2.md` match their
-recorded SHA-256 files. No protected path, `config/manhattan.yaml`, workflow, threshold or protocol file changed.
+Checks:
+- `python -m nightshift.protected <every changed path>`: exit 0.
+- `git diff --check`: exit 0.
+- `SIM_PREREG.md` and `SIM_PREREG_v2.md` match their recorded SHA-256 files.
+- Not changed: protected paths, `config/manhattan.yaml`, workflows, the lockfile, thresholds, protocol versions,
+  promotion rules, live controls, held-out construction and simulation workflows.
 
 ## 17. S1 correction round after the independent S7 audit
 
