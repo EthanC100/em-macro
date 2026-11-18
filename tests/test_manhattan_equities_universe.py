@@ -202,3 +202,20 @@ def test_fundamental_exposures_use_known_values(world):
     assert np.isfinite(v.values).all()
     with pytest.raises(EquityDataError):
         F.fundamental_exposure("not_a_factor", world.fundamentals, snap, day, world.master.company_of)
+
+
+def test_s8_n2_a_conflicting_annual_and_q4_share_count_excludes_one_security_not_the_universe():
+    """S8 N2: one company's annual and Q4 share counts for the same period end disagree; the whole snapshot raised."""
+    from datetime import datetime, time
+
+    from manhattan.equities.fundamentals import Fact
+    w = copy.deepcopy(syn.world())
+    w.fundamentals.add(Fact("C02", "shares_outstanding", date(2005, 12, 31), "annual", 5.2e7, None,
+                            datetime.combine(date(2006, 2, 1), time(8), w.calendar.tz)))
+    w.prices._shares.clear()                                # reported share counts only
+    snap = builder(w).snapshot(date(2006, 3, 31))
+    assert "S02" not in snap.members and any("ambiguous" in r for r in snap.excluded["S02"])
+    assert {"S01", "S03", "S07", "S08"} <= set(snap.members)       # everyone else is still assessed
+    rules = EligibilityRules(min_market_cap=1e8, required_metrics=("shares_outstanding",))
+    snap2 = builder(w, rules=rules).snapshot(date(2006, 3, 31))
+    assert "S02" not in snap2.members and "S01" in snap2.members

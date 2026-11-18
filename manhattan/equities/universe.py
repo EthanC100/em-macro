@@ -24,6 +24,10 @@ capitalisation until the next filing.
 neither a recorded split nor share counts explain is excluded with reason "unresolved price move" and listed in
 ``Snapshot.holds``: excluding it silently would remove crashed stocks from the universe, a survivorship bias.
 
+**One bad record excludes one security (S8 N2).** A fundamental query that fails closed for a security — for example an
+annual and a fourth-quarter share count for the same period end that disagree — excludes that security, with the
+error as its reason. It does not raise out of ``snapshot``, which would halt the whole universe.
+
 **Scope.** The default categories are US-listed technology sub-industries in this package's own taxonomy (vendor
 industry codes are licensed and may be mapped onto it). Listing currency is checked against the rules' currency:
 an international extension adds calendars, currencies and a currency rule, not a second universe framework.
@@ -179,8 +183,11 @@ class UniverseBuilder:
                 why.append("market capitalisation")
             if self.fundamentals is not None:
                 for m in r.required_metrics:
-                    if self.fundamentals.value(sec.company_id, m, day, max_age_days=r.metric_max_age_days) is None:
-                        why.append(f"{m} not known")
+                    try:
+                        if self.fundamentals.value(sec.company_id, m, day, max_age_days=r.metric_max_age_days) is None:
+                            why.append(f"{m} not known")
+                    except EquityDataError as exc:      # one security's conflicting record never halts the universe
+                        why.append(f"{m} ambiguous: {exc}")
             if r.require_action_complete and traded:
                 start = traded[max(0, len(traded) - r.min_history_sessions)].day
                 issue = self.prices.action_issue(sid, start, day, as_of=day)
@@ -216,7 +223,10 @@ def split_adjusted_shares(prices: PriceBook, fundamentals, security_id: str, com
         return s, ""
     if fundamentals is None:
         return None, "no share count"
-    k = fundamentals.value(company_id, shares_metric, day, max_age_days=max_age_days)
+    try:
+        k = fundamentals.value(company_id, shares_metric, day, max_age_days=max_age_days)
+    except EquityDataError as exc:              # e.g. an annual and a Q4 count that disagree (S8 N2): this security
+        return None, f"shares ambiguous: {exc}"  # only is excluded, with the reason; the universe is not halted
     if k is None:
         return None, "shares outstanding unknown"
     published = k.usable_from
