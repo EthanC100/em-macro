@@ -683,7 +683,7 @@ def test_scenario_id_is_a_content_address():
 
 # ------------------------------------------------------------------ no production pathway
 ALLOWED_IMPORTS = {"__future__", "bisect", "dataclasses", "datetime", "decimal", "hashlib", "json", "math", "re",
-                   "manhattan", "manhattan.spec"}
+                   "types", "manhattan", "manhattan.spec"}
 
 
 def _sources():
@@ -1407,3 +1407,97 @@ def test_n4_result_records_both_digests_and_decisions_are_order_free():
     assert r.decisions_digest == X.run(m, list(reversed(decs)), policy(), scenario()).decisions_digest
     other = X.run(m, [X.Decision("SYNA", 2, T0), X.Decision("SYNA", -1, at(date(2027, 1, 20), 12))], policy(), scenario())
     assert other.decisions_digest != r.decisions_digest and other.result_hash() != r.result_hash()
+
+
+# ================================================================== S6 final hardening (L1, L2)
+def test_l1_market_data_cannot_be_changed_after_its_digest():
+    m = world()
+    before = m.digest()
+    old = m.settlement(H, D0)
+    with pytest.raises(TypeError):                                   # read-only containers
+        m.settlements[(H, D0)] = X.Settlement(H, D0, old.price + 1.0, old.known_at)
+    with pytest.raises(TypeError):
+        m.specs[H] = syna(3, initial_margin=1.0)
+    with pytest.raises(TypeError):
+        m.fx[("EUR", "USD", D0)] = None
+    with pytest.raises(TypeError):
+        m.liquidity[H] = ((), ())
+    with pytest.raises(TypeError):
+        m.day_index[D0] = 5
+    for name in ("settlements", "specs", "fx", "liquidity", "calendar", "day_index", "_frozen"):
+        with pytest.raises(AttributeError, match="immutable"):      # no reassignment or deletion either
+            setattr(m, name, {})
+        with pytest.raises(AttributeError, match="immutable"):
+            delattr(m, name)
+    assert m.digest() == before and m.settlement(H, D0) is old
+
+
+def test_l1_a_stale_digest_cannot_survive_even_a_deliberate_bypass():
+    """The digest is never cached: if the immutability is bypassed on purpose, the identity follows the contents."""
+    from types import MappingProxyType
+    m = world()
+    first = m.digest()
+    r1 = X.run(m, [X.Decision("SYNA", 2, T0)], policy(), scenario())
+    old = m.settlement(H, D0)
+    changed = dict(m.settlements)
+    changed[(H, date(2027, 1, 7))] = st(H, date(2027, 1, 7), m.settlement(H, date(2027, 1, 7)).price + 0.5)
+    object.__setattr__(m, "settlements", MappingProxyType(changed))   # bypass, as only a determined caller could
+    assert m.digest() != first
+    r2 = X.run(m, [X.Decision("SYNA", 2, T0)], policy(), scenario())
+    assert r2.market_digest == m.digest() != r1.market_digest
+    assert r2.result_hash() != r1.result_hash()
+    assert m.settlement(H, D0) is old
+
+
+def test_l1_construction_copies_its_inputs():
+    specs = [syna(3), syna(4)]
+    days = weekdays(D0, 3)
+    px = [st(s.contract_id, d, 50.0) for s in specs for d in days]
+    m = X.MarketData(calendar=[X.TradingDay(d, close(d)) for d in days], contracts=specs, settlements=px)
+    first = m.digest()
+    px.append(st(specs[0].contract_id, days[0], 51.0))               # the caller's lists are not the model's
+    specs.pop()
+    assert m.digest() == first and len(m.specs) == 2
+
+
+DK = T0 - timedelta(hours=1)
+
+
+def test_l2_decisions_differing_only_in_inputs_known_at_hash_deterministically():
+    from manhattan.execution.account import decisions_digest
+    a = X.Decision("SYNA", 2, T0)
+    b = X.Decision("SYNA", 2, T0, inputs_known_at=DK)
+    c = X.Decision("SYNA", 2, T0, inputs_known_at=DK - timedelta(minutes=1))
+    perms = [[a, b, c], [c, b, a], [b, a, c], [c, a, b]]
+    digests = {decisions_digest(p) for p in perms}
+    assert len(digests) == 1 and re.fullmatch(r"[0-9a-f]{64}", digests.pop())
+    assert decisions_digest([a, b]) != decisions_digest([a]) != decisions_digest([b])   # each supplied decision counts
+    assert decisions_digest([a, a]) != decisions_digest([a])
+
+
+def test_l2_runs_with_such_decisions_are_deterministic_and_trade_once():
+    m = world()
+    a = X.Decision("SYNA", 2, T0)
+    b = X.Decision("SYNA", 2, T0, inputs_known_at=DK)
+    r1 = X.run(m, [a, b], policy(), scenario())
+    r2 = X.run(m, [b, a], policy(), scenario())
+    assert r1.result_hash() == r2.result_hash()
+    assert [f.filled for f in r1.fills[:1]] == [2] and r1.days == X.run(m, [a], policy(), scenario()).days
+    # unexecuted decisions (after the calendar) are listed in one order whatever the input order
+    last = m.calendar[-1].close_at
+    u1 = X.Decision("SYNA", 1, last)
+    u2 = X.Decision("SYNA", 1, last, inputs_known_at=last - timedelta(hours=2))
+    ra = X.run(m, [u2, u1], policy(), scenario())
+    rb = X.run(m, [u1, u2], policy(), scenario())
+    assert ra.unexecuted == rb.unexecuted == (u1, u2) and ra.result_hash() == rb.result_hash()
+
+
+def test_l2_different_targets_at_one_instant_stay_ambiguous():
+    m = world()
+    with pytest.raises(E.UnitError, match="ambiguous"):
+        X.run(m, [X.Decision("SYNA", 2, T0), X.Decision("SYNA", 3, T0, inputs_known_at=DK)], policy(), scenario())
+
+
+def test_l2_non_decisions_are_refused_before_hashing():
+    with pytest.raises(TypeError, match="Decision objects"):
+        X.run(world(), [X.Decision("SYNA", 2, T0), ("SYNA", 2, T0)], policy(), scenario())

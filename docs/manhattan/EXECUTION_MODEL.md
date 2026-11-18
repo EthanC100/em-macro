@@ -1,6 +1,6 @@
 # Synthetic futures execution, cost and roll model
 
-Version 0.3, 2026-11-18 (Project Manhattan, session 4; 0.2 and 0.3 answer the S6 reviews: section 19). Code: `manhattan/execution/`. Tests:
+Version 0.3.1, 2026-11-18 (Project Manhattan, session 4; 0.2 to 0.3.1 answer the S6 reviews: section 19). Code: `manhattan/execution/`. Tests:
 `tests/test_manhattan_execution.py`.
 
 **What this is.** A deterministic, pure-function model of how a futures position plan turns into gross and net P&L:
@@ -303,7 +303,16 @@ change the output.
   Numbers are Python `repr` of the float (exact), dates ISO, times ISO UTC, `None` as JSON null, the document
   version is 1, and the JSON has no spaces and ASCII only. Inputs no trade or mark used are covered too: the digest
   identifies what was supplied, not what was read.
-* `decisions_digest(decisions)`: SHA-256 of the sorted list of (root, contracts, decided time, inputs-known time).
+  `MarketData` is **immutable** after construction (S6 L1): it copies what it is given, its containers are
+  read-only views, its attributes cannot be set or deleted, and every element is a frozen dataclass. The digest is
+  recomputed from the current contents on every call, never cached, so even a deliberate bypass of the immutability
+  cannot leave a stale identity.
+* `decisions_digest(decisions)`: SHA-256 of the list of (root, contracts, decided time, inputs-known time), sorted
+  by root, target, decided time and then inputs-known time with "not given" first. The order is total (S6 L2: two
+  decisions differing only in whether `inputs_known_at` was given used to raise a raw `TypeError`); duplicates are
+  kept, since each decision supplied is part of the identity. The scheduler orders decisions by decided time, root,
+  target and the same inputs-known key, so tied decisions (and the `unexecuted` list) no longer depend on input
+  order. Two different targets for one root at one instant remain an ambiguity error (`UnitError`).
 * `Result.result_hash()`: SHA-256 of a canonical JSON form of the run: `market_digest`, `decisions_digest`, the
   policy (`ExecutionPolicy.describe()`: base currency, roll rule, lag, missing-price and shortfall policies,
   capital, margin reporting, FX valuation rule), the scenario id, and every output (days, fills, rolls, unfilled
@@ -402,4 +411,6 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 | **N1** (re-review) a roll-day reversal opened the new side while the old side was still open (S6: +5 to −4 left H +3 / J −4, gross 7, under `clip`; H +5 / J −4, gross 9, under `hold`) | defect | reversals close first; partial closes allowed; nothing opened on the new side until the old side is flat; never a roll (section 7). Tests: `clip`, `hold`, missing old settlement, zero liquidity in either month, both directions, several days, mid-roll, off the roll day, conservation; 400 seeded fuzz cases |
 | **N3** (re-review) a cut on a roll day waited behind the roll for the old month's capacity | allocation priority changed (separate commit) | reductions before the roll, additions after it (section 7); tests show the gross path 3, 2, 2 instead of 5, 3, 2, an unchanged exit speed from the old month, and unchanged increases |
 | **N4** (re-review) the result hash does not cover the market data | identity extended | `MarketData.digest()`, `decisions_digest()`, both in `Result` and in `result_hash`; the engine requirement stated (sections 15, 16) |
+| **L1** (final) `MarketData.digest()` was cached over mutable containers | defect | immutable `MarketData` and no cache (section 15); tests change an input after a digest, through the API (refused) and by a deliberate bypass (identity follows) |
+| **L2** (final) `decisions_digest` raised `TypeError` on decisions differing only in `inputs_known_at` given or not | defect | total ordering in the digest and the scheduler (section 15); the 400 fuzz cases give the same result hashes as at 173a7da |
 | **N2** (re-review) a physical contract whose first notice falls after its last trading day could be carried past the last trading day | defect | `may_hold_into` enforces both boundaries; the restored last-trading-day test and the first-notice tests both pass (section 7) |

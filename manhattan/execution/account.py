@@ -214,10 +214,25 @@ class Result:
         return hashlib.sha256(b).hexdigest()
 
 
+def decision_key(d: Decision) -> tuple:
+    """A total order on decisions (S6 L2): decided time, root, target, then the inputs-known time with "not given"
+    first. Every field is compared as a value of one type, so any two decisions can be ordered, including two that
+    differ only in whether ``inputs_known_at`` was given."""
+    return (d.decided_at, d.root, d.contracts, d.inputs_known_at is not None,
+            d.inputs_known_at.isoformat() if d.inputs_known_at is not None else "")
+
+
 def decisions_digest(decisions) -> str:
-    """SHA-256 of the decisions in a canonical, order-free form: (root, contracts, decided_at, inputs_known_at)."""
-    rows = sorted([d.root, d.contracts, d.decided_at.isoformat(),
-                   d.inputs_known_at.isoformat() if d.inputs_known_at else None] for d in decisions)
+    """SHA-256 of the decisions in a canonical, order-free form: rows (root, contracts, decided_at,
+    inputs_known_at) sorted by root, target, decided time, then inputs-known time with "not given" first. The order is
+    total, so decisions that differ only in ``inputs_known_at`` hash deterministically (S6 L2); duplicates are kept
+    (each decision supplied is part of the identity). Digests of inputs 173a7da could hash are unchanged."""
+    def row_key(d: Decision) -> tuple:     # the 173a7da row order, with "not given" before any time (no None compared)
+        return (d.root, d.contracts, d.decided_at.isoformat(), d.inputs_known_at is not None,
+                d.inputs_known_at.isoformat() if d.inputs_known_at is not None else "")
+    rows = [[d.root, d.contracts, d.decided_at.isoformat(),
+             d.inputs_known_at.isoformat() if d.inputs_known_at is not None else None]
+            for d in sorted(decisions, key=row_key)]
     return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode("ascii")).hexdigest()
 
 
@@ -230,9 +245,10 @@ def execution_index(market: MarketData, decided_at: datetime, lag: int) -> int |
 def _schedule(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostScenario):
     by_day: dict[int, dict[str, Decision]] = {}
     unexecuted = []
-    for dec in sorted(decisions, key=lambda x: (x.decided_at, x.root, x.contracts)):
+    for dec in decisions:
         if not isinstance(dec, Decision):
             raise TypeError("decisions are Decision objects")
+    for dec in sorted(decisions, key=decision_key):
         if not any(s.root == dec.root for s in market.specs.values()):
             raise MissingInputError(f"no contract metadata for root {dec.root!r}")
         scenario.for_root(dec.root)

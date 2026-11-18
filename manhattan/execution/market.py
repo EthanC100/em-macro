@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 from bisect import bisect_right
+from types import MappingProxyType
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -97,7 +98,7 @@ class MarketData:
             if b.day <= a.day or b.close_at <= a.close_at:
                 raise TimestampError(f"the calendar must strictly increase in day and close time ({a.day}, {b.day})")
         self.calendar = cal
-        self.day_index = {t.day: i for i, t in enumerate(cal)}
+        self.day_index = MappingProxyType({t.day: i for i, t in enumerate(cal)})
 
         specs = {}
         for s in contracts:
@@ -106,7 +107,7 @@ class MarketData:
             if s.contract_id in specs:
                 raise UnitError(f"contract {s.contract_id} is described twice")
             specs[s.contract_id] = s
-        self.specs = specs
+        self.specs = MappingProxyType(specs)
 
         px = {}
         for s in settlements:
@@ -132,7 +133,7 @@ class MarketData:
             if key in px:
                 raise UnitError(f"two settlements for {s.contract_id} on {s.day}")
             px[key] = s
-        self.settlements = px
+        self.settlements = MappingProxyType(px)
 
         liq = {}
         for q in liquidity:
@@ -141,12 +142,13 @@ class MarketData:
             if q.contract_id not in specs:
                 raise MissingInputError(f"a liquidity estimate names {q.contract_id!r}, which has no contract metadata")
             liq.setdefault(q.contract_id, []).append(q)
-        self.liquidity = {}
+        indexed = {}
         for cid, rows in liq.items():
             rows.sort(key=lambda q: q.known_at)
             if any(a.known_at == b.known_at for a, b in zip(rows, rows[1:])):
                 raise TimestampError(f"two liquidity estimates for {cid} share a known_at time")
-            self.liquidity[cid] = (tuple(q.known_at for q in rows), tuple(rows))
+            indexed[cid] = (tuple(q.known_at for q in rows), tuple(rows))
+        self.liquidity = MappingProxyType(indexed)
 
         rates = {}
         for r in fx:
@@ -158,7 +160,19 @@ class MarketData:
             if key in rates or (r.quote, r.base, r.day) in rates:
                 raise UnitError(f"two rates for {r.base}/{r.quote} on {r.day}")
             rates[key] = r
-        self.fx = rates
+        self.fx = MappingProxyType(rates)
+        object.__setattr__(self, "_frozen", True)
+
+    # Immutable after construction (S6 L1): every container is a read-only view of a private copy and every element
+    # is a frozen dataclass, so the inputs a run reads are the inputs ``digest()`` describes. A caller who wants
+    # different inputs builds a new MarketData.
+    def __setattr__(self, name, value):
+        if getattr(self, "_frozen", False):
+            raise AttributeError(f"MarketData is immutable: build a new one instead of setting {name!r}")
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        raise AttributeError(f"MarketData is immutable: {name!r} cannot be deleted")
 
     # -------------------------------------------------------------- identity
     def digest(self) -> str:
@@ -169,26 +183,27 @@ class MarketData:
         (contract, published time, ADV, daily volatility); every FX rate (base, quote, day, rate, published time).
         Numbers are written as Python ``repr`` (exact for binary floats), dates as ISO dates, times as ISO UTC.
         Inputs that no trade or mark used are covered too: the digest identifies what was supplied, not what was
-        read. It says nothing about where the numbers came from; see design section 15."""
-        if getattr(self, "_digest", None) is None:
-            num = lambda x: repr(float(x))                                    # noqa: E731
-            iso = lambda t: t.isoformat() if t is not None else None          # noqa: E731
-            doc = {
-                "version": 1,
-                "calendar": [[iso(t.day), iso(t.close_at)] for t in self.calendar],
-                "contracts": [[s.contract_id, s.root, s.exchange, s.delivery_month, s.currency, num(s.tick_size),
-                               num(s.tick_value), num(s.multiplier), num(s.price_unit_value), iso(s.first_trade),
-                               iso(s.last_trade), s.settlement_type, iso(s.first_notice),
-                               None if s.initial_margin is None else num(s.initial_margin)]
-                              for _, s in sorted(self.specs.items())],
-                "settlements": [[c, iso(d), num(v.price), iso(v.known_at)] for (c, d), v in sorted(self.settlements.items())],
-                "liquidity": [[c, iso(q.known_at), num(q.adv_contracts), num(q.daily_vol_points)]
-                              for c, (_, rows) in sorted(self.liquidity.items()) for q in rows],
-                "fx": [[b, q, iso(d), num(r.rate), iso(r.known_at)] for (b, q, d), r in sorted(self.fx.items())],
-            }
-            b = json.dumps(doc, separators=(",", ":"), ensure_ascii=True).encode("ascii")
-            self._digest = hashlib.sha256(b).hexdigest()
-        return self._digest
+        read. It says nothing about where the numbers came from; see design section 15.
+
+        Recomputed from the current contents on every call (never cached), so it cannot outlive a change made by
+        bypassing the object's immutability."""
+        num = lambda x: repr(float(x))                                    # noqa: E731
+        iso = lambda t: t.isoformat() if t is not None else None          # noqa: E731
+        doc = {
+            "version": 1,
+            "calendar": [[iso(t.day), iso(t.close_at)] for t in self.calendar],
+            "contracts": [[s.contract_id, s.root, s.exchange, s.delivery_month, s.currency, num(s.tick_size),
+                           num(s.tick_value), num(s.multiplier), num(s.price_unit_value), iso(s.first_trade),
+                           iso(s.last_trade), s.settlement_type, iso(s.first_notice),
+                           None if s.initial_margin is None else num(s.initial_margin)]
+                          for _, s in sorted(self.specs.items())],
+            "settlements": [[c, iso(d), num(v.price), iso(v.known_at)] for (c, d), v in sorted(self.settlements.items())],
+            "liquidity": [[c, iso(q.known_at), num(q.adv_contracts), num(q.daily_vol_points)]
+                          for c, (_, rows) in sorted(self.liquidity.items()) for q in rows],
+            "fx": [[b, q, iso(d), num(r.rate), iso(r.known_at)] for (b, q, d), r in sorted(self.fx.items())],
+        }
+        b = json.dumps(doc, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+        return hashlib.sha256(b).hexdigest()
 
     # -------------------------------------------------------------- lookups
     def settlement(self, cid: str, d: date) -> Settlement | None:
