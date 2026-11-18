@@ -17,6 +17,8 @@ script builds these objects from synthetic numbers.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from bisect import bisect_right
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -157,6 +159,36 @@ class MarketData:
                 raise UnitError(f"two rates for {r.base}/{r.quote} on {r.day}")
             rates[key] = r
         self.fx = rates
+
+    # -------------------------------------------------------------- identity
+    def digest(self) -> str:
+        """SHA-256 of every input this object holds, in a canonical form (S6 N4).
+
+        Covered, each list sorted by its key: the calendar (day, close time); every contract's metadata (all
+        ``ContractSpec`` fields); every settlement (contract, day, price, published time); every liquidity estimate
+        (contract, published time, ADV, daily volatility); every FX rate (base, quote, day, rate, published time).
+        Numbers are written as Python ``repr`` (exact for binary floats), dates as ISO dates, times as ISO UTC.
+        Inputs that no trade or mark used are covered too: the digest identifies what was supplied, not what was
+        read. It says nothing about where the numbers came from; see design section 15."""
+        if getattr(self, "_digest", None) is None:
+            num = lambda x: repr(float(x))                                    # noqa: E731
+            iso = lambda t: t.isoformat() if t is not None else None          # noqa: E731
+            doc = {
+                "version": 1,
+                "calendar": [[iso(t.day), iso(t.close_at)] for t in self.calendar],
+                "contracts": [[s.contract_id, s.root, s.exchange, s.delivery_month, s.currency, num(s.tick_size),
+                               num(s.tick_value), num(s.multiplier), num(s.price_unit_value), iso(s.first_trade),
+                               iso(s.last_trade), s.settlement_type, iso(s.first_notice),
+                               None if s.initial_margin is None else num(s.initial_margin)]
+                              for _, s in sorted(self.specs.items())],
+                "settlements": [[c, iso(d), num(v.price), iso(v.known_at)] for (c, d), v in sorted(self.settlements.items())],
+                "liquidity": [[c, iso(q.known_at), num(q.adv_contracts), num(q.daily_vol_points)]
+                              for c, (_, rows) in sorted(self.liquidity.items()) for q in rows],
+                "fx": [[b, q, iso(d), num(r.rate), iso(r.known_at)] for (b, q, d), r in sorted(self.fx.items())],
+            }
+            b = json.dumps(doc, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+            self._digest = hashlib.sha256(b).hexdigest()
+        return self._digest
 
     # -------------------------------------------------------------- lookups
     def settlement(self, cid: str, d: date) -> Settlement | None:

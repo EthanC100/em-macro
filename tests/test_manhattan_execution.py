@@ -593,7 +593,8 @@ def test_no_decisions_means_no_trades_and_no_costs():
     assert r.fills == () and r.rolls == () and r.totals()["net"] == 0 and r.totals()["turnover"] == 0
     assert all(d.positions == () and d.gross_exposure == 0 and d.margin is not None for d in r.days)
     flat = X.run(m, [X.Decision("SYNA", 0, T0)], policy(), scenario())
-    assert flat.fills == () and flat.result_hash() == r.result_hash()
+    assert flat.fills == () and flat.days == r.days
+    assert flat.result_hash() != r.result_hash()                    # same numbers, but a decision was recorded (N4)
 
 
 def test_zero_trades_need_no_fx_or_liquidity():
@@ -1360,3 +1361,49 @@ def test_n3_an_increase_still_rolls_before_it_adds():
     r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", 8, ON_ROLL_DAY)],
               policy(on_liquidity_shortfall="clip"), scenario())
     assert root_book(r, ROLL_DAY) == {J: 6}                         # roll 5 first, then 1 of the 3 extra
+
+
+# ------------------------------------------------------------------ N4: input digests in the result identity
+def test_n4_market_digest_is_deterministic_and_order_free():
+    a, b = world(), world()
+    assert a.digest() == b.digest() and re.fullmatch(r"[0-9a-f]{64}", a.digest())
+    shuffled = X.MarketData(calendar=a.calendar, contracts=list(reversed(list(a.specs.values()))),
+                            settlements=list(reversed(list(a.settlements.values()))),
+                            liquidity=[liq(c) for c in reversed(list(a.specs))], fx=list(reversed(list(a.fx.values()))))
+    assert shuffled.digest() == a.digest()
+
+
+@pytest.mark.parametrize("change", ["price", "published", "liquidity", "fx", "metadata", "unused contract", "calendar"])
+def test_n4_any_input_change_changes_the_digest_and_the_result_hash(change):
+    base = world(roots=("SYNA", "SYNE"))
+    specs, px = list(base.specs.values()), list(base.settlements.values())
+    lq, fxr, cal = [liq(c) for c in base.specs], list(base.fx.values()), list(base.calendar)
+    i = next(j for j, v in enumerate(px) if v.contract_id == H and v.day == date(2027, 1, 7))
+    if change == "price":
+        px[i] = st(H, px[i].day, px[i].price + 0.01)
+    elif change == "published":
+        px[i] = X.Settlement(H, px[i].day, px[i].price, px[i].known_at + timedelta(minutes=1))
+    elif change == "liquidity":
+        lq[0] = liq(lq[0].contract_id, adv=999.0)
+    elif change == "fx":
+        fxr[0] = X.FxRate("EUR", "USD", fxr[0].day, 1.1000001, fxr[0].known_at)
+    elif change == "metadata":
+        specs = [syna(3, initial_margin=5001.0) if s.contract_id == H else s for s in specs]
+    elif change == "unused contract":
+        specs = [syna(9, initial_margin=1.0) if s.contract_id == "SYNAU2027" else s for s in specs]
+    else:
+        cal[3] = X.TradingDay(cal[3].day, cal[3].close_at - timedelta(minutes=1))
+    m = X.MarketData(calendar=cal, contracts=specs, settlements=px, liquidity=lq, fx=fxr)
+    assert m.digest() != base.digest()
+    dec = [X.Decision("SYNA", 2, T0)]
+    assert X.run(m, dec, policy(), scenario()).result_hash() != X.run(base, dec, policy(), scenario()).result_hash()
+
+
+def test_n4_result_records_both_digests_and_decisions_are_order_free():
+    m = world()
+    decs = [X.Decision("SYNA", 2, T0), X.Decision("SYNA", -1, at(date(2027, 1, 20)))]
+    r = X.run(m, iter(decs), policy(), scenario())                 # a one-shot iterable is read once
+    assert r.market_digest == m.digest() and r.fills
+    assert r.decisions_digest == X.run(m, list(reversed(decs)), policy(), scenario()).decisions_digest
+    other = X.run(m, [X.Decision("SYNA", 2, T0), X.Decision("SYNA", -1, at(date(2027, 1, 20), 12))], policy(), scenario())
+    assert other.decisions_digest != r.decisions_digest and other.result_hash() != r.result_hash()

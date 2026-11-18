@@ -289,12 +289,31 @@ first trade day or after its last, or held past its last trade day, is an `Inval
 No randomness, no clock, no I/O. Inputs are sorted before use, so the order of decisions and of scenarios does not
 change the output.
 
-* `Result.result_hash()`: SHA-256 of a canonical JSON form of the run: the policy (`ExecutionPolicy.describe()`:
-  base currency, roll rule, lag, missing-price and shortfall policies, capital, margin reporting, FX valuation rule),
-  the scenario id, and every output (days, fills, rolls, unfilled orders, unexecuted decisions), amounts rounded to
-  8 decimals of the base currency. Two runs under different rules never share a hash, even when their numbers agree.
-  The market data are **not** hashed: a caller who needs them in the identity hashes them alongside, as the engine's
-  `data_hash` does. Differences below 1e-8 of a currency unit do not change the hash.
+* `MarketData.digest()` (S6 N4): SHA-256 of a canonical JSON document of **every input the object holds**, each
+  list sorted by its key, so the order the caller supplied them in does not matter:
+
+  | part | fields, in order | sorted by |
+  |---|---|---|
+  | `calendar` | day, close time (ISO, UTC) | day |
+  | `contracts` | contract id, root, exchange, delivery month, currency, tick size, tick value, multiplier, price unit value, first trade, last trade, settlement type, first notice, initial margin | contract id |
+  | `settlements` | contract id, day, price, published time | (contract id, day) |
+  | `liquidity` | contract id, published time, ADV, daily volatility in points | (contract id, published time) |
+  | `fx` | base, quote, day, rate, published time | (base, quote, day) |
+
+  Numbers are Python `repr` of the float (exact), dates ISO, times ISO UTC, `None` as JSON null, the document
+  version is 1, and the JSON has no spaces and ASCII only. Inputs no trade or mark used are covered too: the digest
+  identifies what was supplied, not what was read.
+* `decisions_digest(decisions)`: SHA-256 of the sorted list of (root, contracts, decided time, inputs-known time).
+* `Result.result_hash()`: SHA-256 of a canonical JSON form of the run: `market_digest`, `decisions_digest`, the
+  policy (`ExecutionPolicy.describe()`: base currency, roll rule, lag, missing-price and shortfall policies,
+  capital, margin reporting, FX valuation rule), the scenario id, and every output (days, fills, rolls, unfilled
+  orders, unexecuted decisions), amounts rounded to 8 decimals of the base currency. Any change of an input value,
+  a decision, a rule or the scenario changes it; differences in outputs below 1e-8 of a currency unit do not.
+
+**What the hash does not prove.** It identifies a run of this model on these exact numbers. It does **not**
+authenticate the market data: it cannot say that a settlement is the exchange's, that a vendor file was read
+unaltered, or that a `known_at` time is when the number really became available. Those are properties of the
+data pipeline, not of this model.
 * `CostScenario.scenario_id()`: a content address (`AC-` + 16 hex of the `manhattan.spec` canonical hash) of the
   scenario's economics: its provenance and every root's terms. The name is a label and is left out, so renaming a
   scenario keeps its id. Suitable as an executable's `cost_model_id`. `run_scenarios` runs one plan under several scenarios; `sensitivity_table` gives
@@ -323,6 +342,13 @@ covers only `manhattan/engine/*.py` and is unchanged. When Ethan decides to conn
    for comparison with `Instrument.cost`; it is exact only there.
 5. **Records.** The engine, not this package, would write the ledger record, with the result hash of the engine's
    own series. This package would stay pure.
+6. **Data identity (required before any result of this model is recorded; S6 N4).** The ledger record of an
+   evaluation must carry both the engine's `data_hash` (ARCHITECTURE §4.1: the manifest of every source file read,
+   path, bytes and SHA-256, as `em_macro.archive_raw` builds it) **and** `Result.market_digest` of the `MarketData`
+   built from those files, plus `decisions_digest`, `scenario_id` and `result_hash`. The adapter that builds the
+   `MarketData` must be deterministic, so the same source manifest always gives the same `market_digest`; a rerun
+   that gives a different `market_digest` for the same `data_hash` is a `nondeterminism` record. Only the digests are
+   public: the licensed rows stay in the private store (hard rule 7).
 
 Each of these is a change to the engine, the ops runner or the protocol and is Ethan's to approve; none is made here.
 
@@ -356,6 +382,8 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 * **FX sweep.** Daily P&L is converted at the day's rate; intraday FX and settlement-currency balances are not
   modelled. No cross rates.
 * **Fixed capital.** Fractions of capital use a fixed capital, with no compounding.
+* **The digest is not provenance.** `market_digest` fixes the numbers a run used; linking them to vendor files and
+  publication times is the engine's job (section 16, item 6).
 * **Options, spreads as single instruments, and exchange-specific fee schedules** (tiers, caps, rebates) are out of
   scope.
 
@@ -373,4 +401,5 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 | back-adjusted series and point in time | limitation | `as_of` builds; documented as revised by later rolls (section 8) |
 | **N1** (re-review) a roll-day reversal opened the new side while the old side was still open (S6: +5 to −4 left H +3 / J −4, gross 7, under `clip`; H +5 / J −4, gross 9, under `hold`) | defect | reversals close first; partial closes allowed; nothing opened on the new side until the old side is flat; never a roll (section 7). Tests: `clip`, `hold`, missing old settlement, zero liquidity in either month, both directions, several days, mid-roll, off the roll day, conservation; 400 seeded fuzz cases |
 | **N3** (re-review) a cut on a roll day waited behind the roll for the old month's capacity | allocation priority changed (separate commit) | reductions before the roll, additions after it (section 7); tests show the gross path 3, 2, 2 instead of 5, 3, 2, an unchanged exit speed from the old month, and unchanged increases |
+| **N4** (re-review) the result hash does not cover the market data | identity extended | `MarketData.digest()`, `decisions_digest()`, both in `Result` and in `result_hash`; the engine requirement stated (sections 15, 16) |
 | **N2** (re-review) a physical contract whose first notice falls after its last trading day could be carried past the last trading day | defect | `may_hold_into` enforces both boundaries; the restored last-trading-day test and the first-notice tests both pass (section 7) |

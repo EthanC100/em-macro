@@ -173,6 +173,8 @@ class Result:
     unfilled: tuple
     unexecuted: tuple               # decisions that could not execute inside the calendar
     meta: dict = field(default_factory=dict)
+    market_digest: str = ""         # MarketData.digest() of the inputs (S6 N4)
+    decisions_digest: str = ""      # decisions_digest() of the decisions
 
     def totals(self) -> dict:
         out = {k: sum(getattr(r, k) for r in self.days) for k in ("gross", *COST_PARTS, "net", "turnover")}
@@ -188,10 +190,11 @@ class Result:
         return out
 
     def result_hash(self) -> str:
-        """SHA-256 of a canonical form of the run: the policy, the scenario id and every output, amounts rounded to
-        8 decimals of the base currency. The same inputs give the same hash; any change of a position, fill, cost
-        (beyond 1e-8), policy or scenario changes it. The market data are not hashed: a caller who needs them in
-        the identity hashes them alongside (as the engine's ``data_hash`` does)."""
+        """SHA-256 of a canonical form of the run: the digest of the market inputs and of the decisions, the
+        policy, the scenario id and every output, amounts rounded to 8 decimals of the base currency. The same
+        inputs give the same hash; any change of an input value, a position, fill, cost (beyond 1e-8), policy or
+        scenario changes it. It identifies the run; it does not authenticate where the market data came from
+        (design section 15)."""
         def canon(x):
             if isinstance(x, float):
                 return format(round(x, 8) + 0.0, ".8f")
@@ -203,11 +206,19 @@ class Result:
                 return [canon(v) for v in x]
             return x
         doc = {"base": self.base_currency, "scenario_id": self.scenario_id, "capital": self.capital, "policy": self.meta,
+               "market_digest": self.market_digest, "decisions_digest": self.decisions_digest,
                "days": [asdict(r) for r in self.days], "fills": [asdict(f) for f in self.fills],
                "rolls": [asdict(r) for r in self.rolls], "unfilled": [asdict(u) for u in self.unfilled],
                "unexecuted": [asdict(d) for d in self.unexecuted]}
         b = json.dumps(canon(doc), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         return hashlib.sha256(b).hexdigest()
+
+
+def decisions_digest(decisions) -> str:
+    """SHA-256 of the decisions in a canonical, order-free form: (root, contracts, decided_at, inputs_known_at)."""
+    rows = sorted([d.root, d.contracts, d.decided_at.isoformat(),
+                   d.inputs_known_at.isoformat() if d.inputs_known_at else None] for d in decisions)
+    return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode("ascii")).hexdigest()
 
 
 def execution_index(market: MarketData, decided_at: datetime, lag: int) -> int | None:
@@ -277,7 +288,8 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
     base = policy.base_currency
     specs = market.specs
     cal = market.calendar
-    by_day, unexecuted = _schedule(market, tuple(decisions), policy, scenario)
+    decisions = tuple(decisions)
+    by_day, unexecuted = _schedule(market, decisions, policy, scenario)
     pos: dict[str, int] = {}
     mark: dict[str, float] = {}
     target: dict[str, int] = {}
@@ -473,7 +485,8 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
                               turnover=acc["turnover"], gross_exposure=gexp, net_exposure=nexp, margin=margin,
                               positions=tuple(sorted(pos.items())), stale_marks=tuple(stale)))
     return Result(base, scenario.name, scenario.scenario_id(), scenario.provenance, policy.capital, tuple(days),
-                  tuple(fills), tuple(rolls), tuple(unfilled), unexecuted, meta=policy.describe())
+                  tuple(fills), tuple(rolls), tuple(unfilled), unexecuted, meta=policy.describe(),
+                  market_digest=market.digest(), decisions_digest=decisions_digest(decisions))
 
 
 def run_scenarios(market: MarketData, decisions, policy: ExecutionPolicy, scenarios) -> dict:
