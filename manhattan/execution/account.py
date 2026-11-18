@@ -155,7 +155,8 @@ class Unfilled:
     contract_id: str
     requested: int
     filled: int
-    why: str                        # "no settlement", "liquidity" (its own cap) or "paired leg" (the roll's other leg)
+    why: str                        # "no settlement", "liquidity" (its own cap), "paired leg" (the roll's other leg)
+                                    # or "reversal: old side not closed" (an opposite-side position is still open)
     reason: str = ""                # what the order was: "decision", "carry", "roll" or "roll+decision"/"roll+carry"
 
 
@@ -304,8 +305,7 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
         for cid in sorted(pos):
             q, spec = pos[cid], specs[cid]
             if not spec.may_hold_into(d):                             # defence in depth: the close check stops this
-                raise InvalidContractError(f"{cid} is held ({q} contracts) into {d}, across its delivery boundary or "
-                                           f"after its last trading day {spec.last_trade}")
+                raise InvalidContractError(f"{cid} is held ({q} contracts) into {d}: {spec.hold_boundary(d)}")
             st = market.settlement(cid, d)
             if st is None:
                 if policy.on_missing_price == "raise":
@@ -346,10 +346,16 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
                 if policy.roll.must_exit(specs[primary], d, next_day):
                     raise InvalidContractError(f"{root}: no contract on {d} can be held past the next trading day "
                                                f"({primary} reaches its delivery boundary or last trading day)")
-            K, roll, net = _plan_root(held, tgt, primary)
-            legs = sorted(set(roll) | set(net))
+            # a reversal closes first: positions on the other side of the target are closed before anything is
+            # opened in the target's direction, and a reversal is never booked as a roll (S6 N1)
+            against = {c: q for c, q in held.items() if tgt and _sign(q) == -_sign(tgt)}
+            keep = {c: q for c, q in held.items() if c not in against}
+            close1 = {c: -q for c, q in against.items()}
+            K, roll, net = _plan_root(keep, tgt, primary)
+            legs = sorted(set(close1) | set(roll) | set(net))
             if not legs:
                 continue
+            want = {c: close1.get(c, 0) + roll.get(c, 0) + net.get(c, 0) for c in legs}
             terms = scenario.for_root(root)
             # what each contract can trade today: its cap under ``clip`` (unbounded under ``raise``: fill_order then
             # refuses an order over the cap); nothing without a settlement under ``hold``
@@ -363,8 +369,19 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
                 elif policy.on_liquidity_shortfall == "clip":
                     avail[c] = capacity(market.liquidity_as_of(c, t_liq), terms)
                 else:
-                    avail[c] = abs(roll.get(c, 0)) + abs(net.get(c, 0))
+                    avail[c] = abs(close1.get(c, 0)) + abs(roll.get(c, 0)) + abs(net.get(c, 0))
                 own[c] = avail[c]
+            close_done = {}
+            for c in sorted(close1):
+                x = min(abs(close1[c]), avail[c])
+                if x:
+                    close_done[c] = _sign(close1[c]) * x
+                    avail[c] -= x
+            reversed_fully = all(abs(close_done.get(c, 0)) == abs(q) for c, q in close1.items())
+            if not reversed_fully:
+                # the old side is still open: nothing may be opened on the new side today; positions already on
+                # the target's side may still be rolled (exposure-neutral), but not increased
+                K, roll, net = _plan_root(keep, sum(keep.values()), primary if keep else None)
             # the roll moves only as many contracts as both sides can trade: exposure neither lapses nor doubles
             n = 0
             if K:
@@ -388,14 +405,15 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
                     avail[c] -= x
             moved_from = []
             for c in legs:
-                want = roll.get(c, 0) + net.get(c, 0)
-                r_q, n_q = roll_done.get(c, 0), net_done.get(c, 0)
+                r_q, n_q = roll_done.get(c, 0), net_done.get(c, 0) + close_done.get(c, 0)
                 q = r_q + n_q
-                if q != want:
+                if q != want[c]:
                     why = ("no settlement" if market.settlement(c, d) is None
-                           else "liquidity" if abs(q) >= own[c] else "paired leg")
-                    unfilled.append(Unfilled(d, c, want, q, why, base_reason if not roll.get(c) else
-                                             ("roll" if not net.get(c) else f"roll+{base_reason}")))
+                           else "liquidity" if abs(q) >= own[c]
+                           else "reversal: old side not closed" if not reversed_fully and c not in close1
+                           else "paired leg")
+                    unfilled.append(Unfilled(d, c, want[c], q, why, base_reason if not roll.get(c) else
+                                             ("roll" if not (net.get(c) or close1.get(c)) else f"roll+{base_reason}")))
                 if not q:
                     continue
                 reason = "roll" if not n_q else (base_reason if not r_q else f"roll+{base_reason}")
@@ -424,10 +442,8 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
         for cid in sorted(pos):
             spec = specs[cid]
             if not spec.may_hold_into(next_day):
-                what = (f"its first notice date {spec.first_notice} (delivery boundary; the model has no delivery "
-                        "management)") if spec.physical else f"after its last trading day {spec.last_trade}"
                 raise InvalidContractError(f"{cid} is still held ({pos[cid]} contracts) at the close of {d} and would be "
-                                           f"carried into {next_day}: {what}")
+                                           f"carried into {next_day}: {spec.hold_boundary(next_day)}")
         # 4. exposure and margin after the close
         gexp = nexp = 0.0
         if policy.report_margin or all(specs[c].initial_margin is not None for c in pos):

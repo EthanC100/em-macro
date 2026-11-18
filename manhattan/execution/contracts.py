@@ -121,14 +121,26 @@ class ContractSpec:
     def may_hold_into(self, d: date) -> bool:
         """May a position still be open at the close before trading day ``d`` and so be carried into ``d``?
 
-        **Delivery boundary.** This model has no delivery management, so a physically settled contract may not be
-        carried into its first notice date: it must be flat by the close of the last trading day before
-        ``first_notice``. A cash-settled contract may not be carried past its last trading day (its final cash
-        settlement is not modelled). Exchanges that assign delivery on positions held earlier (a first position or
-        intention day) are modelled by giving that earlier date as ``first_notice``."""
-        if self.physical:
-            return d < self.first_notice
-        return d <= self.last_trade
+        Two boundaries, and the earlier one binds:
+
+        * **Expiry.** No contract may be carried past its last trading day (``d <= last_trade``): after it there is no
+          market to close in, and final settlement is not modelled.
+        * **Delivery** (physical only). This model has no delivery management, so a physically settled contract may
+          not be carried into its first notice date either (``d < first_notice``), even when first notice falls
+          after the last trading day. Exchanges that assign delivery on positions held earlier (a first position or
+          intention day) are modelled by giving that earlier date as ``first_notice``."""
+        if d > self.last_trade:
+            return False
+        return d < self.first_notice if self.physical else True
+
+    def hold_boundary(self, d: date) -> str | None:
+        """Why a position may not be carried into ``d`` (None when it may): the binding boundary, for messages."""
+        if self.physical and d >= self.first_notice:
+            return (f"its first notice date {self.first_notice} (delivery boundary; the model has no delivery "
+                    "management)")
+        if d > self.last_trade:
+            return f"after its last trading day {self.last_trade} (expiry; final settlement is not modelled)"
+        return None
 
     def require_model_tradable(self, d: date) -> None:
         """``require_tradable``, and no trade at all in a physical contract on or after its first notice date."""

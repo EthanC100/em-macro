@@ -1072,3 +1072,247 @@ def test_back_adjusted_history_is_revised_by_later_rolls():
     assert sp_a.values[: len(sp_b.values)] == sp_b.values           # not revised
     with pytest.raises(E.MissingInputError):
         adjust.build(m, "SYNA", ROLL, "spliced", as_of=date(2026, 12, 1))
+
+
+# ================================================================== S6 re-review (N1, N2)
+def root_book(r, day):
+    d = next(x for x in r.days if x.day == day)
+    return dict(d.positions)
+
+
+def gross_contracts(pos: dict) -> int:
+    return sum(abs(q) for q in pos.values())
+
+
+def assert_reversal_safe(r, m, start: date, end_target: int):
+    """From ``start``: never both sides open, gross contracts never above max(previous, |target|), no roll legs."""
+    prev = None
+    for d in r.days:
+        if d.day < start:
+            prev = dict(d.positions)
+            continue
+        pos = dict(d.positions)
+        signs = {_s(q) for q in pos.values()}
+        assert len(signs) <= 1, (d.day, pos)
+        assert gross_contracts(pos) <= max(gross_contracts(prev), abs(end_target)), (d.day, pos, prev)
+        assert all(f.roll_quantity == 0 for f in r.fills if f.day == d.day and _s(f.filled) == _s(end_target)
+                   and not any(ev.day == d.day for ev in r.rolls)), d.day
+        prev = pos
+    check_books(m, r)
+
+
+def _s(x):
+    return (x > 0) - (x < 0)
+
+
+def test_n1_reversal_with_a_thin_old_month_closes_before_it_opens():
+    m = thin({H: 20.0})                                             # H: 2 contracts a day
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    days = [d.day for d in r.days]
+    k = days.index(ROLL_DAY)
+    # S6 found {H: +3, J: -4} (gross 7); now the old side is worked down first: +3, +1, then flat and -4
+    assert [dict(r.days[k + i].positions) for i in range(3)] == [{H: 3}, {H: 1}, {J: -4}]
+    assert [(f.contract_id, f.filled, f.reason) for f in r.fills if f.day == days[k + 2]] == [(H, -1, "carry"),
+                                                                                              (J, -4, "carry")]
+    u = [x for x in r.unfilled if x.day == ROLL_DAY]
+    assert u == [Unfilled(ROLL_DAY, H, -5, -2, "liquidity", "decision"),
+                 Unfilled(ROLL_DAY, J, -4, 0, "reversal: old side not closed", "decision")]
+    assert not [ev for ev in r.rolls if ev.day >= ROLL_DAY and ev.to_contract == J]    # never booked as a roll
+    assert_reversal_safe(r, m, ROLL_DAY, -4)
+
+
+def test_n1_reversal_with_the_old_month_unpriced_waits():
+    m = world(n=60, drop=((H, ROLL_DAY),))
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)],
+              policy(on_missing_price="hold"), scenario())
+    k = [d.day for d in r.days].index(ROLL_DAY)
+    assert dict(r.days[k].positions) == {H: 5}                      # S6 found {H: +5, J: -4} (gross 9)
+    assert dict(r.days[k + 1].positions) == {J: -4}
+    assert_reversal_safe(r, m, ROLL_DAY, -4)
+    with pytest.raises(E.MissingInputError, match=f"{H} on {ROLL_DAY}"):
+        X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)], policy(), scenario())
+
+
+@pytest.mark.parametrize("start, flip", [(5, -4), (-5, 4)])
+def test_n1_both_directions_and_several_days(start, flip):
+    m = thin({H: 20.0, J: 30.0})                                    # H 2 a day, J 3 a day
+    r = X.run(m, [X.Decision("SYNA", start, T0), X.Decision("SYNA", flip, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    k = [d.day for d in r.days].index(ROLL_DAY)
+    seq = [dict(r.days[k + i].positions) for i in range(4)]
+    s = _s(start)
+    assert seq == [{H: 3 * s}, {H: 1 * s}, {J: -3 * s}, {J: -4 * s}]  # close 2, 2, 1; then open 3 (J's cap), 1
+    assert_reversal_safe(r, m, ROLL_DAY, flip)
+
+
+def test_n1_zero_liquidity_in_the_old_month_never_opens_and_fails_closed():
+    m = thin({H: 0.0})
+    # H could never be traded: the build never happens, so give H liquidity only before the roll
+    lq = [liq(H, adv=1000.0, t=datetime(2026, 12, 31, tzinfo=UTC)), liq(H, adv=0.0, t=at(date(2027, 2, 10)))]
+    m2 = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                      liquidity=lq + [liq(c) for c in m.specs if c != H])
+    with pytest.raises(E.InvalidContractError, match="first notice date 2027-02-25"):
+        X.run(m2, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    # and before that boundary, J is never opened
+    short = X.MarketData(calendar=m2.calendar[:33], contracts=list(m.specs.values()),
+                         settlements=[v for v in m.settlements.values() if v.day <= m2.calendar[32].day],
+                         liquidity=lq + [liq(c) for c in m.specs if c != H])
+    r = X.run(short, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    assert all(dict(d.positions) in ({H: 5}, {}) or d.day < ROLL_DAY for d in r.days)
+    assert all(J not in dict(d.positions) for d in r.days)
+
+
+def test_n1_zero_liquidity_in_the_new_month_ends_flat_not_reversed():
+    m = thin({J: 0.0}, n=40)
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    assert root_book(r, ROLL_DAY) == {}                             # closing is never blocked by the new month
+    assert [u.why for u in r.unfilled if u.day == ROLL_DAY] == ["liquidity"]
+
+
+def test_n1_reversal_during_an_unfinished_roll():
+    m = thin({J: 20.0})                                             # J: 2 a day, so the roll takes three days
+    dec = at(ROLL_DAY)                                               # executes on 16 Feb, mid-roll
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", -4, dec)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    k = [d.day for d in r.days].index(ROLL_DAY)
+    assert dict(r.days[k].positions) == {H: 3, J: 2}               # the roll was under way
+    # 16 Feb: J's whole capacity goes to closing its +2 and H closes its +3: flat; then -2 a day in J
+    assert [dict(r.days[k + i].positions) for i in range(1, 4)] == [{}, {J: -2}, {J: -4}]
+    assert [ev.day for ev in r.rolls if ev.to_contract == J] == [ROLL_DAY]
+    assert_reversal_safe(r, m, ROLL_DAY, -4)
+
+
+def test_n1_reversal_off_the_roll_day_follows_the_same_rule():
+    m = world(adv=20.0)                                             # every month: 2 a day
+    r = X.run(m, [X.Decision("SYNA", 4, T0), X.Decision("SYNA", -2, at(date(2027, 1, 18)))],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    seq = [dict(d.positions) for d in r.days if date(2027, 1, 19) <= d.day <= date(2027, 1, 22)]
+    assert seq == [{H: 2}, {}, {J: -2}, {J: -2}]                     # a new position opens in the roll rule's month
+    assert_reversal_safe(r, m, date(2027, 1, 19), -2)
+
+
+def late_notice_world(adv_after: float = 0.0) -> X.MarketData:
+    """SYNA, but March's first notice (3 Mar) falls after its last trading day (27 Feb)."""
+    base = world(n=60)
+    late = syna(3, first_notice=date(2027, 3, 3))
+    specs = [late if s.contract_id == H else s for s in base.specs.values()]
+    px = [st(s.contract_id, t.day, price_syna(i, s)) for i, t in enumerate(base.calendar) for s in specs
+          if s.tradable_on(t.day)]
+    lq = [liq(s.contract_id, adv=(1000.0 if s.contract_id == H else adv_after)) for s in specs]
+    return X.MarketData(calendar=base.calendar, contracts=specs, settlements=px, liquidity=lq)
+
+
+def test_holding_past_the_last_trade_day_stops_the_run():
+    """Restored (S6 N2): last trade binds for a physical contract whose first notice comes later."""
+    m = late_notice_world()
+    s = m.specs[H]
+    assert s.last_trade < s.first_notice and s.notice == s.last_trade
+    assert s.may_hold_into(date(2027, 2, 26)) and not s.may_hold_into(date(2027, 3, 1))
+    for missing in ("raise", "hold"):
+        with pytest.raises(E.InvalidContractError, match="close of 2027-02-26 .* after its last trading day 2027-02-27"):
+            X.run(m, [X.Decision("SYNA", 5, T0)], policy(on_liquidity_shortfall="clip", on_missing_price=missing),
+                  scenario())
+
+
+def test_n2_with_liquidity_the_late_notice_contract_rolls_before_its_last_trade():
+    m = late_notice_world(adv_after=1000.0)
+    r = X.run(m, [X.Decision("SYNA", 5, T0)], policy(), scenario())
+    ev = [e for e in r.rolls if H in e.from_contracts]
+    assert ev and ev[0].day <= date(2027, 2, 26)
+    assert all(H not in dict(d.positions) for d in r.days if d.day > date(2027, 2, 26))
+
+
+def test_n2_may_hold_into_respects_both_boundaries():
+    phys = syna(3)                                                   # first notice 02-25, last trade 02-27
+    late = syna(3, first_notice=date(2027, 3, 3))
+    cash = syne(3)                                                   # last trade 03-15
+    assert [phys.may_hold_into(d) for d in (date(2027, 2, 24), date(2027, 2, 25), date(2027, 2, 28))] == [True, False, False]
+    assert [late.may_hold_into(d) for d in (date(2027, 2, 27), date(2027, 2, 28), date(2027, 3, 3))] == [True, False, False]
+    assert [cash.may_hold_into(d) for d in (date(2027, 3, 15), date(2027, 3, 16))] == [True, False]
+    assert "first notice" in phys.hold_boundary(date(2027, 2, 25))
+    assert "last trading day" in late.hold_boundary(date(2027, 2, 28))
+    assert phys.hold_boundary(date(2027, 2, 24)) is None
+
+
+# ------------------------------------------------------------------ adversarial fuzzing (seeded, deterministic)
+FUZZ_SEEDS = range(400)
+
+
+def _fuzz_case(seed: int):
+    import random
+    rng = random.Random(seed)
+    roots = ("SYNA",) if rng.random() < 0.7 else ("SYNA", "SYNE")
+    n = 60
+    m0 = world(n=n, roots=roots)
+    days = [t.day for t in m0.calendar]
+    drop = tuple((c, d) for c in m0.specs for d in days[1:-1] if rng.random() < 0.03)
+    m1 = world(n=n, roots=roots, drop=drop)
+    advs = (0.0, 10.0, 20.0, 30.0, 60.0, 1000.0)
+    lq = [liq(c, adv=rng.choice(advs)) for c in m1.specs]
+    m = X.MarketData(calendar=m1.calendar, contracts=list(m1.specs.values()), settlements=list(m1.settlements.values()),
+                     liquidity=lq, fx=list(m1.fx.values()))
+    decs, seen = [], set()
+    for _ in range(rng.randint(1, 6)):
+        root, t = rng.choice(roots), at(rng.choice(days[:-1]), rng.choice((12, 20)))
+        if (root, t) not in seen:                                   # two different targets at one instant are refused
+            seen.add((root, t))
+            decs.append(X.Decision(root, rng.randint(-8, 8), t))
+    pol = (policy(on_liquidity_shortfall="clip", on_missing_price="hold") if rng.random() < 0.7 else
+           policy(on_liquidity_shortfall=rng.choice(("clip", "raise")), on_missing_price=rng.choice(("hold", "raise"))))
+    sc = X.CostScenario("fuzz", "synthetic", tuple((r, terms(fee_currency="USD", impact_coefficient=0.1))
+                                                   for r in roots))
+    return m, decs, pol, sc
+
+
+def _targets_by_day(m, decs, pol):
+    from manhattan.execution.account import execution_index
+    out = {}
+    for dec in sorted(decs, key=lambda x: (x.decided_at, x.root, x.contracts)):
+        k = execution_index(m, dec.decided_at, pol.lag)
+        if k is not None:
+            out.setdefault(k, {})[dec.root] = dec.contracts
+    return out
+
+
+@pytest.mark.parametrize("seed", FUZZ_SEEDS)
+def test_fuzz_invariants(seed):
+    m, decs, pol, sc = _fuzz_case(seed)
+    try:
+        r = X.run(m, decs, pol, sc)
+    except (E.MissingInputError, E.LiquidityError, E.InvalidContractError):
+        return                                                   # fail closed is an allowed outcome
+    assert r.result_hash() == X.run(m, list(reversed(decs)), pol, sc).result_hash()
+    by_day = _targets_by_day(m, decs, pol)
+    target, prev = {}, {}
+    for k, d in enumerate(r.days):
+        target.update(by_day.get(k, {}))
+        pos = dict(d.positions)
+        for root in {m.specs[c].root for c in pos} | set(target):
+            now = {c: q for c, q in pos.items() if m.specs[c].root == root}
+            before = {c: q for c, q in prev.items() if m.specs[c].root == root}
+            assert len({_s(q) for q in now.values()}) <= 1, (seed, d.day, now)          # never both sides
+            assert gross_contracts(now) <= max(gross_contracts(before), abs(target.get(root, 0))), (seed, d.day)
+            assert len(now) <= 2, (seed, d.day, now)
+        for c in pos:
+            assert m.specs[c].may_hold_into(m.calendar[k + 1].day if k + 1 < len(m.calendar) else d.day), (seed, c)
+        fd = [f for f in r.fills if f.day == d.day]
+        for root in {f.root for f in fd}:
+            legs = [f.roll_quantity for f in fd if f.root == root and f.roll_quantity]
+            assert sum(legs) == 0, (seed, d.day, legs)                                    # roll legs pair
+            evs = [ev for ev in r.rolls if ev.day == d.day and ev.root == root]
+            assert sum(ev.contracts for ev in evs) == sum(x for x in legs if x > 0), (seed, d.day)
+        assert d.net == pytest.approx(d.gross - d.costs, abs=1e-9)
+        prev = pos
+    t = r.totals()
+    last = r.days[-1]
+    if not last.stale_marks:
+        cash = sum(-f.filled * f.fill_price * m.specs[f.contract_id].point_value
+                   * (1.10 if m.specs[f.contract_id].currency == "EUR" else 1.0) for f in r.fills)
+        cash += sum(q * m.settlement(c, last.day).price * m.specs[c].point_value
+                    * (1.10 if m.specs[c].currency == "EUR" else 1.0) for c, q in last.positions)
+        assert t["net"] == pytest.approx(cash - t["commission"] - t["exchange_fee"] - t["financing"],
+                                         rel=1e-12, abs=1e-6), seed

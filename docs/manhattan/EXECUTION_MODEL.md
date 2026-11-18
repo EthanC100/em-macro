@@ -1,6 +1,6 @@
 # Synthetic futures execution, cost and roll model
 
-Version 0.2, 2026-11-18 (Project Manhattan, session 4; 0.2 answers the S6 review: section 19). Code: `manhattan/execution/`. Tests:
+Version 0.3, 2026-11-18 (Project Manhattan, session 4; 0.2 and 0.3 answer the S6 reviews: section 19). Code: `manhattan/execution/`. Tests:
 `tests/test_manhattan_execution.py`.
 
 **What this is.** A deterministic, pure-function model of how a futures position plan turns into gross and net P&L:
@@ -125,6 +125,15 @@ Decisions name a **root** and a signed target in contracts; the roll rule picks 
 3. **The net change**: everything else, outright: the rest of the old months is closed, and the primary gets
    `T − p − K`. Roll plus net takes the holdings exactly to `{primary: T}`.
 
+**Reversals close first (S6 N1).** When the target is on the other side of a held position (long to short or
+short to long, in any month, including during an unfinished roll), every position on the wrong side is closed
+**before** anything is opened on the new side. Closing may be partial (capacity or a missing price); while any
+wrong-side contract is still open, nothing is opened in the target's direction that day (the blocked opening is an
+`Unfilled` with `why = "reversal: old side not closed"`) and the closing continues on later days (`carry`). Only
+positions already on the target's side may still be rolled, exposure-neutrally. A reversal is never a roll: its
+trades are outright (`decision` / `carry`, `roll_quantity = 0`) and it records no `RollEvent`. So a root never holds
+both sides at a close, and its gross contracts never exceed the larger of the previous close's and the target's.
+
 The roll executes first and paired: it moves `n = min(|K|, what the new month can trade, what the old months can
 trade)` contracts, so under `clip` or a missing price the position neither lapses nor doubles; the net change then
 uses what capacity is left. Under `raise`, any shortfall or missing price on a needed leg stops the run. A decision
@@ -135,7 +144,7 @@ on the roll day is therefore a roll plus a net change; examples at the roll from
 | 5 (unchanged) | −5 `roll` | +5 `roll` | 5 contracts |
 | 8 (increase) | −5 `roll` | +8 `roll+decision` (5 of them roll) | 5 |
 | 2 (decrease) | −5 `roll+decision` (2 of them roll) | +2 `roll` | 2 |
-| −3 (reversal) | −5 `decision` | −3 `decision` | none: no position is carried across |
+| −3 (reversal) | −5 `decision` | −3 `decision`, only once H is fully closed | none: a reversal is never a roll |
 | 0 (flat) | −5 `decision` | — | none |
 
 Each roll leg pays spread, slippage, impact and fees once; a `RollEvent` is recorded for every day a roll moves
@@ -144,13 +153,17 @@ contracts, with or without a decision. A day on which no listed contract can be 
 
 **Delivery boundary (owner decision, S6 M4).** This synthetic model has no delivery management, so it fails closed:
 
-* A **physically settled** contract may not be carried into its `first_notice` date: a position must be flat by the
-  close of the last trading day before `first_notice`. The exit rule rolls on that day at the latest, even with
+* **No contract** may be carried past its `last_trade` date (S6 N2): there is no market to close in afterwards and
+  final settlement is not modelled. This holds for physical contracts too, also when their first notice falls after
+  the last trading day.
+* A **physically settled** contract may not be carried into its `first_notice` date either: a position must be flat
+  by the close of the last trading day before the **earlier** of `first_notice` and the day after `last_trade`. The exit rule rolls on that day at the latest, even with
   `roll_before_notice_days = 0`; a position still open at that close (for example because the cap or a missing
   price kept the roll from finishing) stops the run with `InvalidContractError`. No trade at all is made in a physical
   contract on or after its first notice date (`ContractSpec.require_model_tradable`).
-* A **cash-settled** contract may not be carried past its `last_trade` date (its final cash settlement is not
-  modelled): flat by the close of the last trade day.
+* A **cash-settled** contract: flat by the close of its last trade day.
+* An unfinished roll fails closed: the run stops at the close at which the position would cross the boundary, with
+  an `InvalidContractError` naming the boundary (`delivery boundary` or `expiry`), the contract and the dates.
 * Dates are calendar dates of the contract's exchange as the caller gives them; "the next trading day" is the next
   day of the caller's calendar (the day after, past its end). Where an exchange assigns delivery on positions held
   earlier (a first position or intention day), give that earlier date as `first_notice`.
@@ -345,3 +358,5 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 | deferred-order labels | defect | `roll_quantity`, combined reasons, `Unfilled.reason` (section 6) |
 | scenario and result hashes | defect | scenario id without the name; result hash covers the policy (section 15) |
 | back-adjusted series and point in time | limitation | `as_of` builds; documented as revised by later rolls (section 8) |
+| **N1** (re-review) a roll-day reversal opened the new side while the old side was still open (S6: +5 to −4 left H +3 / J −4, gross 7, under `clip`; H +5 / J −4, gross 9, under `hold`) | defect | reversals close first; partial closes allowed; nothing opened on the new side until the old side is flat; never a roll (section 7). Tests: `clip`, `hold`, missing old settlement, zero liquidity in either month, both directions, several days, mid-roll, off the roll day, conservation; 400 seeded fuzz cases |
+| **N2** (re-review) a physical contract whose first notice falls after its last trading day could be carried past the last trading day | defect | `may_hold_into` enforces both boundaries; the restored last-trading-day test and the first-notice tests both pass (section 7) |
