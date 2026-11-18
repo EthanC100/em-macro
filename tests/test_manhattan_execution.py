@@ -1,0 +1,800 @@
+"""Synthetic futures execution, cost and roll model (manhattan/execution, docs/manhattan/EXECUTION_MODEL.md).
+
+Every number here is synthetic: made-up contracts (roots SYNA, SYNC, SYNE), made-up prices on a made-up calendar
+and made-up cost terms. None is a market value, and nothing is read from a file or the network.
+"""
+from __future__ import annotations
+
+import ast
+import hashlib
+import re
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from manhattan import execution as X
+from manhattan.execution import adjust, errors as E
+from manhattan.execution.account import Unfilled
+
+ROOT = Path(__file__).resolve().parents[1]
+PKG = ROOT / "manhattan/execution"
+UTC = timezone.utc
+SGT = timezone(timedelta(hours=8))
+ROLL = X.RollPolicy(buffer_days=35, roll_before_notice_days=10)
+
+
+# ------------------------------------------------------------------ synthetic world
+def weekdays(start: date, n: int) -> list[date]:
+    out, d = [], start
+    while len(out) < n:
+        if d.weekday() < 5:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def close(d: date) -> datetime:
+    return datetime(d.year, d.month, d.day, 19, 30, tzinfo=UTC)
+
+
+def published(d: date) -> datetime:
+    return datetime(d.year, d.month, d.day, 21, 0, tzinfo=UTC)
+
+
+def month_add(y: int, m: int, k: int) -> tuple[int, int]:
+    n = y * 12 + m - 1 + k
+    return n // 12, n % 12 + 1
+
+
+def syna(month: int, year: int = 2027, **kw) -> X.ContractSpec:
+    """Physically settled, USD, quoted in dollars: tick 0.01, multiplier 1,000, tick value 10."""
+    py, pm = month_add(year, month, -1)
+    dm = f"{year}-{month:02d}"
+    args = dict(contract_id=X.contract_id("SYNA", dm), root="SYNA", exchange="SYNX", delivery_month=dm,
+                currency="USD", tick_size=0.01, tick_value=10.0, multiplier=1000.0, price_unit_value=1.0,
+                first_trade=date(2026, 1, 2), last_trade=date(py, pm, 27), settlement_type="physical",
+                first_notice=date(py, pm, 25), initial_margin=5000.0)
+    args.update(kw)
+    return X.ContractSpec(**args)
+
+
+def sync(month: int, year: int = 2027) -> X.ContractSpec:
+    """Quoted in US cents: tick 0.25 cents, 5,000 units, price unit 0.01 USD, so tick value 12.5 USD."""
+    py, pm = month_add(year, month, -1)
+    dm = f"{year}-{month:02d}"
+    return X.ContractSpec(X.contract_id("SYNC", dm), "SYNC", "SYNX", dm, "USD", 0.25, 12.5, 5000.0, 0.01,
+                          date(2026, 1, 2), date(py, pm, 27), "physical", first_notice=date(py, pm, 25))
+
+
+def syne(month: int, year: int = 2027) -> X.ContractSpec:
+    """Cash settled, EUR: tick 0.5, multiplier 10, tick value 5 EUR; last trade on the 15th of the month."""
+    dm = f"{year}-{month:02d}"
+    return X.ContractSpec(X.contract_id("SYNE", dm), "SYNE", "SYNX", dm, "EUR", 0.5, 5.0, 10.0, 1.0,
+                          date(2026, 1, 2), date(year, month, 15), "cash", initial_margin=800.0)
+
+
+def price_syna(i: int, spec: X.ContractSpec) -> float:
+    # an upward-sloping curve (contango of 0.50 a month) that rises 0.10 a day; whole cents
+    return round(50.0 + 0.10 * i + 0.50 * int(spec.delivery_month[5:]), 2)
+
+
+def price_sync(i: int, spec: X.ContractSpec) -> float:
+    return 400.0 + 0.25 * (i % 7) + 2.0 * int(spec.delivery_month[5:])
+
+
+def price_syne(i: int, spec: X.ContractSpec) -> float:
+    return 1000.0 - 0.5 * i + 5.0 * int(spec.delivery_month[5:])
+
+
+def world(n: int = 40, *, roots=("SYNA",), adv: float = 1000.0, vol: float = 0.8, eurusd: float | None = 1.10,
+          drop=(), fx_drop=(), extra_specs=(), start: date = date(2027, 1, 4)) -> X.MarketData:
+    days = weekdays(start, n)
+    specs = list(extra_specs)
+    makers = {"SYNA": (syna, price_syna, range(1, 10)), "SYNC": (sync, price_sync, range(1, 10)),
+              "SYNE": (syne, price_syne, range(1, 10))}
+    pricer = {}
+    for r in roots:
+        mk, pf, months = makers[r]
+        for m in months:
+            s = mk(m)
+            specs.append(s)
+            pricer[s.contract_id] = pf
+    px = [X.Settlement(s.contract_id, d, pricer[s.contract_id](i, s), published(d))
+          for i, d in enumerate(days) for s in specs if s.tradable_on(d) and s.contract_id in pricer
+          and (s.contract_id, d) not in drop]
+    liq = [X.Liquidity(s.contract_id, adv, vol, datetime(2026, 12, 31, tzinfo=UTC)) for s in specs]
+    fx = [X.FxRate("EUR", "USD", d, eurusd, published(d)) for d in days if d not in fx_drop] if eurusd else []
+    return X.MarketData(calendar=[X.TradingDay(d, close(d)) for d in days], contracts=specs, settlements=px,
+                        liquidity=liq, fx=fx)
+
+
+def terms(**kw) -> X.CostTerms:
+    t = dict(fee_currency="USD", commission_per_contract=1.0, exchange_fee_per_contract=0.5, half_spread_ticks=0.5,
+             slippage_ticks=0.5, impact_coefficient=0.0, max_participation=0.1, margin_funding_bps_per_year=0.0)
+    t.update(kw)
+    return X.CostTerms(**t)
+
+
+def scenario(name="synthetic base", roots=("SYNA",), **kw) -> X.CostScenario:
+    return X.CostScenario(name, "synthetic", tuple((r, terms(**kw)) for r in roots))
+
+
+ZERO = dict(commission_per_contract=0.0, exchange_fee_per_contract=0.0, half_spread_ticks=0.0, slippage_ticks=0.0,
+            impact_coefficient=0.0)
+
+
+def policy(**kw) -> X.ExecutionPolicy:
+    a = dict(base_currency="USD", roll=ROLL)
+    a.update(kw)
+    return X.ExecutionPolicy(**a)
+
+
+def at(d: date, h: int = 20) -> datetime:
+    return datetime(d.year, d.month, d.day, h, 0, tzinfo=UTC)
+
+
+def liq(cid: str, adv=1000.0, vol=0.8, t=datetime(2026, 12, 31, tzinfo=UTC)) -> X.Liquidity:
+    return X.Liquidity(cid, adv, vol, t)
+
+
+def st(cid: str, d: date, p: float) -> X.Settlement:
+    return X.Settlement(cid, d, p, published(d))
+
+
+D0 = date(2027, 1, 4)
+T0 = at(D0)                 # after the first close: executes on the second trading day
+
+
+# ------------------------------------------------------------------ long and short orders
+def test_buy_fills_above_and_sell_below_the_reference():
+    s = syna(4)
+    b = X.fill_order(s, st(s.contract_id, D0, 50.0), 3, liq(s.contract_id), terms(), decided_at=T0 - timedelta(hours=1))
+    sl = X.fill_order(s, st(s.contract_id, D0, 50.0), -3, liq(s.contract_id), terms(), decided_at=T0 - timedelta(hours=1))
+    assert b.fill_price == pytest.approx(50.01) and sl.fill_price == pytest.approx(49.99)
+    assert b.filled == 3 and sl.filled == -3
+    for f in (b, sl):
+        assert f.execution_cost == pytest.approx(30.0)          # 0.01 points x 1,000 x 3 contracts
+        assert f.execution_cost == pytest.approx((f.fill_price - f.reference_price) * f.filled * s.point_value)
+        assert f.commission == pytest.approx(3.0) and f.exchange_fee == pytest.approx(1.5)
+
+
+def test_short_position_earns_when_the_price_falls():
+    m = world(roots=("SYNE",))
+    r = X.run(m, [X.Decision("SYNE", -2, T0)], policy(), scenario(roots=("SYNE",), fee_currency="EUR", **ZERO))
+    # SYNE falls 0.5 a day; 2 short x 0.5 x multiplier 10 = 10 EUR a day, at 1.10 USD per EUR
+    assert all(d.gross == pytest.approx(11.0) for d in r.days[2:])
+    assert r.days[-1].net_exposure < 0 < r.days[-1].gross_exposure
+
+
+def test_quantities_must_be_whole_contracts():
+    for bad in (1.5, 2.0, True, "3", None):
+        with pytest.raises(E.UnitError):
+            X.Decision("SYNA", bad, T0)
+    s = syna(4)
+    with pytest.raises(E.UnitError):
+        X.fill_order(s, st(s.contract_id, D0, 50.0), 2.0, liq(s.contract_id), terms(), decided_at=T0)
+
+
+# ------------------------------------------------------------------ multipliers and units
+def test_gross_pnl_uses_multiplier_and_price_unit():
+    m = world(roots=("SYNA", "SYNC"))
+    sc = X.CostScenario("free", "synthetic", (("SYNA", terms(**ZERO)), ("SYNC", terms(**ZERO))))
+    r = X.run(m, [X.Decision("SYNA", 3, T0)], policy(), sc)
+    assert r.days[2].gross == pytest.approx(3 * 0.10 * 1000)                   # 300 USD a day
+    r = X.run(m, [X.Decision("SYNC", 2, T0)], policy(), sc)
+    i = 2
+    move = price_sync(i, sync(4)) - price_sync(i - 1, sync(4))                 # 0.25 cents
+    assert r.days[i].gross == pytest.approx(2 * move * 5000 * 0.01)             # 25 USD, not 2,500
+    held = dict(r.days[i].positions)
+    assert X.contract_id("SYNC", "2027-03") in held or X.contract_id("SYNC", "2027-04") in held
+
+
+def test_tick_value_must_agree_with_the_multiplier_and_price_unit():
+    with pytest.raises(E.UnitError, match="price unit"):
+        X.ContractSpec("SYNCH2027", "SYNC", "SYNX", "2027-03", "USD", 0.25, 12.5, 5000.0, 1.0,   # cents as dollars
+                       date(2026, 1, 2), date(2027, 2, 27), "physical", first_notice=date(2027, 2, 25))
+
+
+@pytest.mark.parametrize("ccy", ["usd", "US$", "USc", "US", "EURO", "", None])
+def test_ambiguous_currency_codes_are_refused(ccy):
+    with pytest.raises(E.UnitError):
+        syna(3, currency=ccy)
+
+
+def test_contract_ids_need_a_four_digit_year_and_must_match():
+    assert X.contract_id("SYNA", "2027-03") == "SYNAH2027"
+    with pytest.raises(E.UnitError):
+        syna(3, contract_id="SYNAH7")
+    with pytest.raises(E.UnitError):
+        syna(3, contract_id="SYNAM2027")
+    with pytest.raises(E.UnitError):
+        X.contract_id("SYNA", "27-03")
+
+
+# ------------------------------------------------------------------ tick rounding
+def test_tick_rounding_modes():
+    assert X.round_to_tick(50.0025, 0.01, "up") == pytest.approx(50.01)
+    assert X.round_to_tick(50.0025, 0.01, "down") == pytest.approx(50.00)
+    assert X.round_to_tick(50.004, 0.01, "nearest") == pytest.approx(50.00)
+    assert X.round_to_tick(70.23, 0.01, "up") == 70.23                         # binary noise is not a tick
+    assert X.round_to_tick(0.1 + 0.2, 0.1, "up") == pytest.approx(0.3)
+    assert X.round_to_tick(-37.634, 0.01, "down") == pytest.approx(-37.64)     # negative prices work
+    assert X.adverse_round(400.1, 0.25, 1) == 400.25 and X.adverse_round(400.1, 0.25, -1) == 400.0
+    with pytest.raises(ValueError):
+        X.round_to_tick(1.0, 0.01, "sideways")
+
+
+def test_fill_is_rounded_against_the_trader_and_the_rounding_is_its_own_cost():
+    s = syna(4)
+    t = terms(half_spread_ticks=0.25, slippage_ticks=0.0)
+    b = X.fill_order(s, st(s.contract_id, D0, 50.0), 1, liq(s.contract_id), t, decided_at=T0)
+    sl = X.fill_order(s, st(s.contract_id, D0, 50.0), -1, liq(s.contract_id), t, decided_at=T0)
+    assert b.fill_price == pytest.approx(50.01) and sl.fill_price == pytest.approx(49.99)
+    assert b.spread_cost == pytest.approx(2.5) and b.rounding_cost == pytest.approx(7.5)
+    assert sl.spread_cost == pytest.approx(2.5) and sl.rounding_cost == pytest.approx(7.5)
+
+
+def test_off_tick_settlements_are_refused():
+    s = syna(4)
+    with pytest.raises(E.UnitError, match="tick"):
+        X.MarketData(calendar=[X.TradingDay(D0, close(D0))], contracts=[s], settlements=[st(s.contract_id, D0, 50.005)])
+
+
+# ------------------------------------------------------------------ spread, slippage, impact and fees
+def test_spread_slippage_impact_and_fees_add_up_exactly():
+    s = syna(4)
+    t = terms(half_spread_ticks=1.0, slippage_ticks=2.0, impact_coefficient=0.1, commission_per_contract=2.0,
+              exchange_fee_per_contract=0.75)
+    f = X.fill_order(s, st(s.contract_id, D0, 50.0), 4, liq(s.contract_id, adv=100.0, vol=0.5), t, decided_at=T0)
+    # impact = 0.1 x 0.5 x sqrt(4 / 100) = 0.01 points; raw = 50 + 0.01 + 0.02 + 0.01 = 50.04 (on the tick)
+    assert f.fill_price == pytest.approx(50.04)
+    assert (f.spread_cost, f.slippage_cost, f.impact_cost) == pytest.approx((40.0, 80.0, 40.0))
+    assert f.rounding_cost == pytest.approx(0.0, abs=1e-9)
+    assert f.commission == pytest.approx(8.0) and f.exchange_fee == pytest.approx(3.0)
+    assert f.traded_notional == pytest.approx(4 * 50.0 * 1000)
+
+
+def test_one_way_cost_fraction_matches_a_single_fill():
+    s = syna(4)
+    t = terms(half_spread_ticks=1.0, slippage_ticks=1.0, commission_per_contract=2.0, exchange_fee_per_contract=1.0)
+    f = X.fill_order(s, st(s.contract_id, D0, 50.0), 2, liq(s.contract_id), t, decided_at=T0)
+    frac = X.one_way_cost_fraction(s, 50.0, 2, liq(s.contract_id), t)
+    assert frac == pytest.approx((f.execution_cost + f.commission + f.exchange_fee) / f.traded_notional)
+
+
+def test_provenance_cannot_claim_calibration():
+    for bad in ("calibrated", "measured", "empirical", ""):
+        with pytest.raises(E.UnitError):
+            X.CostScenario("x", bad, (("SYNA", terms()),))
+    assert X.CALIBRATED is False and X.RESEARCH_ONLY is True
+
+
+def test_cost_terms_have_no_defaults_and_refuse_negative_values():
+    with pytest.raises(TypeError):
+        X.CostTerms("USD")                                         # every term must be given
+    with pytest.raises(E.UnitError):
+        terms(half_spread_ticks=-0.5)
+    with pytest.raises(E.UnitError):
+        terms(max_participation=1.5)
+    with pytest.raises(E.UnitError):
+        terms(max_participation=0.0)
+    with pytest.raises(E.UnitError):
+        X.CostScenario("x", "synthetic", (("SYNA", terms()), ("SYNA", terms())))
+
+
+# ------------------------------------------------------------------ rolls
+def test_roll_happens_on_the_first_day_within_the_window_and_pays_both_legs():
+    m = world()
+    r = X.run(m, [X.Decision("SYNA", 5, T0)], policy(), scenario())
+    first = r.fills[0]
+    assert first.day == date(2027, 1, 5) and first.contract_id == "SYNAH2027"   # notice 2027-02-25 > 5 Jan + 35
+    assert len(r.rolls) == 1
+    ev = r.rolls[0]
+    h = X.contract_id("SYNA", "2027-03")
+    assert ev.from_contracts == (h,) and ev.to_contract == "SYNAJ2027" and ev.contracts == 5
+    assert ev.day == date(2027, 2, 15)                       # first trading day with notice (2-25) − day ≤ 10
+    assert (m.specs[h].notice - date(2027, 2, 12)).days > 10
+    legs = [f for f in r.fills if f.day == ev.day]
+    assert {f.reason for f in legs} == {"roll"} and sorted(f.filled for f in legs) == [-5, 5]
+    day = next(d for d in r.days if d.day == ev.day)
+    assert day.commission == pytest.approx(10 * 1.0) and day.exchange_fee == pytest.approx(10 * 0.5)
+    assert day.spread == pytest.approx(10 * 0.005 * 1000)
+
+
+def test_roll_yield_is_in_the_same_contract_pnl_and_the_gap_is_not_booked():
+    m = world()
+    r = X.run(m, [X.Decision("SYNA", 1, T0)], policy(), scenario(**ZERO))
+    ev = r.rolls[0]
+    assert ev.calendar_gap_points == pytest.approx(0.5)        # J is one month after H: 0.50 of contango
+    # every day's gross is the held contract's own change: 0.10 x 1,000, including the roll day and the day after
+    assert all(d.gross == pytest.approx(100.0) for d in r.days[2:])
+    spliced = adjust.build(m, "SYNA", ROLL, "spliced")
+    k = spliced.days.index(ev.day)
+    # a naive spliced series books the 1.0-point gap on the roll day as if it were earned
+    assert (spliced.values[k] - spliced.values[k - 1]) * 1000 == pytest.approx(100.0 + 500.0)
+
+
+def test_holding_past_the_last_trade_day_stops_the_run():
+    # zero liquidity on every later month: the roll can never be done under the clip policy
+    m = world(n=60, adv=1000.0)
+    lq = [liq(c, adv=(1000.0 if c == "SYNAH2027" else 0.0)) for c in m.specs]
+    m2 = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                      liquidity=lq)
+    with pytest.raises(E.InvalidContractError, match="after its last trading day"):
+        X.run(m2, [X.Decision("SYNA", 5, T0)], policy(on_liquidity_shortfall="clip"), scenario())
+
+
+def test_no_eligible_contract_is_an_invalid_contract_error():
+    m = world(n=5)
+    one = [s for s in m.specs.values() if s.delivery_month <= "2027-02"]
+    m2 = X.MarketData(calendar=m.calendar, contracts=one, settlements=[v for v in m.settlements.values()
+                                                                        if v.contract_id in {s.contract_id for s in one}],
+                      liquidity=[liq(s.contract_id) for s in one])
+    with pytest.raises(E.InvalidContractError, match="notice date"):
+        X.run(m2, [X.Decision("SYNA", 1, T0)], policy(), scenario())
+
+
+def test_trading_outside_a_contract_life_is_refused():
+    s = syna(4, first_trade=date(2027, 1, 10))
+    with pytest.raises(E.InvalidContractError, match="not listed"):
+        s.require_tradable(D0)
+    with pytest.raises(E.InvalidContractError):
+        X.ContractSpec("SYNAH2027", "SYNA", "SYNX", "2027-03", "USD", 0.01, 10.0, 1000.0, 1.0, date(2027, 3, 1),
+                       date(2027, 2, 1), "cash")
+
+
+def test_roll_policy_must_leave_room():
+    with pytest.raises(E.UnitError):
+        X.RollPolicy(10, 10)
+    with pytest.raises(E.UnitError):
+        X.RollPolicy(35.0, 10)
+
+
+# ------------------------------------------------------------------ adjusted versus tradable prices
+def test_adjusted_series_are_never_tradable():
+    m = world()
+    for method in adjust.METHODS:
+        a = adjust.build(m, "SYNA", ROLL, method)
+        assert a.tradable is False
+        p = a.point(5)
+        with pytest.raises(TypeError, match="tradable"):
+            X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=[p])
+        s = m.specs[a.held[5]]
+        with pytest.raises(TypeError, match="tradable"):
+            X.fill_order(s, p, 1, liq(s.contract_id), terms(), decided_at=T0)
+
+
+def test_back_adjusted_levels_are_not_prices_but_their_changes_match_the_held_contract():
+    m = world()
+    diff = adjust.build(m, "SYNA", ROLL, "difference")
+    ratio = adjust.build(m, "SYNA", ROLL, "ratio")
+    chained = adjust.build(m, "SYNA", ROLL, "chained")
+    r = X.run(m, [X.Decision("SYNA", 1, at(date(2027, 1, 1)))], policy(), scenario(**ZERO))   # held from day 0
+    gross = [d.gross for d in r.days]
+    for k in range(1, len(diff.days)):
+        assert (diff.values[k] - diff.values[k - 1]) * 1000 == pytest.approx(gross[k])        # points: exact
+        assert ratio.values[k] / ratio.values[k - 1] == pytest.approx(chained.values[k] / chained.values[k - 1])
+    # before the roll, the difference-adjusted level is not the price of the contract held that day
+    assert diff.values[0] != pytest.approx(m.settlement(diff.held[0], diff.days[0]).price)
+    assert diff.values[0] - m.settlement(diff.held[0], diff.days[0]).price == pytest.approx(0.5)   # the later gap
+    # and its percentage change differs from the held contract's return
+    c, d0, d1 = diff.held[0], diff.days[0], diff.days[1]
+    true_ret = m.settlement(c, d1).price / m.settlement(c, d0).price - 1
+    assert diff.values[1] / diff.values[0] - 1 != pytest.approx(true_ret, rel=1e-6)
+
+
+# ------------------------------------------------------------------ currency conversion
+def test_foreign_currency_contract_is_converted_at_the_days_rate():
+    m = world(roots=("SYNE",), eurusd=1.25)
+    r = X.run(m, [X.Decision("SYNE", 3, T0)], policy(), scenario(roots=("SYNE",), fee_currency="EUR", **ZERO))
+    assert r.days[2].gross == pytest.approx(3 * -0.5 * 10 * 1.25)
+    held = dict(r.days[2].positions)
+    (cid, q), = held.items()
+    px = m.settlement(cid, r.days[2].day).price
+    assert r.days[2].net_exposure == pytest.approx(3 * px * 10 * 1.25)
+    assert r.days[2].margin == pytest.approx(3 * 800.0 * 1.25)
+    # the same rate quoted the other way gives the same result
+    days = [t.day for t in m.calendar]
+    inv = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                       liquidity=[liq(c) for c in m.specs], fx=[X.FxRate("USD", "EUR", d, 0.8, published(d)) for d in days])
+    r2 = X.run(inv, [X.Decision("SYNE", 3, T0)], policy(), scenario(roots=("SYNE",), fee_currency="EUR", **ZERO))
+    assert [d.gross for d in r2.days] == pytest.approx([d.gross for d in r.days])
+
+
+def test_fees_in_another_currency_are_converted():
+    m = world(roots=("SYNE",), eurusd=1.25)
+    sc = scenario(roots=("SYNE",), fee_currency="USD", commission_per_contract=2.0, exchange_fee_per_contract=0.0,
+                  half_spread_ticks=0.0, slippage_ticks=0.0)
+    r = X.run(m, [X.Decision("SYNE", 3, T0)], policy(base_currency="EUR"), sc)
+    assert r.days[1].commission == pytest.approx(6.0 / 1.25)
+
+
+def test_missing_fx_rate_fails_and_no_cross_rate_is_used():
+    m = world(roots=("SYNE",), fx_drop=(date(2027, 1, 7),))
+    with pytest.raises(E.MissingInputError, match="EUR/USD"):
+        X.run(m, [X.Decision("SYNE", 1, T0)], policy(), scenario(roots=("SYNE",), fee_currency="EUR"))
+    m = world(roots=("SYNE",), eurusd=1.1)
+    with pytest.raises(E.MissingInputError, match="EUR/GBP"):
+        m.rate("EUR", "GBP", D0)
+    with pytest.raises(E.UnitError):
+        X.FxRate("EUR", "EUR", D0, 1.0, published(D0))
+
+
+# ------------------------------------------------------------------ zero and extreme liquidity
+def test_zero_liquidity_refuses_or_fills_nothing():
+    s = syna(4)
+    z = liq(s.contract_id, adv=0.0)
+    with pytest.raises(E.LiquidityError):
+        X.fill_order(s, st(s.contract_id, D0, 50.0), 1, z, terms(), decided_at=T0)
+    f = X.fill_order(s, st(s.contract_id, D0, 50.0), 1, z, terms(), decided_at=T0, shortfall="clip")
+    assert f.filled == 0 and f.execution_cost == 0 and f.commission == 0
+    m = world(adv=0.0)
+    r = X.run(m, [X.Decision("SYNA", 3, T0)], policy(on_liquidity_shortfall="clip"), scenario())
+    assert all(d.positions == () for d in r.days) and r.totals()["costs"] == 0
+    assert r.unfilled and all(u.why == "liquidity" and u.filled == 0 for u in r.unfilled)
+
+
+def test_extreme_liquidity_has_negligible_impact():
+    s = syna(4)
+    t = terms(half_spread_ticks=0.0, slippage_ticks=0.0, impact_coefficient=1.0)
+    f = X.fill_order(s, st(s.contract_id, D0, 50.0), 10, liq(s.contract_id, adv=1e15, vol=1.0), t, decided_at=T0)
+    assert f.impact_cost < 1e-2 and f.fill_price == pytest.approx(50.01)      # the rest is one tick of rounding
+
+
+def test_participation_cap_clips_and_the_rest_is_worked_the_next_day():
+    m = world(adv=30.0)                      # cap = floor(0.1 x 30) = 3 contracts a day
+    r = X.run(m, [X.Decision("SYNA", 7, T0)], policy(on_liquidity_shortfall="clip"), scenario())
+    first = [f.filled for f in r.fills[:3]]
+    assert first == [3, 3, 1] and [f.reason for f in r.fills[:3]] == ["decision", "carry", "carry"]
+    assert r.unfilled[0] == Unfilled(date(2027, 1, 5), "SYNAH2027", 7, 3, "liquidity")
+    with pytest.raises(E.LiquidityError):
+        X.run(m, [X.Decision("SYNA", 7, T0)], policy(), scenario())
+
+
+# ------------------------------------------------------------------ missing metadata and inputs
+def test_missing_contract_metadata_is_refused():
+    m = world()
+    with pytest.raises(E.MissingInputError, match="root 'SYNZ'"):
+        X.run(m, [X.Decision("SYNZ", 1, T0)], policy(), scenario())
+    with pytest.raises(E.MissingInputError, match="no contract metadata"):
+        X.MarketData(calendar=m.calendar, contracts=[], settlements=[st("SYNAH2027", D0, 50.0)])
+    with pytest.raises(E.MissingInputError, match="first notice"):
+        syna(3, first_notice=None)
+    with pytest.raises(E.MissingInputError, match="no cost terms for root"):
+        X.run(world(roots=("SYNA", "SYNE")), [X.Decision("SYNE", 1, T0)], policy(), scenario())
+
+
+def test_missing_settlement_raises_by_default_and_hold_books_the_gap_later():
+    gap = date(2027, 1, 12)
+    m = world(drop=(("SYNAH2027", gap),))
+    with pytest.raises(E.MissingInputError, match="no settlement for held contract"):
+        X.run(m, [X.Decision("SYNA", 2, T0)], policy(), scenario(**ZERO))
+    r = X.run(m, [X.Decision("SYNA", 2, T0)], policy(on_missing_price="hold"), scenario(**ZERO))
+    k = [d.day for d in r.days].index(gap)
+    assert r.days[k].gross == 0 and r.days[k].stale_marks == ("SYNAH2027",)
+    assert r.days[k + 1].gross == pytest.approx(2 * 2 * 0.10 * 1000)          # two days' move on the return
+
+
+def test_missing_liquidity_or_margin_fails():
+    m = world()
+    bare = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()))
+    with pytest.raises(E.MissingInputError, match="no liquidity"):
+        X.run(bare, [X.Decision("SYNA", 1, T0)], policy(), scenario())
+    nomargin = world(roots=("SYNC",))
+    with pytest.raises(E.MissingInputError, match="initial margin"):
+        X.run(nomargin, [X.Decision("SYNC", 1, T0)], policy(), scenario(roots=("SYNC",), margin_funding_bps_per_year=50))
+    with pytest.raises(E.MissingInputError, match="initial margin"):
+        X.run(nomargin, [X.Decision("SYNC", 1, T0)], policy(report_margin=True), scenario(roots=("SYNC",)))
+    r = X.run(nomargin, [X.Decision("SYNC", 1, T0)], policy(), scenario(roots=("SYNC",)))
+    assert r.days[-1].margin is None                                         # unknown, never reported as zero
+
+
+def test_margin_funding_is_a_separate_cost():
+    m = world()
+    r = X.run(m, [X.Decision("SYNA", 4, T0)], policy(), scenario(margin_funding_bps_per_year=100.0, **ZERO))
+    # held from the close of 5 Jan; Friday 8 Jan -> Monday 11 Jan is three days
+    k = [d.day for d in r.days].index(date(2027, 1, 11))
+    assert r.days[k].financing == pytest.approx(4 * 5000.0 * 0.01 * 3 / 365)
+    assert r.days[k].net == pytest.approx(r.days[k].gross - r.days[k].financing)
+    assert r.days[1].financing == 0                                          # nothing was held before the first close
+
+
+# ------------------------------------------------------------------ timestamps and look-ahead
+def test_naive_and_date_timestamps_are_refused():
+    with pytest.raises(E.TimestampError, match="naive"):
+        X.Decision("SYNA", 1, datetime(2027, 1, 4, 20))
+    with pytest.raises(E.TimestampError, match="date"):
+        X.Decision("SYNA", 1, D0)
+    with pytest.raises(E.TimestampError):
+        X.TradingDay(D0, datetime(2027, 1, 4, 19, 30))
+    with pytest.raises(E.TimestampError):
+        X.Settlement("SYNAH2027", datetime(2027, 1, 4, tzinfo=UTC), 50.0, published(D0))
+
+
+def test_settlement_known_before_the_close_is_refused():
+    s = syna(4)
+    with pytest.raises(E.TimestampError, match="before that day's close"):
+        X.MarketData(calendar=[X.TradingDay(D0, close(D0))], contracts=[s],
+                     settlements=[X.Settlement(s.contract_id, D0, 50.0, close(D0) - timedelta(minutes=1))])
+    with pytest.raises(E.TimestampError, match="not in the trading calendar"):
+        X.MarketData(calendar=[X.TradingDay(D0, close(D0))], contracts=[s],
+                     settlements=[st(s.contract_id, date(2027, 1, 5), 50.0)])
+
+
+def test_calendar_must_strictly_increase():
+    d1 = date(2027, 1, 5)
+    with pytest.raises(E.TimestampError):
+        X.MarketData(calendar=[X.TradingDay(d1, close(d1)), X.TradingDay(D0, close(D0))], contracts=[])
+    with pytest.raises(E.TimestampError):
+        X.MarketData(calendar=[X.TradingDay(D0, close(D0)), X.TradingDay(d1, close(D0))], contracts=[])
+
+
+def test_decision_never_trades_at_a_price_already_printed():
+    m = world()
+    on_close = X.run(m, [X.Decision("SYNA", 1, close(D0))], policy(), scenario())
+    before = X.run(m, [X.Decision("SYNA", 1, close(D0) - timedelta(seconds=1))], policy(), scenario())
+    assert on_close.fills[0].day == date(2027, 1, 5)            # exactly at the close: the next day
+    assert before.fills[0].day == D0
+    lag2 = X.run(m, [X.Decision("SYNA", 1, T0)], policy(lag=2), scenario())
+    assert lag2.fills[0].day == date(2027, 1, 6)
+    # time zones are converted, not ignored: 03:00 on 5 Jan in Singapore is 19:00 UTC on 4 Jan, before the close
+    sg = X.run(m, [X.Decision("SYNA", 1, datetime(2027, 1, 5, 3, 0, tzinfo=SGT))], policy(), scenario())
+    assert sg.fills[0].day == D0
+    with pytest.raises(E.UnitError):
+        policy(lag=0)
+
+
+def test_inputs_and_liquidity_from_the_future_are_refused():
+    with pytest.raises(E.LookAheadError):
+        X.Decision("SYNA", 1, T0, inputs_known_at=T0 + timedelta(seconds=1))
+    s = syna(4)
+    late = liq(s.contract_id, t=T0 + timedelta(hours=1))
+    with pytest.raises(E.LookAheadError):
+        X.fill_order(s, st(s.contract_id, D0, 50.0), 1, late, terms(), decided_at=T0)
+    m = world()
+    m2 = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                      liquidity=[liq(c, t=T0 + timedelta(days=3)) for c in m.specs])
+    with pytest.raises(E.LookAheadError):
+        X.run(m2, [X.Decision("SYNA", 1, T0)], policy(), scenario())
+
+
+def test_liquidity_used_is_the_latest_known_at_the_decision():
+    m = world()
+    early = liq("SYNAH2027", adv=10.0, t=datetime(2026, 12, 31, tzinfo=UTC))
+    later = liq("SYNAH2027", adv=10_000.0, t=T0 + timedelta(hours=1))
+    m2 = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                      liquidity=[early, later] + [liq(c) for c in m.specs if c != "SYNAH2027"])
+    assert m2.liquidity_as_of("SYNAH2027", T0) is early
+    with pytest.raises(E.LiquidityError):                     # the bigger ADV was not known yet
+        X.run(m2, [X.Decision("SYNA", 5, T0)], policy(), scenario())
+
+
+def test_decisions_after_the_calendar_are_reported_not_executed():
+    m = world(n=5)
+    last = m.calendar[-1].close_at
+    r = X.run(m, [X.Decision("SYNA", 1, last)], policy(), scenario())
+    assert r.fills == () and len(r.unexecuted) == 1
+
+
+def test_conflicting_simultaneous_decisions_are_ambiguous():
+    m = world()
+    with pytest.raises(E.UnitError, match="ambiguous"):
+        X.run(m, [X.Decision("SYNA", 1, T0), X.Decision("SYNA", 2, T0)], policy(), scenario())
+    r = X.run(m, [X.Decision("SYNA", 1, T0), X.Decision("SYNA", 2, T0 + timedelta(minutes=5))], policy(), scenario())
+    assert r.fills[0].filled == 2                             # the later decision of the day wins
+
+
+# ------------------------------------------------------------------ zero trades
+def test_no_decisions_means_no_trades_and_no_costs():
+    m = world()
+    r = X.run(m, [], policy(), scenario())
+    assert r.fills == () and r.rolls == () and r.totals()["net"] == 0 and r.totals()["turnover"] == 0
+    assert all(d.positions == () and d.gross_exposure == 0 and d.margin is not None for d in r.days)
+    flat = X.run(m, [X.Decision("SYNA", 0, T0)], policy(), scenario())
+    assert flat.fills == () and flat.result_hash() == r.result_hash()
+
+
+def test_zero_trades_need_no_fx_or_liquidity():
+    m = world(roots=("SYNE",), eurusd=None)
+    r = X.run(m, [], policy(), scenario(roots=("SYNE",), fee_currency="EUR"))
+    assert r.totals()["net"] == 0
+
+
+# ------------------------------------------------------------------ no double counting
+def test_net_equals_cash_flows_at_fill_prices_minus_fees():
+    m = world(n=60)
+    decisions = [X.Decision("SYNA", 4, T0), X.Decision("SYNA", -3, at(date(2027, 1, 20))),
+                 X.Decision("SYNA", 2, at(date(2027, 3, 1)))]
+    sc = scenario(half_spread_ticks=0.5, slippage_ticks=1.25, impact_coefficient=0.2, margin_funding_bps_per_year=40)
+    r = X.run(m, decisions, policy(), sc)
+    assert r.rolls, "the plan should include a roll"
+    t = r.totals()
+    cash = sum(-f.filled * f.fill_price * m.specs[f.contract_id].point_value for f in r.fills)
+    last = r.days[-1]
+    cash += sum(q * m.settlement(c, last.day).price * m.specs[c].point_value for c, q in last.positions)
+    cash -= t["commission"] + t["exchange_fee"] + t["financing"]
+    assert t["net"] == pytest.approx(cash, rel=1e-12, abs=1e-6)
+    assert t["costs"] == pytest.approx(sum(d.costs for d in r.days))
+    for d in r.days:
+        assert d.net == pytest.approx(d.gross - d.costs, abs=1e-9)
+    assert t["execution_costs"] == pytest.approx(sum(f.execution_cost for f in r.fills))
+
+
+def test_gross_does_not_depend_on_costs():
+    m = world(n=60)
+    dec = [X.Decision("SYNA", 4, T0), X.Decision("SYNA", -3, at(date(2027, 1, 20)))]
+    free = X.run(m, dec, policy(), scenario(**ZERO))
+    dear = X.run(m, dec, policy(), scenario(half_spread_ticks=3, slippage_ticks=2, impact_coefficient=0.5,
+                                            commission_per_contract=5))
+    assert [d.gross for d in free.days] == pytest.approx([d.gross for d in dear.days])
+    assert free.totals()["costs"] == 0 and dear.totals()["costs"] > 0
+    assert dear.totals()["net"] == pytest.approx(free.totals()["net"] - dear.totals()["costs"])
+
+
+def test_turnover_counts_each_contract_traded_once():
+    m = world()
+    r = X.run(m, [X.Decision("SYNA", 5, T0)], policy(), scenario())
+    expected = sum(abs(f.filled) * f.reference_price * 1000 for f in r.fills)
+    assert r.totals()["turnover"] == pytest.approx(expected)
+    assert r.totals()["contracts_traded"] == 15                 # 5 opened, 5 closed and 5 opened at the roll
+
+
+# ------------------------------------------------------------------ reproducibility and sensitivity
+def scen_grid():
+    base = scenario("synthetic base", impact_coefficient=0.1)
+    return [base, base.scaled(0.0, "synthetic zero"), base.scaled(2.0, "synthetic x2"), base.scaled(4.0, "synthetic x4")]
+
+
+def test_scenario_outputs_are_reproducible_and_order_free():
+    m = world(n=60)
+    dec = [X.Decision("SYNA", 4, T0), X.Decision("SYNA", -2, at(date(2027, 2, 2)))]
+    a = X.sensitivity_table(X.run_scenarios(m, dec, policy(capital=1e6), scen_grid()))
+    b = X.sensitivity_table(X.run_scenarios(m, list(reversed(dec)), policy(capital=1e6), list(reversed(scen_grid()))))
+    assert a == b
+    assert [row["scenario"] for row in a] == sorted(row["scenario"] for row in a)
+    costs = {row["scenario"]: row["costs"] for row in a}
+    assert costs["synthetic zero"] == 0 < costs["synthetic base"]
+    assert costs["synthetic base"] < costs["synthetic x2"] < costs["synthetic x4"]
+    nets = {row["scenario"]: row["net"] for row in a}
+    assert nets["synthetic zero"] > nets["synthetic base"] > nets["synthetic x2"] > nets["synthetic x4"]
+    assert len({row["gross"] for row in a}) == 1
+    assert a[0]["net_fraction_of_capital"] == pytest.approx(a[0]["net"] / 1e6)
+
+
+def test_result_hash_is_stable_and_sensitive():
+    m = world()
+    r1 = X.run(m, [X.Decision("SYNA", 2, T0)], policy(), scenario())
+    r2 = X.run(world(), [X.Decision("SYNA", 2, T0)], policy(), scenario())
+    r3 = X.run(m, [X.Decision("SYNA", 3, T0)], policy(), scenario())
+    assert r1.result_hash() == r2.result_hash() != r3.result_hash()
+    assert re.fullmatch(r"[0-9a-f]{64}", r1.result_hash())
+
+
+def test_scenario_id_is_a_content_address():
+    a, b = scenario(), scenario()
+    assert a.scenario_id() == b.scenario_id() and a.scenario_id().startswith("AC-")
+    assert scenario(slippage_ticks=0.75).scenario_id() != a.scenario_id()
+    with pytest.raises(E.UnitError, match="unique"):
+        X.run_scenarios(world(), [], policy(), [a, b])
+
+
+# ------------------------------------------------------------------ no production pathway
+ALLOWED_IMPORTS = {"__future__", "bisect", "dataclasses", "datetime", "decimal", "hashlib", "json", "math", "re",
+                   "manhattan", "manhattan.spec"}
+
+
+def _sources():
+    return sorted(PKG.glob("*.py"))
+
+
+def test_the_package_imports_nothing_that_trades_reads_or_records():
+    for p in _sources():
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:                                   # relative: inside manhattan.execution
+                    continue
+                names = [node.module]
+            else:
+                continue
+            for n in names:
+                assert n in ALLOWED_IMPORTS, f"{p.name} imports {n}"
+        text = p.read_text(encoding="utf-8")
+        for bad in ("open(", "os.environ", "getenv", "subprocess", "socket", "urllib", "requests", "http.client",
+                    "Path(", "write_text", "write_bytes"):
+            assert bad not in text, f"{p.name} contains {bad!r}"
+
+
+def test_no_order_routing_or_broker_names_exist():
+    import manhattan.execution.account as A
+    import manhattan.execution.contracts as C
+    import manhattan.execution.costs as K
+    import manhattan.execution.market as M
+    names = {n.lower() for mod in (X, A, C, K, M, adjust) for n in dir(mod)}
+    for bad in ("submit", "send", "broker", "route", "connect", "credential", "token", "login", "place_order"):
+        assert not any(bad in n for n in names), bad
+
+
+def test_nothing_in_production_imports_the_execution_model():
+    pat = re.compile(r"manhattan\.execution|from manhattan import[^\n]*\bexecution\b")
+    hits = []
+    for p in ROOT.rglob("*.py"):
+        rel = p.relative_to(ROOT).as_posix()
+        if rel.startswith(("manhattan/execution/", "tests/test_manhattan_execution.py", ".git/")):
+            continue
+        if pat.search(p.read_text(encoding="utf-8", errors="replace")):
+            hits.append(rel)
+    for p in (ROOT / ".github/workflows").glob("*.yml"):
+        if "manhattan.execution" in p.read_text(encoding="utf-8") or "manhattan/execution" in p.read_text(encoding="utf-8"):
+            hits.append(p.name)
+    assert hits == []
+
+
+def test_running_the_model_changes_no_switch_and_writes_no_file(tmp_path, monkeypatch):
+    from manhattan import config as mconfig
+    before = hashlib.sha256(mconfig.CONFIG.read_bytes()).hexdigest()
+    monkeypatch.chdir(tmp_path)
+    X.sensitivity_table(X.run_scenarios(world(n=60), [X.Decision("SYNA", 3, T0)], policy(), scen_grid()))
+    assert list(tmp_path.iterdir()) == []
+    cfg = mconfig.load()
+    assert hashlib.sha256(mconfig.CONFIG.read_bytes()).hexdigest() == before
+    assert cfg["forward"]["real_money"] is False and cfg["claims"]["enabled"] is False
+    assert cfg["reserve"]["enabled"] is False
+
+
+
+def test_a_clipped_roll_moves_both_legs_together():
+    m = world(n=60)
+    # the new month can absorb 2 contracts a day (0.1 x 20): the old month is closed only as fast as that
+    lq = [liq(c, adv=(20.0 if c == "SYNAJ2027" else 1000.0)) for c in m.specs]
+    m2 = X.MarketData(calendar=m.calendar, contracts=list(m.specs.values()), settlements=list(m.settlements.values()),
+                      liquidity=lq)
+    r = X.run(m2, [X.Decision("SYNA", 5, T0)], policy(on_liquidity_shortfall="clip"), scenario())
+    roll_days = [d for d in r.days if any(c == "SYNAJ2027" for c, _ in d.positions)][:3]
+    assert [dict(d.positions) for d in roll_days] == [{"SYNAH2027": 3, "SYNAJ2027": 2},
+                                                      {"SYNAH2027": 1, "SYNAJ2027": 4}, {"SYNAJ2027": 5}]
+    assert all(sum(q for _, q in d.positions) == 5 for d in r.days[1:])        # exposure never doubles or lapses
+    assert [ev.contracts for ev in r.rolls[:3]] == [2, 2, 1]
+
+
+def test_hold_policy_waits_for_a_price_before_trading():
+    m = world(drop=(("SYNAH2027", date(2027, 1, 5)),))
+    r = X.run(m, [X.Decision("SYNA", 2, T0)], policy(on_missing_price="hold"), scenario())
+    assert r.unfilled[0] == Unfilled(date(2027, 1, 5), "SYNAH2027", 2, 0, "no settlement")
+    assert r.fills[0].day == date(2027, 1, 6) and r.fills[0].reason == "carry"
+    with pytest.raises(E.MissingInputError, match="cannot be filled"):
+        X.run(m, [X.Decision("SYNA", 2, T0)], policy(), scenario())
+
+
+def test_a_roll_waits_when_the_new_month_has_no_price():
+    roll_day = date(2027, 2, 15)
+    m = world(drop=(("SYNAJ2027", roll_day),))
+    r = X.run(m, [X.Decision("SYNA", 3, T0)], policy(on_missing_price="hold"), scenario())
+    k = [d.day for d in r.days].index(roll_day)
+    assert dict(r.days[k].positions) == {"SYNAH2027": 3}                       # still held, not dropped
+    assert dict(r.days[k + 1].positions) == {"SYNAJ2027": 3} and r.rolls[0].day == r.days[k + 1].day
+    with pytest.raises(E.MissingInputError, match="roll cannot be filled"):
+        X.run(m, [X.Decision("SYNA", 3, T0)], policy(), scenario())
+
+
+def test_the_unit_guard_on_the_repositorys_own_contract_table():
+    """Section 16 of the design: ledger/settlements.CONTRACTS gives ``multiplier`` as currency per price point, so
+    it maps with price_unit_value 1.0; reading the cents-quoted grains' multiplier as bushels is refused."""
+    from ledger.settlements import CONTRACTS
+    for prod, c in CONTRACTS.items():
+        kw = dict(contract_id=X.contract_id("SYNQ", "2027-03"), root="SYNQ", exchange="SYNX", delivery_month="2027-03",
+                  currency="USD", tick_size=c["tick"], tick_value=c["tick_value"], multiplier=float(c["multiplier"]),
+                  first_trade=date(2026, 1, 2), last_trade=date(2027, 2, 20), settlement_type="cash")
+        assert X.ContractSpec(price_unit_value=1.0, **kw).point_value == pytest.approx(c["multiplier"]), prod
+        if "cents" in c["unit"]:
+            with pytest.raises(E.UnitError, match="price unit"):
+                X.ContractSpec(price_unit_value=0.01, **kw)
+
+
+def test_a_fill_cannot_use_a_price_published_before_the_decision():
+    s = syna(4)
+    with pytest.raises(E.LookAheadError, match="already seen"):
+        X.fill_order(s, st(s.contract_id, D0, 50.0), 1, liq(s.contract_id), terms(), decided_at=published(D0))
