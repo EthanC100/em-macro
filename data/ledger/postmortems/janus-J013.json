@@ -1,0 +1,31 @@
+{
+ "book": "janus",
+ "id": "J013",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-18T23:12:23+00:00",
+ "postmortem": {
+  "thesis_right": "no",
+  "skill_or_luck": "unclear",
+  "what_happened": "Janus shorted the US 10-year (forecast 47% that yields fall) after the 12 Nov jump to about 5.10%, filling at 5.15% on 13 Nov. Over the next three sessions the 10y eased to 5.07% as equities fell to their lowest close since July ahead of and after Nvidia's results, and Brent gave back much of its November gains, even though Fed speakers (Waller) and the FOMC minutes released on 18 Nov stayed hawkish. The C08 forecast on 17 Nov moved to 51%, so the CLI flipped the position and closed it at the 18 Nov mark for about -0.05% of the account net.",
+  "assessment": "The thesis that hawkish Fed talk and oil would push long yields higher was wrong over this short window: with a December hike already fully priced, more hawkishness lifted the dollar and front-end yields but not the 10-year, which traded with risk sentiment and oil. The forecast was only three points from even, so the loss was small and mostly costs and a few basis points of noise; five sessions cannot judge a 20-day call, so skill or luck is unclear. The C08 mechanism worked as designed, but a one-to-two point swing in the forecast forced a flip and round-trip costs.",
+  "do_differently": "1) When a central-bank move is fully priced, do not count more hawkish rhetoric as evidence for higher long yields; weigh term premium, oil and equity risk instead. 2) Avoid entering right after a sharp one-day selloff (the base mark followed a 10bp jump), as The Opposition warned. 3) Keep forecasts near even stable from day to day unless new evidence arrives, since a flip across 50 costs a round trip for no edge.",
+  "sources": [
+   {
+    "title": "24/7 Wall St: Treasury yields top 5% (13 Nov 2026)",
+    "url": "https://247wallst.com/investing/2026/11/13/stock-market-today-nvidia-rebounds-after-huangs-exit-as-treasury-yields-top-5/"
+   },
+   {
+    "title": "Kitco/Reuters: Dollar at 19-month high as policymakers, data cement December rate hike bets",
+    "url": "https://www.kitco.com/news/off-the-wire/2026-11-18/dollar-19-month-high-policymakers-data-cement-december-rate-hike-bets"
+   },
+   {
+    "title": "Benzinga: Fed minutes, almost all officials see more hikes",
+    "url": "https://www.benzinga.com/markets/economic-data/26/11/63409950/fed-minutes-almost-all-officials-more-hikes-ai-debt"
+   },
+   {
+    "title": "Oilprice: Brent stuck near $93 as Hormuz tanker attacks offset Gulf export surge",
+    "url": "https://oilprice.com/Energy/Energy-General/Brent-Stuck-Near-93-as-Hormuz-Tanker-Attacks-Offset-Gulf-Export-Surge.html"
+   }
+  ]
+ }
+}
