@@ -1,15 +1,9 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "night-worker",
-  "acquired_at": "2026-11-18T23:36:02+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qcCeMH28YW9C3CHvv8",
-  "cap": 4,
-  "safe_mode": true
- },
+ "lock": null,
  "night": "2026-11-18",
- "runs_used": 0,
- "last_kind": null,
+ "runs_used": 1,
+ "last_kind": "worker",
  "chain_stopped": null,
  "log": [
   {
@@ -385,6 +379,21 @@
    "commits": [],
    "note": "dev merged with main (4b66feb, no auto-resolved files); tests 1986 pass after pip PyYAML (2 site_build failures were env: Debian PyYAML lacks RECORD); filed Q031 (todo daily-review line, approved p=78%); Q025 p=72%, Q026 p=85% Opposition logged and set done (fixes already on main/dev via Ethan's PRs #47/#46); 0 blocked; night-worker not fired (no API trigger, exit 6), hourly schedule picks it up",
    "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-18T23:36:02+08:00",
+   "finished_at": "2026-11-18T23:55:15+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q031"
+   ],
+   "commits": [],
+   "note": "PR #88 opened for Q031",
+   "session": "https://claude.ai/code/session_01Ayx8qcCeMH28YW9C3CHvv8",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
