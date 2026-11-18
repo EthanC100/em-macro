@@ -1316,3 +1316,47 @@ def test_fuzz_invariants(seed):
                     * (1.10 if m.specs[c].currency == "EUR" else 1.0) for c, q in last.positions)
         assert t["net"] == pytest.approx(cash - t["commission"] - t["exchange_fee"] - t["financing"],
                                          rel=1e-12, abs=1e-6), seed
+
+
+# ------------------------------------------------------------------ N3: risk-reducing trades before the roll
+def test_n3_a_target_cut_on_the_roll_day_reduces_before_it_rolls():
+    m = thin({H: 20.0})                                             # H: 2 contracts a day
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", 2, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    k = [d.day for d in r.days].index(ROLL_DAY)
+    path = [dict(r.days[k + i].positions) for i in range(3)]
+    assert path == [{H: 3}, {H: 1, J: 1}, {J: 2}]                  # was {H 3, J 2} (gross 5), {H 1, J 2}, {J 2}
+    assert [gross_contracts(p) for p in path] == [3, 2, 2]
+    assert [(f.contract_id, f.filled, f.reason, f.roll_quantity) for f in r.fills if f.day == ROLL_DAY] == [
+        (H, -2, "decision", 0)]
+    day2 = [(f.contract_id, f.filled, f.reason, f.roll_quantity) for f in r.fills if f.day == r.days[k + 1].day]
+    assert day2 == [(H, -2, "roll+carry", -1), (J, 1, "roll", 1)]
+    check_books(m, r)
+
+
+def test_n3_cutting_first_never_slows_the_exit_from_the_old_month():
+    for adv_h, adv_j in ((20.0, 1000.0), (20.0, 10.0), (1000.0, 10.0), (30.0, 20.0)):
+        m = thin({H: adv_h, J: adv_j})
+        r = X.run(m, [X.Decision("SYNA", 6, T0), X.Decision("SYNA", 2, ON_ROLL_DAY)],
+                  policy(on_liquidity_shortfall="clip"), scenario())
+        k = [d.day for d in r.days].index(ROLL_DAY)
+        cap_h, cap_j = int(adv_h * 0.1), int(adv_j * 0.1)
+        books = [dict(d.positions) for d in r.days[k - 1:k + 8]]
+        for before, after in zip(books, books[1:]):
+            h0, h1 = before.get(H, 0), after.get(H, 0)
+            cut_left = max(h0 + before.get(J, 0) - 2, 0)        # all of the cut is in H (J is below the target)
+            x = min(cut_left, cap_h)                            # cut first ...
+            y = min(h0 - cut_left, cap_j, cap_h - x)            # ... then the paired roll with what H has left
+            y_old = min(h0 - cut_left, cap_j, cap_h)            # roll-first (0.2) for comparison
+            x_old = min(cut_left, cap_h - y_old)
+            assert h0 - h1 == x + y >= x_old + y_old, (adv_h, adv_j, books)     # never a slower exit
+            assert sum(after.values()) >= 2 and gross_contracts(after) <= gross_contracts(before)
+        assert books[-1] == {J: 2}, books
+        check_books(m, r)
+
+
+def test_n3_an_increase_still_rolls_before_it_adds():
+    m = thin({J: 60.0})                                             # J: 6 a day
+    r = X.run(m, [X.Decision("SYNA", 5, T0), X.Decision("SYNA", 8, ON_ROLL_DAY)],
+              policy(on_liquidity_shortfall="clip"), scenario())
+    assert root_book(r, ROLL_DAY) == {J: 6}                         # roll 5 first, then 1 of the 3 extra

@@ -134,9 +134,22 @@ positions already on the target's side may still be rolled, exposure-neutrally. 
 trades are outright (`decision` / `carry`, `roll_quantity = 0`) and it records no `RollEvent`. So a root never holds
 both sides at a close, and its gross contracts never exceed the larger of the previous close's and the target's.
 
-The roll executes first and paired: it moves `n = min(|K|, what the new month can trade, what the old months can
-trade)` contracts, so under `clip` or a missing price the position neither lapses nor doubles; the net change then
-uses what capacity is left. Under `raise`, any shortfall or missing price on a needed leg stops the run. A decision
+**Order of a day's trades in a root** (each contract's capacity is shared in this order):
+
+1. closes of wrong-side positions (reversals, above);
+2. **risk-reducing** net trades: closing the part of a month's position the target no longer needs (S6 N3);
+3. the **roll**, paired: it moves `n = min(|K|, what the new month can trade, what the old months can trade)`
+   contracts, so under `clip` or a missing price the position neither lapses nor doubles;
+4. **risk-adding** net trades (an increase of the target in the month to hold), with what capacity is left.
+
+**Why reductions come before the roll (S6 N3, a deliberate change of allocation priority in 0.3).** A cut and a roll
+leg both use the old month's capacity. With the roll first, a cut on a roll day waited behind the roll: +5 cut to +2
+with the old month able to trade 2 a day ran gross 5, 3, 2 over three days (the roll opened 2 in the new month
+while 3 stayed open in the old). With the cut first it runs 3, 2, 2. The old month empties at the same speed (every
+contract it trades is either a cut or a roll leg, so its capacity is fully used either way; a test checks this),
+the costs are the same contracts at the same prices, and the roll stays paired. What changes: the new month is
+opened later, so for a few days more of the position can sit in the old month; it still must be flat before the
+delivery or expiry boundary, or the run stops. Increases are unaffected: the roll keeps priority over adding. Under `raise`, any shortfall or missing price on a needed leg stops the run. A decision
 on the roll day is therefore a roll plus a net change; examples at the roll from H to J holding +5:
 
 | new target | H trade | J trade | RollEvent |
@@ -359,4 +372,5 @@ would need (median recorded half-spreads and fees over 12 months); this package 
 | scenario and result hashes | defect | scenario id without the name; result hash covers the policy (section 15) |
 | back-adjusted series and point in time | limitation | `as_of` builds; documented as revised by later rolls (section 8) |
 | **N1** (re-review) a roll-day reversal opened the new side while the old side was still open (S6: +5 to −4 left H +3 / J −4, gross 7, under `clip`; H +5 / J −4, gross 9, under `hold`) | defect | reversals close first; partial closes allowed; nothing opened on the new side until the old side is flat; never a roll (section 7). Tests: `clip`, `hold`, missing old settlement, zero liquidity in either month, both directions, several days, mid-roll, off the roll day, conservation; 400 seeded fuzz cases |
+| **N3** (re-review) a cut on a roll day waited behind the roll for the old month's capacity | allocation priority changed (separate commit) | reductions before the roll, additions after it (section 7); tests show the gross path 3, 2, 2 instead of 5, 3, 2, an unchanged exit speed from the old month, and unchanged increases |
 | **N2** (re-review) a physical contract whose first notice falls after its last trading day could be carried past the last trading day | defect | `may_hold_into` enforces both boundaries; the restored last-trading-day test and the first-notice tests both pass (section 7) |

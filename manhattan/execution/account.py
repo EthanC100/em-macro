@@ -382,6 +382,15 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
                 # the old side is still open: nothing may be opened on the new side today; positions already on
                 # the target's side may still be rolled (exposure-neutral), but not increased
                 K, roll, net = _plan_root(keep, sum(keep.values()), primary if keep else None)
+            # risk-reducing trades next (S6 N3): closing what the target no longer needs comes before the roll,
+            # so a cut is never queued behind a roll for the same old month's capacity
+            net_done = {}
+            for c in sorted(net):
+                if c in keep and _sign(net[c]) == -_sign(keep[c]):
+                    x = min(abs(net[c]), abs(keep[c]), avail[c])
+                    if x:
+                        net_done[c] = _sign(net[c]) * x
+                        avail[c] -= x
             # the roll moves only as many contracts as both sides can trade: exposure neither lapses nor doubles
             n = 0
             if K:
@@ -397,11 +406,11 @@ def run(market: MarketData, decisions, policy: ExecutionPolicy, scenario: CostSc
             if n:
                 roll_done[primary] = _sign(K) * n
                 avail[primary] -= n
-            net_done = {}
+            # then the trades that add exposure, with what capacity is left
             for c in sorted(net):
-                x = min(abs(net[c]), avail[c])
-                if x:
-                    net_done[c] = _sign(net[c]) * x
+                x = min(abs(net[c]) - abs(net_done.get(c, 0)), avail[c])
+                if x > 0:
+                    net_done[c] = net_done.get(c, 0) + _sign(net[c]) * x
                     avail[c] -= x
             moved_from = []
             for c in legs:
