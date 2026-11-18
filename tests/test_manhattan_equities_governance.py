@@ -157,7 +157,7 @@ def test_s8_m9_interfaces_on_this_checkout_are_absent_or_match_never_mismatch():
     the equities adapters expect."""
     res = integration.check_all()
     assert all(v in ("absent", "structural_match") for v in res.values()), res
-    assert integration.PINNED == {"#86": "5aa643f", "#84": "1e86b33"}
+    assert integration.PINNED == {"#86": "bab1a4d", "#84": "e1882be"}
 
 
 # ----------------------------------------------------------------------------- research gate (S8 H3, H4)
@@ -303,7 +303,7 @@ def test_s8_r2_structure_is_not_runtime_integration():
     import types
     assert integration.runtime_integration() is False
     reqs = {name for _, name, _ in integration.SEMANTIC_REQUIREMENTS}
-    assert {"bound_computation", "verified_fence", "config_sha256", "designated_reserve", "schema_v3",
+    assert {"bound_computation", "verified_fence", "config_record", "designated_reserve", "schema_v3",
             "attempt_object", "issued"} <= reqs
     # #86 restricts its runner-only paths to access/runner/data: equities pins and calls neither
     assert not any(p.split(".")[-1] in ("run_bound", "forward_window") for _, p in integration.EXPECTED)
@@ -338,7 +338,7 @@ def test_s8_r3_priorities_follow_affordable_data_and_groups_are_declared_only():
 
 
 def test_equities_never_references_86s_private_access_paths():
-    """PR #86 (5aa643f) fails its own test if any module outside its allowlist references these names (as an
+    """PR #86 (bab1a4d; list first taken at 5aa643f) fails its own test if any module outside its allowlist references these names (as an
     identifier, attribute or exact string). The equities package must stay clean before and after #86 merges."""
     private = {"_open_window", "_SEAL_KEY", "_seal", "_GRANTS", "_fields", "_guard", "_Meter", "_meter", "_open_read",
                "_as_of", "_store", "_value", "_period", "diagnostic_window", "Window", "_CTX_KEY", "_PROOF_KEY", "_mac",
@@ -347,7 +347,10 @@ def test_equities_never_references_86s_private_access_paths():
                "_require_active", "_ended", "CompletionProof", "verify_completion", "store_seal_ok", "run_bound",
                "commit_results", "commit_failures", "commit_recovery", "forward_window", "record_evaluation",
                "_append", "_index", "_starts", "_terminated", "_superseded", "_designated", "_append_local",
-               "_commit", "_push", "_transact", "_apply", "_verify_entry", "_reset_to_remote"}
+               "_commit", "_push", "_transact", "_apply", "_verify_entry", "_reset_to_remote",
+               # added at #86 bab1a4d
+               "_COMPUTED", "_computing", "_may_read", "_FS_CACHE", "_check_forward_plan", "_tag", "_git_config",
+               "_fence_of", "_fence_key"}
     for p in PKG.glob("*.py"):
         refs = set()
         for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
@@ -362,3 +365,62 @@ def test_equities_never_references_86s_private_access_paths():
             elif isinstance(node, ast.alias):
                 refs.add(node.name.split(".")[-1])
         assert not (refs & private), f"{p.name} references {sorted(refs & private)}"
+
+
+# ----------------------------------------------------------------------------- S8 targeted re-review: N1
+def test_s8_n1_authorization_takes_config_and_the_old_shape_is_a_mismatch():
+    """S8 N1: at #86 bab1a4d ``authorization`` takes ``config`` ({sha256, commit} or None), not ``config_sha256``.
+    The checker must report the old shape as a mismatch (not be loosened to accept both)."""
+    import types
+
+    def new(kind, windows, *, caller, fence, freeze, holding, token, identity, config=None):
+        return {}
+
+    def old(kind, windows, *, caller, fence, freeze, holding, token, identity, config_sha256=None):
+        return {}
+    assert integration.check("manhattan.access", "authorization",
+                             module=types.SimpleNamespace(authorization=new)) == "structural_match"
+    assert integration.check("manhattan.access", "authorization",
+                             module=types.SimpleNamespace(authorization=old)).startswith("mismatch")
+
+
+def test_s8_n1_verified_fence_returns_the_capability_with_its_members():
+    import types
+
+    # this file, like manhattan/access.py, uses postponed annotations: these are recorded as strings, unevaluated
+    def returns_capability(commit, *, root=None, expected_sha256=None) -> VerifiedFence:      # noqa: F821
+        return None
+
+    def returns_pair(commit, *, root=None, expected_sha256=None) -> tuple[roles.Fence, str]:   # noqa: F821
+        return None
+    assert integration.check_return("manhattan.access", "verified_fence",
+                                    module=types.SimpleNamespace(verified_fence=returns_capability)) == "structural_match"
+    assert integration.check_return("manhattan.access", "verified_fence",
+                                    module=types.SimpleNamespace(verified_fence=returns_pair)).startswith("mismatch")
+
+    class VerifiedFence:
+        __slots__ = ("fence", "config_sha256", "commit")
+
+        def valid(self):
+            return True
+
+        def record(self):
+            return {}
+
+    class NoRecord:
+        __slots__ = ("fence", "config_sha256", "commit")
+
+        def valid(self):
+            return True
+    assert integration.check_class_api("manhattan.access", "VerifiedFence",
+                                       module=types.SimpleNamespace(VerifiedFence=VerifiedFence)) == "structural_match"
+    assert integration.check_class_api("manhattan.access", "VerifiedFence",
+                                       module=types.SimpleNamespace(VerifiedFence=NoRecord)).startswith("mismatch")
+
+
+def test_s8_n1_structure_still_never_claims_runtime_integration():
+    assert integration.runtime_integration() is False
+    reqs = {name: text for _, name, text in integration.SEMANTIC_REQUIREMENTS}
+    assert "VerifiedFence" in reqs["verified_fence"] and "config={sha256, commit}" in reqs["config_record"]
+    assert set(integration.check_all()) >= {"manhattan.access:authorization", "manhattan.access:verified_fence->return",
+                                            "manhattan.access:VerifiedFence.api"}

@@ -99,3 +99,12 @@ Cross-PR check for this round (scratch worktrees only; nothing merged into this 
 + #84 `1e86b33` with this package overlaid: 13 structural checks `structural_match`, `runtime_integration()` False,
 equities + #86 binding-access + #84 evidence + PIT tests **761 passed**; the same with #84's later head `e1882be`:
 **802 passed**.
+
+## 6. Targeted re-review (reviewed head `e6ae852`)
+
+S8's targeted re-review found every earlier defect fixed or failing closed, with one merge blocker (N1) and one
+activation blocker (N2).
+
+| id | finding | fix | test |
+|---|---|---|---|
+| N1 (merge blocker) | the checker pinned #86 `5aa643f`; at #86 `bab1a4d` `authorization` takes `config` (`{"sha256", "commit"}` or None) instead of `config_sha256`, and `verified_fence` returns a `VerifiedFence` capability; in a scratch merge with #86 the equities suite had 1 failure, 204 passes | pins refreshed to #86 `bab1a4d` and #84 `e1882be`; `authorization` pinned with `config`; new structural checks for `verified_fence`'s declared return (`VerifiedFence`) and the capability's public members (`fence`, `config_sha256`, `commit`, `valid()`, `record()`); semantic requirements rewritten (a forward attempt needs the `VerifiedFence`, a plain fence or hash is refused; `authorization` records `config=VerifiedFence.record()`; the reconciler re-verifies it). The checker was not loosened: the old `config_sha256` shape is a test-asserted mismatch. The local mirror of #86's private-name list was refreshed to `bab1a4d` (`_tag`, `_fence_key`, `_FS_CACHE`, ...); no equities module references any of them | `test_s8_n1_*`, `test_equities_never_references_86s_private_access_paths` |
