@@ -41,7 +41,7 @@ supported Manhattan APIs.** It is not a sandbox. Stated plainly:
 | A protected window reads only while its attempt is registered and active | every read re-checks the attempt (liveness on the shared read meter), the store version, and that the object is the one minted here, unchanged, in this process; copies, deep copies, pickling, `object.__setattr__` widening and fork inheritance are refused | the liveness check sees the attempt's own `Ledger`/`Store` object in this process; another process's terminal is enforced at write time (Store lock compare-and-swap; single-writer Ledger) and by reconciliation |
 | A terminal's `data_read` is true whenever a value was read | reads are counted before any value leaves, and refused after the terminal | as above |
 | Every protected statistical evaluation has a start, an identity and exactly one terminal | registration before exposure; protected completions need a one-use completion proof (Ledger) or a sealed, linkage-checked commit (Store) | a process that never runs Manhattan code leaves no record (ARCHITECTURE §8 item 3) |
-| A recorded result's computed values are those of the attempt's own computation | Ledger: the completion proof is minted by `engine.evaluate` for the result hash of the backtest it ran. Store (S7 N2): `access.run_bound` runs the strategy over the attempt's own window and binds the result; `completion` refuses any observation whose `net`, `gross`, `cost`, `turnover` or `exposure` differ from that result at its date, and any screening record whose `result_hash` or `summary` differ | **narrow:** an observation's provenance fields (`reconstructed`, and through it the weight) are derived by runner code from first-seen captures and are **not** bound to the capture records here; eligibility, registration status and weight are re-checked against the registration by the reconciler. Activation gate G-1 (section 18) |
+| A recorded result is the attempt's own computation of its registered specification | Ledger: the completion proof is minted by `engine.evaluate` for the result hash of the backtest it ran. Store (S7 N2, F2, G-1): `access.run_bound` recompiles the strategy from the attempt's registered specs, computes once over the attempt's own window (its windows are readable only inside that computation), and binds the result; `completion` requires the results to be exactly the forward plan recomputed from the Store's own captures and registration (values, `reconstructed`, eligibility, weight, no omission, no unjustified missed observation); the reconciler re-derives the provenance part from the capture records | an engine evaluation's strategy is still the caller's (no production caller: gate G-3); independent verification of F1, F2 and the omission checks is an activation blocker (section 19) |
 | Deletion or alteration of either store's history is detected | chains re-verified from immutable snapshots against a supplied anchor `{records, head}` | a supplied anchor is not independent custody (D-7, section 10) |
 
 The exploration role stays open (ARCHITECTURE §6.1): exploration windows need no registration and exploratory reads
@@ -250,7 +250,7 @@ round (after the S7 audit) are marked **decided**.
 | D-4 | Disposition of legacy records: may certification start at an accounting epoch? | open: readable, counted, never certified; their presence keeps `access_reconciled` false |
 | D-5 | Must protected completions require a registered attempt and a completion path that establishes authorization and accounting? | **decided (yes)**: `Ledger.record_evaluation` writes a reserve/forward completion only with the attempt's one-use completion proof (minted by `engine.evaluate` after a read); `Ledger.append` refuses lifecycle types; `Store.write` refuses evidence and attempt types unless sealed by `manhattan.access`, whose results commit checks linkage. Historical records stay readable and are never certified |
 | D-6 | One designated reserve evaluation per (batch, domain) | **decided (enforce conservatively)**: a reserve attempt is always the designated evaluation of its (batch, domain); non-designated reserve attempts are refused at registration (S7 N1). A second reserve registration of any kind for a (batch, domain) is refused unless it retries (`supersedes`) the one unfinished earlier attempt. The reconciler reports any non-designated reserve attempt (`non_designated_reserve_attempt`) and any second reserve attempt or completion (`designated_reserve_reused`), forged histories included |
-| D-12 | Configuration of the hash-locked runner | **decided (adopt a hash-pinned PyYAML)**: `pyyaml==6.0.3` is added to `requirements-manhattan-runner.lock` with the SHA-256 of its CPython 3.12 manylinux wheel; the hash was checked against PyPI's published digest and against two independent downloads. The fence comes only from `config/manhattan.yaml`, read with `yaml.safe_load` and verified against its pinned identity: byte-identical to the file at the attempt's registered commit, and to an explicit SHA-256 pin when one is given (`--config-sha256` / `MANHATTAN_CONFIG_SHA256`). A caller can no longer inject a fence into the runner. A missing, unparseable or mismatched configuration fails closed before any attempt is registered. Forward attempts record the configuration's SHA-256, which the reconciler requires |
+| D-12 | Configuration of the hash-locked runner | **decided (adopt a hash-pinned PyYAML)**: `pyyaml==6.0.3` is added to `requirements-manhattan-runner.lock` with the SHA-256 of its CPython 3.12 manylinux wheel; the hash was checked against PyPI's published digest and against two independent downloads. The fence comes only from `config/manhattan.yaml`, read with `yaml.safe_load` and verified against its pinned identity: byte-identical to the file at the attempt's registered commit, and to an explicit SHA-256 pin when one is given (`--config-sha256` / `MANHATTAN_CONFIG_SHA256`). A caller cannot inject a fence into the runner. A missing, unparseable or mismatched configuration fails closed before any attempt is registered. **A syntactically valid configuration hash is not proof that a fence was verified** (S7 F1): forward registration requires the `VerifiedFence` capability that only `verified_fence` produces, bound to the fence, the configuration digest and the commit (which must be the attempt's); the reconciler re-verifies every recorded claim against the configuration at that commit and counts only those that re-verify |
 | D-13 | Designation consumption | **decided (never released)**: a designated reserve attempt consumes its (batch, domain) designation however it ends, **even if it failed or was aborted before any protected read**; the designation is never released or recycled |
 | D-7 | Custody of anchors | **decided (no false certification)**: an anchor held by the same writing credential is not independent. No independent custody is configured, so the reconciler reports `checked_against_supplied_anchor` only and never `independently_certified`. No external service is implemented |
 
@@ -365,10 +365,11 @@ Limitations (also returned in every report's `limitations`):
    compare-and-swap; the Ledger is single-writer) and by reconciliation, not on the in-memory read.
 10. Registration records (`registration`, from the merge time and witness) are written by the existing registration
     path; this phase checks attempts against them but does not re-authenticate them.
-11. Store computation binding is narrow (S7 N2): computed values are bound to the attempt's own computation;
-    the `reconstructed` provenance flag is not bound to the capture records, and a selectively omitted observation
-    is not detected in the run (the next run records it, since its key is still absent). Gate G-1.
-12. A missing `config_sha256` (a caller-supplied fence; engine attempts in tests) is recorded as such. No
+11. The Store computation binding (S7 N2, F2, G-1) rests on the in-process `access` path and on the reconciler's
+    re-derivation from capture records and the clone's raw files; a credential holder who also rewrites the capture
+    records and raw files consistently is outside it (section 1). Independent verification is an activation blocker
+    (section 19).
+12. A missing configuration claim (a caller-supplied fence; engine attempts in tests) is recorded as such. No
     production engine reserve or forward caller exists; gate G-3 covers one.
 
 ## 15. Remaining integration decisions
@@ -521,9 +522,44 @@ because they add coverage rather than reproduce a defect.
 
 | gate | before forward or reserve results may count as evidence |
 |---|---|
-| G-1 | Bind the observations' `reconstructed` provenance to the Store's capture records. For example, the reconciler could re-derive first-seen availability from the Store clone's captures and raw files. Until then, forward observations must not count as evidence (S7 N2). |
+| G-1 | Bind the observations' `reconstructed` provenance to the Store's capture records. **Implemented in section 19** (write-time plan recomputation; reconciler re-derivation). It stays an activation blocker until independently verified: until then no forward observation may count as evidence. |
 | G-2 | Independent custody of anchors (D-7). Without it, nothing is independently certified. |
 | G-3 | Any production engine reserve or forward caller registers with the verified configuration (`fence=None`). Caller-supplied fences are reported as `protected_attempts_with_unpinned_fence`. |
 | G-4 | A workflow adopts the candidate lock (owner). The live workflow is unchanged and installs `requirements.txt`. |
 | G-5 | Reserve stays disabled (`config/manhattan.yaml`). No reserve workflow is authorized, and this PR enables none. |
 | G-6 | D-1: the counting unit of any multiple-testing denominator. `independent_statistical_tests` stays `null`. |
+
+## 19. Final hardening after the S7 approval (head `5aa643f`)
+
+S7 approved PR #86 as dormant infrastructure with no merge blocker, and reported two public-API weaknesses (F1, F2)
+to close before evidence is activated. G-1 was to be addressed if feasible. Each regression test below fails on
+`5aa643f` (12 of 12, run in a scratch worktree) and passes here.
+
+| item | weakness | fix | tests |
+|---|---|---|---|
+| **F1** verified fence identity | `register_store_attempts` accepted any `Fence` and any 64-hex hash; an invented fence with `config_sha256 = "a"*64` registered and reconciled | `access.VerifiedFence`: the only capability forward registration accepts, produced only by `verified_fence`, binding the fence, the configuration digest and the verified commit (an in-process MAC; not protection against hostile code). The commit must be the attempt's code-identity commit. The caller-supplied hash path is removed. The authorization records `config: {sha256, commit}`, and the reconciler re-verifies every claim independently (configuration at that commit hashes to it; its fence is the recorded fence; the commit is the attempt's); a claim that does not re-verify is `configuration_not_verified` | `test_an_invented_fence_cannot_register_a_forward_attempt`, `test_an_unverified_configuration_claim_never_reconciles` (invented hash, other fence, other commit) |
+| **F2** one strategy per attempt | `run_bound` accepted any strategy and a second call replaced the first result | `run_bound` takes the compiled executable, re-links and recompiles it from its four specs (`compiler.from_specs`) and requires the attempt's registered identity (spec hash, executable, variant, hypothesis, family IDs); the strategy is the registered one, never the caller's. One computation per attempt: a second call is refused even when identical, and the computation is recorded as begun before it runs, so a part-way failure counts. An operational attempt's windows are readable only inside that computation, so no other strategy can read them and no variant can be tried and discarded under the attempt | `test_one_computation_of_the_registered_specification` (reversed signal via the family sign, another prediction's executable, a doctored compiled object, repeated calls, a failure after the read began), the window-lifetime and fabrication tests |
+| **G-1** reconstructed observations and selective omission | flipping `reconstructed` True→False gave weight 1 and reconciled; an expected observation could be omitted or replaced by a `missed_observation` | the plan is one pure function (`manhattan/ops/forward.py`, the runner's rules unchanged). `completion` recomputes it from the Store's own first-seen captures (hash-checked raw files) and the registration in force, after checking they reproduce the attempt's data identity, and requires an exact match. The reconciler rebuilds first-seen values from the capture records before each forward attempt, checks the data identity, and reports `reconstructed_flag_mismatch`, `observation_set_mismatch` (omission, unjustified or extra missed) and `data_identity_mismatch` | `test_the_forward_plan_is_recomputed_at_completion` (flip, omission, unjustified missed, extra missed), `test_forged_forward_provenance_never_reconciles` (flip, omission, unjustified missed) |
+
+**Before and after** (S7's counterexamples):
+
+| counterexample | before (`5aa643f`) | after |
+|---|---|---|
+| invented `Fence` with `config_sha256 = "a"*64` | registers, reconciles true | refused: no `VerifiedFence` capability; forged equivalents are `configuration_not_verified` |
+| a second `run_bound` with a reversed signal | replaces the first result | refused: the strategy is compiled from the registered specs (a reversed signal does not compile against them), and a second computation is refused even when identical |
+| `reconstructed` flipped True→False (weight 1) | accepted, no related violation | refused at completion; a forged equivalent is `reconstructed_flag_mismatch` |
+| an expected observation omitted | accepted | refused at completion; a forged equivalent is `observation_set_mismatch` |
+
+**Activation blockers.** These are explicit and none is lifted here. Until each is independently verified, no
+forward or reserve result may count as evidence.
+
+| blocker | what must be independently verified or decided |
+|---|---|
+| B-1 (F1) | that every forward attempt's configuration claim re-verifies, and that the configuration custody (the commit's provenance on main) is what it claims |
+| B-2 (F2) | that one computation of the registered specification is the only path to a forward or screening result, and that engine evaluations (whose strategy is still the caller's) have no production caller (G-3) |
+| B-3 (G-1) | that provenance and the observation set (no selective omission, no unjustified missed observation) re-derive from authoritative capture records under independent review |
+| G-2 to G-6 | section 18: independent anchor custody, the verified configuration for engine callers, the lock's adoption, the reserve kept disabled, and the multiple-testing denominator (D-1) |
+
+This infrastructure is not a sandbox (section 1). Its guarantees hold through the supported Manhattan APIs and are
+checked from the persisted records; they do not hold against hostile code in the process or against a holder of the
+stores' credentials who rewrites records, captures and raw files consistently.

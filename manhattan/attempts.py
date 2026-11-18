@@ -157,6 +157,10 @@ class _Audit:
         self.designated: dict[str, int] = {}
         self.designated_chains: dict[tuple, int] = {}
         self.unpinned = 0
+        self.config_verified = 0
+        self.config_cache: dict = {}
+        self.config_root = None
+        self.raw_dir = None
 
     def v(self, code: str, store: str, seq) -> None:
         self.violations.append({"code": code, "store": store, "seq": seq})
@@ -191,8 +195,9 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                     if p.get("kind") != "engine_evaluation":
                         raise A.AccessError("kind")
                     A.check_recorded("engine_evaluation", ident, p.get("authorization"))
-                    if ident["role"] in PROTECTED and p["authorization"]["config_sha256"] is None:
+                    if ident["role"] in PROTECTED and p["authorization"]["config"] is None:
                         audit.unpinned += 1                    # a caller-supplied fence (gate G-3)
+                    _verify_config(p["authorization"], ident, "ledger", seq, audit)
                 except (KeyError, L.LedgerError, PermissionError):
                     audit.v("invalid_identity_or_authorization", "ledger", seq)
             elif "attempt_schema" in p:
@@ -309,6 +314,7 @@ def _store_pass(records: list, audit: _Audit) -> set:
     epoch = by_key.get(("accounting_epoch", str(L.ATTEMPT_SCHEMA)))
     epoch_seq = epoch["seq"] if epoch else None
     starts, terminal, retried, linked = {}, {}, set(), {}
+    completed_forward: list = []
     active_by_identity: dict[bytes, str] = {}
     for r in records:
         seq, kind, p, key = r["seq"], r["type"], r["payload"], tuple(r["key"])
@@ -323,6 +329,7 @@ def _store_pass(records: list, audit: _Audit) -> set:
                     raise A.AccessError("schema")
                 L.validate_attempt_identity(p["identity"])
                 A.check_recorded(p["kind"], p["identity"], p["authorization"])
+                _verify_config(p["authorization"], p["identity"], "store", seq, audit)
                 # The run is bound into the attempt ID. The record's provenance may name a later run instead:
                 # the one whose journal recovery finished this write.
                 run = p["run"]
@@ -381,8 +388,11 @@ def _store_pass(records: list, audit: _Audit) -> set:
             if status == "completed":
                 writer = {"run_id": r["provenance"]["run_id"], "run_attempt": r["provenance"]["run_attempt"]}
                 _check_links(p, aid, sseq, sp, seq, writer, by_key, linked, audit)
+                if sp["kind"] == "forward_observation":
+                    completed_forward.append((sseq, sp, p["results"], seq))
             if audit.scoped(sp["identity"]):
                 audit.ended(status, p["data_read"])
+    _check_forward_provenance(records, by_key, completed_forward, audit)
     # results: unregistered protected evaluations and evidential weight (canonical function)
     from .ops import store as ST
     for r in records:
@@ -451,6 +461,85 @@ def _registration_matches(p: dict, seq: int, by_key: dict) -> bool:
     return False
 
 
+def _verify_config(auth: dict, identity: dict, store: str, seq: int, audit) -> None:
+    """S7 F1: a recorded configuration claim counts only if it re-verifies here, independently of the writer."""
+    from . import access as A
+    if auth.get("config") is None:
+        return
+    try:
+        A.verify_recorded_config(auth, identity, audit.config_root, audit.config_cache)
+        audit.config_verified += 1
+    except PermissionError:
+        audit.v("configuration_not_verified", store, seq)
+
+
+class _CaptureView:
+    """The capture records of a chain prefix and the clone's raw files, as ``data.first_seen`` reads a Store."""
+
+    def __init__(self, captures: list, raw_dir):
+        self._caps, self._raw = captures, Path(raw_dir)
+
+    def of_type(self, type_: str) -> list:
+        return list(self._caps) if type_ == "capture" else []
+
+    def raw_path(self, sha: str) -> Path:
+        return self._raw / f"{sha}.bin"
+
+
+def _check_forward_provenance(records: list, by_key: dict, completed: list, audit) -> None:
+    """S7 G-1. For every completed forward attempt: rebuild first-seen values from the capture records written
+    before the attempt started (and the clone's hash-checked raw files); they must reproduce the attempt's data
+    identity; then the linked observations and missed observations must be exactly the expected sets, and every
+    observation's ``reconstructed`` flag the one the captures give (``forward.reconstructed``)."""
+    from datetime import date as _date
+    from .ops import compiler as CP
+    from .ops import data as D
+    from .ops import forward as FW
+    caps = [r for r in records if r["type"] == "capture"]
+    cache: dict = {}
+    for sseq, sp, links, tseq in completed:
+        subj = sp["subject"]
+        sources = tuple(subj["sources"].split(","))
+        n = sum(1 for r in caps if r["seq"] < sseq)
+        if (n, sources) not in cache:
+            try:
+                if audit.raw_dir is None:
+                    raise FileNotFoundError("no raw directory")
+                fs = D.first_seen(_CaptureView(caps[:n], audit.raw_dir), sources)
+                cache[(n, sources)] = (fs, fs.pit_store().data_hash())
+            except Exception:                                # noqa: BLE001 - missing or altered evidence
+                cache[(n, sources)] = None
+        if cache[(n, sources)] is None:
+            audit.v("capture_evidence_unavailable", "store", sseq)
+            continue
+        fs, data_hash = cache[(n, sources)]
+        if data_hash != sp["identity"]["data_hash"]:
+            audit.v("data_identity_mismatch", "store", sseq)
+            continue
+        reg = next((by_key[k]["payload"] for k in (("registration", subj["prediction"], "witnessed"),
+                                                   ("registration", subj["prediction"], "provisional"))
+                    if k in by_key), None)
+        universe = CP.UNIVERSES.get(reg.get("universe")) if reg else None
+        if universe is None:
+            audit.v("registration_mismatch", "store", sseq)
+            continue
+        ev = next(w for w in sp["authorization"]["windows"] if w["purpose"] == "evaluation")
+        asof = _date.fromisoformat(subj["asof"])
+        obs, missed = FW.expected(fs, universe, _date.fromisoformat(ev["start"]), asof)
+        got = {kind: {link["key"][2] for link in links if link.get("type") == kind}
+               for kind in ("observation", "missed_observation")}
+        if got["observation"] != {d.isoformat() for d in obs} or \
+                got["missed_observation"] != {d.isoformat() for d in missed}:
+            audit.v("observation_set_mismatch", "store", tseq)       # an omission or an unjustified missed
+        for link in links:
+            rec = by_key.get(tuple(link["key"]))
+            if link.get("type") != "observation" or rec is None:
+                continue
+            want = FW.reconstructed(fs, universe, _date.fromisoformat(rec["payload"]["date"]), asof)
+            if rec["payload"].get("reconstructed") is not want:
+                audit.v("reconstructed_flag_mismatch", "store", rec["seq"])
+
+
 def _check_links(p, aid, sseq, sp, tseq, writer, by_key, linked, audit) -> None:
     """A ``new`` result was written by the same writer as its terminal (one journal entry: the attempt's own run,
     or the later run whose journal recovery finished that entry), after the start and before the terminal; every
@@ -491,19 +580,24 @@ def _check_links(p, aid, sseq, sp, tseq, writer, by_key, linked, audit) -> None:
 
 
 def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_anchor=None,
-              batch: str | None = None) -> dict:
+              batch: str | None = None, config_root=None) -> dict:
     """Audit either or both authoritative stores up to their anchors (BINDING_ACCOUNTING.md section 9).
 
     ``ledger_path``: the Manhattan ledger file. ``store_chain``: the operational Store's ``chain.jsonl`` (a clone's
     file; never the cached ``Store`` object). Each needs its anchor ``{"records": n, "head": hash}``, retained
     outside the store (the caller's responsibility; D-7). ``batch`` restricts attempt counts and attempt-level
-    violations to one batch; unattributable records are always reported."""
+    violations to one batch; unattributable records are always reported. ``config_root``: the em-macro
+    repository in which recorded configuration claims are re-verified (``git show <commit>:config/...``; this
+    checkout by default). Forward provenance is re-derived from the capture records and the clone's ``raw/``
+    files next to ``store_chain``."""
     from .ops import store as ST
     if ledger_path is None and store_chain is None:
         raise ReconciliationError("reconciliation needs at least one authoritative store")
     if batch is not None and (not isinstance(batch, str) or not batch):
         raise ReconciliationError("batch is a batch ID")
     audit = _Audit(batch)
+    audit.config_root = config_root
+    audit.raw_dir = Path(store_chain).parent / "raw" if store_chain is not None else None
     covered, boundary, ids = [], {}, {}
     if ledger_path is not None:
         anchor = _anchor(ledger_anchor, "ledger")
@@ -543,6 +637,7 @@ def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_a
             "repeated_observations": audit.observations, "independent_statistical_tests": None,
             "legacy": audit.legacy, "designated_reserve_completions": audit.designated,
             "protected_attempts_with_unpinned_fence": audit.unpinned,
+            "configuration_claims_verified": audit.config_verified,
             "violations": audit.violations,
             "access_reconciled": reconciled,
             "limitations": list(LIMITATIONS)}

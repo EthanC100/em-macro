@@ -204,6 +204,10 @@ ALLOWED = {
     "verify_completion": {ACCESS, LEDGER}, "store_seal_ok": {ACCESS, STORE},
     "run_bound": {ACCESS, RUNNER}, "commit_results": {ACCESS, RUNNER}, "commit_failures": {ACCESS, RUNNER},
     "commit_recovery": {ACCESS, RUNNER}, "forward_window": {"manhattan/ops/data.py", RUNNER, ACCESS},
+    # S7 final hardening: the verified-fence capability, the one computation, the recomputed forward plan
+    "_COMPUTED": {ACCESS}, "_computing": {ACCESS}, "_may_read": {ACCESS}, "_FS_CACHE": {ACCESS},
+    "_check_forward_plan": {ACCESS}, "_tag": {ACCESS}, "_git_config": {ACCESS}, "_fence_of": {ACCESS},
+    "_fence_key": {ACCESS},
     # the Ledger's raw writer and lifecycle indexes
     "record_evaluation": {LEDGER, EVALUATE}, "_append": {LEDGER}, "_index": {LEDGER}, "_starts": {LEDGER},
     "_terminated": {LEDGER}, "_superseded": {LEDGER}, "_designated": {LEDGER},
@@ -250,6 +254,9 @@ def test_private_access_paths_are_used_only_where_allowed():
     ("from manhattan.access import CompletionProof", "CompletionProof"),
     ("def f(ctx):\n    return ctx._completion_proof('c' * 64)", "_completion_proof"),
     ("x = {'name': '_BOUND'}", "_BOUND"),
+    ("from manhattan import access\naccess._COMPUTED.discard('a')", "_COMPUTED"),
+    ("def f(ctx):\n    ctx._computing = True", "_computing"),
+    ("def f(vf):\n    object.__setattr__(vf, '_tag', 'x')", "_tag"),
 ])
 def test_the_scan_detects_prohibited_references(snippet, name):
     """N3: a module outside the allowlist that reaches a private access path is flagged."""
@@ -664,11 +671,12 @@ def test_the_runner_fence_is_verified_against_its_pinned_identity(tmp_path, case
     cfg = R.RunConfig(ledger_dir=tmp_path, remote="", batches_dir=tmp_path, asof=date(2026, 1, 2), commit=F.HEAD)
     assert not hasattr(cfg, "fence")
     if case in ("verified", "pinned"):
-        fence, sha = R.run_fence(cfg)
-        assert fence == roles.Fence.from_config(__import__("manhattan.config", fromlist=["load"]).load())
+        vf = R.run_fence(cfg)
+        assert isinstance(vf, access.VerifiedFence) and vf.valid() and vf.commit == F.HEAD
+        assert vf.fence == roles.Fence.from_config(__import__("manhattan.config", fromlist=["load"]).load())
         if case == "pinned":
-            cfg.config_sha256 = sha
-            assert R.run_fence(cfg) == (fence, sha)
+            cfg.config_sha256 = vf.config_sha256
+            assert R.run_fence(cfg).record() == vf.record()
         return
     root = ROOT
     if case == "wrong_pin":

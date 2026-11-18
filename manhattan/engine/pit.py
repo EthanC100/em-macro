@@ -342,7 +342,8 @@ class Window:
                 raise PitError("the store changed after this window was authorized (data identity)")
             alive = self._meter.alive
             if alive is None or not alive():
-                raise AccessError("the window's attempt is not registered and active (ended, failed or superseded)")
+                raise AccessError("the window's attempt is not registered and active (ended, failed or superseded), "
+                                  "or the read is outside its one computation")
 
     def as_of(self, series: str, t, n: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         """(periods, values) of ``series`` as known at the close of day ``t``: for each period in the window, the

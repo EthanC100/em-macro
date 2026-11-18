@@ -40,10 +40,11 @@ class LockedRunnerProbe(unittest.TestCase):
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
                               check=True, timeout=30).stdout.strip()
         probe = R.RunConfig(ledger_dir=ROOT, remote="", batches_dir=ROOT, asof=date(2005, 1, 7), commit=head)
-        fence, sha = R.run_fence(probe)
-        self.assertEqual(len(sha), 64)
-        probe.config_sha256 = sha
-        self.assertEqual(R.run_fence(probe), (fence, sha))
+        verified = R.run_fence(probe)
+        self.assertTrue(isinstance(verified, A.VerifiedFence) and verified.valid())
+        self.assertEqual(len(verified.config_sha256), 64)
+        probe.config_sha256 = verified.config_sha256
+        self.assertEqual(R.run_fence(probe).record(), verified.record())
         probe.config_sha256 = "f" * 64
         with self.assertRaises(A.AccessError):
             R.run_fence(probe)

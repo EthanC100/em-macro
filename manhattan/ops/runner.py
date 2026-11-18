@@ -45,6 +45,7 @@ from manhattan.engine import evaluate as EV
 from . import blinding as B
 from . import compiler as CP
 from . import data as D
+from . import forward as FW
 from . import promotion
 from . import store as ST
 from . import timing as TM
@@ -72,13 +73,14 @@ class RunConfig:
     config_sha256: str | None = None    # optional explicit pin of config/manhattan.yaml (D-12)
 
 
-def run_fence(cfg: RunConfig) -> tuple[roles.Fence, str]:
+def run_fence(cfg: RunConfig) -> A.VerifiedFence:
     """The fence for forward-observation attempts, from ``config/manhattan.yaml`` verified against its pinned
     identity: byte-identical to the file at the run's commit (the attempts' registered code identity) and, if
     ``cfg.config_sha256`` is set, hashing to it; parsed with ``yaml.safe_load`` (owner decision D-12). A caller
     cannot inject a fence. PyYAML is imported only here, so the runner module imports without it (S7 H1); the
     hash-locked runner environment now pins PyYAML. Fails closed (``AccessError``) when the configuration is
-    unavailable or mismatched, before any attempt is registered."""
+    unavailable or mismatched, before any attempt is registered. Returns the ``access.VerifiedFence`` capability
+    that forward registration requires (S7 F1)."""
     return A.verified_fence(cfg.commit, expected_sha256=cfg.config_sha256)
 
 
@@ -157,7 +159,7 @@ def code_identity(commit: str) -> dict:
 
 
 def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, version: dict,
-                    config_sha256: str | None = None) -> A.StoreAttempt:
+                    sources: tuple) -> A.StoreAttempt:
     """The declaration of one night's forward observation of one prediction (an accounting unit, not a test:
     BINDING_ACCOUNTING.md section 2). Evaluation window: first observation to ``asof`` + 7 days; signal warm-up:
     the executable's warm-up days before it."""
@@ -175,22 +177,19 @@ def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, v
                                                    "frequency": "daily"},
                 "code_version": version}
     return A.StoreAttempt("forward_observation", identity, tuple(windows),
-                          {"prediction": reg["prediction"], "asof": asof.isoformat()},
-                          freeze=date.fromisoformat(reg["registration_utc"][:10]), config_sha256=config_sha256)
+                          {"prediction": reg["prediction"], "asof": asof.isoformat(),
+                           "sources": ",".join(sorted(sources))},
+                          freeze=date.fromisoformat(reg["registration_utc"][:10]))
 
 
 def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: CP.Executable,
                         asof: date, *, attempt: A.AttemptContext) -> tuple[list[ST.Intent], dict]:
     """Observation (or missed-observation) intents for one prediction up to ``asof``, read through the forward
-    window of its registered, active forward-observation ``attempt`` (Phase 4B)."""
-    cal = TM.calendar(exe.universe.calendar)
-    start = date.fromisoformat(reg["first_observation"])
-    series = [p for _, p in exe.universe.instruments]
-    srcs = [D.SOURCES[s] for s in exe.universe.sources]
-    lag = max(s.lag_days for s in srcs)
-    grace = max(s.grace_days for s in srcs)
-    monitoring = min(fs.monitoring_start.get(s.id, asof) for s in srcs)
+    window of its registered, active forward-observation ``attempt``. The executable's strategy is compiled from
+    its registered specs and computed once (``access.run_bound``); the intents are ``forward.plan``, which the
+    completion recomputes from the Store's own captures and registration (S7 F2, G-1)."""
     counts = {"new": 0, "reconstructed": 0, "missed": 0, "expected": 0}
+    start = date.fromisoformat(reg["first_observation"])
     if asof <= start:
         return [], counts
     # the window ends a settlement lag after asof, so the marks of asof itself (seen after its close) are in it;
@@ -199,34 +198,15 @@ def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: 
     if (window.start, window.end, window.signal_start) != (start - timedelta(days=exe.warmup_days),
                                                            asof + timedelta(days=7), start):
         raise A.AccessError("the attempt did not declare this prediction's forward window")
-    res = A.run_bound(attempt, window, exe.strategy())          # S7 N2: the completion accepts only these values
-    at = {str(d): i for i, d in enumerate(res.dates.astype("datetime64[D]"))}
-    out = []
-    for d in cal.sessions(start + timedelta(days=1), asof):
-        ds = d.isoformat()
-        counts["expected"] += 1
-        if fs.complete(series, ds) and ds in at:
-            i = at[ds]
-            base = cal.prev_session(d).isoformat()             # the return runs from the previous close
-            recon = fs.reconstructed(series, ds) or (fs.complete(series, base) and fs.reconstructed(series, base)) \
-                or d < monitoring
-            weight = L.forward_observation_weight(eligible=bool(reg["eligible"]),
-                                                  registration_weight=reg["evidential_weight"],
-                                                  reconstructed=bool(recon), channel=reg.get("channel", "blind"))
-            payload = {"prediction": reg["prediction"], "executable": exe.id, "date": ds,
-                       **A.observation_values(res, i),
-                       "eligible": bool(reg["eligible"]), "reconstructed": bool(recon), "evidential_weight": weight,
-                       "registration_status": reg["registration_status"], "role": "forward"}
-            if ledger.get(("observation", reg["prediction"], ds)) is None:
+    res = A.run_bound(attempt, window, exe)
+    out, counts["expected"] = FW.plan(fs, reg, exe, asof, res)
+    for it in out:
+        if ledger.get(it.key) is None:
+            if it.type == "observation":
                 counts["new"] += 1
-                counts["reconstructed"] += int(recon)
-            out.append(ST.Intent("observation", ("observation", reg["prediction"], ds), payload,
-                                 source=",".join(exe.universe.sources)))
-        elif d + timedelta(days=lag + grace) < asof:
-            if ledger.get(("missed_observation", reg["prediction"], ds)) is None:
+                counts["reconstructed"] += int(it.payload["reconstructed"])
+            else:
                 counts["missed"] += 1
-            out.append(ST.Intent("missed_observation", ("missed_observation", reg["prediction"], ds),
-                                 {"prediction": reg["prediction"], "date": ds, "reason": "data_not_available_by_grace"}))
     return out, counts
 
 
@@ -343,10 +323,9 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
             if plans:
                 # Registration before exposure: every start is durable on the remote before any window opens.
                 version, data_hash = code_identity(cfg.commit), pit.data_hash()
-                fence, config_sha = run_fence(cfg)
                 ctxs = A.register_store_attempts(
-                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version, config_sha) for reg, x in plans],
-                    fence=fence, label=f"forward attempts {cfg.asof}", require_lock=True)
+                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version, cfg.sources) for reg, x in plans],
+                    fence=run_fence(cfg), label=f"forward attempts {cfg.asof}", require_lock=True)
             health["attempts_registered"] = len(ctxs)
             intents, terminals = [], []
             try:
@@ -545,11 +524,11 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
     try:
         for x, ctx in zip(exes, ctxs):
             w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence, attempt=ctx).window(start, end)
-            res = A.run_bound(ctx, w, x.strategy())             # S7 N2: the completion accepts only these values
+            res = A.run_bound(ctx, w, x)                        # compiled from its specs, computed once
             it = ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
                            {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
                             "label": "exploration: no evidential weight", "evidential_weight": 0,
-                            "window": {"start": str(start), "end": str(end)}, "data_hash": w.data_hash(),
+                            "window": {"start": str(start), "end": str(end)}, "data_hash": data_hash,
                             **A.screening_values(res)},
                            source="exploration")
             intents.append(it)

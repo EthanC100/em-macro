@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from pathlib import Path
 from datetime import date, timedelta
 
 import pytest
@@ -91,9 +92,9 @@ def test_observations_need_an_active_forward_attempt(setup):
     with pytest.raises(pit.AccessError):
         R.observation_intents(led, fs, store, reg, exe, date(2026, 11, 16), attempt=None)
     led2 = ST.Store(workdir=led.workdir.parent / "w2", remote=led.remote, run_id="t", commit="c" * 40).open()
-    fence, sha = A.verified_fence(F.HEAD)
     (ctx,) = A.register_store_attempts(led2, [R.forward_attempt(reg, exe, date(2026, 11, 17), store.data_hash(),
-                                                                R.code_identity("c" * 40), sha)], fence=fence)
+                                                                R.code_identity(F.HEAD), ("synthetic",))],
+                                       fence=A.verified_fence(F.HEAD))
     with pytest.raises(pit.AccessError):                       # declared for another night
         R.observation_intents(led2, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
     ctx.fail("cancelled")
@@ -101,7 +102,22 @@ def test_observations_need_an_active_forward_attempt(setup):
         ctx.forward_window(store)
 
 
-def test_warmup_overlapping_a_configured_reserve_is_refused(setup):
+def _verified_fence_with(tmp_path, text: str):
+    """A genuinely verified fence (access.verified_fence) from a temporary repository holding ``text`` as its
+    committed configuration: the only way to obtain a VerifiedFence for a non-repository configuration."""
+    import subprocess
+    root = tmp_path / "cfgrepo"
+    (root / "config").mkdir(parents=True)
+    (root / "config/manhattan.yaml").write_text(text)
+    git = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True).stdout
+    git("init", "-q")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "cfg")
+    commit = git("rev-parse", "HEAD").strip()
+    return A.verified_fence(commit, root=root), commit
+
+
+def test_warmup_overlapping_a_configured_reserve_is_refused(setup, tmp_path):
     """Owner decision D-3: fail closed, and write nothing."""
     s = setup
     first_night(s)
@@ -110,13 +126,14 @@ def test_warmup_overlapping_a_configured_reserve_is_refused(setup):
     manifest, specs = R.load_batch(s["cfg"](date(2026, 11, 16)).batches_dir, 1)
     exe = next(x for x in R.batch_executables(specs) if R.prediction_id(R.S.spec_hash(manifest), x.spec_hash)
                == reg["prediction"])
-    attempt = R.forward_attempt(reg, exe, date(2026, 11, 16), "d" * 64, R.code_identity("c" * 40), "e" * 64)
-    warm = next(w for w in attempt.windows if w.purpose == "signal_warmup")
-    fence = roles.Fence(exploration_end=date(2019, 12, 31), enabled=False,
-                        reserve={exe.universe.domain: (warm.start, warm.start)})
+    probe = R.forward_attempt(reg, exe, date(2026, 11, 16), "d" * 64, R.code_identity(F.HEAD), ("synthetic",))
+    warm = next(w for w in probe.windows if w.purpose == "signal_warmup")
+    vf, commit = _verified_fence_with(tmp_path, f"""exploration:\n  data_end: "2019-12-31"\nreserve:\n  enabled: false
+  windows: {{{exe.universe.domain}: {{start: {warm.start.isoformat()}, end: {warm.start.isoformat()}}}}}\n""")
+    attempt = R.forward_attempt(reg, exe, date(2026, 11, 16), "d" * 64, R.code_identity(commit), ("synthetic",))
     before = len(led.records)
     with pytest.raises(pit.AccessError, match="D-3"):
-        A.register_store_attempts(led, [attempt], fence=fence)
+        A.register_store_attempts(led, [attempt], fence=vf)
     assert len(led.records) == before
 
 
@@ -460,9 +477,9 @@ def _one_ctx(s, asof=date(2026, 11, 16)):
     fs = D.first_seen(led, ("synthetic",))
     store = fs.pit_store()
     w = ST.Store(workdir=led.workdir.parent / f"ctx-{asof}", remote=led.remote, run_id="ctx", commit="c" * 40).open()
-    fence, sha = A.verified_fence(F.HEAD)
     (ctx,) = A.register_store_attempts(w, [R.forward_attempt(reg, exe, asof, store.data_hash(),
-                                                             R.code_identity("c" * 40), sha)], fence=fence)
+                                                             R.code_identity(F.HEAD), ("synthetic",))],
+                                       fence=A.verified_fence(F.HEAD))
     return w, ctx, reg, exe, fs, store
 
 
@@ -473,13 +490,14 @@ def test_store_window_reads_only_while_its_attempt_is_active(setup, ending):
     first_night(s)
     w, ctx, reg, exe, fs, store = _one_ctx(s)
     win = ctx.forward_window(store)
-    win.as_of(exe.universe.instruments[0][1], date(2026, 11, 16))
+    with pytest.raises(pit.AccessError, match="outside its one computation"):    # S7 F2: only run_bound reads
+        win.as_of(exe.universe.instruments[0][1], date(2026, 11, 16))
+    its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
     if ending == "fail":
         ctx.fail("execution_error")
         assert w.get((A.STORE_TERMINAL, ctx.attempt_id))["payload"]["data_read"] is True
     elif ending == "complete":
-        A.run_bound(ctx, win, exe.strategy())
-        A.completion(ctx, w, [])
+        A.completion(ctx, w, its)
     else:
         assert A.commit_recovery(w, require_lock=False) == 1
     with pytest.raises(pit.AccessError, match="not registered and active"):
@@ -658,12 +676,13 @@ def test_a_fabricated_observation_after_a_legitimate_read_is_refused(setup, fabr
     cap.write([it], "capture", files=files)
     w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
     if fabrication == "unread_raw_backtest":
-        # a computation outside run_bound, on the attempt's own window: read, but never bound
-        backtest.run(D.forward_window(ctx, store), exe.strategy())
+        # a computation outside run_bound, on the attempt's own window: refused at the first read (S7 F2)
+        with pytest.raises(pit.AccessError, match="outside its one computation"):
+            backtest.run(D.forward_window(ctx, store), exe.strategy())
         its = [ST.Intent("observation", ("observation", reg["prediction"], "2026-11-16"),
                          {"prediction": reg["prediction"], "executable": exe.id, "date": "2026-11-16", "net": 0.01,
                           "gross": 0.01, "cost": 0.0, "turnover": 0.0, "exposure": [0.0], "role": "forward"})]
-        match = "bound computation"
+        match = "read nothing"                                     # the refused read returned no value
     else:
         its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
         o = next(i for i in its if i.type == "observation")
@@ -683,7 +702,7 @@ def test_the_bound_computation_is_the_attempts_own_window(setup):
     w, ctx, reg, exe, fs, store = _one_ctx(s)
     w2, other, *_ = _one_ctx(s, asof=date(2026, 11, 17))
     with pytest.raises(pit.AccessError, match="own"):
-        A.run_bound(ctx, D.forward_window(other, store), exe.strategy())
+        A.run_bound(ctx, D.forward_window(other, store), exe)
 
 
 def _screening_setup(tmp_path, n=2):
@@ -743,3 +762,197 @@ def test_screening_failure_while_applying_results_never_contradicts_them(tmp_pat
     r = audit(later)
     assert r["access_reconciled"], r["violations"]
     assert r["completed"] == len(exes) and later.of_type("conflict") == []
+
+
+# ================================================================== S7 final hardening: F1, F2, G-1
+
+def _capture_16(s):
+    from manhattan.ops import timing as TM
+    cap = s["ledger"]()
+    it, files = D.capture_intent(D.SOURCES["synthetic"], D.synthetic_csv(date(2026, 11, 16)),
+                                 TM.parse_time("2026-11-16T23:30:00Z"))
+    cap.write([it], "capture", files=files)
+
+
+def _plain_attempt(s):
+    led = s["ledger"]()
+    reg = sorted(R.registrations(led).items())[0][1]
+    manifest, specs = R.load_batch(s["cfg"](date(2026, 11, 16)).batches_dir, 1)
+    exe = next(x for x in R.batch_executables(specs) if R.prediction_id(R.S.spec_hash(manifest), x.spec_hash)
+               == reg["prediction"])
+    store = D.first_seen(led, ("synthetic",)).pit_store()
+    return led, reg, exe, store
+
+
+def test_an_invented_fence_cannot_register_a_forward_attempt(setup, tmp_path):
+    """S7 F1, the counterexample: an arbitrary Fence with config_sha256 'a'*64 registered and reconciled. Now a
+    forward attempt registers only with the VerifiedFence capability, verified for the attempt's own commit."""
+    import copy
+    import dataclasses
+    s = setup
+    first_night(s)
+    led, reg, exe, store = _plain_attempt(s)
+    attempt = R.forward_attempt(reg, exe, date(2026, 11, 16), store.data_hash(), R.code_identity(F.HEAD),
+                                ("synthetic",))
+    before = len(led.records)
+    invented = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)
+    with pytest.raises(pit.AccessError, match="verified fence capability"):
+        A.register_store_attempts(led, [attempt], fence=invented)
+    with pytest.raises(TypeError):                                 # the old caller-supplied hash path is gone
+        A.StoreAttempt("forward_observation", attempt.identity, attempt.windows, attempt.subject,
+                       freeze=attempt.freeze, config_sha256="a" * 64)
+    vf = A.verified_fence(F.HEAD)
+    repo_cfg = (Path(A.__file__).resolve().parents[1] / "config/manhattan.yaml").read_text()
+    other, commit = _verified_fence_with(tmp_path, repo_cfg)       # the same text, verified for another commit
+    with pytest.raises(pit.AccessError, match="another commit"):  # verified, but for another commit
+        A.register_store_attempts(led, [attempt], fence=other)
+    for alter in ("fence", "config_sha256", "commit"):
+        forged = A.verified_fence(F.HEAD)
+        wider = roles.Fence(exploration_end=date(2025, 12, 31), reserve={}, enabled=False)
+        object.__setattr__(forged, alter, wider if alter == "fence" else
+                           ("a" * 64 if alter == "config_sha256" else commit))
+        with pytest.raises(pit.AccessError):
+            A.register_store_attempts(led, [attempt], fence=forged)
+    for clone in (copy.copy, copy.deepcopy):
+        with pytest.raises(pit.AccessError):
+            clone(vf)
+    with pytest.raises(pit.AccessError):
+        A.VerifiedFence(_key=object(), fence=invented, config_sha256="a" * 64, commit=F.HEAD)
+    assert len(led.records) == before
+    (ctx,) = A.register_store_attempts(led, [attempt], fence=vf)     # the genuine capability registers
+    rec = led.get((A.STORE_START, ctx.attempt_id))["payload"]["authorization"]["config"]
+    assert rec == {"sha256": vf.config_sha256, "commit": F.HEAD} and dataclasses.is_dataclass(attempt)
+
+
+@pytest.mark.parametrize("claim", ["invented_hash", "other_fence", "other_commit"])
+def test_an_unverified_configuration_claim_never_reconciles(setup, claim):
+    """S7 F1 in a hostile history: a start whose recorded configuration claim does not re-verify (a made-up hash, a
+    fence that is not that configuration's, a commit that is not the attempt's) is a violation; genuine claims are
+    counted as verified."""
+    s = setup
+    first_night(s)
+    s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
+    led = s["ledger"]()
+    genuine = audit(led)
+    assert genuine["access_reconciled"] and genuine["configuration_claims_verified"] == genuine["registered_executions"]
+    f = _forger(led)
+    start = f.of_type("attempt_started")[0]
+    aid, p = forged_attempt(start)
+    cfg = p["authorization"]["config"]
+    if claim == "invented_hash":
+        cfg["sha256"] = "a" * 64
+    elif claim == "other_fence":
+        p["authorization"]["fence"]["exploration_end"] = "2025-12-31"
+    else:
+        cfg["commit"] = "b" * 40
+    aid = A.store_attempt_id(p)
+    hostile(f, [ST.Intent(A.STORE_START, (A.STORE_START, aid), p),
+                A.terminal_intent(aid, "failed", reason="cancelled", data_read=False)])
+    r = audit(_forger(f))
+    codes_ = codes(r)
+    assert ("configuration_not_verified" in codes_ or "invalid_identity_or_authorization" in codes_), codes_
+    assert not r["access_reconciled"]
+
+
+def test_one_computation_of_the_registered_specification(setup, monkeypatch):
+    """S7 F2. run_bound compiles the strategy from the attempt's registered specs: a reversed signal (another
+    family sign), another prediction's executable, or a doctored compiled object cannot be computed; a second
+    computation is refused even with the identical executable; a computation that fails part-way still counts."""
+    import dataclasses
+    from manhattan.engine import backtest
+    s = setup
+    first_night(s)
+    _capture_16(s)
+    w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
+    win = D.forward_window(ctx, store)
+    reversed_family = {**exe.family, "sign": "-" if exe.family["sign"] == "+" else "+"}
+    with pytest.raises(pit.AccessError, match="do not compile"):     # the spec chain no longer links
+        A.run_bound(ctx, win, dataclasses.replace(exe, family=reversed_family))
+    led = s["ledger"]()
+    manifest, specs = R.load_batch(s["cfg"](date(2026, 11, 16)).batches_dir, 1)
+    other = next(x for x in R.batch_executables(specs) if x.spec_hash != exe.spec_hash)
+    with pytest.raises(pit.AccessError, match="registered specification"):
+        A.run_bound(ctx, win, other)
+    doctored = dataclasses.replace(exe, params={k: v for k, v in exe.params.items()}, vol_target=7.0)
+    res = A.run_bound(ctx, win, doctored)                          # compiled from the specs, not the object
+    for again in (exe, doctored):
+        with pytest.raises(pit.AccessError, match="already computed"):
+            A.run_bound(ctx, win, again)
+    w2, ctx2, *_ = _one_ctx(s, asof=date(2026, 11, 16))
+    assert A.run_bound(ctx2, D.forward_window(ctx2, store), exe).result_hash() == res.result_hash()
+    # a computation that fails part-way: recorded as begun, never retried under the same attempt
+    w3, ctx3, *_ = _one_ctx(s, asof=date(2026, 11, 16))
+    real = backtest.run
+
+    def explode(window, strategy):
+        window.as_of(exe.universe.instruments[0][1], date(2026, 11, 13))
+        raise RuntimeError("synthetic failure after the read began")
+
+    monkeypatch.setattr(backtest, "run", explode)
+    with pytest.raises(RuntimeError):
+        A.run_bound(ctx3, D.forward_window(ctx3, store), exe)
+    monkeypatch.setattr(backtest, "run", real)
+    with pytest.raises(pit.AccessError, match="already computed"):
+        A.run_bound(ctx3, D.forward_window(ctx3, store), exe)
+    ctx3.fail("execution_error")
+    assert w3.get((A.STORE_TERMINAL, ctx3.attempt_id))["payload"]["data_read"] is True
+
+
+@pytest.mark.parametrize("change", ["flip_reconstructed", "omit_observation", "unjustified_missed",
+                                    "extra_missed"])
+def test_the_forward_plan_is_recomputed_at_completion(setup, change):
+    """S7 G-1 at write time: the results must be exactly the plan recomputed from the Store's own captures and
+    registration: a flipped reconstructed flag (weight 0 -> 1), an omitted observation, an observation replaced by
+    a missed observation, or an extra missed observation are refused."""
+    s = setup
+    first_night(s)
+    _capture_16(s)
+    w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
+    its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
+    obs = [i for i in its if i.type == "observation"]
+    recon = [i for i in obs if i.payload["reconstructed"]]
+    assert recon and obs
+    if change == "flip_reconstructed":
+        tgt = recon[0]
+        its = [ST.Intent(i.type, i.key, {**i.payload, "reconstructed": False, "evidential_weight": 1})
+               if i is tgt else i for i in its]
+    elif change == "omit_observation":
+        its = [i for i in its if i is not obs[-1]]
+    else:
+        d = obs[-1].payload["date"] if change == "unjustified_missed" else "2026-11-12"
+        missed = ST.Intent("missed_observation", ("missed_observation", reg["prediction"], d),
+                           {"prediction": reg["prediction"], "date": d, "reason": "data_not_available_by_grace"})
+        its = ([i for i in its if i is not obs[-1]] if change == "unjustified_missed" else its) + [missed]
+    with pytest.raises(pit.AccessError):
+        A.completion(ctx, w, its)
+    assert ctx.active() and w.of_type("observation") == []
+
+
+@pytest.mark.parametrize("change", ["flip_reconstructed", "omit_observation", "unjustified_missed"])
+def test_forged_forward_provenance_never_reconciles(setup, change):
+    """S7 G-1 in a hostile history: a credential holder writes the completion directly. The reconciler rebuilds
+    first-seen values from the capture records before the attempt and reports the flipped flag, the omission or
+    the unjustified missed observation."""
+    s = setup
+    first_night(s)
+    _capture_16(s)
+    w, ctx, reg, exe, fs, store = _one_ctx(s, asof=date(2026, 11, 16))
+    its, _ = R.observation_intents(w, fs, store, reg, exe, date(2026, 11, 16), attempt=ctx)
+    obs = [i for i in its if i.type == "observation"]
+    if change == "flip_reconstructed":
+        tgt = next(i for i in obs if i.payload["reconstructed"])
+        its = [ST.Intent(i.type, i.key, {**i.payload, "reconstructed": False, "evidential_weight": 1})
+               if i is tgt else i for i in its]
+        expect = "reconstructed_flag_mismatch"
+    elif change == "omit_observation":
+        its = [i for i in its if i is not obs[-1]]
+        expect = "observation_set_mismatch"
+    else:
+        d = obs[-1].payload["date"]
+        its = [i for i in its if i is not obs[-1]] + [ST.Intent(
+            "missed_observation", ("missed_observation", reg["prediction"], d),
+            {"prediction": reg["prediction"], "date": d, "reason": "data_not_available_by_grace"})]
+        expect = "observation_set_mismatch"
+    hostile(w, its + [linked(ctx.attempt_id, its)])
+    r = audit(_forger(w))
+    assert expect in codes(r) and not r["access_reconciled"], codes(r)
