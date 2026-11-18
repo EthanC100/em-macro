@@ -421,7 +421,7 @@ That CI failure was a **genuine regression** (S7 H1), separate from the local Q0
 | targeted, crash-injection, access-control and integration | the 19 files of section 16 plus `ops_workflow`, `ops_inputs` | 667 passed, **1 failed**: `test_lock_has_only_exact_versions_and_wheel_hashes` asserted six lock entries; D-12 adds a seventh. The test now expects seven and the exact PyYAML pin (2 passed) | 1 → fixed |
 | exact locked-runner test, CPython 3.12.3, with the PyYAML pin | `python3.12 -m pytest tests/test_manhattan_ops_lock_install.py` | 1 passed; the probe checks the verified fence, a matching pin and a wrong pin | 0 |
 | local full suite, `9b514ce` | `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q -rs -p no:cacheprovider` | 2,142 passed, 131 skipped, **1 error** (the Q019 `E2BIG` case below), 1,626 s | **1** |
-| remote CI, `9b514ce` | `pytest` workflow | reported on the PR | |
+| remote CI, `9b514ce` (CPython 3.12.16, includes the locked-runner test) | `pytest` workflow, PR #86 | 2,142 passed, 132 skipped, 0 failed: conclusion **success** | 0 |
 
 **The local error is pre-existing, environmental and local-only.** The test is
 `test_q019_collect_refuses_late_dated_oversized_or_binary_tables[big.csv-...]`, which fails at setup with
