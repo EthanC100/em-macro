@@ -126,7 +126,8 @@ def facts_for(md):
                          "manifest_hash": H("m"), "spec_hash": sp.get("spec_hash")},
         "attempt_binding": {"attempt_id": att.get("id"), "store": att.get("store"),
                             "kind": "forward_observation" if role == roles.FORWARD else "engine_evaluation",
-                            "spec_hash": sp.get("spec_hash"), "role": role, "designated": md.get("designated"),
+                            "spec_hash": sp.get("spec_hash"), "batch": "batch-0001", "role": role,
+                            "designated": md.get("designated"),
                             "window_id": win.get("id"), "window_start": span.get("start"),
                             "window_end": span.get("end"), "freeze": sp.get("freeze"),
                             "holding": sp.get("holding_periods"), "terminal": "completed", "superseded": False,
@@ -541,8 +542,16 @@ def test_reserve_candidate_requirements(change, avail):
 
 def test_undesignated_reserve_read_is_unauthorised():
     md = reserve(designated=False)
-    c = run(md, LIC + ("attempt_binding",))
+    del md["attempt"]
+    c = run(md, LIC)
     assert c.role == roles.RESERVE and c.authorization == E.AUTH_NONE and c.eligibility == E.E_NONE
+
+
+def test_non_designated_reserve_attempt_is_refused():
+    # PR #86 D-13 / S7 N1: a reserve attempt is always its batch's designated evaluation of the domain
+    c = run(reserve(designated=False), LIC + ("attempt_binding",))
+    assert_closed(c)
+    assert "D-13" in c.problems[0]
 
 
 def test_reserve_disabled_in_config_authorises_nothing():
@@ -1041,3 +1050,189 @@ def test_module_is_pure():
 def test_classification_is_deterministic():
     md = captured()
     assert run(md, FWD) == run(copy.deepcopy(md), FWD)
+
+
+# ---------------------------------------------------------------- A1: batch identity of the attempt
+
+@pytest.mark.parametrize("make,names", [(lambda: captured(), FWD), (lambda: reserve(), RES)])
+def test_attempt_batch_must_be_the_frozen_batch(make, names):
+    c = run(make(), names)
+    assert c.identity.batch == "batch-0001" and c.eligibility in (E.E_FORWARD, E.E_RESERVE)
+    c = run(make(), names, override={("attempt_binding", "batch"): "batch-0002"})
+    assert_closed(c)
+    assert "attempt batch" in c.problems[0]
+
+
+@pytest.mark.parametrize("value", ["", "  ", None, 1])
+def test_attempt_batch_is_required_without_a_freeze(value):
+    md = historical(attempt={"id": H("exploration attempt"), "store": "ledger"})
+    assert run(md, PUB + ("attempt_binding",)).identity.batch == "batch-0001"
+    assert_closed(run(md, PUB + ("attempt_binding",), override={("attempt_binding", "batch"): value}))
+
+
+def _designated(start, end, window, attempt, store="ledger", batch="batch-0001", domain="fx_daily"):
+    md = reserve(start=start, end=end, window={"id": window}, attempt={"id": H(attempt), "store": store},
+                 domain=domain)
+    override = {("runner_token", "batch"): batch, ("batch_freeze", "batch"): batch,
+                ("attempt_binding", "batch"): batch}
+    return run(md, RES, override=override)
+
+
+def test_combine_rejects_two_designated_evaluations_of_one_batch_and_domain():
+    a = _designated("2021-01-04", "2021-12-31", "w1", "a1")
+    b = _designated("2022-01-03", "2022-12-30", "w2", "a2")         # other window, other attempt, disjoint span
+    assert a.eligibility == b.eligibility == E.E_RESERVE
+    assert E.combine([a]).eligibility == E.E_RESERVE
+    c = E.combine([a, b])
+    assert_closed(c)
+    assert "designated reserve evaluation" in c.problems[0]
+
+
+def test_combine_rejects_designated_evaluations_of_other_batches():
+    a = _designated("2021-01-04", "2021-12-31", "w1", "a1")
+    b = _designated("2022-01-03", "2022-12-30", "w2", "a2", batch="batch-0002")
+    assert b.identity.batch == "batch-0002"
+    assert_closed(E.combine([a, b]))
+
+
+def test_combine_rejects_forward_parts_of_other_batches():
+    a = _part("2026-07-01", "2026-07-31", "w1")
+    md = captured(start="2026-08-03", end="2026-08-31", window={"id": "w2"})
+    b = run(md, FWD, override={("batch_freeze", "batch"): "batch-0002", ("attempt_binding", "batch"): "batch-0002"})
+    assert b.eligibility == E.E_FORWARD
+    assert_closed(E.combine([a, b]))
+
+
+# ---------------------------------------------------------------- A2: nothing else touches TRUSTED_AUTHORITIES
+
+NAME = "TRUSTED_AUTHORITIES"
+OWNER = "manhattan/evidence.py"
+
+
+def _docstring_nodes(tree):
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) \
+                    and isinstance(first.value.value, str):
+                out.add(id(first.value))
+    return out
+
+
+def authority_findings(source: str, *, owner: bool = False) -> list[str]:
+    """Static findings: every way this file could bind, rebind, delete or reach ``TRUSTED_AUTHORITIES`` by name.
+
+    Outside the owner module any mention is a finding: a store, delete or augmented assignment of the name or an
+    attribute of that name; a ``global`` or ``nonlocal`` of it; an import of it; a keyword argument of that name
+    (``__dict__.update(TRUSTED_AUTHORITIES=...)``); and any non-docstring string containing it (``setattr``,
+    ``vars(m)[...]``, ``globals()[...]``, ``mock.patch("...TRUSTED_AUTHORITIES")``). In the owner module, only
+    loads, docstrings and the one module-level ``TRUSTED_AUTHORITIES: frozenset[str] = frozenset()`` are allowed."""
+    tree = ast.parse(source)
+    docs = _docstring_nodes(tree)
+    found = []
+    shipped = [n for n in tree.body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", None) == NAME]
+    if owner:
+        if len(shipped) != 1 or ast.unparse(shipped[0].value) != "frozenset()":
+            found.append("the shipped value is not exactly one `TRUSTED_AUTHORITIES: ... = frozenset()`")
+    allowed = {id(shipped[0]), id(shipped[0].target)} if owner and len(shipped) == 1 else set()
+    for node in ast.walk(tree):
+        line = getattr(node, "lineno", "?")
+        if id(node) in allowed:
+            continue
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            name = node.id if isinstance(node, ast.Name) else node.attr
+            if name == NAME and (not owner or not isinstance(node.ctx, ast.Load)):
+                found.append(f"line {line}: {type(node.ctx).__name__.lower()} of {NAME}")
+        elif isinstance(node, (ast.Global, ast.Nonlocal)) and NAME in node.names:
+            found.append(f"line {line}: global/nonlocal {NAME}")
+        elif isinstance(node, ast.alias) and NAME in (node.name, node.asname):
+            found.append(f"line {line}: import of {NAME}")
+        elif isinstance(node, ast.keyword) and node.arg == NAME:
+            found.append(f"line {line}: keyword argument {NAME}")
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and NAME in node.value \
+                and id(node) not in docs:
+            found.append(f"line {line}: string naming {NAME} (dynamic attribute access)")
+    return found
+
+
+def production_python_files() -> list[str]:
+    out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "*.py"], capture_output=True, text=True, check=True)
+    files = [f for f in out.stdout.split() if not f.startswith("tests/")]
+    assert OWNER in files and len(files) > 50
+    return files
+
+
+def test_no_production_module_touches_trusted_authorities():
+    problems = {}
+    for rel in production_python_files():
+        found = authority_findings((ROOT / rel).read_text(encoding="utf-8"), owner=rel == OWNER)
+        if found:
+            problems[rel] = found
+    assert problems == {}
+
+
+@pytest.mark.parametrize("snippet", [
+    "TRUSTED_AUTHORITIES = frozenset({'x'})",
+    "TRUSTED_AUTHORITIES: frozenset = frozenset({'x'})",
+    "TRUSTED_AUTHORITIES |= {'x'}",
+    "from manhattan import evidence as E\nE.TRUSTED_AUTHORITIES = frozenset({'x'})",
+    "import manhattan.evidence\nmanhattan.evidence.TRUSTED_AUTHORITIES |= {'x'}",
+    "from manhattan.evidence import TRUSTED_AUTHORITIES",
+    "from manhattan.evidence import TRUSTED_AUTHORITIES as T",
+    "import manhattan.evidence as E\nsetattr(E, 'TRUSTED_AUTHORITIES', frozenset({'x'}))",
+    "import manhattan.evidence as E\nobject.__setattr__(E, 'TRUSTED_AUTHORITIES', frozenset({'x'}))",
+    "import manhattan.evidence as E\nvars(E)['TRUSTED_AUTHORITIES'] = frozenset({'x'})",
+    "import manhattan.evidence as E\nE.__dict__['TRUSTED_AUTHORITIES'] = frozenset({'x'})",
+    "import manhattan.evidence as E\nE.__dict__.update(TRUSTED_AUTHORITIES=frozenset({'x'}))",
+    "import manhattan.evidence as E\nE.__dict__.update({'TRUSTED_AUTHORITIES': frozenset({'x'})})",
+    "import sys\nsys.modules['manhattan.evidence'].TRUSTED_AUTHORITIES = frozenset({'x'})",
+    "globals()['TRUSTED_AUTHORITIES'] = frozenset({'x'})",
+    "import manhattan.evidence as E\ndel E.TRUSTED_AUTHORITIES",
+    "def f():\n    global TRUSTED_AUTHORITIES\n    TRUSTED_AUTHORITIES = frozenset({'x'})",
+    "from unittest import mock\nmock.patch('manhattan.evidence.TRUSTED_AUTHORITIES', frozenset({'x'})).start()",
+    "import manhattan.evidence as E\nfrom unittest import mock\nmock.patch.object(E, 'TRUSTED_AUTHORITIES', {'x'}).start()",
+    "(TRUSTED_AUTHORITIES := frozenset({'x'}))",
+    "for TRUSTED_AUTHORITIES in [frozenset({'x'})]:\n    pass",
+])
+def test_static_check_catches_each_mutation_pattern(snippet):
+    assert authority_findings(snippet), snippet
+
+
+@pytest.mark.parametrize("mutation", [
+    "TRUSTED_AUTHORITIES = frozenset({'x'})\n",
+    "TRUSTED_AUTHORITIES |= {'x'}\n",
+    "globals()['TRUSTED_AUTHORITIES'] = frozenset({'x'})\n",
+    "def _enable():\n    global TRUSTED_AUTHORITIES\n    TRUSTED_AUTHORITIES = frozenset({'x'})\n",
+    "setattr(__import__('sys').modules[__name__], 'TRUSTED_AUTHORITIES', frozenset({'x'}))\n",
+])
+def test_static_check_catches_mutations_inside_the_owner_module(mutation):
+    source = (ROOT / OWNER).read_text(encoding="utf-8")
+    assert authority_findings(source, owner=True) == []
+    assert authority_findings(source + "\n" + mutation, owner=True)
+
+
+def test_static_check_catches_a_second_assignment_on_the_shipped_line():
+    source = (ROOT / OWNER).read_text(encoding="utf-8")
+    line = "TRUSTED_AUTHORITIES: frozenset[str] = frozenset()"
+    mutated = source.replace(line, line + "; TRUSTED_AUTHORITIES = frozenset({'x'})", 1)
+    assert mutated != source and authority_findings(mutated, owner=True)
+
+
+def test_static_check_requires_the_shipped_value_to_be_empty():
+    source = (ROOT / OWNER).read_text(encoding="utf-8")
+    nonempty = source.replace("TRUSTED_AUTHORITIES: frozenset[str] = frozenset()",
+                              "TRUSTED_AUTHORITIES: frozenset[str] = frozenset({'x'})", 1)
+    assert nonempty != source and authority_findings(nonempty, owner=True)
+
+
+@pytest.mark.parametrize("snippet", [
+    "import manhattan.evidence as E\nsetattr(E, 'TRUSTED_' + 'AUTHORITIES', frozenset({'x'}))",
+    "import manhattan.evidence as E\nk = bytes.fromhex('545255535445445f415554484f524954494553').decode()\n"
+    "setattr(E, k, frozenset({'x'}))",
+])
+def test_static_check_limitation_constructed_names_are_not_seen(snippet):
+    """Documented limitation (EVIDENCE_CLASSIFICATION.md): a name built at run time is invisible to a static
+    check. Hostile code in the process is outside what any check here can stop; the clean-subprocess test of the
+    shipped value and code review remain the controls."""
+    assert authority_findings(snippet) == []

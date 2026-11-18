@@ -46,7 +46,7 @@ untrusted results fail closed.
 | `spec_registry` | `spec_hash`, `channel`, `domain`, `holding_periods` | the frozen spec |
 | `batch_freeze` | `spec_hash`, `batch`, `freeze`, `manifest_hash` | `manhattan.freeze.verify_frozen` |
 | `runner_token` | `domain`, `window_id`, `batch`, `manifest_hash`, `spec_hash` | a verified `roles.RunnerToken` (PR #86 snapshot: batch, manifest hash, spec in `token.specs`) naming this designated (domain, window) |
-| `attempt_binding` | `attempt_id`, `store`, `kind`, `spec_hash`, `role`, `designated`, `window_id`, `window_start`, `window_end`, `freeze`, `holding`, `terminal`, `superseded`, `assurance` | PR #86's anchored attempt history (start record, its `authorization`, its terminal, reconciliation assurance) |
+| `attempt_binding` | `attempt_id`, `store`, `kind`, `spec_hash`, `batch`, `role`, `designated`, `window_id`, `window_start`, `window_end`, `freeze`, `holding`, `terminal`, `superseded`, `assurance` | PR #86's anchored attempt history (start record, its `authorization`, its terminal, reconciliation assurance) |
 | `capture_replay` | `source_id`, `capture_id`, `monitoring_start`, `backfill`, `late`, `observed_start`, `observed_end` | `manhattan.ops.data.first_seen` |
 | `store_anchor` | `capture_id`, `anchor`, `assurance` | `manhattan.ops.store.verify_chain` and the reconciler's assurance level |
 | `publication_contract` | `source_id`, `contract_sha256` | `validate_source` on the recorded source definition |
@@ -95,16 +95,65 @@ untrusted results fail closed.
 - Non-scalar values or a non-mapping become `None`, which fails closed.
 - Later changes to the caller's dict have no effect, and the proxy refuses assignment.
 
+## Final hardening (after `1e86b33`)
+
+**A1: batch identity.**
+- `attempt_binding` states the attempt's `batch` (PR #86 identity field).
+- When a `batch_freeze` result is required (forward spans, designated reserve), the attempt batch must equal the
+  frozen batch. Otherwise it must be non-empty text.
+- `Identity.batch` comes from verified facts only. `combine` rejects parts of different batches, and any two
+  designated reserve evaluations of one (batch, domain), whatever their windows, spans or attempt ids (ARCHITECTURE
+  6.2; PR #86 D-6).
+- Following PR #86 D-13, an attempt binding for a non-designated reserve attempt is refused.
+
+**A2: static check on `TRUSTED_AUTHORITIES`.**
+- `test_no_production_module_touches_trusted_authorities` parses every tracked `*.py` outside `tests/`.
+- Outside `manhattan/evidence.py`, any of these is a finding:
+  - a store, delete or augmented assignment of the name, or of an attribute of that name;
+  - `global` or `nonlocal` of it;
+  - an import of it;
+  - a keyword argument of that name (`__dict__.update(TRUSTED_AUTHORITIES=...)`);
+  - any non-docstring string containing it (`setattr`, `object.__setattr__`, `vars(m)[...]`, `m.__dict__[...]`,
+    `globals()[...]`, `sys.modules[...]`, `mock.patch(...)`, `mock.patch.object(...)`).
+- Inside `manhattan/evidence.py`, only loads, docstrings and the one module-level
+  `TRUSTED_AUTHORITIES: frozenset[str] = frozenset()` are allowed. The allowance is matched by AST node, so a second
+  assignment on the same line is still caught.
+- 21 positive-control snippets, 5 owner-module mutations, the same-line case and a non-empty shipped value are all
+  shown to be caught.
+
+**Limits of the static check.**
+- It sees source text only. A name built at run time (`"TRUSTED_" + "AUTHORITIES"`, decoded bytes) is invisible to
+  it; `test_static_check_limitation_constructed_names_are_not_seen` records that explicitly.
+- It does not see:
+  - `importlib` reloads of a modified file;
+  - C extensions;
+  - debuggers;
+  - `gc.get_referents` tricks;
+  - code outside the repository;
+  - anything executed from data.
+- Hostile code running in the same process can always replace the value. The controls against that are code review
+  (CODEOWNERS, an owner action), the clean-subprocess check of the shipped value (N1), and, at activation, an
+  authentication boundary outside the process.
+- Tests are excluded from the scan by design: they patch the set to exercise the logic under a simulated authority.
+
 Earlier fixes kept:
 - **M1:** the spec's holding period, never defaulted, passed to `role_of`, with boundary tests for 0, 5 and 20.
 - **M2:** malformed config, protocol hash and fence fail closed; seeded fuzz tests cover them.
 - **H2:** digests are integrity only, and facts must come from a trusted authority.
 - **M3:** `combine` checks identity, duplicates and overlaps.
 
-## PR #86 integration contracts (checked against head `8615c69`)
+## PR #86 integration contracts (checked against head `5aa643f`)
+
+Re-checked at `5aa643f`:
+- `roles`, `availability` and `ops.promotion` are unchanged since `8615c69`, and `ledger.evidential_weight` is
+  unchanged.
+- The attempt `authorization` now also records `config_sha256`. This module reads no field that changed.
+- D-13 is new: a reserve attempt is always the designated evaluation. It is mirrored here (A1).
+- `register_evaluation` and `StoreAttempt` still default `holding` to 0, so contract 1 still stands.
 
 1. **Authoritative holding periods.**
-   - Today PR #86 takes `holding` as a caller argument that defaults to 0; its forward-observation attempts pass none.
+   - At `5aa643f` PR #86 still takes `holding` as a caller argument that defaults to 0; its forward-observation
+     attempts pass none.
    - The classifier requires `attempt_binding.holding == spec_registry.holding_periods == spec.holding_periods`. A
      default-0 registration of a spec with a longer holding period fails closed
      (`test_attempt_holding_must_be_the_specs_never_a_default`).
@@ -142,7 +191,9 @@ Earlier fixes kept:
 
 Also required from PR #86:
 - `roles.role_of` keeps its signature and embargo semantics. PR #86 adds `RunnerToken.specs` and changes nothing
-  else in `roles`.
+  else in `roles` (still true at `5aa643f`).
+- The attempt identity's `batch` is the frozen batch for reserve and forward attempts, and D-6/D-13 (one designated
+  reserve attempt per (batch, domain)) stay enforced at registration.
 - `ledger.evidential_weight`, `availability.validate_source` and `ops.promotion.status` stay unchanged.
 
 ## Remaining activation blockers
@@ -154,8 +205,9 @@ Also required from PR #86:
    `attempt_binding` and `runner_token` are still needed.
 4. **The `UNIMPLEMENTED_GATES` and `promotion.status`:** enrolment (§6.8), guard and test-period construction
    (§§6.1-6.7), an adopted protocol hash, and `claims.enabled: true` (Ethan's).
-5. **CODEOWNERS.** `manhattan/evidence.py` should be added to the protected block of `.github/CODEOWNERS` (Ethan's
-   edit) so that `TRUSTED_AUTHORITIES` cannot change without his review.
+5. **CODEOWNERS (owner action, not done here).** Ethan should add `/manhattan/evidence.py` to the protected block of
+   `.github/CODEOWNERS`, so that `TRUSTED_AUTHORITIES` cannot change without his review. Sessions must not edit that
+   file (hard rule 2).
 
 ## Limitations
 

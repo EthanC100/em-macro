@@ -118,7 +118,7 @@ VERIFIERS = {
                      "this (domain, window) as unused and designated",
                      {"domain", "window_id", "batch", "manifest_hash", "spec_hash"}),
     "attempt_binding": ("the registered attempt the observations belong to (PR #86), read from an anchored history",
-                        {"attempt_id", "store", "kind", "spec_hash", "role", "designated", "window_id",
+                        {"attempt_id", "store", "kind", "spec_hash", "batch", "role", "designated", "window_id",
                          "window_start", "window_end", "freeze", "holding", "terminal", "superseded", "assurance"}),
 }
 REQUIRED = {
@@ -182,6 +182,8 @@ class Identity:
     attempt_id: str | None
     attempt_store: str | None = None
     window_verified: bool = False      # window identity and boundaries stated by an authoritative attempt binding
+    batch: str | None = None           # the frozen batch, from batch_freeze or the attempt binding (never metadata)
+    designated: bool = False
 
 
 @dataclass(frozen=True)
@@ -554,6 +556,12 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         _agree(f["role"], role, "attempt role")
         _agree(f["designated"], designated, "attempt designation")
         _agree(f["holding"], holding, "attempt holding period (must be the spec's, never a default)")
+        if "batch_freeze" in facts:
+            _agree(f["batch"], facts["batch_freeze"]["batch"], "attempt batch (must be the frozen batch)")
+        elif not _text(f["batch"]):
+            _fail("verified attempt batch is required")
+        if role == roles.RESERVE and not designated:
+            _fail("a reserve attempt is always its batch's designated evaluation of the domain (PR #86 D-13)")
         if f["kind"] not in ATTEMPT_KINDS.get(role, ()):
             _fail(f"an attempt of kind {f['kind']!r} cannot carry {role} evidence")
         if STORE_OF_KIND[f["kind"]] != attempt["store"]:
@@ -656,10 +664,12 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         blockers.extend(UNIMPLEMENTED_GATES)
     if eligibility == E_RESERVE:
         blockers.append("screening is not implemented and is out of scope for classification")
+    batch = facts["batch_freeze"]["batch"] if "batch_freeze" in facts else \
+        facts["attempt_binding"]["batch"] if bound else None
     ident = Identity(spec["spec_hash"], channel, md["domain"],
                      None if effective_freeze is None else effective_freeze.isoformat(), holding, win["id"],
                      span["start"], span["end"], None if attempt is None else attempt["id"],
-                     None if attempt is None else attempt["store"], bound)
+                     None if attempt is None else attempt["store"], bound, batch, designated)
     return Classification(provenance, kind == "licensed", frozenset(recon), availability, role, authorization,
                           eligibility, ceiling, False, False, False, tuple(blockers), (), subject, ident, True)
 
@@ -725,9 +735,15 @@ def combine(parts) -> Classification:
     if any(p.provenance == UNVERIFIED or not p.authenticated or p.identity is None for p in parts):
         return _unverified(["a part is unverified"] + [q for p in parts for q in p.problems])
     ids = [p.identity for p in parts]
-    same = {(i.spec_hash, i.channel, i.domain, i.freeze, i.holding_periods) for i in ids}
+    same = {(i.spec_hash, i.channel, i.domain, i.freeze, i.holding_periods, i.batch) for i in ids}
     if len(same) != 1:
-        return _unverified(["parts belong to different specs, channels, domains, freezes or holding periods"])
+        return _unverified(["parts belong to different specs, channels, domains, freezes, holding periods or "
+                            "batches"])
+    designations = [(i.batch, i.domain) for i in ids if i.designated]
+    if any(b is None for b, _ in designations) or len(set(designations)) != len(designations):
+        # ARCHITECTURE 6.2 / PR #86 D-6: one designated reserve evaluation per (batch, domain), whatever the
+        # windows or attempt ids
+        return _unverified(["more than one designated reserve evaluation of one (batch, domain)"])
     keys = {(p.provenance, p.role, p.licensed, p.availability, p.authorization) for p in parts}
     if len(keys) > 1:
         return _unverified([f"mixed provenance or role: {sorted(map(str, keys))}"])
