@@ -70,8 +70,7 @@ def bundles_at(m: float, domains=D.DOMAINS, cost_models=("c1", "c2"), sizings=TP
         for dom in domains:
             hyp = R.hypothesis(fam, dom)
             for hz in HORIZONS:
-                spec = R.strategy_spec(hyp, tname, g[tname][hz], cost_models=cost_models, sizings=sizings,
-                                       label=f"{tname}/{dom}/{hz}")
+                spec = R.strategy_spec(hyp, tname, g[tname][hz], cost_models=cost_models, sizings=sizings)
                 out.append(R.Bundle(fam, hyp, spec))
     return out
 

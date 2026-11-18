@@ -33,6 +33,9 @@ PREFIX = {"family": "HF", "hypothesis": "HH", "strategy_spec": "HS", "variant": 
 ID_HEX = 16
 PKG_DIR = Path(__file__).resolve().parent
 ROOT = PKG_DIR.parent.parent
+# modules outside the package whose code changes HTE results; they are part of the engine digest
+DEPENDENCIES = ("manhattan/spec.py", "manhattan/availability.py", "manhattan/stats/bootstrap.py",
+                "manhattan/stats/meff.py")
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -74,12 +77,14 @@ def merkle_root_array(digests: np.ndarray) -> str:
 
 
 def code_identity(root: Path = ROOT) -> dict:
-    """The code that evaluates: SHA-256 of every ``manhattan/hte/*.py`` (path and bytes, sorted), the numeric
-    stack, and the git commit when it is known. ``engine_sha256`` alone decides whether two runs used the same
+    """The code that evaluates: SHA-256 of every ``manhattan/hte/*.py`` and of ``DEPENDENCIES`` (path and bytes,
+    sorted), the numeric stack, and the git commit when it is known. ``engine_sha256`` alone decides whether two runs used the same
     evaluation code; the commit is informative (a dirty tree has the same commit and a different digest)."""
     h = hashlib.sha256()
     for p in sorted(PKG_DIR.glob("*.py")):
         h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
+    for rel in DEPENDENCIES:
+        h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
     try:
         commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
                                 timeout=10).stdout.strip() or None

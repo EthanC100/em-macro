@@ -465,3 +465,36 @@ def test_throughput_has_not_regressed_grossly(tmp_path, panel):
     ws, out = _run(tmp_path, panel, chunk_size=120, stages=(1, 2, 3))
     per = (out["timings"]["pass_A_s"] + out["timings"]["pass_B_s"]) / 120
     assert per < 0.05, per
+
+
+# -- regressions from the adversarial pass ------------------------------------------------------------------------
+
+def test_a_lost_worker_cannot_hang_the_run_and_is_retried(tmp_path, baseline):
+    p = _sub(tmp_path, "worker_exit:2", workers=2)
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert json.loads(p.stdout.strip().splitlines()[-1])["closed"] is False
+    ws = Workspace(tmp_path)
+    failed = AttemptLog(ws.log_path).of_type("attempt_failed")
+    assert failed and any(r["payload"]["reason"] == "worker_lost" for r in failed)
+    p2 = _sub(tmp_path, workers=2)
+    res = json.loads(p2.stdout.strip().splitlines()[-1])
+    assert res["root"] == baseline[1]["result_root"]
+    assert reconcile(ws, res["run_id"])["violations"] == []
+
+
+def test_one_runner_per_workspace(tmp_path, panel):
+    import fcntl
+    ws = _ws(tmp_path)
+    with open(ws.root / ".lock", "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(RN.RunError, match="another runner"):
+            Runner(ws, panel, Policy()).run()
+    assert Runner(ws, panel, Policy(), chunk_size=60).run()["reused"] is False
+
+
+def test_disk_preflight_refuses_and_logs(tmp_path, panel, monkeypatch):
+    ws = _ws(tmp_path)
+    monkeypatch.setattr(Runner, "BYTES_PER_CANDIDATE", 10 ** 15)
+    with pytest.raises(RN.RunError, match="preflight"):
+        Runner(ws, panel, Policy()).run()
+    assert "run_refused" in _types(ws)

@@ -444,3 +444,54 @@ def test_streaming_spa_matches_manhattan_spa_and_any_chunking():
     with_zero = kernels.spa_combine([kernels.spa_partial(z0, np.append(mean, 0.0), np.append(om, 0.0), n,
                                                          np.zeros(m + 1, int))[0]])
     assert with_zero == whole
+
+
+# -- regressions from the adversarial pass ------------------------------------------------------------------------
+
+def test_reordered_grid_is_the_same_spec_and_a_duplicate(tmp_path):
+    reg, lg = _reg(tmp_path)
+    b = X.small_bundles(domains=("fx",), templates=("trend",))[0]
+    g = {k: list(reversed(v)) for k, v in X.small_grids()["trend"].items()}
+    again = R.strategy_spec(b.hypothesis, "trend", g, cost_models=("c2", "c1"))
+    assert ids.full_hash(again) == ids.full_hash(b.spec)
+    reg.submit([b])
+    assert reg.submit([R.Bundle(b.family, b.hypothesis, again)])["duplicate_submissions"] == 1
+
+
+@pytest.mark.parametrize("mutate,expect", [
+    (lambda s: s["grid"].update(lookback=[120, 10, 40]), "canonical (ascending) order"),
+    (lambda s: s["bindings"].update(cost_model=["c2", "c1"]), "must be sorted"),
+    (lambda s: s.update(label="same economics, new name"), "not part of the schema"),
+    (lambda s: s["grid"].update(lookback=[10, 10.0]), "duplicate values"),
+])
+def test_non_canonical_or_cosmetic_specs_are_refused(tmp_path, mutate, expect):
+    reg, lg = _reg(tmp_path)
+    b = X.small_bundles(domains=("fx",), templates=("trend",))[0]
+    spec = json.loads(json.dumps(b.spec))
+    mutate(spec)
+    assert reg.submit([R.Bundle(b.family, b.hypothesis, spec)])["rejected"] == 1
+    assert any(expect in r for r in lg.of_type("submission_rejected")[-1]["payload"]["reasons"])
+
+
+def test_overlapping_specs_are_flagged_as_semantic_duplicates(tmp_path):
+    reg, lg = _reg(tmp_path)
+    b = X.small_bundles(domains=("fx",), templates=("trend",))[0]
+    g = dict(X.small_grids()["trend"], lookback=[40, 77])          # 40 overlaps the first spec's grid
+    other = R.strategy_spec(b.hypothesis, "trend", g, cost_models=("c1", "c2"))
+    reg.submit([b, R.Bundle(b.family, b.hypothesis, other)])
+    fr = reg.freeze()
+    # lookback 40 x shape 2 x halflife 1 x rebalance 2 x cost 2 = 8 repeated economics; both copies registered
+    assert fr["counts"]["semantic_duplicates"] == 8
+    assert fr["counts"]["candidates"] == 24 + 16
+
+
+def test_engine_digest_covers_its_dependencies(tmp_path):
+    import shutil
+    base = ids.code_identity()["engine_sha256"]
+    for rel in ids.DEPENDENCIES:
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ids.ROOT / rel, tmp_path / rel)
+    assert ids.code_identity(tmp_path)["engine_sha256"] == base
+    (tmp_path / "manhattan/stats/bootstrap.py").write_text((ids.ROOT / "manhattan/stats/bootstrap.py").read_text()
+                                                            + "\n# changed\n")
+    assert ids.code_identity(tmp_path)["engine_sha256"] != base

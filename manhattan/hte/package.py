@@ -93,7 +93,7 @@ def _meff(runner, table, idx_h: np.ndarray) -> dict:
     if X.shape[0] < 2:
         return {"value": None, "reason": "fewer than two non-constant series"}
     corr = np.corrcoef(X)
-    return {"value": float(meff.li_ji(corr)), "series_used": int(X.shape[0]), "of_computed": int(
+    return {"value": round(float(meff.li_ji(corr)), 6), "series_used": int(X.shape[0]), "of_computed": int(
         (table["s3"][idx_h] == 1).sum()), "selection": "outcome-blind stride over canonical order"}
 
 
@@ -109,6 +109,12 @@ def build(runner, table: dict, spa_parts) -> dict:
                     if r["payload"]["identity"]["registry_root"] == root]
     run_ids = sorted({r["payload"]["run_id"] for r in runs_on_root})
     files = {}
+    pkgs: dict = {}
+    meff_jobs: list = []
+
+    def name_of(fh):
+        return f"{ids.short_id('family', fh)}.json"
+
     s2c = {k: i for i, k in enumerate(kernels.S2_COLS)}
     s3c = {k: i for i, k in enumerate(kernels.S3_COLS)}
     from .runner import S1, S3
@@ -182,11 +188,40 @@ def build(runner, table: dict, spa_parts) -> dict:
                 sp = [s for s in specs if reg.records[reg.spec_hashes[s]]["hypothesis"] == h]
                 idx_h = idx[np.isin(view.spec_index[idx], sp)]
                 reps = idx_h[table["alias_of"][idx_h] < 0]
-                pkg["m_eff"][ids.short_id("hypothesis", h)] = _meff(runner, table, reps)
+                meff_jobs.append((name_of(fh), ids.short_id("hypothesis", h), reps))
+        pkgs[name_of(fh)] = pkg
+    if meff_jobs:
+        vals = _run_meff(runner, table, meff_jobs)
+        for (name, hid, _), v in zip(meff_jobs, vals):
+            pkgs[name]["m_eff"][hid] = v
+    for name, pkg in pkgs.items():
         raw = json.dumps(pkg, sort_keys=True, indent=1, default=float).encode()
-        name = f"{ids.short_id('family', fh)}.json"
         files[name] = store.atomic_write_bytes(out_dir / name, raw)
     return {"files": files}
+
+
+_MEFF_CTX: dict = {}
+
+
+def _meff_job(i: int):
+    runner, table, jobs = _MEFF_CTX["runner"], _MEFF_CTX["table"], _MEFF_CTX["jobs"]
+    return _meff(runner, table, jobs[i][2])
+
+
+def _run_meff(runner, table, jobs) -> list:
+    """M_eff per hypothesis, in parallel when the run has workers (each value is a pure function of its
+    hypothesis's recorded series, so the order of computation cannot change it)."""
+    _MEFF_CTX.update(runner=runner, table=table, jobs=jobs)
+    try:
+        if runner.workers > 1 and len(jobs) > 1:
+            import multiprocessing as mp
+            from concurrent.futures import ProcessPoolExecutor
+            # an executor, not multiprocessing.Pool: a lost worker raises instead of hanging
+            with ProcessPoolExecutor(min(runner.workers, len(jobs)), mp_context=mp.get_context("fork")) as ex:
+                return list(ex.map(_meff_job, range(len(jobs))))
+        return [_meff_job(i) for i in range(len(jobs))]
+    finally:
+        _MEFF_CTX.clear()
 
 
 def load(run_dir: Path, name: str) -> dict:

@@ -57,13 +57,19 @@ def hypothesis(fam: dict, domain: str, frequency: str = "daily") -> dict:
             "synthetic": True}
 
 
-def strategy_spec(hyp: dict, template: str, grid: dict, *, cost_models=("c1",), sizings=("unit_risk",),
-                  label: str = "") -> dict:
+def _order_key(v):
+    return (0, float(v), "") if isinstance(v, (int, float)) and not isinstance(v, bool) else (1, 0.0, str(v))
+
+
+def strategy_spec(hyp: dict, template: str, grid: dict, *, cost_models=("c1",), sizings=("unit_risk",)) -> dict:
+    """A strategy spec in canonical form: every grid axis and binding list sorted, so that the same grid written
+    in another order is the *same* spec (and a re-submission is a duplicate, not new candidates). There is no
+    free-text label: anything that is not identity would create distinct specs with identical economics."""
     t = TP.TEMPLATES[template]
     return {"level": "strategy_spec", "hypothesis": ids.full_hash(hyp), "template": template,
-            "template_version": t.version, "label": label,
-            "grid": {k: list(grid[k]) for k in sorted(grid)},
-            "bindings": {"cost_model": list(cost_models), "sizing": list(sizings)}}
+            "template_version": t.version,
+            "grid": {k: sorted(grid[k], key=_order_key) for k in sorted(grid)},
+            "bindings": {"cost_model": sorted(cost_models), "sizing": sorted(sizings)}}
 
 
 def grid_size(spec: dict) -> int:
@@ -152,12 +158,20 @@ def validate_bundle(b: Bundle) -> list[str]:
             _canonicalisable(v) for v in vals) else None
         if canon is None:
             probs.append(f"grid.{k}: a value cannot be canonicalised")
-        elif len(set(canon)) != len(canon):
+        elif len(set(canon)) != len(canon) or len({_order_key(v) for v in vals}) != len(vals):
             probs.append(f"grid.{k}: duplicate values (would register duplicate candidates)")
+        elif vals != sorted(vals, key=_order_key):
+            probs.append(f"grid.{k}: values must be in canonical (ascending) order; use registry.strategy_spec")
     for k, allowed in (("cost_model", tuple(TP.COST_MODELS)), ("sizing", TP.SIZINGS)):
         vals = bind.get(k) if isinstance(bind, dict) else None
         if not vals or any(v not in allowed for v in vals) or len(set(vals)) != len(vals):
             probs.append(f"bindings.{k} must be distinct values from {allowed}")
+        elif list(vals) != sorted(vals):
+            probs.append(f"bindings.{k} must be sorted; use registry.strategy_spec")
+    extra = set(s) - {"level", "hypothesis", "template", "template_version", "grid", "bindings"}
+    if extra:
+        probs.append(f"strategy_spec: fields {sorted(extra)} are not part of the schema (non-identity text is "
+                     "refused: it would make identical economics look like distinct specs)")
     return probs
 
 
@@ -205,7 +219,8 @@ class Registry:
                 self._cand = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
             else:
                 self._cand = {"spec_index": np.zeros(0, np.int32), "grid_index": np.zeros(0, np.int64),
-                              "cand": np.zeros((0, 32), np.uint8), "variant": np.zeros((0, 32), np.uint8)}
+                              "cand": np.zeros((0, 32), np.uint8), "variant": np.zeros((0, 32), np.uint8),
+                              "semantic": np.zeros((0, 32), np.uint8)}
         return self._cand
 
     def __len__(self) -> int:
@@ -285,17 +300,24 @@ class Registry:
         n = grid_size(spec)
         cand = np.empty((n, 32), np.uint8)
         var = np.empty((n, 32), np.uint8)
+        sem = np.empty((n, 32), np.uint8)
         i = 0
         for vals in itertools.product(*(spec["grid"][k] for k in keys)):
-            vh = ids.full_hash(variant_record(sh, dict(zip(keys, vals))))
+            params = dict(zip(keys, vals))
+            vh = ids.full_hash(variant_record(sh, params))
             vb = np.frombuffer(bytes.fromhex(vh), np.uint8)
             for c in b["cost_model"]:
                 for s in b["sizing"]:
                     cand[i] = np.frombuffer(bytes.fromhex(ids.full_hash(candidate_record(vh, c, s))), np.uint8)
                     var[i] = vb
+                    # the economics, without the spec: equal across specs that overlap in one hypothesis
+                    sem[i] = np.frombuffer(bytes.fromhex(ids.full_hash(
+                        {"hypothesis": spec["hypothesis"], "template": spec["template"],
+                         "template_version": spec["template_version"], "params": params, "cost_model": c,
+                         "sizing": s})), np.uint8)
                     i += 1
         return {"spec_index": np.full(n, spec_index, np.int32), "grid_index": np.arange(n, dtype=np.int64),
-                "cand": cand, "variant": var}
+                "cand": cand, "variant": var, "semantic": sem}
 
     def _commit_segment(self, new_records, new_specs, arrays) -> None:
         # a full-hash collision check against everything registered (16-hex short IDs may collide; full hashes
@@ -311,8 +333,11 @@ class Registry:
         rsha = store.atomic_write_bytes(self.root / rname, "".join(
             json.dumps(rec, sort_keys=True, separators=(",", ":")) + "\n" for _, rec in new_records).encode())
         # files first, log record last: a crash before the record leaves orphan files that are never read
+        allsem = np.concatenate([self._arrays()["semantic"], arrays["semantic"]])
+        sem_dups = int(allsem.shape[0] - np.unique(allsem, axis=0).shape[0]) if allsem.size else 0
         payload = {"segment": k, "file": fname, "sha256": sha, "records_file": rname, "records_sha256": rsha,
                    "n_candidates": int(arrays["spec_index"].size),
+                   "semantic_duplicates_total": sem_dups,
                    "merkle_root": ids.merkle_root_array(arrays["cand"]),
                    "new_records": [h for h, _ in new_records], "new_specs": new_specs}
         self.log.append("registry_segment", payload)
@@ -367,9 +392,13 @@ class Registry:
             if r["level"] in lv:
                 lv[r["level"]] += 1
         a = self._arrays()
+        sem = a["semantic"]
         return {"families": lv["family"], "hypotheses": lv["hypothesis"], "strategy_specs": lv["strategy_spec"],
                 "variants": int(np.unique(a["variant"], axis=0).shape[0]) if a["variant"].size else 0,
-                "candidates": int(a["spec_index"].size)}
+                "candidates": int(a["spec_index"].size),
+                # candidates whose economics (hypothesis, template, parameters, binding) repeat another
+                # candidate's in an overlapping spec: still registered and counted, flagged here
+                "semantic_duplicates": int(sem.shape[0] - np.unique(sem, axis=0).shape[0]) if sem.size else 0}
 
 
 class FrozenView:

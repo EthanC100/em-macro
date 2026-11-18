@@ -28,5 +28,5 @@ def small_bundles(domains=("fx", "rates"), templates=TP.PRODUCTION_TEMPLATES, co
         for dom in domains:
             hyp = R.hypothesis(fam, dom)
             out.append(R.Bundle(fam, hyp, R.strategy_spec(hyp, tname, g[tname], cost_models=cost_models,
-                                                          sizings=sizings, label=f"{tname}/{dom}")))
+                                                          sizings=sizings)))
     return out
