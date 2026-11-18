@@ -1,20 +1,85 @@
 {
- "since": "2026-11-18T14:50:14+00:00",
- "at": "2026-11-18T18:21:47+00:00",
+ "since": "2026-11-18T18:21:47+00:00",
+ "at": "2026-11-18T22:19:19+00:00",
  "items": [
-  {
-   "book": "algorithm",
-   "kind": "pnl",
-   "label": "algorithm v1.0",
-   "change": 0.379,
-   "text": "algorithm v1.0: +0.38 index points (to 100.07)"
-  },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": 0.0775,
-   "text": "janus: +0.08 index points (to 100.03)"
+   "change": -0.0356,
+   "text": "janus: -0.04 index points (to 100.00)"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J007",
+   "text": "Janus J007 closed (C08 rebalance): net +0.07%"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J010",
+   "text": "Janus J010 closed (C08 rebalance): net +0.06%"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J011",
+   "text": "Janus J011 closed (C08 rebalance): net +0.17%"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J014",
+   "text": "Janus J014 closed (C08 rebalance): net +0.02%"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J015",
+   "text": "Janus J015 closed (C08 rebalance): net +0.02%"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J016",
+   "text": "Janus J016 closed (C08 rebalance): net +0.02%"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J019",
+   "text": "Janus J019 filled: short EUR"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J020",
+   "text": "Janus J020 filled: short GBP"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J021",
+   "text": "Janus J021 filled: long JPY"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J022",
+   "text": "Janus J022 filled: short AUD"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J023",
+   "text": "Janus J023 filled: short BRL"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J024",
+   "text": "Janus J024 filled: short MXN"
   }
  ]
 }
