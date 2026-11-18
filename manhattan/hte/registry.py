@@ -38,7 +38,7 @@ from . import METHODOLOGY
 from . import data as D
 from . import ids, pit, store
 from . import templates as TP
-from .log import AttemptLog
+from .log import AttemptLog, locked, recover_torn_tail
 
 
 class RegistryError(RuntimeError):
@@ -125,6 +125,10 @@ def validate_bundle(b: Bundle) -> list[str]:
         missing = [k for k in req if k not in rec]
         if missing:
             probs.append(f"{lvl}: missing {missing}")
+        if lvl != "strategy_spec":
+            extra = set(rec) - set(req) - {"level", "synthetic"}
+            if extra:
+                probs.append(f"{lvl}: fields {sorted(extra)} are not part of the schema")
         if rec.get("synthetic") is False:
             probs.append(f"{lvl}: HTE registers synthetic research workloads only")
     if probs:
@@ -195,6 +199,14 @@ class Registry:
         self.segments: list[dict] = []
         self._load()
 
+    def _reload(self) -> None:
+        """Re-read everything from the log (called under the lock before any write: another writer may have
+        registered or frozen since this object was built)."""
+        recover_torn_tail(self.log.path)
+        self.log.refresh()
+        self.records, self.spec_hashes, self.segments = {}, [], []
+        self._load()
+
     # loading verifies every file against the log
     def _load(self) -> None:
         for rec in self.log.of_type("registry_segment"):
@@ -231,23 +243,30 @@ class Registry:
 
     # -- submission --------------------------------------------------------------------------------------
     def submit(self, bundles: list[Bundle], *, probe_panel=None) -> dict:
-        """Validate and register. Returns counts; every outcome is logged."""
+        """Validate and register under the workspace lock. Returns counts; every outcome is logged."""
+        with locked(self.log.path):
+            self._reload()
+            return self._submit(bundles, probe_panel)
+
+    def _submit(self, bundles: list[Bundle], probe_panel) -> dict:
         report = {"submitted": len(bundles), "registered_specs": 0, "registered_candidates": 0,
                   "duplicate_submissions": 0, "rejected": 0}
         known_specs = set(self.spec_hashes)
         new_records, new_specs, seg_parts = [], [], []
         batch_specs: set[str] = set()
-        probed = {(r["payload"]["template"], r["payload"]["version"]): r["payload"]["passed"]
+        code = pit.code_hash()
+        # a probe result is reused only for the same template version *and* the same template and feature code
+        probed = {(r["payload"]["template"], r["payload"]["version"], r["payload"].get("code")): r["payload"]["passed"]
                   for r in self.log.of_type("pit_probe")}
         for b in bundles:
             probs = validate_bundle(b)
             sh = None
             if not probs:
                 sh = ids.full_hash(b.spec)
-                key = (b.spec["template"], b.spec["template_version"])
+                key = (b.spec["template"], b.spec["template_version"], code)
                 if key not in probed:
                     res = pit.probe(b.spec["template"], panel=probe_panel)
-                    self.log.append("pit_probe", {"template": key[0], "version": key[1], **res})
+                    self.log.append("pit_probe", {"template": key[0], "version": key[1], "code": code, **res})
                     probed[key] = res["passed"]
                 if not probed[key]:
                     probs.append("template failed the PIT probe (positions depend on future data)")
@@ -274,7 +293,7 @@ class Registry:
                     new_records.append((h, rec))
             spec_index = len(self.spec_hashes) + len(new_specs)
             new_specs.append(sh)
-            seg_parts.append(self._enumerate(b.spec, sh, spec_index))
+            seg_parts.append(self._enumerate(b.spec, sh, spec_index, b.hypothesis))
             report["registered_specs"] += 1
         if new_specs:
             arrays = {k: np.concatenate([p[k] for p in seg_parts]) for k in seg_parts[0]}
@@ -294,7 +313,8 @@ class Registry:
                     break
         return bad
 
-    def _enumerate(self, spec: dict, sh: str, spec_index: int) -> dict:
+    def _enumerate(self, spec: dict, sh: str, spec_index: int, hyp: dict) -> dict:
+        domain, frequency = hyp["domain"], hyp["frequency"]
         keys = sorted(spec["grid"])
         b = spec["bindings"]
         n = grid_size(spec)
@@ -310,9 +330,10 @@ class Registry:
                 for s in b["sizing"]:
                     cand[i] = np.frombuffer(bytes.fromhex(ids.full_hash(candidate_record(vh, c, s))), np.uint8)
                     var[i] = vb
-                    # the economics, without the spec: equal across specs that overlap in one hypothesis
+                    # the economics alone (no family, hypothesis or spec text): equal across overlapping specs and
+                    # across families that re-register the same rule under another name
                     sem[i] = np.frombuffer(bytes.fromhex(ids.full_hash(
-                        {"hypothesis": spec["hypothesis"], "template": spec["template"],
+                        {"domain": domain, "frequency": frequency, "template": spec["template"],
                          "template_version": spec["template_version"], "params": params, "cost_model": c,
                          "sizing": s})), np.uint8)
                     i += 1
@@ -349,8 +370,13 @@ class Registry:
 
     # -- freezing ----------------------------------------------------------------------------------------
     def freeze(self) -> dict:
-        """Fix the canonical order of every registered candidate and log its root. Idempotent: freezing an
-        unchanged registry returns the existing version."""
+        """Fix the canonical order of every registered candidate and log its root, under the workspace lock.
+        Idempotent: freezing an unchanged registry returns the existing version."""
+        with locked(self.log.path):
+            self._reload()
+            return self._freeze()
+
+    def _freeze(self) -> dict:
         a = self._arrays()
         n = a["spec_index"].size
         if n == 0:
@@ -372,11 +398,19 @@ class Registry:
         self.log.append("registry_frozen", payload)
         return payload
 
-    def frozen(self, version: int | None = None) -> "FrozenView":
+    def frozen(self, version: int | None = None, *, root: str | None = None) -> "FrozenView":
+        """A frozen version: the latest, a version number, or the version with a given root (a run is bound to
+        the root in its identity, never to "the latest")."""
         fr = self.log.of_type("registry_frozen")
         if not fr:
             raise RegistryError("registry has not been frozen")
-        p = fr[-1]["payload"] if version is None else fr[version]["payload"]
+        if root is not None:
+            match = [r for r in fr if r["payload"]["root"] == root]
+            if not match:
+                raise RegistryError(f"no frozen version has root {root[:16]}")
+            p = match[0]["payload"]
+        else:
+            p = fr[-1]["payload"] if version is None else fr[version]["payload"]
         order = store.read_arrays(self.root / p["order_file"], p["order_sha256"])["order"]
         a = self._arrays()
         if order.size != p["n_candidates"]:
@@ -396,8 +430,8 @@ class Registry:
         return {"families": lv["family"], "hypotheses": lv["hypothesis"], "strategy_specs": lv["strategy_spec"],
                 "variants": int(np.unique(a["variant"], axis=0).shape[0]) if a["variant"].size else 0,
                 "candidates": int(a["spec_index"].size),
-                # candidates whose economics (hypothesis, template, parameters, binding) repeat another
-                # candidate's in an overlapping spec: still registered and counted, flagged here
+                # candidates whose economics (domain, template, parameters, binding) repeat another candidate's,
+                # in an overlapping spec or under another family: still registered and counted, flagged here
                 "semantic_duplicates": int(sem.shape[0] - np.unique(sem, axis=0).shape[0]) if sem.size else 0}
 
 
@@ -413,6 +447,7 @@ class FrozenView:
         self.grid_index = arrays["grid_index"][order]
         self.cand = arrays["cand"][order]
         self.variant = arrays["variant"][order]
+        self.semantic = arrays["semantic"][order]
 
     def __len__(self) -> int:
         return int(self.order.size)
@@ -439,9 +474,15 @@ class FrozenView:
         return candidate_record(vh, cost, sizing)
 
     def family_of_spec(self) -> tuple[np.ndarray, list]:
-        """Per spec index: an integer family number (by sorted family hash)."""
-        fams = sorted({self.reg.records[self.reg.records[h]["hypothesis"]]["family"]
-                       for h in self.reg.spec_hashes})
+        """Per global spec index: an integer family number (by sorted family hash), over the families of *this
+        frozen view only* (a spec registered later cannot renumber the families of a run). Specs outside the
+        view map to -1."""
+        in_view = sorted({int(s) for s in np.unique(self.spec_index)})
+        fam_of = {s: self.reg.records[self.reg.records[self.reg.spec_hashes[s]]["hypothesis"]]["family"]
+                  for s in in_view}
+        fams = sorted(set(fam_of.values()))
         fnum = {f: i for i, f in enumerate(fams)}
-        return np.array([fnum[self.reg.records[self.reg.records[h]["hypothesis"]]["family"]]
-                         for h in self.reg.spec_hashes], dtype=np.int32), fams
+        out = np.full(len(self.reg.spec_hashes), -1, dtype=np.int32)
+        for s, f in fam_of.items():
+            out[s] = fnum[f]
+        return out, fams

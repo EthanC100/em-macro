@@ -38,7 +38,6 @@ Faults never change results; they exist so that crash and resume can be tested i
 """
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import multiprocessing as mp
 import os
@@ -56,7 +55,7 @@ from . import data as D
 from . import features as F
 from . import ids, kernels, store
 from . import templates as TP
-from .log import AttemptLog, recover_torn_tail
+from .log import AttemptLog, LogError, locked, recover_torn_tail
 from .policy import Policy
 from .registry import Registry
 
@@ -86,8 +85,8 @@ class Workspace:
         return self.root / "attempts.jsonl"
 
     def log(self) -> AttemptLog:
-        if self.log_path.exists():
-            recover_torn_tail(self.log_path)
+        """Read access. A torn final line is tolerated when reading; it is quarantined only by a writer holding
+        the workspace lock (``Runner.run``, ``Registry.submit``/``freeze``)."""
         return AttemptLog(self.log_path)
 
     def registry(self, log: AttemptLog | None = None) -> Registry:
@@ -288,10 +287,11 @@ def _init_worker(ctx):
 
 # -- parent side ----------------------------------------------------------------------------------------------
 
-def run_identity(view, data_hash: str, policy: Policy, fence: int, code: dict, pass_a: str) -> dict:
+def run_identity(view, data_hash: str, policy: Policy, fence: int, code: dict, pass_a: str,
+                 stages: tuple = (1, 2, 3, 4)) -> dict:
     return {"registry_root": view.root, "data_hash": data_hash, "engine_sha256": code["engine_sha256"],
             "policy_hash": policy.hash(), "warmup": policy.warmup, "fence": fence, "methodology": METHODOLOGY,
-            "pass_a": pass_a}
+            "pass_a": pass_a, "stages": list(stages)}
 
 
 def boot_seed(view, data_hash: str, policy: Policy, fence: int) -> int:
@@ -305,7 +305,9 @@ def boot_seed(view, data_hash: str, policy: Policy, fence: int) -> int:
 class Runner:
     def __init__(self, ws: Workspace, panel, policy: Policy = Policy(), *, chunk_size: int = 256,
                  workers: int = 1, cache_enabled: bool = True, disk_cache: bool = True,
-                 stages: tuple = (1, 2, 3, 4)):
+                 stages: tuple = (1, 2, 3, 4), registry_root: str | None = None):
+        """``registry_root`` binds the run to one frozen registry version (default: the latest). Pass the root
+        of an interrupted run to resume it after a newer freeze."""
         if chunk_size < 1 or workers < 1:
             raise ValueError("chunk_size and workers must be positive")
         if 5 in stages:
@@ -320,10 +322,11 @@ class Runner:
         self.data_hash = D.verify_synthetic(panel)
         self.log = ws.log()
         self.reg = ws.registry(self.log)
-        self.view = self.reg.frozen()
+        self.view = self.reg.frozen(root=registry_root) if registry_root else self.reg.frozen()
         self.code = ids.code_identity()
         self.pass_a = "stage1_only" if self.stages == (1,) else "stages_1_2"
-        self.ident = run_identity(self.view, self.data_hash, policy, panel.fence, self.code, self.pass_a)
+        self.ident = run_identity(self.view, self.data_hash, policy, panel.fence, self.code, self.pass_a,
+                                  self.stages)
         self.run_hash = ids.full_hash(self.ident)
         self.run_id = "HR-" + self.run_hash[:16]
         self.dir = ws.run_dir(self.run_id)
@@ -372,17 +375,15 @@ class Runner:
     def run(self, *, verify_rerun: bool = False) -> dict:
         """One invocation. Holds an exclusive lock on the workspace for its whole duration (released by the OS if
         the process dies), so two runners can never interleave records in one log."""
-        lock = open(self.ws.root / ".lock", "a+")
         try:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            lock.close()
-            raise RunError("another runner holds this workspace") from None
-        try:
-            return self._run(verify_rerun=verify_rerun)
-        finally:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-            lock.close()
+            with locked(self.log.path):
+                recover_torn_tail(self.log.path)
+                self.log.refresh()                      # records written by any other writer since __init__
+                return self._run(verify_rerun=verify_rerun)
+        except LogError as e:
+            if "another writer" in str(e):
+                raise RunError("another runner holds this workspace") from None
+            raise
 
     BYTES_PER_CANDIDATE = 2048       # preflight: about 3x the measured ~0.6 KB per candidate (BENCHMARKS.md)
 
@@ -414,6 +415,8 @@ class Runner:
         if incomplete:
             return self._stop(f"{incomplete} candidates have no completed stage 1-2 attempt")
         if self.stages == (1,) or 3 not in self.stages:
+            if closed and verify_rerun:
+                return self._verified(closed[-1]["payload"])
             return self._close(stage3=False)
         t2 = time.perf_counter()
         self._select()
@@ -424,7 +427,26 @@ class Runner:
         incomplete = self._uncovered("B")
         if incomplete:
             return self._stop(f"{incomplete} selected candidates have no completed stage 3 attempt")
+        if closed and verify_rerun:
+            return self._verified(closed[-1]["payload"])
         return self._close(stage3=True)
+
+    def _verified(self, closed: dict) -> dict:
+        """End of a verification invocation: every chunk was recomputed and compared field by field; the result
+        table rebuilt from the results of record must also reproduce the closed ``result_root``. Nothing of
+        record (results, packages) is rewritten."""
+        mine = [r for r in self.log.records() if r["payload"].get("run_id") == self.run_id]
+        last = max(r["seq"] for r in mine if r["type"] == "run_started")
+        ver = [r for r in mine if r["seq"] > last and r["type"] in ("attempt_completed", "attempt_failed")]
+        bad = [r for r in ver if r["type"] == "attempt_failed" or r["payload"].get("verification") != "identical"]
+        stage3 = 3 in self.stages
+        root = ids.sha256_bytes(store.arrays_to_bytes(self.results_table(stage3)))
+        if bad or root != closed["result_root"]:
+            self.log.append("verification_failed", {"run_id": self.run_id, "failed_attempts": len(bad),
+                                                    "result_root_reproduced": root == closed["result_root"]})
+            raise RunError("verification did not complete or did not reproduce the result of record")
+        self.log.append("run_verified", {"run_id": self.run_id, "result_root": root, "attempts": len(ver)})
+        return dict(closed, reused=False, verified=True, timings=self.timings)
 
     def _stop(self, why: str) -> dict:
         p = {"run_id": self.run_id, "reason": why}
@@ -506,14 +528,13 @@ class Runner:
         self._execute(pas, ranges, verification=False)
 
     def _prior_failed(self, pas: str) -> list[tuple]:
+        """Every failed or interrupted attempt of this pass: a new attempt names each one whose range it overlaps,
+        whether or not an earlier retry already named it (a retry can itself be interrupted part-way)."""
         fails = {r["payload"]["attempt_id"] for r in self._recs("attempt_failed", "attempt_interrupted")}
-        superseded = set()
-        for r in self._recs("attempt_started"):
-            superseded.update(r["payload"].get("supersedes", []))
         out = []
         for r in self._recs("attempt_started"):
             p = r["payload"]
-            if p["pass"] == pas and r["hash"] in fails and r["hash"] not in superseded:
+            if p["pass"] == pas and r["hash"] in fails:
                 out.append((p["lo"], p["hi"], r["hash"]))
         return out
 
@@ -595,7 +616,7 @@ class Runner:
             payload = {"pass": pas, "lo": t["lo"], "hi": t["hi"], "file": f"{pas}/{fname}",
                        "sha256": out["sha256"], "counts": out["counts"], "errors": out["errors"]}
             if verification:
-                payload["verification"] = self._verify(pas, t, out)
+                payload["verification"] = self._verify(pas, t, out, aid)
             self._complete(aid, payload)
 
         # sliding window: at most `inflight` chunks are started and unfinished; completions are logged in
@@ -615,17 +636,28 @@ class Runner:
             if pool is not None:
                 pool.shutdown(wait=True, cancel_futures=True)
 
-    def _verify(self, pas: str, t: dict, out: dict) -> str:
+    def _verify(self, pas: str, t: dict, out: dict, aid: str) -> str:
+        """Compare every field of a verification chunk (SPA partial maxima included) with the completed attempt
+        of record for exactly the same range. A mismatch gives the verification attempt its terminal
+        (``attempt_failed``, reason ``nondeterminism``), logs ``nondeterminism`` and raises."""
         new = store.read_arrays(Path(t["path"]), out["sha256"])
-        old = self._load_pass(pas, restrict=(t["lo"], t["hi"]))
-        for k in new:
-            if k.startswith("spa_"):
-                continue
-            if not np.array_equal(new[k], old[k], equal_nan=True):
-                self.log.append("nondeterminism", {"run_id": self.run_id, "pass": pas, "lo": t["lo"],
-                                                   "hi": t["hi"], "field": k})
-                raise RunError(f"nondeterminism in pass {pas} [{t['lo']}, {t['hi']}): field {k}")
-        return "identical"
+        rec = [p for p in self._completed(pas) if p["lo"] == t["lo"] and p["hi"] == t["hi"]]
+        field = None
+        if len(rec) != 1:
+            field = "range"
+        else:
+            old = store.read_arrays(self.dir / rec[0]["file"], rec[0]["sha256"])
+            for k in sorted(set(new) | set(old)):
+                if k not in new or k not in old or not np.array_equal(new[k], old[k], equal_nan=True):
+                    field = k
+                    break
+        if field is None:
+            return "identical"
+        self.log.append("attempt_failed", {"run_id": self.run_id, "attempt_id": aid, "pass": pas,
+                                           "reason": "nondeterminism", "error_class": "Nondeterminism"})
+        self.log.append("nondeterminism", {"run_id": self.run_id, "pass": pas, "lo": t["lo"], "hi": t["hi"],
+                                           "field": field})
+        raise RunError(f"nondeterminism in pass {pas} [{t['lo']}, {t['hi']}): field {field}")
 
     # loading results of record ----------------------------------------------------------------------------
     def _load_pass(self, pas: str, restrict: tuple | None = None) -> dict:
@@ -669,10 +701,14 @@ class Runner:
         s1 = A["s1"]
         alias_of = np.full(N, -1, np.int64)
         live = (s1 == S1["pass"]) | (s1 == S1["dominated"])
+        fam = self.fam_of_spec[self.view.spec_index]
         if self.policy.dedup_behavioural and live.any():
+            # aliases are resolved *within a family*: every family's SPA then holds each of its behavioural
+            # classes once. An alias across families would silently shrink one family's variant set.
             li = np.flatnonzero(live)
-            fp = A["fingerprint"][li]
-            _, first, inv = np.unique(fp, axis=0, return_index=True, return_inverse=True)
+            key = np.concatenate([A["fingerprint"][li], fam[li].astype(">i4").view(np.uint8).reshape(-1, 4)],
+                                 axis=1)
+            _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
             rep = li[first][inv.ravel()]
             alias_of[li] = np.where(rep != li, rep, -1)
         planned = np.zeros(N, np.uint8)
@@ -695,7 +731,21 @@ class Runner:
         al = alias_of >= 0
         planned[al] = np.where(planned[alias_of[al]] == S3["computed"], S3["alias"], planned[alias_of[al]])
         # an alias of a dominated representative carries the representative's planned status
-        return {"selected": np.flatnonzero(eligible).astype(np.int64), "alias_of": alias_of, "planned": planned}
+        # behaviour shared across families (the same positions registered under another family): computed in
+        # each family, and flagged, never merged
+        cross = np.zeros(N, bool)
+        if live.any():
+            li = np.flatnonzero(live)
+            fp = A["fingerprint"][li]
+            _, inv = np.unique(fp, axis=0, return_inverse=True)
+            inv = inv.ravel()
+            fams_per = {}
+            for g, f in zip(inv.tolist(), fam[li].tolist()):
+                fams_per.setdefault(g, set()).add(f)
+            multi = np.array([len(fams_per[g]) > 1 for g in inv.tolist()], bool)
+            cross[li] = multi
+        return {"selected": np.flatnonzero(eligible).astype(np.int64), "alias_of": alias_of, "planned": planned,
+                "cross_family_behaviour": cross}
 
     def _select(self) -> None:
         sel = self.compute_selection()
@@ -712,6 +762,7 @@ class Runner:
         inputs = [{"attempt_lo": p["lo"], "sha256": p["sha256"]} for p in
                   sorted(self._completed("A"), key=lambda p: p["lo"])]
         counts = {k: int((sel["planned"] == v).sum()) for k, v in S3.items() if (sel["planned"] == v).any()}
+        counts["cross_family_behaviour"] = int(sel["cross_family_behaviour"].sum())
         self.log.append("selection", {"run_id": self.run_id, "file": fname, "sha256": sha,
                                       "policy_hash": self.policy.hash(),
                                       "performance_gate": self.policy.performance_gate,
@@ -745,7 +796,7 @@ class Runner:
             fi = np.flatnonzero(al)[s3[src] == S3["failed"]]
             s3[fi] = S3["skipped_failed_upstream"]
             table.update({"s3": s3, "reason3": r3, "stats3": stats3, "series_sha256": h3,
-                          "alias_of": sel["alias_of"]})
+                          "alias_of": sel["alias_of"], "cross_family_behaviour": sel["cross_family_behaviour"]})
         return table
 
     def _close(self, stage3: bool) -> dict:
@@ -807,9 +858,16 @@ def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
         else:
             by["interrupted"] += 1
     reg = Registry(ws.root / "registry", log)
-    view = reg.frozen()
-    N = len(view)
     started = [r for r in recs if r["type"] == "run_started"]
+    if not started:
+        raise RunError(f"no run {run_id} in this workspace")
+    view = reg.frozen(root=started[0]["payload"]["identity"]["registry_root"])      # the run's own version
+    N = len(view)
+    for r in recs:
+        if r["type"] in ("nondeterminism", "verification_failed"):
+            violations.append({"code": r["type"], "seq": r["seq"]})
+    if unfinished and any(r["type"] == "run_closed" for r in recs):
+        violations.append({"code": "unfinished_attempts_in_closed_run", "n": len(unfinished)})
     passes = {}
     for pas in ("A", "B"):
         comp = [r["payload"] for r in recs if r["type"] == "attempt_completed" and r["payload"]["pass"] == pas
@@ -858,7 +916,8 @@ def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
 
 
 def history(ws: Workspace, run_id: str, canonical_index: int) -> list[dict]:
-    """Every attempt that covered one candidate in one run, with its terminal (or ``unfinished``)."""
+    """Every attempt that covered one candidate (an index in the run's own frozen order) in one run, with its
+    terminal (or ``unfinished``)."""
     log = AttemptLog(ws.log_path)
     recs = [r for r in log.records() if r["payload"].get("run_id") == run_id]
     term = {r["payload"]["attempt_id"]: r["type"] for r in recs

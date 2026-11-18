@@ -70,11 +70,16 @@ def _corner_points(template: str) -> list[dict]:
 _MEMO: dict = {}
 
 
+def code_hash() -> str:
+    """SHA-256 of the template and feature code a probe result depends on."""
+    from pathlib import Path
+    from .ids import sha256_bytes
+    return sha256_bytes(Path(TP.__file__).read_bytes() + Path(F.__file__).read_bytes())
+
+
 def probe(template: str, panel: D.FencedPanel | None = None) -> dict:
     """Run (or reuse, within one process, for unchanged template and feature code) the probe of one template."""
-    from .ids import sha256_bytes
-    from pathlib import Path
-    code = sha256_bytes(Path(TP.__file__).read_bytes() + Path(F.__file__).read_bytes())
+    code = code_hash()
     key = (template, TP.TEMPLATES[template].version, id(TP.TEMPLATES[template]), code,
            panel.data_hash if panel is not None else "default")
     if key not in _MEMO:

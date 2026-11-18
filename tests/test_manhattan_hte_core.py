@@ -495,3 +495,92 @@ def test_engine_digest_covers_its_dependencies(tmp_path):
     (tmp_path / "manhattan/stats/bootstrap.py").write_text((ids.ROOT / "manhattan/stats/bootstrap.py").read_text()
                                                             + "\n# changed\n")
     assert ids.code_identity(tmp_path)["engine_sha256"] != base
+
+
+# -- regressions from the independent review -----------------------------------------------------------------------
+
+def test_stale_log_objects_never_fork_the_chain(tmp_path):
+    p = tmp_path / "attempts.jsonl"
+    a, b = L.AttemptLog(p), L.AttemptLog(p)
+    a.records()
+    b.records()
+    b.append("x", {"by": "b"})
+    a.append("x", {"by": "a"})                     # a was built before b wrote: it must re-read, not fork
+    assert [r["payload"]["by"] for r in L.read(p)] == ["b", "a"]
+
+
+def test_stale_registry_objects_cannot_overwrite_each_others_segments(tmp_path):
+    lg = L.AttemptLog(tmp_path / "attempts.jsonl")
+    r1 = R.Registry(tmp_path / "registry", lg)
+    r2 = R.Registry(tmp_path / "registry", L.AttemptLog(tmp_path / "attempts.jsonl"))
+    b = X.small_bundles()
+    r2.submit(b[:3])
+    r1.submit(b[3:6])                              # r1 is stale: it must reload and use the next segment number
+    fresh = R.Registry(tmp_path / "registry", L.AttemptLog(tmp_path / "attempts.jsonl"))
+    assert len(fresh) == R.grid_size(b[0].spec) * 0 + sum(R.grid_size(x.spec) for x in b[:6])
+    assert fresh.freeze()["n_candidates"] == len(fresh)
+
+
+def test_registry_writes_take_the_workspace_lock(tmp_path):
+    import fcntl
+    reg, lg = _reg(tmp_path)
+    with open(tmp_path / ".lock", "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(L.LogError, match="another writer"):
+            reg.submit(X.small_bundles()[:1])
+
+
+def test_reading_tolerates_a_torn_tail_and_only_a_writer_quarantines_it(tmp_path):
+    p = tmp_path / "attempts.jsonl"
+    lg = L.AttemptLog(p)
+    lg.append("x", {"i": 1})
+    with open(p, "ab") as f:
+        f.write(b'{"seq":2,"ty')
+    reader = L.AttemptLog(p)
+    assert len(reader.records()) == 1 and reader.torn
+    with pytest.raises(L.LogError, match="torn"):
+        reader.append("x", {"i": 2})
+    assert p.read_bytes().endswith(b'{"seq":2,"ty')        # reading changed nothing
+
+
+def test_a_quarantine_left_by_a_crash_is_recorded_on_the_next_recovery(tmp_path):
+    p = tmp_path / "attempts.jsonl"
+    L.AttemptLog(p).append("x", {"i": 1})
+    (tmp_path / "attempts.jsonl.torn-0").write_bytes(b"partial")   # crash after the cut, before the record
+    rec = L.recover_torn_tail(p)
+    assert rec["payload"]["quarantine"] == "attempts.jsonl.torn-0" and rec["payload"]["recovered_after_crash"]
+    assert L.recover_torn_tail(p) is None                         # recorded once
+
+
+def test_family_and_hypothesis_records_refuse_extra_fields(tmp_path):
+    reg, lg = _reg(tmp_path)
+    b = X.small_bundles(domains=("fx",), templates=("trend",))[0]
+    hyp = dict(b.hypothesis, note="v2")
+    spec = R.strategy_spec(hyp, "trend", X.small_grids()["trend"])
+    assert reg.submit([R.Bundle(b.family, hyp, spec)])["rejected"] == 1
+    fam = dict(b.family, note="v2")
+    hyp2 = R.hypothesis(fam, "fx")
+    assert reg.submit([R.Bundle(fam, hyp2, R.strategy_spec(hyp2, "trend", X.small_grids()["trend"]))])["rejected"] == 1
+
+
+def test_renamed_family_with_the_same_economics_is_a_semantic_duplicate(tmp_path):
+    reg, lg = _reg(tmp_path)
+    b = X.small_bundles(domains=("fx",), templates=("trend",))[0]
+    fam2 = R.family("renamed-trend", "same rule, new words", "+", "dense")
+    hyp2 = R.hypothesis(fam2, "fx")
+    spec2 = R.strategy_spec(hyp2, "trend", X.small_grids()["trend"], cost_models=("c1", "c2"))
+    reg.submit([b, R.Bundle(fam2, hyp2, spec2)])
+    assert reg.freeze()["counts"]["semantic_duplicates"] == R.grid_size(b.spec)
+
+
+def test_pit_probe_records_are_keyed_by_code(tmp_path):
+    reg, lg = _reg(tmp_path)
+    reg.submit(X.small_bundles(domains=("fx",), templates=("trend",)))
+    rec = lg.refresh().of_type("pit_probe")[-1]["payload"]
+    assert rec["code"] == pit.code_hash()
+
+
+def test_a_moved_fence_is_refused(panel):
+    import dataclasses
+    with pytest.raises(D.NotSynthetic, match="fence"):
+        D.verify_synthetic(dataclasses.replace(panel, fence=panel.params.n_days))

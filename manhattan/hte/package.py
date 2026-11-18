@@ -35,28 +35,57 @@ def _q(x: np.ndarray) -> dict | None:
     return {f"q{int(q * 100):02d}": float(np.quantile(x, q)) for q in QS} | {"n": int(x.size)}
 
 
-def _post_look_specs(runner) -> set:
-    """Spec hashes registered after a run had looked at another spec of the same family."""
-    log = runner.log
+def _looks(runner) -> tuple[set, dict]:
+    """(post-look spec hashes, family hash -> run ids that looked at it).
+
+    A run *looks at* every family of the frozen version it evaluates, whatever that version's root. A spec is
+    *post-look* when its registry segment was logged after a run had looked at (a) its own family, or (b) any
+    candidate with the same economics (domain, template, parameters, binding: the registry's semantic digest),
+    so that re-registering a looked-at rule under a new family name is flagged too."""
+    log, reg = runner.log, runner.reg
     frozen = {r["payload"]["root"]: r["payload"]["segments"] for r in log.of_type("registry_frozen")}
-    seg_seq = [(r["seq"], r["payload"]["new_specs"]) for r in log.of_type("registry_segment")]
-    fam_of = {}
-    for h in runner.reg.spec_hashes:
-        fam_of[h] = runner.reg.records[runner.reg.records[h]["hypothesis"]]["family"]
+    segs = log.of_type("registry_segment")
+    fam_of = {h: reg.records[reg.records[h]["hypothesis"]]["family"] for h in reg.spec_hashes}
+    sem = reg._arrays()["semantic"]
+    bounds = np.cumsum([0] + [r["payload"]["n_candidates"] for r in segs])
+    runs = [(r["seq"], r["payload"]["run_id"], frozen.get(r["payload"]["identity"]["registry_root"], 0))
+            for r in log.of_type("run_started")]
+    looked_runs: dict[str, set] = {}
     first_look: dict[str, int] = {}
-    for r in log.of_type("run_started"):
-        k = frozen.get(r["payload"]["identity"]["registry_root"], 0)
-        for _, specs in seg_seq[:k]:
-            for s in specs:
-                f = fam_of[s]
-                first_look[f] = min(first_look.get(f, r["seq"]), r["seq"])
+    for seq, rid, k in runs:
+        for r in segs[:k]:
+            for sh in r["payload"]["new_specs"]:
+                f = fam_of[sh]
+                looked_runs.setdefault(f, set()).add(rid)
+                first_look[f] = min(first_look.get(f, seq), seq)
     post = set()
-    for seq, specs in seg_seq:
-        for s in specs:
-            f = fam_of[s]
-            if f in first_look and seq > first_look[f]:
-                post.add(s)
-    return post
+    for j, r in enumerate(segs):
+        seq = r["seq"]
+        for sh in r["payload"]["new_specs"]:
+            if fam_of[sh] in first_look and seq > first_look[fam_of[sh]]:
+                post.add(sh)
+        earlier = [k for (rs, _, k) in runs if rs < seq]
+        k = min(max(earlier), j) if earlier else 0
+        if k == 0:
+            continue
+        seen = {bytes(x) for x in sem[: bounds[k]]}           # economics looked at before this segment
+        mine = sem[bounds[j]: bounds[j + 1]]
+        spec_idx = reg._arrays()["spec_index"][bounds[j]: bounds[j + 1]]
+        for row, si in zip(mine, spec_idx):
+            if bytes(row) in seen:
+                post.add(reg.spec_hashes[int(si)])
+    return post, looked_runs
+
+
+def _cross_family(keys: np.ndarray, fam: np.ndarray) -> np.ndarray:
+    """Per row: does the same key (32 bytes) occur in another family?"""
+    if not keys.shape[0]:
+        return np.zeros(0, bool)
+    _, inv = np.unique(keys, axis=0, return_inverse=True)
+    inv = inv.ravel()
+    pairs = np.unique(np.stack([inv, fam]), axis=1)
+    nfam = np.bincount(pairs[0], minlength=inv.max() + 1)
+    return nfam[inv] > 1
 
 
 def _meff(runner, table, idx_h: np.ndarray) -> dict:
@@ -103,7 +132,8 @@ def build(runner, table: dict, spa_parts) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     fos = runner.fam_of_spec
     fam_idx = fos[view.spec_index]
-    post = _post_look_specs(runner)
+    post, looked_runs = _looks(runner)
+    cross_sem = _cross_family(view.semantic, fam_idx)
     root = view.root
     runs_on_root = [r for r in runner.log.of_type("run_started")
                     if r["payload"]["identity"]["registry_root"] == root]
@@ -135,18 +165,25 @@ def build(runner, table: dict, spa_parts) -> dict:
             "denominators": {
                 "hypotheses": len(hyps), "strategy_specs": len(specs),
                 "variants": int(np.unique(view.variant[idx], axis=0).shape[0]), "candidates": int(idx.size),
+                "cross_family_semantic_duplicates": int(cross_sem[idx].sum()),
+                "cross_family_behavioural_duplicates": int(table["cross_family_behaviour"][idx].sum())
+                if "cross_family_behaviour" in table else None,
                 "behavioural_classes": int(np.unique(table["fingerprint"][idx][live], axis=0).shape[0])
                 if live.any() else 0,
                 "stage1": {k: int((s1 == v).sum()) for k, v in S1.items() if k != "not_run"},
             },
             "looks": {"runs_on_this_registry": len(run_ids), "run_ids": run_ids,
                       "invocations_on_this_registry": len(runs_on_root),
+                      "runs_on_any_registry_version": len(looked_runs.get(fh, ())),
                       "post_look_specs": sorted(h for h in spec_hashes if h in post)},
             "independent_statistical_tests": None,
             "independent_statistical_tests_reason": "the counting unit for a multiple-testing denominator is an "
                                                     "owner decision (PR #86 D-1); M_eff below is descriptive only",
             "warnings": ["SYNTHETIC DATA: no statement here is about any market",
-                         "screening and descriptive statistics only; nothing here is evidence"],
+                         "screening and descriptive statistics only; nothing here is evidence"]
+            + (["some candidates repeat the economics or the positions of another family's candidates: the "
+                "families are not independent"] if cross_sem[idx].any() or (
+                    "cross_family_behaviour" in table and table["cross_family_behaviour"][idx].any()) else []),
         }
         st2 = table["stats2"][idx]
         ok2 = table["s2"][idx] == 1

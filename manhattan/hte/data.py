@@ -191,6 +191,8 @@ def verify_synthetic(panel) -> str:
         raise NotSynthetic("HTE runs on synthetic panels from manhattan.hte.data.generate only")
     if panel.provenance.get("generator") != GENERATOR:
         raise NotSynthetic(f"unknown generator {panel.provenance.get('generator')!r}")
+    if panel.fence != panel.params.n_days - panel.params.protected_days:
+        raise NotSynthetic("the fence does not match the panel's recorded protected window")
     if _VERIFIED.get(panel.data_hash):
         # still check the arrays have not been swapped since verification
         if _hash_arrays(panel.params, panel._returns, panel._carry, panel.dates) != panel.data_hash:

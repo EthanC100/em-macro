@@ -200,16 +200,34 @@ or out of memory) raises `BrokenProcessPool` instead of hanging, as `multiproces
 logged `attempt_failed` with reason `worker_lost`, dispatch stops, and the next invocation retries (tested with a
 worker that calls `os._exit`).
 
-**One runner per workspace.** `Runner.run` holds an exclusive `flock` on `<workspace>/.lock`, which the operating
-system releases if the process dies. A second concurrent runner is refused. A disk preflight, at about 3x the
+**One writer per workspace.** Every writer holds an exclusive `flock` on `<workspace>/.lock` (`log.locked`) while
+it writes. The writers are `Runner.run`, `Registry.submit` and `Registry.freeze`, and the operating system releases
+the lock if the process dies. A second concurrent writer is refused.
+
+Two further rules keep stale objects safe:
+
+- A writer reloads from the log under the lock before writing.
+- `AttemptLog.append` re-reads the file whenever its size changed since this object last read it, so an object
+  built before another writer ran can never append a stale `seq` or `prev_hash`.
+
+Reading tolerates a torn final line and never changes the file. Only a writer, under the lock, quarantines it. The
+quarantine copy is fsynced before the cut, and a copy that a crash left unrecorded is logged on the next recovery
+(`recovered_after_crash`). A disk preflight, at about 3x the
 measured bytes per candidate, refuses a run that cannot fit and logs `run_refused`.
 
 **Fail closed.** Stage 3 does not start while any candidate lacks a completed stage-1/2 attempt. The run logs
 `run_incomplete` instead.
 
 **Repeated runs.** A closed run invoked again logs `run_reused`. With `verify_rerun=True`, the engine recomputes every
-chunk as a *verification* attempt and compares each field bit-for-bit with the result of record. Any difference logs
-`nondeterminism` and raises. The result of record is never replaced.
+chunk as a *verification* attempt and compares every field bit-for-bit with the attempt of record for the same
+range, SPA partial maxima included. A difference gives the verification attempt its terminal (`attempt_failed`,
+reason `nondeterminism`), logs `nondeterminism` and raises. A verification that completes must also rebuild the
+closed `result_root`, and then logs `run_verified`. Results and packages of record are never rewritten.
+
+**Run identity** is the registry root, data hash, engine digest, policy hash, window and the requested stages. A
+stage-1-2 run and a full run of the same candidates are therefore two counted looks. A run is bound to the frozen
+version whose root is in its identity. `Runner(registry_root=...)` resumes an interrupted run after a newer freeze,
+and `reconcile` and `history` always use the run's own version.
 
 **Reconciliation.** `runner.reconcile(ws, run_id, anchor)` reads only persisted records and the files they name,
 with hashes verified. It checks the following and returns counts and violations:
@@ -379,4 +397,23 @@ A second pass found five more problems, each fixed with a regression test:
   have reused a closed run silently; the digest now covers them.
 - **No guard on concurrent runners or disk.** Runs now take a workspace `flock` and run a disk preflight.
 
-This self-review is not an independent review. Its findings are limited by my own model of the system.
+**Independent read (a separate reviewer agent given the code, not my conclusions).** It reported 12 findings. I
+checked each against the code. All but #11 were real, and all were fixed with regression tests. #11 is documented
+instead: parameters a template ignores create candidates with identical economics, which behavioural dedup catches
+at stage 1, not stage 0.
+
+| # | finding | fix |
+|---|---|---|
+| 1 | a runner or registry object built before another writer ran could append a stale `seq`/`prev_hash` and fork the chain; registry writes took no lock | shared lock; reload under the lock; `append` re-reads a changed file |
+| 2 | runs and `reconcile` used the latest freeze, stranding interrupted runs after a new freeze | runs bound to their root; `registry_root=` resumes |
+| 3 | `stages` was missing from the run identity, so a stage-1-2 run masked a later full run | added |
+| 4 | family numbering came from every registered spec, not the run's frozen view | fixed |
+| 5 | **behavioural aliases crossed families, shrinking a family's SPA variant set and so overstating evidence; a renamed family evaded the duplicate and post-look flags** | dedup is family-scoped; the semantic digest excludes family and hypothesis text; family and hypothesis records refuse extra fields; packages report cross-family semantic and behavioural duplicates with a "not independent" warning; post-look is detected by economics as well as by family |
+| 6 | verification skipped the SPA fields and could "close" without completing; `reconcile` ignored nondeterminism | full-field comparison, `run_verified`/`verification_failed`, new violations |
+| 7 | a verification rerun rewrote packages of record | it no longer closes; it verifies |
+| 8 | PIT probe results were reused across template code changes | keyed by code hash |
+| 9 | the fence was not bound to the panel identity | `verify_synthetic` checks it |
+| 10 | `supersedes` could omit a failed attempt after a partial retry | names every overlapping failed or interrupted attempt |
+| 12 | torn-tail recovery was not crash-atomic | fsynced copy before the cut; unrecorded copies logged later |
+
+Neither review is a substitute for an independent human reviewer. Its findings are limited by my own model of the system.

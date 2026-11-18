@@ -498,3 +498,107 @@ def test_disk_preflight_refuses_and_logs(tmp_path, panel, monkeypatch):
     with pytest.raises(RN.RunError, match="preflight"):
         Runner(ws, panel, Policy()).run()
     assert "run_refused" in _types(ws)
+
+
+# -- regressions from the independent review -----------------------------------------------------------------------
+
+def test_stages_are_part_of_the_run_identity(tmp_path, panel):
+    ws = _ws(tmp_path)
+    o1 = Runner(ws, panel, Policy(), chunk_size=60, stages=(1, 2)).run()
+    o2 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    assert o1["run_id"] != o2["run_id"] and o2["reused"] is False
+    t = store.read_arrays(ws.run_dir(o2["run_id"]) / "results.bin", o2["results_sha256"])
+    assert "s3" in t and (t["s3"] == RN.S3["not_run"]).sum() == 0
+
+
+def test_an_interrupted_run_resumes_and_reconciles_on_its_own_frozen_version(tmp_path, baseline):
+    p = _sub(tmp_path, "exit_after_start:3")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    old_root = ws.registry().frozen().root
+    reg = ws.registry()
+    fam = R.family("later", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                    "vol_halflife": [20], "rebalance": [1]}))])
+    reg.freeze()
+    panel = D.generate(X.SMALL_PANEL)
+    out = Runner(ws, panel, Policy(), chunk_size=16, registry_root=old_root).run()
+    assert out["result_root"] == baseline[1]["result_root"]
+    rec = reconcile(ws, out["run_id"])
+    assert rec["violations"] == [] and rec["registered"]["candidates"] == 120
+    assert rec["attempts"]["interrupted"] == 2         # two intents were in flight (window of 2) at the crash
+
+
+def test_specs_registered_after_freeze_cannot_renumber_a_runs_families(tmp_path, panel):
+    ws = _ws(tmp_path)
+    r = Runner(ws, panel, Policy())
+    fam = R.family("aaaa-new", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    ws.registry().submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                           "vol_halflife": [20],
+                                                                           "rebalance": [1]}))])
+    r2 = Runner(ws, panel, Policy())                       # same frozen version: same run, same families
+    assert r2.run_id == r.run_id and r2.families == r.families
+    assert np.array_equal(r2.fam_of_spec[r2.view.spec_index], r.fam_of_spec[r.view.spec_index])
+
+
+def test_renamed_family_keeps_its_own_complete_spa_and_is_flagged(tmp_path, panel):
+    b = X.small_bundles(domains=("fx",), templates=("trend",))
+    fam2 = R.family("renamed-trend", "same rule, new words", "+", "dense")
+    hyp2 = R.hypothesis(fam2, "fx")
+    b2 = R.Bundle(fam2, hyp2, R.strategy_spec(hyp2, "trend", X.small_grids()["trend"], cost_models=("c1", "c2")))
+    ws, out = _run(tmp_path, panel, bundles=b + [b2], chunk_size=20)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    r = Runner(ws, panel, Policy())
+    fam = r.fam_of_spec[r.view.spec_index]
+    al = np.flatnonzero(t["alias_of"] >= 0)
+    assert np.all(fam[al] == fam[t["alias_of"][al]])       # no alias crosses a family
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
+    a, c = pk["synthetic-trend"], pk["renamed-trend"]
+    assert a["spa"]["computed"] and c["spa"]["computed"]
+    assert a["spa"]["variants"] == c["spa"]["variants"] and a["spa"]["p_c"] == c["spa"]["p_c"]
+    for p in (a, c):
+        assert p["denominators"]["cross_family_semantic_duplicates"] == p["denominators"]["candidates"]
+        assert p["denominators"]["cross_family_behavioural_duplicates"] > 0
+        assert any("not independent" in w for w in p["warnings"])
+
+
+def test_re_registering_looked_at_economics_under_a_new_name_is_post_look(tmp_path, panel):
+    b = X.small_bundles(domains=("fx",), templates=("trend",))
+    ws, out = _run(tmp_path, panel, bundles=b, chunk_size=60)
+    fam2 = R.family("renamed-trend", "same rule, new words", "+", "dense")
+    hyp2 = R.hypothesis(fam2, "fx")
+    spec2 = R.strategy_spec(hyp2, "trend", {"lookback": [40], "shape": ["sign"], "vol_halflife": [20],
+                                            "rebalance": [1]})
+    reg = ws.registry()
+    reg.submit([R.Bundle(fam2, hyp2, spec2)])
+    reg.freeze()
+    o2 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(o2["run_id"]) / "packages").glob("*.json")}
+    assert pk["renamed-trend"]["looks"]["post_look_specs"] == [ids.full_hash(spec2)]
+    assert pk["synthetic-trend"]["looks"]["runs_on_any_registry_version"] == 2
+
+
+def test_verification_covers_spa_and_never_rewrites_packages(tmp_path, panel, monkeypatch):
+    ws, out = _run(tmp_path, panel, chunk_size=64)
+    pdir = ws.run_dir(out["run_id"]) / "packages"
+    before = {p.name: p.read_bytes() for p in pdir.glob("*.json")}
+    v = Runner(ws, panel, Policy(), chunk_size=64).run(verify_rerun=True)
+    assert v["verified"] is True and "run_verified" in _types(ws)
+    assert {p.name: p.read_bytes() for p in pdir.glob("*.json")} == before
+    real = kernels.spa_partial
+
+    def drifting(*a, **k):
+        res = real(*a, **k)
+        return {g: (T + 1e-12,) + tuple(rest) for g, (T, *rest) in res.items()}
+
+    monkeypatch.setattr(kernels, "spa_partial", drifting)
+    with pytest.raises(RN.RunError, match="spa_T"):
+        Runner(ws, panel, Policy(), chunk_size=64).run(verify_rerun=True)
+    rec = reconcile(ws, out["run_id"])
+    assert any(v["code"] == "nondeterminism" for v in rec["violations"])
+    failed = AttemptLog(ws.log_path).of_type("attempt_failed")
+    assert any(r["payload"]["reason"] == "nondeterminism" for r in failed)
