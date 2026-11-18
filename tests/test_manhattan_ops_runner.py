@@ -44,6 +44,7 @@ def setup(tmp_path):
 
     def cfg(asof, **kw):
         n["run"] += 1
+        kw.setdefault("commit", "c" * 40)     # Phase 4B: forward attempts need a known code identity
         return R.RunConfig(ledger_dir=tmp_path / f"rt{n['run']}/private/ledger", remote=str(remote),
                            batches_dir=tmp_path / "batches", asof=asof, sources=("synthetic",), run_id=str(n["run"]),
                            private_dir=tmp_path / f"rt{n['run']}/private", run_calendar="synthetic", **kw)
@@ -70,11 +71,17 @@ def test_rerun_on_the_same_day_adds_nothing(setup):
     s["night"](date(2026, 11, 12), "2026-11-12T23:30:00Z")
     s["register"]()
     h1 = s["night"](date(2026, 11, 16), "2026-11-16T23:30:00Z")
-    before = [r for r in s["ledger"]().records if r["type"] not in ("lock", "unlock")]
+    accounting = ("lock", "unlock", "attempt_started", "attempt_completed")
+    before = [r for r in s["ledger"]().records if r["type"] not in accounting]
     h2 = s["night"](date(2026, 11, 16), "2026-11-16T23:50:00Z")
-    after = [r for r in s["ledger"]().records if r["type"] not in ("lock", "unlock")]
+    led = s["ledger"]()
+    after = [r for r in led.records if r["type"] not in accounting]
     assert h1["observations_new"] > 0 and h2["observations_new"] == 0 and h2["captures_new"] == 0
-    assert after == before and h2["status"] == "ok"
+    assert after == before and h2["status"] == "ok"            # no evidence added
+    # Phase 4B: the rerun read forward data, so it is a second registered execution; its results are all duplicates
+    second = [r for r in led.of_type("attempt_completed") if r["provenance"]["run_id"] == str(led.records[-1]["provenance"]["run_id"])]
+    assert h2["attempts_registered"] == len(second) > 0
+    assert all(x["disposition"] == "duplicate" for r in second for x in r["payload"]["results"])
 
 
 def test_capture_is_recorded_before_any_observation_of_the_run(setup):

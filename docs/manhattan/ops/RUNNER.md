@@ -33,7 +33,10 @@ captured after the grace period are `reconstructed`, weight 0.
 **Warm-up.** A forward strategy needs history (a 120-day momentum needs 120 days). `manhattan.roles.check_read`
 allows one role per read and has no "signal input" role, so the runner opens its window through an adapter
 (`data.forward_window`, request R-1 in OPS_PROGRESS.md). Returns on or before a prediction's first observation are
-computed in memory and never recorded.
+computed in memory and never recorded. Since Phase 4B the adapter opens a window only for a registered
+forward-observation attempt whose start is already verified on the remote (`docs/manhattan/BINDING_ACCOUNTING.md`):
+the runner recovers interrupted attempts after taking the lock, registers one attempt per prediction per night, and
+writes the observations together with their attempts' terminals in one journalled write.
 
 **Sources.** FRED H.10 (`DEXBZUS`, `DEXMXUS`, `DEXSFUS`: BRL, MXN, ZAR, spot only, grace 10 days because FRED posts
 the dailies weekly) and the synthetic source used by tests. The FRED fetcher was written but **not run** from this

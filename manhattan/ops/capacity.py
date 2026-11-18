@@ -83,7 +83,7 @@ _PIT = None
 def _init():
     global _PIT
     from manhattan.engine.pit import PitStore
-    st = PitStore()
+    st = PitStore(synthetic=True)      # an operational diagnostic: never evidence (pit.diagnostic_window)
     by = {}
     for s, p, v in D.synthetic_rows(date(2019, 12, 31)):
         by.setdefault(s, ([], []))
@@ -97,15 +97,16 @@ def _init():
 def _work(args):
     mode, idx = args
     from manhattan.engine import backtest
+    from manhattan.engine.pit import diagnostic_window
     out = 0
     for x in _slice(*idx):
         if mode == "full":
-            w = D.forward_window(_PIT, "syn_daily", *FULL)
+            w = diagnostic_window(_PIT, *FULL, role="forward", domain="syn_daily")
             res = backtest.run(w, x.strategy())
             out += len(res.result_hash())
         else:
             start = FORWARD_START - timedelta(days=x.warmup_days)
-            w = D.forward_window(_PIT, "syn_daily", start, FORWARD_START + timedelta(days=1))
+            w = diagnostic_window(_PIT, start, FORWARD_START + timedelta(days=1), role="forward", domain="syn_daily")
             res = backtest.run(w, x.strategy())
             i = res.dates.size - 1
             payload = {"executable": x.id, "date": str(res.dates[i]), "net": round(float(res.net[i]), 12),

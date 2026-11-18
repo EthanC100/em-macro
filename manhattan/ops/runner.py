@@ -36,9 +36,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from manhattan import access as A
+from manhattan import config as MC
 from manhattan import ledger as L
+from manhattan import roles
 from manhattan import spec as S
 from manhattan.engine import backtest
+from manhattan.engine import evaluate as EV
 
 from . import blinding as B
 from . import compiler as CP
@@ -135,9 +139,40 @@ def registrations(ledger: ST.Store) -> dict:
 
 # ---------------------------------------------------------------- observation
 
+def code_identity(commit: str) -> dict:
+    """The runner's code identity for an attempt: the checked-out commit and the engine's content digest. Fails
+    closed (``LedgerError``) on an unknown or all-zero commit."""
+    version = {"commit": commit, "engine_sha256": EV.code_version()["engine_sha256"]}
+    L.require_code_identity(version)
+    return version
+
+
+def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, version: dict) -> A.StoreAttempt:
+    """The declaration of one night's forward observation of one prediction (an accounting unit, not a test:
+    BINDING_ACCOUNTING.md section 2). Evaluation window: first observation to ``asof`` + 7 days; signal warm-up:
+    the executable's warm-up days before it."""
+    start = date.fromisoformat(reg["first_observation"])
+    end = asof + timedelta(days=7)
+    wid = f"forward:{reg['prediction']}:{asof.isoformat()}"
+    windows = [A.DeclaredWindow(wid, exe.universe.domain, start, end, roles.FORWARD, "evaluation", data_hash)]
+    if exe.warmup_days > 0:
+        windows.insert(0, A.DeclaredWindow(wid + ":warmup", exe.universe.domain, start - timedelta(days=exe.warmup_days),
+                                           start - timedelta(days=1), roles.FORWARD, "signal_warmup", data_hash))
+    identity = {"executable": exe.id, "variant": S.spec_id(exe.variant), "hypothesis": S.spec_id(exe.hypothesis),
+                "family": S.spec_id(exe.family), "batch": reg["batch"], "role": roles.FORWARD,
+                "channel": reg.get("channel", "blind"), "designated": False, "spec_hash": exe.spec_hash,
+                "data_hash": data_hash, "window": {"id": wid, "start": start.isoformat(), "end": end.isoformat(),
+                                                   "frequency": "daily"},
+                "code_version": version}
+    return A.StoreAttempt("forward_observation", identity, tuple(windows),
+                          {"prediction": reg["prediction"], "asof": asof.isoformat()},
+                          freeze=date.fromisoformat(reg["registration_utc"][:10]))
+
+
 def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: CP.Executable,
-                        asof: date) -> tuple[list[ST.Intent], dict]:
-    """Observation (or missed-observation) intents for one prediction up to ``asof``."""
+                        asof: date, *, attempt: A.AttemptContext) -> tuple[list[ST.Intent], dict]:
+    """Observation (or missed-observation) intents for one prediction up to ``asof``, read through the forward
+    window of its registered, active forward-observation ``attempt`` (Phase 4B)."""
     cal = TM.calendar(exe.universe.calendar)
     start = date.fromisoformat(reg["first_observation"])
     series = [p for _, p in exe.universe.instruments]
@@ -150,8 +185,10 @@ def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: 
         return [], counts
     # the window ends a settlement lag after asof, so the marks of asof itself (seen after its close) are in it;
     # nothing dated after asof exists in the captures, and decisions only see what was available at each close
-    window = D.forward_window(pit, exe.universe.domain, start - timedelta(days=exe.warmup_days),
-                              asof + timedelta(days=7))
+    window = D.forward_window(attempt, pit)
+    if (window.start, window.end, window.signal_start) != (start - timedelta(days=exe.warmup_days),
+                                                           asof + timedelta(days=7), start):
+        raise A.AccessError("the attempt did not declare this prediction's forward window")
     res = backtest.run(window, exe.strategy())
     at = {str(d): i for i, d in enumerate(res.dates.astype("datetime64[D]"))}
     out = []
@@ -163,7 +200,9 @@ def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: 
             base = cal.prev_session(d).isoformat()             # the return runs from the previous close
             recon = fs.reconstructed(series, ds) or (fs.complete(series, base) and fs.reconstructed(series, base)) \
                 or d < monitoring
-            weight = 0 if (recon or not reg["eligible"] or reg["evidential_weight"] == 0) else 1
+            weight = L.forward_observation_weight(eligible=bool(reg["eligible"]),
+                                                  registration_weight=reg["evidential_weight"],
+                                                  reconstructed=bool(recon), channel=reg.get("channel", "blind"))
             payload = {"prediction": reg["prediction"], "executable": exe.id, "date": ds,
                        "net": round(float(res.net[i]), 12), "gross": round(float(res.gross[i]), 12),
                        "cost": round(float(res.cost[i]), 12), "turnover": round(float(res.turnover[i]), 12),
@@ -193,6 +232,20 @@ def missed_run_intents(ledger: ST.Store, asof: date, cal: TM.Calendar) -> list[S
 
 
 # ---------------------------------------------------------------- the nightly run
+
+EPOCH_KEY = ("accounting_epoch", str(L.ATTEMPT_SCHEMA))
+
+
+def _fail_attempts(s: ST.Store, ctxs: list) -> None:
+    """Close every attempt of a failed batch as ``failed: execution_error`` (no result of the batch was written).
+    Best effort: when this write fails too, the attempts stay unfinished and the next run's recovery aborts them."""
+    fails = [A.terminal_intent(c.attempt_id, "failed", reason="execution_error", data_read=c.data_read)
+             for c in ctxs if s.get((A.STORE_TERMINAL, c.attempt_id)) is None]
+    if fails:
+        try:
+            s.write(fails, "attempts failed")
+        except Exception:                                       # noqa: BLE001 - recovery covers it
+            traceback.print_exc()
 
 def _counts(health: dict, **kw) -> None:
     for k, v in kw.items():
@@ -225,6 +278,16 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
             lk = s.acquire(timedelta(minutes=cfg.lock_ttl_minutes))
             health["lock_status"], health["locks_broken"] = lk["status"], lk["broken"]
             health["checkpoints"].append("lock")
+            stage = "attempts"
+            # The lock is held and nothing is registered yet: every unfinished forward attempt is a dead run's
+            # and can never finish (Phase 4B, BINDING_ACCOUNTING.md section 8).
+            recovered = A.recover_interrupted(s)
+            epoch = [] if s.get(EPOCH_KEY) is not None else [
+                ST.Intent("accounting_epoch", EPOCH_KEY, {"attempt_schema": L.ATTEMPT_SCHEMA})]
+            if recovered or epoch:
+                s.write(recovered + epoch, "attempt recovery")
+            health["attempts_recovered"] = len(recovered)
+            health["checkpoints"].append("attempts")
             stage = "missed"
             missed = missed_run_intents(s, cfg.asof, TM.calendar(cfg.run_calendar))
             new_missed = [m for m in missed if s.get(m.key) is None]
@@ -269,18 +332,37 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                     exes[prediction_id(S.spec_hash(manifest), x.spec_hash)] = x
             fs = D.first_seen(s, cfg.sources)
             pit = fs.pit_store()
-            intents = []
+            plans = []
             for pred, reg in sorted(regs.items()):
                 x = exes.get(pred)
                 if x is None or not set(x.universe.sources) <= set(cfg.sources):
                     continue
-                its, c = observation_intents(s, fs, pit, reg, x, cfg.asof)
-                intents += its
-                _counts(health, observations_new=c["new"], observations_reconstructed=c["reconstructed"],
-                        missed_observations=c["missed"], observations_expected=c["expected"])
+                if cfg.asof <= date.fromisoformat(reg["first_observation"]):
+                    continue                                         # nothing to observe yet
+                plans.append((reg, x))
+            ctxs = []
+            if plans:
+                # Registration before exposure: every start is durable on the remote before any window opens.
+                version, data_hash = code_identity(cfg.commit), pit.data_hash()
+                ctxs = A.register_store_attempts(
+                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version) for reg, x in plans],
+                    fence=roles.Fence.from_config(MC.load()), label=f"forward attempts {cfg.asof}")
+            health["attempts_registered"] = len(ctxs)
+            intents, terminals = [], []
+            try:
+                for (reg, x), ctx in zip(plans, ctxs):
+                    its, c = observation_intents(s, fs, pit, reg, x, cfg.asof, attempt=ctx)
+                    intents += its
+                    terminals.append(A.completion(ctx, s, its))
+                    _counts(health, observations_new=c["new"], observations_reconstructed=c["reconstructed"],
+                            missed_observations=c["missed"], observations_expected=c["expected"])
+            except Exception:
+                _fail_attempts(s, ctxs)
+                raise
             before = len(s.of_type("conflict"))
-            if intents:
-                s.write(intents, f"observations to {cfg.asof}")
+            if intents or terminals:
+                # Results and their attempts' terminals: one journal entry, so a crash leaves both or neither.
+                s.write(intents + terminals, f"observations to {cfg.asof}")
             health["conflicts"] = len(s.of_type("conflict")) - before
             health["batches"] = len({r["batch"] for r in regs.values()})
             health["predictions_registered"] = len(regs)
@@ -436,25 +518,49 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
     """Run each executable on exploration-role data (``roles.check_read`` decides the role, as a session) and
     record a ``screening`` record in the **private** ledger, labelled exploration with evidential weight 0.
     Returns {hypothesis hash: (n_days, n_variants) array of daily net returns} for the effective-count report,
-    in memory only."""
+    in memory only.
+
+    Phase 4B: each executable's screening is a registered attempt (kind ``screening``), written durably before any
+    window opens; the screening records and their completions are one journalled write."""
     from manhattan.engine.pit import Reader
     import numpy as np
 
-    out, intents = {}, []
+    version, data_hash = code_identity(ledger.commit), pit.data_hash()
+    declared = []
     for x in exes:
-        w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence).window(start, end)
-        res = backtest.run(w, x.strategy())
-        summ = res.summary()
-        intents.append(ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
-                                 {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
-                                  "label": "exploration: no evidential weight", "evidential_weight": 0,
-                                  "window": {"start": str(start), "end": str(end)}, "data_hash": w.data_hash(),
-                                  "result_hash": res.result_hash(),
-                                  "summary": {k: (round(v, 10) if isinstance(v, float) and v == v else None)
-                                              if isinstance(v, float) else v for k, v in summ.items()}},
-                                 source="exploration"))
-        out.setdefault(S.spec_hash(x.hypothesis), []).append(res.returns)
-    ledger.write(intents, f"screening {start}:{end}")
+        wid = f"{x.universe.domain}:{start}:{end}"
+        identity = {"executable": x.id, "variant": S.spec_id(x.variant), "hypothesis": S.spec_id(x.hypothesis),
+                    "family": S.spec_id(x.family), "batch": "pre-freeze", "role": roles.EXPLORATION,
+                    "channel": x.variant.get("channel", "blind"), "designated": False, "spec_hash": x.spec_hash,
+                    "data_hash": data_hash,
+                    "window": {"id": wid, "start": str(start), "end": str(end), "frequency": "daily"},
+                    "code_version": version}
+        declared.append(A.StoreAttempt("screening", identity,
+                                       (A.DeclaredWindow(wid, x.universe.domain, start, end, roles.EXPLORATION,
+                                                         "evaluation", data_hash),),
+                                       {"window": f"{start}:{end}"}, caller="session"))
+    ctxs = A.register_store_attempts(ledger, declared, fence=fence, label=f"screening attempts {start}:{end}")
+    out, intents, terminals = {}, [], []
+    try:
+        for x, ctx in zip(exes, ctxs):
+            w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence, attempt=ctx).window(start, end)
+            res = backtest.run(w, x.strategy())
+            summ = res.summary()
+            it = ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
+                           {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
+                            "label": "exploration: no evidential weight", "evidential_weight": 0,
+                            "window": {"start": str(start), "end": str(end)}, "data_hash": w.data_hash(),
+                            "result_hash": res.result_hash(),
+                            "summary": {k: (round(v, 10) if isinstance(v, float) and v == v else None)
+                                        if isinstance(v, float) else v for k, v in summ.items()}},
+                           source="exploration")
+            intents.append(it)
+            terminals.append(A.completion(ctx, ledger, [it]))
+            out.setdefault(S.spec_hash(x.hypothesis), []).append(res.returns)
+    except Exception:
+        _fail_attempts(ledger, ctxs)
+        raise
+    ledger.write(intents + terminals, f"screening {start}:{end}")
     return {h: np.column_stack(v) for h, v in out.items()}
 
 

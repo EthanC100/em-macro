@@ -209,13 +209,18 @@ def runs(tmp_path_factory):
     return {"crash": flow(base / "crash", True), "reference": flow(base / "reference", False)}
 
 
+ACCOUNTING = ("attempt_started", "attempt_completed", "attempt_failed", "attempt_aborted")
+
+
 def content(records):
-    """Type, key and payload of every record but the locks. A conflict's ``existing_hash`` is the hash of the record
-    it protects, which covers that record's random nonce and time, so it differs between two runs by design."""
+    """Type, key and payload of every record but the locks and the attempt accounting. A conflict's
+    ``existing_hash`` is the hash of the record it protects, which covers that record's random nonce and time, so it
+    differs between two runs by design. Attempt records (Phase 4B) differ by design too: attempt IDs carry a random
+    nonce, and a crashed run has executions an uninterrupted one does not (checked in test_recovery_is_exact)."""
     def payload(r):
         return {k: v for k, v in r["payload"].items() if not (r["type"] == "conflict" and k == "existing_hash")}
     return sorted(json.dumps([r["type"], r["key"], payload(r)], sort_keys=True) for r in records
-                  if r["type"] not in ("lock", "unlock", "lock_broken"))
+                  if r["type"] not in ("lock", "unlock", "lock_broken", *ACCOUNTING))
 
 
 # ---- O-34
@@ -294,6 +299,14 @@ def test_recovery_is_exact(runs):
     assert len(runs["crash"]["after_crash"]) < len(c.records)          # the crash really cut the cycle short
     keys = [tuple(x["key"]) for x in c.records]
     assert len(keys) == len(set(keys))
+    # Phase 4B: the crashed cycle's executions are accounted for, and both histories reconcile
+    from manhattan import attempts
+    for run in (c, ref):
+        r = attempts.reconcile(store_chain=run.workdir / ST.CHAIN,
+                               store_anchor={"records": len(run.records), "head": run.head})
+        assert r["access_reconciled"], r["violations"]
+        assert r["repeated_observations"] == len(run.of_type("observation"))
+    assert len(c.of_type("attempt_started")) > len(ref.of_type("attempt_started"))
 
 
 # ---- O-05 and O-35: nothing leaks to the public stand-in or to the generator

@@ -18,6 +18,14 @@ a domain and the fence of ``config/manhattan.yaml``, and every window it opens i
 ``manhattan.roles.check_read``. A session therefore cannot read reserve, embargoed or forward dates, and with
 the default configuration nothing dated after 2019-12-31. The engine takes a ``Window``; it never sees a store.
 
+**Sealed windows (Phase 4B, docs/manhattan/BINDING_ACCOUNTING.md).** A ``Window`` cannot be constructed or
+copied: its fields are bound by a seal that only this module mints, for a ``Reader`` (exploration, after
+``check_read``) or for a registered ``manhattan.access.AttemptContext`` (reserve and forward roles always; exploration
+optionally). A protected window also refuses reads once its store has changed since authorization. A synthetic store
+(``PitStore(synthetic=True)``) may be opened under any role label for operational diagnostics only; such a window can
+never produce an evaluation record. This is a structural guard within Manhattan code, not a sandbox: see the trust
+boundary in BINDING_ACCOUNTING.md section 1.
+
 **Data hash.** ``PitStore.data_hash()`` is the SHA-256 of the canonical form of everything in the store (series
 names, periods, availabilities, values, in a fixed order). It is the ``data_hash`` of a ledger record.
 
@@ -26,9 +34,11 @@ Daily resolution. Minute data are out of scope here (ARCHITECTURE section 6.4).
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from datetime import date, datetime, time
 
 import numpy as np
@@ -37,10 +47,25 @@ from manhattan import roles
 from manhattan.availability import AvailabilityError, sources_from_spec, validate_source
 
 DAY = np.timedelta64(1, "D")
+PROTECTED_ROLES = (roles.RESERVE, roles.FORWARD)
+PURPOSES = ("exploration", "evaluation", "forward_observation", "diagnostic")
+_SEAL_KEY = secrets.token_bytes(32)          # per process; never persisted, logged or exported
 
 
 class PitError(ValueError):
     """Data that cannot be stored or read point in time."""
+
+
+class AccessError(roles.RoleError):
+    """A window was asked for without the authorization its role and purpose need (Phase 4B)."""
+
+
+class _Meter:
+    """Counts reads through the windows of one authorization, so a terminal can say whether data were read."""
+    __slots__ = ("reads",)
+
+    def __init__(self):
+        self.reads = 0
 
 
 def _days(x) -> np.ndarray:
@@ -108,12 +133,16 @@ class PitStore:
     """Values by series, each with its period and its availability day. Append-only: a value is never changed
     or removed; a correction is a revision with its own availability."""
 
-    def __init__(self):
+    def __init__(self, *, synthetic: bool = False):
+        if not isinstance(synthetic, bool):
+            raise PitError("synthetic must be a boolean")
         self._period: dict[str, np.ndarray] = {}
         self._available: dict[str, np.ndarray] = {}
         self._value: dict[str, np.ndarray] = {}
         self._simple: dict[str, bool] = {}
         self._reconstructed = False
+        self._version = 0                       # bumped by every add: a protected window refuses a changed store
+        self._synthetic = synthetic             # declared by the code that builds the store; diagnostics only
 
     def add(self, series: str, periods, values, *, available=None, lag_days: int | None = None,
             reconstructed: bool = False) -> None:
@@ -149,6 +178,7 @@ class PitStore:
             raise PitError(f"{series}: conflicting values share one period and availability day")
         unique = np.r_[True, ~same] if p.size else np.array([], dtype=bool)
         self._period[series], self._available[series], self._value[series] = p[unique], a[unique], v[unique]
+        self._version += 1
         self._reconstructed |= reconstructed
         p, a = self._period[series], self._available[series]
         # the fast path: one value per period, and availability never runs backwards
@@ -227,16 +257,52 @@ class PitStore:
         return p[last], v[last], a[last]
 
 
+def _seal(store, start, end, role, domain, caller, purpose, attempt_id, window_id, signal_start, version,
+          meter) -> str:
+    msg = json.dumps([id(store), str(start), str(end), role, domain, caller, purpose, attempt_id, window_id,
+                      None if signal_start is None else str(signal_start), version, id(meter)],
+                     separators=(",", ":")).encode("utf-8")
+    return hmac.new(_SEAL_KEY, msg, hashlib.sha256).hexdigest()
+
+
 @dataclass(frozen=True)
 class Window:
-    """Permission to read one domain's data over ``start..end``, granted by ``roles.check_read``. Everything
-    the engine learns about data, it learns here."""
+    """Permission to read one domain's data over ``start..end``, granted by ``roles.check_read`` (exploration) or by
+    a registered attempt (``manhattan.access``). Everything the engine learns about data, it learns here.
+
+    Only ``Reader.window`` and ``manhattan.access.AttemptContext`` open one; direct construction and
+    ``dataclasses.replace`` raise ``AccessError``. ``purpose``: ``exploration`` (open), ``evaluation`` (a declared
+    window of a registered attempt), ``forward_observation`` (the runner's R-1 adapter: warm-up from ``start``,
+    observations from ``signal_start``), ``diagnostic`` (synthetic stores only, never evidence)."""
     _store: PitStore
     start: date
     end: date
     role: str
     domain: str
     caller: str
+    purpose: str = "exploration"
+    attempt_id: str | None = None
+    window_id: str | None = None
+    signal_start: date | None = None
+    _version: int = field(default=-1, repr=False)
+    _meter: _Meter | None = field(default=None, repr=False, compare=False)
+    _seal: str | None = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self):
+        expected = _seal(self._store, self.start, self.end, self.role, self.domain, self.caller, self.purpose,
+                         self.attempt_id, self.window_id, self.signal_start, self._version, self._meter)
+        if not isinstance(self._seal, str) or not hmac.compare_digest(self._seal, expected):
+            raise AccessError("a Window is opened by a Reader or a registered attempt; it is never constructed "
+                              "or copied directly")
+
+    @property
+    def bound(self) -> bool:
+        """Whether this window belongs to a registered attempt or carries a protected role."""
+        return self.attempt_id is not None or self.role in PROTECTED_ROLES
+
+    def _guard(self) -> None:
+        if self.bound and self._store._version != self._version:
+            raise PitError("the store changed after this window was authorized (data identity)")
 
     def as_of(self, series: str, t, n: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         """(periods, values) of ``series`` as known at the close of day ``t``: for each period in the window, the
@@ -259,8 +325,15 @@ class Window:
         return p, v
 
     def _known(self, series: str, t):
+        self._guard()
         t = min(_day(t), _day(self.end))                       # nothing after the window's end is ever known here
-        return self._store._as_of(series, t, _day(self.start), _day(self.end))
+        out = self._store._as_of(series, t, _day(self.start), _day(self.end))
+        self._meter.reads += 1
+        return out
+
+    @property
+    def reads(self) -> int:
+        return self._meter.reads
 
     @property
     def reconstructed(self) -> bool:
@@ -270,24 +343,75 @@ class Window:
         self._store.require_historical_evidence()
 
     def data_hash(self) -> str:
+        self._guard()
         return self._store.data_hash()
 
     def has(self, series: str) -> bool:
         return series in self._store
 
 
+def _open_window(store: PitStore, start, end, role: str, domain: str, caller: str, *, purpose: str,
+                 attempt_id: str | None = None, window_id: str | None = None, signal_start=None,
+                 meter: _Meter | None = None) -> Window:
+    """Mint a sealed window. Private: callers are ``Reader`` and ``manhattan.access`` only (a static test pins
+    this). It checks only the combination; the caller has already authorized the read."""
+    if not isinstance(store, PitStore):
+        raise AccessError("a window reads a PitStore")
+    if role not in (roles.EXPLORATION, roles.RESERVE, roles.FORWARD):
+        raise AccessError(f"unknown role {role}")
+    if purpose not in PURPOSES:
+        raise AccessError(f"unknown window purpose {purpose}")
+    if purpose == "diagnostic":
+        if store._synthetic is not True or attempt_id is not None:
+            raise AccessError("a diagnostic window opens a synthetic store only, outside any attempt")
+    elif purpose == "exploration":
+        if role != roles.EXPLORATION or attempt_id is not None:
+            raise AccessError("an open window is exploration-role and belongs to no attempt")
+    else:
+        if not isinstance(attempt_id, str) or re.fullmatch(r"[0-9a-f]{64}", attempt_id) is None:
+            raise AccessError("an attempt window needs its registered attempt ID")
+        if purpose == "forward_observation" and role != roles.FORWARD:
+            raise AccessError("the forward-observation adapter opens forward-role windows only")
+    s, e = _day(start).astype(object), _day(end).astype(object)
+    if signal_start is not None:
+        signal_start = _day(signal_start).astype(object)
+    meter = meter or _Meter()
+    seal = _seal(store, s, e, role, domain, caller, purpose, attempt_id, window_id, signal_start, store._version,
+                 meter)
+    return Window(store, s, e, role, domain, caller, purpose, attempt_id, window_id, signal_start, store._version,
+                  meter, seal)
+
+
+def diagnostic_window(store: PitStore, start, end, *, role: str, domain: str, caller: str = roles.RUNNER) -> Window:
+    """An operational diagnostic (capacity, timing) on a synthetic store, under any role label. Never evidence:
+    ``engine.evaluate`` and the runner's observation path refuse it."""
+    if role not in (roles.EXPLORATION, roles.RESERVE, roles.FORWARD):
+        raise AccessError(f"unknown role {role}")
+    return _open_window(store, start, end, role, domain, caller, purpose="diagnostic")
+
+
 class Reader:
-    """The only way to data: a caller, a domain and a fence. ``window`` asks ``manhattan.roles.check_read``."""
+    """The only open way to data: a caller, a domain and a fence. ``window`` asks ``manhattan.roles.check_read``.
+
+    Reserve and forward reads also need ``attempt``, a registered ``manhattan.access.AttemptContext`` that declared
+    exactly this window; without one they raise ``AccessError`` even when ``check_read`` allows them. An exploration
+    read with an attempt is bound to it."""
 
     def __init__(self, store: PitStore, *, caller: str, domain: str, fence: roles.Fence, freeze: date | None = None,
-                 holding: int = 0, token: roles.RunnerToken | None = None, window_id: str | None = None):
+                 holding: int = 0, token: roles.RunnerToken | None = None, window_id: str | None = None,
+                 attempt=None):
         self._store, self.caller, self.domain, self.fence = store, caller, domain, fence
         self._kw = dict(freeze=freeze, holding=holding, token=token, window_id=window_id)
+        self._attempt = attempt
 
     def window(self, start: date, end: date) -> Window:
-        """A window in one role, or ``roles.RoleError``."""
+        """A window in one role, or ``roles.RoleError`` (``AccessError`` for a missing authorization)."""
         role = roles.check_read(self.caller, self.domain, start, end, self.fence, **self._kw)
-        return Window(self._store, _day(start).astype(object), _day(end).astype(object), role, self.domain, self.caller)
+        if self._attempt is None:
+            if role in PROTECTED_ROLES:
+                raise AccessError(f"a {role} read needs a registered attempt (manhattan.access.AttemptContext)")
+            return _open_window(self._store, start, end, role, self.domain, self.caller, purpose="exploration")
+        return self._attempt._open_read(self, start, end, role)
 
 
 def lags_from_spec(hypothesis_spec: dict) -> dict[str, int]:
