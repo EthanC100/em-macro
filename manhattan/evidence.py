@@ -8,8 +8,8 @@ Six separate axes, each decided on its own and never inferred from another:
     availability    how the day each value became usable is known (the publication contract of
                     ``manhattan.availability``): per-vintage release dates, a declared daily lag, first-seen
                     capture, a conservative assumption, or generated (synthetic)
-    role            exploration | reserve | forward | embargo, **computed** from the fence and the spec's freeze
-                    (``manhattan.roles.role_of`` for every day of the span), never taken from a label
+    role            exploration | reserve | forward | embargo, **computed** with ``manhattan.roles.role_of`` for every
+                    day of the span, from the fence, the spec's freeze and the spec's holding period; never a label
     authorization   what lets the observations be read in that role: open exploration, a verified designated
                     reserve token, a verified batch freeze; otherwise unauthorised
     eligibility     none | infrastructure_validation | descriptive | reserve_screening_candidate | forward_candidate
@@ -23,20 +23,30 @@ always: classification authorises nothing (``manhattan.ops.promotion`` is the on
 ``weight_ceiling`` is the most the existing table (``manhattan.ledger.evidential_weight``, ARCHITECTURE 6.3)
 could give such evidence; ``cap_weight`` only ever lowers a recorded weight to it, never raises one.
 
-**Authentication.** The module reads a closed metadata schema and the results of the repository's existing
-verifiers (``VERIFIERS``), each bound to the SHA-256 of the canonical metadata (``subject_digest``). It checks that
-every verifier the claimed provenance needs is present and bound to exactly this metadata, and that the metadata
-are internally consistent. It cannot itself authenticate anything: a verification is only as good as the code
-that minted it, and minting them is the integration's job (docs/manhattan/ops/EVIDENCE_CLASSIFICATION.md).
-Filenames, timestamps alone, recent dates and labels never decide a class. Anything unknown, missing or
-contradictory gives ``provenance = unverified`` and ``eligibility = none``, with the problems listed.
+**Digests are not authentication.** Two different checks are made and kept apart:
+
+* *integrity*: every ``VerifierResult`` names ``subject_digest(metadata)``, the SHA-256 of the canonical metadata.
+  Anyone holding the metadata can compute it; it proves only that the result is about exactly these bytes, so an
+  edit after verification is detected. It establishes no fact.
+* *authority*: the facts a classification rests on (spec identity, holding period, freeze date, window identity,
+  capture identity, monitoring start, attempt identity) are taken only from ``VerifierResult.facts`` whose
+  ``authority`` is in ``TRUSTED_AUTHORITIES``, and are checked against the metadata field by field. Metadata alone
+  never establish a fact.
+
+``TRUSTED_AUTHORITIES`` is **empty**: no integration boundary that could mint verifier results exists yet (the
+binding attempt store of Phase 4B, PR #86, is not merged and is not wired here). Every classification is therefore
+``unverified`` today. Adding an authority is a reviewed code change, like ``promotion.ADOPTED_PROTOCOLS``. Even
+then this is a gate, not cryptography: an in-process Python object can be forged by any code in the process, so
+authority must be established at the boundary that builds the results (docs/manhattan/ops/EVIDENCE_CLASSIFICATION.md).
+Anything unknown, missing, malformed or contradictory gives ``provenance = unverified``, ``eligibility = none`` and
+weight 0, with the problems listed. ``classify`` and ``combine`` never raise.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Mapping
 
@@ -47,7 +57,7 @@ from manhattan.availability import AvailabilityError, validate_source
 from manhattan.ledger import evidential_weight
 from manhattan.ops import promotion
 
-SCHEMA = "manhattan.evidence/1"
+SCHEMA = "manhattan.evidence/2"
 
 SYNTHETIC, HISTORICAL_PUBLIC, HISTORICAL_LICENSED = "synthetic", "historical_public", "historical_licensed"
 CAPTURED_FORWARD, UNVERIFIED = "captured_forward", "unverified"
@@ -65,41 +75,79 @@ AUTH_NONE = "unauthorized"
 E_NONE, E_INFRA, E_DESCRIPTIVE = "none", "infrastructure_validation", "descriptive"
 E_RESERVE, E_FORWARD = "reserve_screening_candidate", "forward_candidate"
 
-# The existing verifiers a verification must come from (the integration mints them; see the contract document).
+# Authorities whose verifier results are accepted. Empty: nothing can be authenticated yet (see module docstring).
+TRUSTED_AUTHORITIES: frozenset[str] = frozenset()
+
+# Each verifier, the existing code that must produce its result, and the facts it must state.
 VERIFIERS = {
-    "synthetic_generator": "the generator definition and seed that produced the values (e.g. ops.data synthetic)",
-    "publication_contract": "manhattan.availability.validate_source on the recorded source definition",
-    "public_archive": "SHA-256 of the archived public snapshot the values were read from",
-    "licensed_snapshot": "SHA-256 manifest of the private licensed snapshot (iMac only; never in this repository)",
-    "capture_replay": "manhattan.ops.data.first_seen replay: raw hashes, byte counts, schema-v2 source definition",
-    "store_anchor": "manhattan.ops.store.verify_chain against an independently retained head anchor",
-    "batch_freeze": "manhattan.freeze.verify_frozen: signed tag, manifest hash, external timestamp",
-    "runner_token": "a verified manhattan.roles.RunnerToken naming this (domain, window) as unused and designated",
+    "spec_registry": ("the frozen spec in the registry: identity, channel, domain, holding period",
+                      {"spec_hash", "channel", "domain", "holding_periods"}),
+    "batch_freeze": ("manhattan.freeze.verify_frozen: signed tag, manifest hash, external timestamp",
+                     {"spec_hash", "freeze", "manifest_hash"}),
+    "synthetic_generator": ("the generator definition and seed that produced the values", {"vintage_id"}),
+    "publication_contract": ("manhattan.availability.validate_source on the recorded source definition",
+                             {"source_id", "contract_sha256"}),
+    "public_archive": ("SHA-256 of the archived public snapshot", {"vintage_id", "as_of"}),
+    "licensed_snapshot": ("SHA-256 manifest of the private licensed snapshot (never in this repository)",
+                          {"vintage_id", "as_of"}),
+    "capture_replay": ("manhattan.ops.data.first_seen: raw hashes, byte counts, schema-v2 definition, counts",
+                       {"source_id", "capture_id", "monitoring_start", "backfill", "late"}),
+    "store_anchor": ("manhattan.ops.store.verify_chain against an independently retained head anchor",
+                     {"capture_id", "anchor"}),
+    "runner_token": ("a verified RunnerToken naming this (domain, window) as unused and designated",
+                     {"domain", "window_id", "manifest_hash"}),
+    "attempt_binding": ("the registered, anchored attempt the observations belong to (Phase 4B)",
+                        {"attempt_id", "spec_hash", "window_id"}),
 }
 REQUIRED = {
-    SYNTHETIC: {"synthetic_generator"},
-    HISTORICAL_PUBLIC: {"publication_contract", "public_archive"},
-    HISTORICAL_LICENSED: {"publication_contract", "licensed_snapshot"},
-    CAPTURED_FORWARD: {"publication_contract", "capture_replay", "store_anchor"},
+    SYNTHETIC: {"spec_registry", "synthetic_generator"},
+    HISTORICAL_PUBLIC: {"spec_registry", "publication_contract", "public_archive"},
+    HISTORICAL_LICENSED: {"spec_registry", "publication_contract", "licensed_snapshot"},
+    CAPTURED_FORWARD: {"spec_registry", "publication_contract", "capture_replay", "store_anchor"},
 }
 
 # Gates that forward e-LOND eligibility needs and that no code implements yet. Each stays a blocker until the
 # protected protocol is adopted and the gate exists in code; this module can never clear them.
 UNIMPLEMENTED_GATES = (
     "enrolment gate (Protocol v3.1 section 6.8: enrolled at the first review as Promising or higher) not implemented",
-    "attempt binding (each observation tied to a registered, anchored attempt; Session 1 interface) not integrated",
+    "attempt binding (each observation tied to a registered, anchored attempt; Phase 4B interface) not integrated",
     "guard and test-period construction (Protocol v3.1 sections 6.1-6.7) not wired to classified evidence",
 )
 
 _SHA = re.compile(r"[0-9a-f]{64}")
-_TOP = {"schema", "source", "domain", "span", "vintage", "capture", "spec", "designated", "claimed_role",
-        "claimed_provenance"}
+_TOP = {"schema", "source", "domain", "span", "vintage", "capture", "spec", "window", "attempt_id", "designated",
+        "claimed_role", "claimed_provenance"}
 _SOURCE = {"id", "kind", "publication_contract"}
 _VINTAGE = {"kind", "id", "as_of"}
 _CAPTURE = {"capture_id", "schema_version", "monitoring_start", "first_retrieved_utc", "reconstructed"}
 _RECON = {"backfill", "late"}
-_SPEC = {"spec_hash", "channel", "freeze"}
+_SPEC = {"spec_hash", "channel", "freeze", "holding_periods"}
 _MAX_SPAN_DAYS = roles.MAX_READ_DAYS
+_MAX_HOLDING = 2_520                       # ten years of weekdays: a sanity bound, not a rule
+
+
+@dataclass(frozen=True)
+class VerifierResult:
+    """What a verifier established about one metadata subject. ``subject`` is a digest (integrity only); ``facts``
+    count only when ``authority`` is trusted. Constructing one proves nothing: see the module docstring."""
+    verifier: str
+    authority: str
+    subject: str
+    facts: Mapping
+
+
+@dataclass(frozen=True)
+class Identity:
+    spec_hash: str
+    channel: str
+    domain: str
+    freeze: str | None
+    holding_periods: int
+    window_id: str
+    start: str
+    end: str
+    attempt_id: str | None
+    window_verified: bool = False      # stated by an authoritative runner_token or attempt_binding result
 
 
 @dataclass(frozen=True)
@@ -118,28 +166,42 @@ class Classification:
     blockers: tuple
     problems: tuple
     subject: str | None
+    identity: Identity | None = None
+    authenticated: bool = False
+    parts: tuple = field(default_factory=tuple)
 
     @property
     def genuine_capture(self) -> bool:
         """Captured forward and seen as it happened: no backfill, no late marks, no assumed availability."""
         return self.provenance == CAPTURED_FORWARD and not self.reconstruction and self.availability == AVAIL_FIRST_SEEN
 
+    @property
+    def subjects(self) -> tuple:
+        return tuple(p.subject for p in self.parts) if self.parts else (self.subject,)
 
-class _Reject(Exception):
-    pass
+
+class EvidenceError(ValueError):
+    """Raised only by the public helpers ``subject_digest`` and ``contract_digest`` on non-JSON input."""
 
 
-def canonical(metadata: Mapping) -> bytes:
+_Reject = EvidenceError
+
+
+def canonical(obj) -> bytes:
     try:
-        return json.dumps(metadata, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
                           allow_nan=False).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise _Reject(f"metadata is not canonical JSON: {exc}") from None
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise _Reject(f"not canonical JSON: {type(exc).__name__}") from None
 
 
 def subject_digest(metadata: Mapping) -> str:
-    """The SHA-256 every verification must be bound to."""
+    """The SHA-256 every verifier result must name. A digest: anyone can compute it; it authenticates nothing."""
     return hashlib.sha256(canonical(metadata)).hexdigest()
+
+
+def contract_digest(contract: Mapping) -> str:
+    return hashlib.sha256(canonical(contract)).hexdigest()
 
 
 def _unverified(problems, subject=None, role=None) -> Classification:
@@ -155,6 +217,18 @@ def _text(v) -> bool:
     return isinstance(v, str) and bool(v.strip())
 
 
+def _sha(v, what) -> str:
+    if not isinstance(v, str) or not _SHA.fullmatch(v):
+        _fail(f"{what} must be a SHA-256")
+    return v
+
+
+def _whole(v, what, hi=None) -> int:
+    if type(v) is not int or v < 0 or (hi is not None and v > hi):
+        _fail(f"{what} must be a whole number, 0 or more" + (f" and at most {hi}" if hi is not None else ""))
+    return v
+
+
 def _date(v, what) -> date:
     if not isinstance(v, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
         _fail(f"{what} must be an ISO date string")
@@ -167,6 +241,8 @@ def _date(v, what) -> date:
 def _keys(obj, allowed, required, what):
     if not isinstance(obj, Mapping):
         _fail(f"{what} must be an object")
+    if not all(isinstance(k, str) for k in obj):
+        _fail(f"{what} has non-text keys")
     unknown = set(obj) - allowed
     if unknown:
         _fail(f"{what} has unknown fields {sorted(unknown)} (closed schema)")
@@ -175,7 +251,37 @@ def _keys(obj, allowed, required, what):
         _fail(f"{what} is missing {sorted(missing)}")
 
 
-def _computed_role(domain, start, end, fence, freeze, holding=0) -> str:
+def _check_fence(fence) -> None:
+    if type(fence) is not roles.Fence:
+        _fail("fence must be a manhattan.roles.Fence")
+    if not isinstance(fence.exploration_end, date) or type(fence.enabled) is not bool \
+            or not isinstance(fence.reserve, Mapping):
+        _fail("malformed fence")
+    for dom, w in fence.reserve.items():
+        if not isinstance(dom, str) or not isinstance(w, tuple) or len(w) != 2 \
+                or not all(isinstance(d, date) for d in w) or w[1] < w[0]:
+            _fail("malformed reserve window in fence")
+
+
+def _check_config(config, protocol_hash) -> dict:
+    """Only the shapes ``manhattan.config`` produces; anything else fails closed (never AttributeError)."""
+    if config is None:
+        config = {}
+    if not isinstance(config, Mapping):
+        _fail("config must be a mapping")
+    for section in ("reserve", "claims"):
+        if section in config:
+            sub = config[section]
+            if not isinstance(sub, Mapping):
+                _fail(f"config.{section} must be a mapping")
+            if "enabled" in sub and type(sub["enabled"]) is not bool:
+                _fail(f"config.{section}.enabled must be a boolean")
+    if protocol_hash is not None:
+        _sha(protocol_hash, "protocol_hash")
+    return {"reserve": dict(config.get("reserve") or {}), "claims": dict(config.get("claims") or {})}
+
+
+def _computed_role(domain, start, end, fence, freeze, holding) -> str:
     days = np.arange(np.datetime64(start), np.datetime64(end) + np.timedelta64(1, "D"))
     found = {roles.role_of(d.astype(object), domain, fence, freeze, holding) for d in days}
     if len(found) != 1:
@@ -183,21 +289,59 @@ def _computed_role(domain, start, end, fence, freeze, holding=0) -> str:
     return found.pop()
 
 
-def classify(metadata: Mapping, verifications: Mapping[str, str] | None, *, fence: roles.Fence,
-             config: Mapping | None = None, protocol_hash: str | None = None) -> Classification:
-    """Classify one homogeneous body of evidence. Never raises on bad input: it fails closed instead."""
+def classify(metadata: Mapping, verifications=None, *, fence: roles.Fence, config: Mapping | None = None,
+             protocol_hash: str | None = None) -> Classification:
+    """Classify one homogeneous body of evidence. Never raises: it fails closed instead."""
+    subject = None
     try:
         subject = subject_digest(metadata) if isinstance(metadata, Mapping) else None
-    except _Reject as exc:
-        return _unverified([str(exc)])
-    try:
-        return _classify(metadata, verifications, fence, config or {}, protocol_hash, subject)
+        return _classify(metadata, verifications, fence, config, protocol_hash, subject)
     except _Reject as exc:
         return _unverified([str(exc)], subject)
+    except Exception as exc:          # a bug or an unforeseen shape: fail closed, never a default class
+        return _unverified([f"classifier refused malformed input ({type(exc).__name__})"], subject)
+
+
+def _facts(verifications, subject, need) -> dict:
+    """The facts of each needed verifier, from trusted authorities only, bound to this subject."""
+    if verifications is None:
+        _fail("no verifier results supplied")
+    if isinstance(verifications, (str, bytes, Mapping)) or not isinstance(verifications, (list, tuple)):
+        _fail("verifier results must be a list of VerifierResult")
+    out: dict = {}
+    for r in verifications:
+        if type(r) is not VerifierResult:
+            _fail("a verifier result is not a VerifierResult (a digest or label is not a verification)")
+        if r.verifier not in VERIFIERS:
+            _fail(f"unknown verifier {r.verifier!r}")
+        if r.verifier in out:
+            _fail(f"two results from verifier {r.verifier!r}")
+        if r.subject != subject:
+            _fail(f"{r.verifier} result is bound to other metadata (integrity check failed)")
+        if not isinstance(r.authority, str) or r.authority not in TRUSTED_AUTHORITIES:
+            _fail(f"{r.verifier} result is not from a trusted authority (none is configured: authentication "
+                  "needs an integration boundary that does not exist yet)")
+        expected = VERIFIERS[r.verifier][1]
+        if not isinstance(r.facts, Mapping) or set(r.facts) != expected:
+            _fail(f"{r.verifier} result must state exactly {sorted(expected)}")
+        out[r.verifier] = r.facts
+    missing, extra = sorted(need - set(out)), sorted(set(out) - need)
+    if missing:
+        _fail(f"required verifier results missing: {missing}")
+    if extra:
+        _fail(f"verifier results that do not apply to this evidence: {extra}")
+    return out
+
+
+def _agree(fact, value, what):
+    if type(fact) is not type(value) or fact != value:
+        _fail(f"verified {what} contradicts the metadata")
 
 
 def _classify(md, verifications, fence, config, protocol_hash, subject) -> Classification:
-    _keys(md, _TOP, {"schema", "source", "domain", "span", "vintage", "designated"}, "metadata")
+    _check_fence(fence)
+    config = _check_config(config, protocol_hash)
+    _keys(md, _TOP, {"schema", "source", "domain", "span", "vintage", "spec", "window", "designated"}, "metadata")
     if md["schema"] != SCHEMA:
         _fail(f"unknown metadata schema {md['schema']!r}")
     if not _text(md["domain"]):
@@ -219,7 +363,7 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         _fail("publication contract names a different source")
     akind = contract["availability"]["kind"]
 
-    # span and vintage
+    # span, vintage, window, attempt
     span = md["span"]
     _keys(span, {"start", "end"}, {"start", "end"}, "span")
     start, end = _date(span["start"], "span.start"), _date(span["end"], "span.end")
@@ -231,23 +375,29 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     _keys(vin, _VINTAGE, _VINTAGE, "vintage")
     if vin["kind"] not in ("generated", "snapshot", "first_seen_capture"):
         _fail("vintage kind must be generated, snapshot or first_seen_capture")
-    if not isinstance(vin["id"], str) or not _SHA.fullmatch(vin["id"]):
-        _fail("vintage id must be one SHA-256 (an ambiguous or missing vintage fails closed)")
+    _sha(vin["id"], "vintage id (an ambiguous or missing vintage fails closed)")
     as_of = _date(vin["as_of"], "vintage.as_of")
     if as_of < end:
         _fail("vintage as_of precedes the end of the span it holds")
+    win = md["window"]
+    _keys(win, {"id"}, {"id"}, "window")
+    if not _text(win["id"]):
+        _fail("window id is required")
+    attempt_id = md.get("attempt_id")
+    if "attempt_id" in md:
+        _sha(attempt_id, "attempt_id")
 
-    # spec (who the evidence would be about), and the computed role
-    spec = md.get("spec")
-    freeze = channel = None
-    if spec is not None:
-        _keys(spec, _SPEC, _SPEC, "spec")
-        if not isinstance(spec["spec_hash"], str) or not _SHA.fullmatch(spec["spec_hash"]):
-            _fail("spec_hash must be a SHA-256")
-        if spec["channel"] not in ("blind", "adaptive"):
-            _fail("spec channel must be blind or adaptive")
-        channel, freeze = spec["channel"], _date(spec["freeze"], "spec.freeze")
-    role = _computed_role(md["domain"], start, end, fence, freeze)
+    # spec: identity, freeze and holding period (never defaulted)
+    spec = md["spec"]
+    _keys(spec, _SPEC, _SPEC, "spec")
+    _sha(spec["spec_hash"], "spec_hash")
+    if spec["channel"] not in ("blind", "adaptive"):
+        _fail("spec channel must be blind or adaptive")
+    channel = spec["channel"]
+    freeze = None if spec["freeze"] is None else _date(spec["freeze"], "spec.freeze")
+    holding = _whole(spec["holding_periods"], "spec.holding_periods", _MAX_HOLDING)
+
+    role = _computed_role(md["domain"], start, end, fence, freeze, holding)
     if "claimed_role" in md and md["claimed_role"] != role:
         _fail(f"claimed role {md['claimed_role']!r} contradicts the computed role {role!r}")
     if md["designated"] and role != roles.RESERVE:
@@ -271,53 +421,87 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
     if "claimed_provenance" in md and md["claimed_provenance"] != provenance:
         _fail(f"claimed provenance {md['claimed_provenance']!r} contradicts the derived {provenance!r}")
 
-    # verifications: each required one present and bound to exactly this metadata
-    if verifications is None or not isinstance(verifications, Mapping):
-        _fail("no verifications supplied")
-    unknown = set(verifications) - set(VERIFIERS)
-    if unknown:
-        _fail(f"unknown verifiers {sorted(unknown)}")
+    recon: set = set()
+    if provenance == CAPTURED_FORWARD:
+        recon |= _capture_reconstruction(capture, vin, start, as_of)
+
+    # verifier results: integrity (bound to this subject) and authority (trusted), then facts == metadata
     need = set(REQUIRED[provenance])
     if role == roles.FORWARD:
         need.add("batch_freeze")
     if role == roles.RESERVE and md["designated"]:
         need.add("runner_token")
-    missing = sorted(v for v in need if verifications.get(v) != subject)
-    if missing:
-        _fail(f"verifications missing or not bound to this metadata: {missing}")
+    if attempt_id is not None:
+        need.add("attempt_binding")
+    facts = _facts(verifications, subject, need)
+    f = facts["spec_registry"]
+    _agree(f["spec_hash"], spec["spec_hash"], "spec identity")
+    _agree(f["channel"], channel, "channel")
+    _agree(f["domain"], md["domain"], "domain")
+    _agree(f["holding_periods"], holding, "holding period")
+    if "batch_freeze" in facts:
+        f = facts["batch_freeze"]
+        _agree(f["spec_hash"], spec["spec_hash"], "frozen spec identity")
+        _agree(f["freeze"], spec["freeze"], "freeze date")
+        _sha(f["manifest_hash"], "verified manifest hash")
+    if "runner_token" in facts:
+        f = facts["runner_token"]
+        _agree(f["domain"], md["domain"], "token domain")
+        _agree(f["window_id"], win["id"], "token window identity")
+        _sha(f["manifest_hash"], "token manifest hash")
+    if "attempt_binding" in facts:
+        f = facts["attempt_binding"]
+        _agree(f["attempt_id"], attempt_id, "attempt identity")
+        _agree(f["spec_hash"], spec["spec_hash"], "attempt spec identity")
+        _agree(f["window_id"], win["id"], "attempt window identity")
+    if "synthetic_generator" in facts:
+        _agree(facts["synthetic_generator"]["vintage_id"], vin["id"], "generator vintage")
+    for v in ("public_archive", "licensed_snapshot"):
+        if v in facts:
+            _agree(facts[v]["vintage_id"], vin["id"], "snapshot identity")
+            _agree(facts[v]["as_of"], vin["as_of"], "snapshot date")
+    if "publication_contract" in facts:
+        _agree(facts["publication_contract"]["source_id"], src["id"], "source identity")
+        _agree(facts["publication_contract"]["contract_sha256"], contract_digest(contract), "publication contract")
+    if "capture_replay" in facts:
+        f = facts["capture_replay"]
+        _agree(f["source_id"], src["id"], "capture source")
+        _agree(f["capture_id"], capture["capture_id"], "capture identity")
+        _agree(f["monitoring_start"], capture["monitoring_start"], "monitoring start")
+        _agree(f["backfill"], capture["reconstructed"]["backfill"], "backfill count")
+        _agree(f["late"], capture["reconstructed"]["late"], "late count")
+    if "store_anchor" in facts:
+        _agree(facts["store_anchor"]["capture_id"], capture["capture_id"], "anchored capture identity")
+        _sha(facts["store_anchor"]["anchor"], "store anchor")
 
     # reconstruction and availability, each explicit
-    recon: set = set()
     if akind == "conservative":
         recon.add(CONSERVATIVE)
     if provenance == SYNTHETIC:
         availability = AVAIL_GENERATED
     elif provenance == CAPTURED_FORWARD:
-        recon |= _capture_reconstruction(capture, vin, start, end, as_of)
         availability = AVAIL_CONSERVATIVE if akind == "conservative" else AVAIL_FIRST_SEEN
     else:
         availability = {"release_dates": AVAIL_PER_VINTAGE, "release_calendar": AVAIL_PER_VINTAGE,
                         "daily_lag": AVAIL_DECLARED_LAG, "conservative": AVAIL_CONSERVATIVE}[akind]
 
     # authorization (what lets these dates be read in this role)
-    reserve_cfg = (config.get("reserve") or {}) if isinstance(config, Mapping) else {}
     if role == roles.EXPLORATION:
         authorization = AUTH_OPEN
-    elif role == roles.RESERVE and md["designated"] and reserve_cfg.get("enabled") is True and fence.enabled:
+    elif role == roles.RESERVE and md["designated"] and config["reserve"].get("enabled") is True and fence.enabled:
         authorization = AUTH_RESERVE
     elif role == roles.FORWARD:
-        authorization = AUTH_FREEZE           # batch_freeze was required above
+        authorization = AUTH_FREEZE           # an authoritative batch_freeze result was required above
     else:
         authorization = AUTH_NONE
 
     # eligibility: provenance can only disqualify
     reconstructed = bool(recon)
     blockers: list[str] = []
-    licensed = kind == "licensed"
     if provenance == SYNTHETIC:
         eligibility = E_INFRA
         blockers.append("synthetic evidence validates infrastructure, never market performance")
-    elif role in (roles.EMBARGO,) or authorization == AUTH_NONE:
+    elif role == roles.EMBARGO or authorization == AUTH_NONE:
         eligibility = E_NONE
         blockers.append(f"{role} dates without an authorisation carry no evidence")
     elif role == roles.EXPLORATION:
@@ -339,31 +523,33 @@ def _classify(md, verifications, fence, config, protocol_hash, subject) -> Class
         elif reconstructed or availability != AVAIL_FIRST_SEEN:
             eligibility = E_DESCRIPTIVE
             blockers.append(f"reconstructed forward observations carry weight 0: {sorted(recon)}")
-        elif start <= freeze:
-            _fail("forward span starts on or before the freeze")
+        elif "attempt_binding" not in facts:
+            eligibility = E_DESCRIPTIVE
+            blockers.append("forward observations without an authoritative attempt binding have no verified "
+                            "window or attempt identity")
         else:
             eligibility = E_FORWARD
             blockers.append("captured-forward provenance is necessary, not sufficient, for forward e-LOND")
 
-    if eligibility in (E_RESERVE, E_FORWARD):
-        ceiling = evidential_weight(channel, role, md["designated"], reconstructed)
-    else:
-        ceiling = 0
-    enabled, reason = promotion.status(protocol_hash, config if isinstance(config, Mapping) else None)
+    ceiling = evidential_weight(channel, role, md["designated"], reconstructed) \
+        if eligibility in (E_RESERVE, E_FORWARD) else 0
+    enabled, reason = promotion.status(protocol_hash, config)
     if not enabled:
         blockers.append(f"promotion disabled: {reason}")
     if eligibility == E_FORWARD:
         blockers.extend(UNIMPLEMENTED_GATES)
     if eligibility == E_RESERVE:
         blockers.append("screening is not implemented and is out of scope for classification")
-    return Classification(provenance, licensed, frozenset(recon), availability, role, authorization, eligibility,
-                          ceiling, False, False, False, tuple(blockers), (), subject)
+    ident = Identity(spec["spec_hash"], channel, md["domain"], spec["freeze"], holding, win["id"],
+                     span["start"], span["end"], attempt_id,
+                     "runner_token" in facts or "attempt_binding" in facts)
+    return Classification(provenance, kind == "licensed", frozenset(recon), availability, role, authorization,
+                          eligibility, ceiling, False, False, False, tuple(blockers), (), subject, ident, True)
 
 
-def _capture_reconstruction(capture, vin, start: date, end: date, as_of: date) -> set:
+def _capture_reconstruction(capture, vin, start: date, as_of: date) -> set:
     _keys(capture, _CAPTURE, _CAPTURE, "capture")
-    if not isinstance(capture["capture_id"], str) or not _SHA.fullmatch(capture["capture_id"]):
-        _fail("capture identity must be a SHA-256")
+    _sha(capture["capture_id"], "capture identity")
     if capture["capture_id"] != vin["id"]:
         _fail("capture identity differs from the vintage it claims to be")
     if type(capture["schema_version"]) is not int or capture["schema_version"] != 2:
@@ -382,44 +568,66 @@ def _capture_reconstruction(capture, vin, start: date, end: date, as_of: date) -
         _fail("monitoring starts after the vintage it produced")
     counts = capture["reconstructed"]
     _keys(counts, _RECON, _RECON, "capture.reconstructed")
-    if any(type(counts[k]) is not int or counts[k] < 0 for k in _RECON):
-        _fail("reconstructed counts must be whole numbers, 0 or more")
-    recon = set()
-    if counts["backfill"]:
-        recon.add(BACKFILLED)
-    if counts["late"]:
-        recon.add(LATE)
-    if start < monitoring and not counts["backfill"]:
+    backfill, late = _whole(counts["backfill"], "backfill count"), _whole(counts["late"], "late count")
+    if start < monitoring and not backfill:
         _fail("span starts before monitoring began but reports no backfill (reconstructed data posing as captured)")
-    if start < monitoring:
+    recon = set()
+    if backfill or start < monitoring:
         recon.add(BACKFILLED)
+    if late:
+        recon.add(LATE)
     return recon
 
 
 def cap_weight(c: Classification, recorded_weight: int) -> int:
     """A recorded evidential weight, lowered to the classification's ceiling. Never raises a weight."""
-    if type(recorded_weight) is not int or recorded_weight not in (0, 1):
+    if type(c) is not Classification or type(recorded_weight) is not int or recorded_weight not in (0, 1) \
+            or type(c.weight_ceiling) is not int:
         return 0
-    return min(recorded_weight, c.weight_ceiling)
+    return max(0, min(recorded_weight, c.weight_ceiling))
 
 
 _RANK = {E_NONE: 0, E_INFRA: 1, E_DESCRIPTIVE: 2, E_RESERVE: 3, E_FORWARD: 3}
 
 
 def combine(parts) -> Classification:
-    """One result for evidence assembled from several classified parts. Any mixture of provenance, role,
-    licence or a failed part fails closed: mixed evidence never inherits the class of its best part."""
-    parts = tuple(parts)
-    if not parts or not all(isinstance(p, Classification) for p in parts):
+    """One result for evidence assembled from several classified parts of **one spec's** record.
+
+    Fails closed on: a failed or unauthenticated part; a part of another spec, channel, domain, freeze or holding
+    period; mixed provenance, role, licence, availability or authorization; a duplicate (same subject, window or
+    attempt); overlapping spans; or attempt identities present on some parts and absent on others. The result keeps
+    every part (and so every subject and individual provenance) and takes the weakest part's eligibility."""
+    try:
+        parts = tuple(parts)
+    except Exception:
+        return _unverified(["parts are not iterable"])
+    if not parts or not all(type(p) is Classification for p in parts):
         return _unverified(["nothing (or something unclassified) to combine"])
-    if any(p.provenance == UNVERIFIED for p in parts):
+    if any(p.provenance == UNVERIFIED or not p.authenticated or p.identity is None for p in parts):
         return _unverified(["a part is unverified"] + [q for p in parts for q in p.problems])
+    ids = [p.identity for p in parts]
+    same = {(i.spec_hash, i.channel, i.domain, i.freeze, i.holding_periods) for i in ids}
+    if len(same) != 1:
+        return _unverified(["parts belong to different specs, channels, domains, freezes or holding periods"])
     keys = {(p.provenance, p.role, p.licensed, p.availability, p.authorization) for p in parts}
     if len(keys) > 1:
         return _unverified([f"mixed provenance or role: {sorted(map(str, keys))}"])
+    for what, vals in (("subject", [p.subject for p in parts]), ("window", [i.window_id for i in ids])):
+        if len(set(vals)) != len(vals):
+            return _unverified([f"duplicate {what} among parts"])
+    attempts = [i.attempt_id for i in ids]
+    if any(a is None for a in attempts) and any(a is not None for a in attempts):
+        return _unverified(["attempt identity present on some parts only"])
+    present = [a for a in attempts if a is not None]
+    if len(set(present)) != len(present):
+        return _unverified(["duplicate attempt among parts"])
+    spans = sorted((i.start, i.end) for i in ids)
+    if any(b[0] <= a[1] for a, b in zip(spans, spans[1:])):
+        return _unverified(["evidence spans overlap"])
     first = parts[0]
     worst = min(parts, key=lambda p: (_RANK[p.eligibility], p.weight_ceiling))
     recon = frozenset().union(*(p.reconstruction for p in parts))
     return Classification(first.provenance, first.licensed, recon, first.availability, first.role,
                           first.authorization, worst.eligibility, min(p.weight_ceiling for p in parts),
-                          False, False, False, tuple(dict.fromkeys(b for p in parts for b in p.blockers)), (), None)
+                          False, False, False, tuple(dict.fromkeys(b for p in parts for b in p.blockers)), (), None,
+                          None, True, parts)
