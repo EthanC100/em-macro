@@ -16,6 +16,14 @@ allowed only when the classification was public in advance.
 borrow availability are all evaluated with information available at that close. Every exclusion has a reason, so
 a snapshot can be audited. ``snapshot`` never reads a bar, action, fact or classification dated after its day.
 
+**Shares are split-adjusted (S8 M6).** Market capitalisation uses ``split_adjusted_shares``: a share count reported
+for a quarter is multiplied by the splits after its publication, so a split does not halve (or double) market
+capitalisation until the next filing.
+
+**Unresolved price moves are holds, not silent drops (S8 M7).** A security whose history has a split-like move that
+neither a recorded split nor share counts explain is excluded with reason "unresolved price move" and listed in
+``Snapshot.holds``: excluding it silently would remove crashed stocks from the universe, a survivorship bias.
+
 **Scope.** The default categories are US-listed technology sub-industries in this package's own taxonomy (vendor
 industry codes are licensed and may be mapped onto it). Listing currency is checked against the rules' currency:
 an international extension adds calendars, currencies and a currency rule, not a second universe framework.
@@ -46,8 +54,8 @@ class Classification:
     company_id: str
     category: str
     start: date
-    end: date | None = None
-    known_from: date | None = None
+    end: date | None                     # None while in force (stated explicitly)
+    known_from: date                     # first day the assignment was published (no default)
     source: str = ""
 
     def __post_init__(self):
@@ -55,8 +63,9 @@ class Classification:
             raise EquityDataError(f"{self.company_id}: unknown category {self.category!r}")
         if self.end is not None and self.end < self.start:
             raise EquityDataError(f"{self.company_id}: classification ends before it starts")
-        if self.known_from is None:
-            object.__setattr__(self, "known_from", self.start)
+        if not isinstance(self.known_from, date):
+            raise EquityDataError(f"{self.company_id}: known_from is required (a classification is not known "
+                                  "because it took effect)")
 
 
 class ClassificationHistory:
@@ -110,6 +119,7 @@ class Snapshot:
     excluded: dict = field(default_factory=dict)     # security_id -> tuple of reasons
     categories: dict = field(default_factory=dict)   # member security_id -> category
     rules_hash: str = ""
+    holds: tuple = ()                                 # securities excluded only by an unresolved price move
 
     def membership_hash(self) -> str:
         """SHA-256 of the day and the sorted members: a feature or a neutralisation that names this hash was
@@ -132,7 +142,7 @@ class UniverseBuilder:
         cal = self.prices.calendar
         if not cal.is_session(day):
             raise EquityDataError(f"{day} is not a session: a universe is formed at a close")
-        members, excluded, cats = [], {}, {}
+        members, excluded, cats, holds = [], {}, {}, []
         for sid in self.master.listed(day):
             why = []
             sec = self.master.security(sid)
@@ -160,20 +170,24 @@ class UniverseBuilder:
             dv = self.prices.dollar_volume(sid, day, r.adv_sessions)
             if dv.size < min(r.adv_sessions, r.min_history_sessions) or float(np.median(dv)) < r.min_dollar_volume:
                 why.append("dollar volume")
+            shares, sh_why = split_adjusted_shares(self.prices, self.fundamentals, sid, sec.company_id, day,
+                                                   r.shares_metric, r.metric_max_age_days)
+            if shares is None:
+                if r.min_market_cap > 0:
+                    why.append(f"market capitalisation unknown ({sh_why})")
+            elif close * shares < r.min_market_cap:
+                why.append("market capitalisation")
             if self.fundamentals is not None:
-                sh = self.fundamentals.value(sec.company_id, r.shares_metric, day, max_age_days=r.metric_max_age_days)
-                if sh is None:
-                    why.append("shares outstanding unknown")
-                elif close * sh.value < r.min_market_cap:
-                    why.append("market capitalisation")
                 for m in r.required_metrics:
                     if self.fundamentals.value(sec.company_id, m, day, max_age_days=r.metric_max_age_days) is None:
                         why.append(f"{m} not known")
-            elif r.min_market_cap > 0:
-                why.append("market capitalisation unknown (no fundamental store)")
             if r.require_action_complete and traded:
                 start = traded[max(0, len(traded) - r.min_history_sessions)].day
-                if not self.prices.corporate_action_complete(sid, start, day, as_of=day):
+                issue = self.prices.action_issue(sid, start, day, as_of=day)
+                if issue == "suspected_split":
+                    why.append("unresolved price move (data hold: review, do not drop silently)")
+                    holds.append(sid)
+                elif issue:
                     why.append("corporate actions incomplete")
             if r.require_borrow:
                 try:
@@ -187,7 +201,28 @@ class UniverseBuilder:
             else:
                 members.append(sid)
                 cats[sid] = cat
-        return Snapshot(day, tuple(sorted(members)), excluded, cats, r.hash())
+        holds = tuple(sorted(s for s in holds if len(excluded.get(s, ())) == 1))
+        return Snapshot(day, tuple(sorted(members)), excluded, cats, r.hash(), holds)
+
+
+def split_adjusted_shares(prices: PriceBook, fundamentals, security_id: str, company_id: str, day: date,
+                          shares_metric: str = "shares_outstanding", max_age_days: int = 200):
+    """(shares on ``day`` as known at its close, or None; the reason when None). Share counts in the price book
+    come first (adjusted for later splits). A reported share count is adjusted for splits after its publication;
+    a split between its period end and its publication is ambiguous (financial statements may already restate it,
+    ASC 260), so the count is refused rather than guessed (S8 M6)."""
+    s = prices.shares_outstanding(security_id, day, as_of=day)
+    if s is not None:
+        return s, ""
+    if fundamentals is None:
+        return None, "no share count"
+    k = fundamentals.value(company_id, shares_metric, day, max_age_days=max_age_days)
+    if k is None:
+        return None, "shares outstanding unknown"
+    published = k.usable_from
+    if prices.splits_between(security_id, k.period_end, published, as_of=day):
+        return None, "shares ambiguous: a split between the period end and the filing"
+    return k.value * prices.split_factor(security_id, published, day, as_of=day), ""
 
 
 def assert_snapshot_for(snapshot: Snapshot, day: date) -> None:

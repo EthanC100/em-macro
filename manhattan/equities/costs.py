@@ -1,6 +1,6 @@
 """Trading costs and shorting: borrow availability and fees, recall risk, financing, spread crossing and impact.
 
-These are research **assumptions** with explicit parameters; they are not measured costs. Protocol v3.1 §10.3
+These are research **assumptions** with explicit parameters, none defaulted; they are not measured costs. Protocol v3.1 §10.3
 re-estimates cost models from recorded spreads once a year; nothing here replaces that. Session 4's futures
 execution model is a separate thing: ``integration.ExecutionCostModel`` is the contract the two can share later.
 
@@ -66,21 +66,27 @@ class BorrowBook:
         return r
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class EquityCostModel:
-    half_spread: float = 0.0005               # fraction of traded notional
-    commission: float = 0.0001
-    impact: float = 0.1                       # coefficient on σ_daily · sqrt(participation)
-    short_financing: float = 0.0              # extra annual spread paid on short proceeds beyond the fee
-    long_financing: float = 0.0               # annual spread over cash on leverage above 100% long
-    recall_cost: float = 0.002                # cost of a forced buy-in, fraction of the position
+    """Every parameter is stated by the caller with a ``reference`` for where it came from (S8 M10): no default can
+    make a strategy look cheap by omission. Values are fractions (``half_spread=0.0005`` is 5 bp)."""
+    half_spread: float                        # fraction of traded notional
+    commission: float
+    impact: float                             # coefficient on σ_daily · sqrt(participation)
+    short_financing: float                    # extra annual spread paid on short proceeds beyond the fee
+    long_financing: float                     # annual spread over cash on leverage above 100% long
+    recall_cost: float                        # cost of a forced buy-in, fraction of the position
+    reference: str                            # where these numbers come from (a measurement, a broker schedule)
     borrow: BorrowBook | None = None
     name: str = "equity-cost-assumption"
 
     def __post_init__(self):
         for k in ("half_spread", "commission", "impact", "short_financing", "long_financing", "recall_cost"):
-            if getattr(self, k) < 0:
-                raise EquityDataError(f"cost parameter {k} cannot be negative")
+            v = getattr(self, k)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not np.isfinite(v) or v < 0:
+                raise EquityDataError(f"cost parameter {k} must be a finite number, 0 or more")
+        if not isinstance(self.reference, str) or not self.reference.strip():
+            raise EquityDataError("a cost model states the reference for its parameters")
 
     def trade_cost(self, traded_notional: float, adv_notional: float, daily_vol: float) -> float:
         """Cost as a fraction of the traded notional."""

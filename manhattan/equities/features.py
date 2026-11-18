@@ -30,7 +30,7 @@ import numpy as np
 
 from .errors import EquityDataError, NeutralizationError, TemporalError
 from .fundamentals import FundamentalStore
-from .universe import Snapshot, assert_snapshot_for
+from .universe import Snapshot, assert_snapshot_for, split_adjusted_shares
 
 KINDS = ("exposure", "candidate_signal")
 
@@ -316,20 +316,21 @@ def growth_exposure(metric: str, store: FundamentalStore, snap: Snapshot, as_of:
 
 def valuation_exposure(metric: str, store: FundamentalStore, prices, snap: Snapshot, as_of: date, company_of,
                        *, shares_metric: str = "shares_outstanding", max_age_days: int = 200) -> CrossSection:
-    """``metric`` per share over the close at ``as_of`` (a yield: earnings, sales, book or cash flow to price)."""
+    """``metric`` over market capitalisation at ``as_of`` (a yield: earnings, sales, book or cash flow to price), with
+    split-adjusted shares (``universe.split_adjusted_shares``)."""
     assert_snapshot_for(snap, as_of)
     vals = []
     for s in snap.members:
         c = company_of(s)
         m = store.value(c, metric, as_of, max_age_days=max_age_days)
-        sh = store.value(c, shares_metric, as_of, max_age_days=max_age_days)
+        sh, _ = split_adjusted_shares(prices, store, s, c, as_of, shares_metric, max_age_days)
         bars = prices.bars(s, as_of, as_of)
-        if m is None or sh is None or not bars or sh.value <= 0:
+        if m is None or sh is None or not bars or sh <= 0:
             vals.append(np.nan)
             continue
         if m.currency and m.currency != prices.currency(s):
             raise EquityDataError(f"{s}: {metric} in {m.currency}, price in {prices.currency(s)}")
-        vals.append(m.value / (sh.value * bars[-1].close))
+        vals.append(m.value / (sh * bars[-1].close))
     return CrossSection(f"{metric}_yield", as_of, snap.members, np.array(vals, dtype=float), "exposure",
                         snap.membership_hash())
 

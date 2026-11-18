@@ -18,10 +18,16 @@ distributions per **post-split** share with ex-date ``t`` (regular and special a
 apart in the record because they are not income signals). A distribution in another currency is refused
 (``CurrencyError``): conversion must be explicit.
 
+**Knowledge.** Each return carries the day it became knowable (``ReturnSeries.known``): its session for an ordinary
+close-to-close return, and the day the proceeds were known for a delisting return (``DelistingReturn.known_from``),
+which can be weeks after the last trade. Anything exported point in time must use ``known``, not the session.
+
 **Gaps.** A session with no bar (missing data) or a suspended bar gives no return for that day; the return from the
 last traded close to the next is booked on the day trading resumes and the day is flagged ``multi_session``.
-A close-to-close ratio within 1% of a common split ratio (2:1, 3:2, 1:10 ...) with no known split raises
-``CorporateActionError``, and so does any move whose absolute log return exceeds ``max_unexplained_move`` (default
+A close-to-close ratio within 1% of a common split ratio (2:1, 3:2, 1:10 ...) with no known split is
+checked against share counts known at the date (``add_share_count``): shares changing with the price mean a missing
+split (``CorporateActionError``); unchanged shares mean a genuine move (kept, listed in ``genuine_moves``); no share
+evidence raises ``SuspectedSplitError`` (unresolved, never silently a split or a crash), and so does any move whose absolute log return exceeds ``max_unexplained_move`` (default
 1.0, about −63% or +172%) unless it was confirmed against the source (``confirm_move``). A silent missing split
 creates a fictitious return of −50% or more.
 
@@ -33,7 +39,7 @@ output. Dropping the security, the default of many databases, is survivorship bi
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 
@@ -44,6 +50,7 @@ from .sessions import MarketCalendar
 ACTION_KINDS = ("split", "cash_dividend", "special_dividend", "stock_dividend", "return_of_capital")
 BAR_STATUSES = ("traded", "suspended")
 # split-like close ratios (new shares per old, forward and reverse) that a missing split would leave in raw closes
+SHARE_TOLERANCE = 0.05          # share-count change within 5% of a split ratio (or of 1) counts as evidence
 COMMON_SPLITS = (1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 10.0, 20.0, 1 / 2, 1 / 3, 1 / 4, 1 / 5, 1 / 8, 1 / 10, 1 / 20)
 SPLIT_TOLERANCE = 0.01
 
@@ -121,15 +128,44 @@ class DelistingPolicy:
         return cls("assume", dict(assumed), reference)
 
 
+@dataclass(frozen=True)
+class ShareCount:
+    """Shares outstanding of a security on ``day`` (a transfer-agent, exchange or cover-page count), public from
+    ``known_from``."""
+    security_id: str
+    day: date
+    shares: float
+    known_from: date
+    source: str = ""
+
+    def __post_init__(self):
+        if not (np.isfinite(self.shares) and self.shares > 0):
+            raise CorporateActionError(f"{self.security_id}: a share count is a positive number")
+        if self.known_from < self.day:
+            raise TemporalError(f"{self.security_id}: a share count cannot be public before the day it counts")
+
+
+class SuspectedSplitError(CorporateActionError):
+    """A close-to-close ratio that matches a split, with no recorded split and no share-count evidence either way.
+    Unresolved, it is neither a split nor a genuine move: the data must be reviewed (record the split, add share
+    counts, or ``confirm_move``)."""
+
+
 @dataclass
 class ReturnSeries:
     security_id: str
     days: np.ndarray                    # session days with a return (object array of dates)
     returns: np.ndarray
     multi_session: np.ndarray           # bool: return spans a missing or suspended session
+    known: np.ndarray = None            # day each return became knowable (≥ its session; later for delisting proceeds)
     delisting_day: date | None = None
     delisting_assumed: bool = False
     as_of: date | None = None
+    genuine_moves: tuple = ()           # split-like moves that share counts showed to be genuine
+
+    def __post_init__(self):
+        if self.known is None:
+            self.known = self.days.copy()
 
 
 class PriceBook:
@@ -145,6 +181,7 @@ class PriceBook:
         self._last_day: dict[str, date] = {}
         self._reasons: dict[str, str] = {}
         self._confirmed: dict[tuple, str] = {}
+        self._shares: dict[str, list[ShareCount]] = {}
 
     # ---- building
     def add_bar(self, bar: Bar) -> None:
@@ -170,6 +207,9 @@ class PriceBook:
                                 f"{self._currency[a.security_id]}; convert explicitly first")
         self._actions.setdefault(a.security_id, []).append(a)
 
+    def add_share_count(self, c: ShareCount) -> None:
+        self._shares.setdefault(c.security_id, []).append(c)
+
     def add_delisting_return(self, d: DelistingReturn) -> None:
         if d.security_id in self._delisting and self._delisting[d.security_id] != d:
             raise CorporateActionError(f"{d.security_id}: two delisting returns")
@@ -193,6 +233,38 @@ class PriceBook:
     def last_traded(self, security_id: str, as_of: date) -> date | None:
         days = [d for d, b in self._bars.get(security_id, {}).items() if d <= as_of and b.status == "traded"]
         return max(days) if days else None
+
+    def split_factor(self, security_id: str, after: date, upto: date, *, as_of: date) -> float:
+        """Product of split ratios with ``after < ex_date <= upto``, of splits known by ``as_of``."""
+        k = 1.0
+        for a in self.actions_known(security_id, as_of):
+            if a.kind in ("split", "stock_dividend") and after < a.ex_date <= upto:
+                k *= a.ratio
+        return k
+
+    def splits_between(self, security_id: str, after: date, upto: date, *, as_of: date) -> list:
+        return [a for a in self.actions_known(security_id, as_of)
+                if a.kind in ("split", "stock_dividend") and after < a.ex_date <= upto]
+
+    def shares_outstanding(self, security_id: str, day: date, *, as_of: date, max_age_days: int = 120):
+        """Shares on ``day`` as known at ``as_of``: the latest share count dated on or before ``day`` and public by
+        ``as_of``, multiplied by the splits after its date (M6). None when no recent count is known."""
+        counts = [c for c in self._shares.get(security_id, []) if c.day <= day and c.known_from <= as_of]
+        if not counts:
+            return None
+        c = max(counts, key=lambda c: (c.day, c.known_from))
+        if (day - c.day).days > max_age_days:
+            return None
+        return c.shares * self.split_factor(security_id, c.day, day, as_of=as_of)
+
+    def _share_ratio(self, security_id: str, before: date, after: date, as_of: date):
+        """Shares after / shares before a move, from counts known at ``as_of`` within 120 days either side."""
+        cs = [c for c in self._shares.get(security_id, []) if c.known_from <= as_of]
+        pre = [c for c in cs if before - timedelta(days=120) <= c.day <= before]
+        post = [c for c in cs if after <= c.day <= after + timedelta(days=120)]
+        if not pre or not post:
+            return None
+        return max(post, key=lambda c: -(c.day - after).days).shares / max(pre, key=lambda c: c.day).shares
 
     def split_adjusted_closes(self, security_id: str, start: date, end: date, *, as_of: date):
         """Closes from ``start`` to ``end`` back-adjusted for splits known by ``as_of`` (only those with ex-date
@@ -223,7 +295,7 @@ class PriceBook:
         if before:
             prev_day = max(before)
             prev_close = allbars[prev_day].close
-        days, rets, multi = [], [], []
+        days, rets, multi, genuine = [], [], [], []
         pending_k, pending_d = 1.0, 0.0
         gap = False
         for d in sessions:
@@ -243,14 +315,15 @@ class PriceBook:
                 continue
             if prev_close is not None:
                 r = (bar.close * pending_k + pending_d) / prev_close - 1.0
-                self._check_move(security_id, d, r, pending_k, as_of)
+                if self._check_move(security_id, d, r, pending_k, as_of, prev_day):
+                    genuine.append(d)
                 days.append(d)
                 rets.append(r)
                 multi.append(gap)
             prev_close, prev_day = bar.close, d
             pending_k, pending_d, gap = 1.0, 0.0, False
         out = ReturnSeries(security_id, np.array(days, dtype=object), np.array(rets, dtype=float),
-                           np.array(multi, dtype=bool), as_of=as_of)
+                           np.array(multi, dtype=bool), as_of=as_of, genuine_moves=tuple(genuine))
         listed_to = self._listed_to(security_id)
         if listed_to is not None and start <= listed_to < end:
             out = self._append_delisting(out, security_id, listed_to, end, as_of, delisting)
@@ -262,18 +335,32 @@ class PriceBook:
             raise CorporateActionError("a confirmed move needs a note saying how it was checked")
         self._confirmed[(security_id, day)] = note
 
-    def _check_move(self, security_id: str, day: date, r: float, k: float, as_of: date) -> None:
+    def _check_move(self, security_id: str, day: date, r: float, k: float, as_of: date, prev_day: date) -> bool:
+        """Raise on an unresolved move; return True for a split-like move that share counts show to be genuine."""
         if (security_id, day) in self._confirmed:
-            return
+            return False
         ratio = 1.0 + r
-        if k == 1.0 and any(abs(ratio * s - 1.0) < SPLIT_TOLERANCE for s in COMMON_SPLITS):
-            raise CorporateActionError(
-                f"{security_id} {day}: close-to-close ratio {ratio:.4f} matches a split and no split is known at "
-                f"{as_of}; resolve the corporate action before use")
+        genuine = False
+        split_like = [s for s in COMMON_SPLITS if abs(ratio * s - 1.0) < SPLIT_TOLERANCE]
+        if k == 1.0 and split_like:
+            sh = self._share_ratio(security_id, prev_day, day, as_of)
+            if sh is None:
+                raise SuspectedSplitError(
+                    f"{security_id} {day}: close-to-close ratio {ratio:.4f} matches a split, no split is known at "
+                    f"{as_of} and no share counts show either way; review before use")
+            if abs(sh / split_like[0] - 1.0) < SHARE_TOLERANCE:
+                raise CorporateActionError(
+                    f"{security_id} {day}: shares changed by {sh:.3f} with the price: a split missing from the "
+                    f"corporate actions known at {as_of}")
+            if abs(sh - 1.0) >= SHARE_TOLERANCE:
+                raise SuspectedSplitError(f"{security_id} {day}: share counts changed by {sh:.3f}; neither a split "
+                                          "nor an unchanged share count")
+            genuine = True                    # unchanged share count: a real price move, not a split
         if self.max_unexplained_move is not None and abs(np.log(ratio)) > self.max_unexplained_move:
             raise CorporateActionError(
                 f"{security_id} {day}: move {r:+.1%} exceeds the unexplained-move limit; confirm it against the "
                 "source (confirm_move) or record the missing action")
+        return genuine
 
     def _listed_to(self, security_id: str) -> date | None:
         """The last trading day, when a delisting return is recorded or trading has stopped for good."""
@@ -294,31 +381,39 @@ class PriceBook:
             return out
         rec = self._delisting.get(security_id)
         if rec is not None and rec.known_from <= as_of:
-            value, assumed = rec.value, False
+            value, assumed, known = rec.value, False, max(nxt, rec.known_from)
         elif policy.mode == "assume":
             reason = self._reasons.get(security_id, "unknown")
             if reason not in policy.assumed:
                 raise CorporateActionError(f"{security_id}: no delisting return and no assumption for reason "
                                            f"{reason!r}")
-            value, assumed = float(policy.assumed[reason]), True
+            value, assumed, known = float(policy.assumed[reason]), True, nxt
         else:
             raise CorporateActionError(f"{security_id}: delisted after {last_day} and no delisting return is known "
                                        f"at {as_of}; dropping it would be survivorship bias")
         out.days = np.append(out.days, np.array([nxt], dtype=object))
         out.returns = np.append(out.returns, value)
         out.multi_session = np.append(out.multi_session, False)
+        out.known = np.append(out.known, np.array([known], dtype=object))
         out.delisting_day, out.delisting_assumed = nxt, assumed
         return out
 
-    def corporate_action_complete(self, security_id: str, start: date, end: date, *, as_of: date) -> bool:
-        """True when every close-to-close move in the span is either ordinary or explained by a known action."""
+    def action_issue(self, security_id: str, start: date, end: date, *, as_of: date) -> str | None:
+        """None when every close-to-close move in the span is ordinary or explained; ``"suspected_split"`` for an
+        unresolved split-like move; ``"incomplete"`` for any other corporate-action problem."""
         try:
             self.total_returns(security_id, start, min(end, as_of), as_of=as_of,
                                delisting=DelistingPolicy.assume({r: 0.0 for r in DELISTING_REASONS},
                                                                 "completeness check only: value unused"))
+        except SuspectedSplitError:
+            return "suspected_split"
         except CorporateActionError:
-            return False
-        return True
+            return "incomplete"
+        return None
+
+    def corporate_action_complete(self, security_id: str, start: date, end: date, *, as_of: date) -> bool:
+        """True when every close-to-close move in the span is either ordinary or explained by a known action."""
+        return self.action_issue(security_id, start, end, as_of=as_of) is None
 
     def dollar_volume(self, security_id: str, end: date, sessions: int) -> np.ndarray:
         """Close × volume of the last ``sessions`` traded bars on or before ``end`` (raw, unadjusted)."""

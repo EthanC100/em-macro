@@ -38,6 +38,10 @@ def test_promotion_stays_shut_even_if_manhattan_gate_opened(monkeypatch):
                          config=cfg)
     # with both gates open, a candidate is still not what gets promoted
     monkeypatch.setattr(evidence, "EQUITY_COVERING_PROTOCOLS", frozenset({fake}))
+    with pytest.raises(EvidenceError, match="not approved"):
+        evidence.promote(evidence.ResearchRecord("pair_candidate", "ab" * 32), "promising", protocol_hash=fake,
+                         config=cfg)
+    monkeypatch.setattr(evidence, "EQUITY_RESEARCH_APPROVED", True)
     with pytest.raises(EvidenceError, match="frozen family"):
         evidence.promote(evidence.ResearchRecord("pair_candidate", "ab" * 32), "promising", protocol_hash=fake,
                          config=cfg)
@@ -113,23 +117,109 @@ def test_provenance_hash_is_deterministic_and_value_free():
     a2 = dict(a, params={"lookback": 126})
     assert not provenance.verify(a2)
     with pytest.raises(EvidenceError, match="SHA-256"):
-        provenance.record("x", inputs={"prices": [1.0, 2.0]}, params={}, boundary={}, code_version="x")
+        provenance.record("x", inputs={"prices": [1.0, 2.0]}, params={}, boundary={}, code_version="abc1234")
     with pytest.raises(EvidenceError, match="exploration"):
-        provenance.record("x", inputs={}, params={}, boundary={}, code_version="x", role="reserve")
+        provenance.record("x", inputs={}, params={}, boundary={}, code_version="abc1234", role="reserve")
+    with pytest.raises(EvidenceError, match="git commit"):
+        provenance.record("x", inputs={}, params={}, boundary={}, code_version="latest")
+    with pytest.raises(EvidenceError, match="SHA-256"):
+        evidence.ResearchRecord("pair_candidate", "not-a-hash")
 
 
-# ----------------------------------------------------------------------------- integration contracts
-def test_integration_contracts_are_checkable_without_the_unfinished_code():
-    class Attempts:
-        def start(self, *, executable, family, batch, spec_hash, data_hash, window, role):
-            return "id"
+# ----------------------------------------------------------------------------- integration contracts (S8 M9)
+def test_s8_m9_method_name_only_objects_no_longer_satisfy_a_contract():
+    """S8 M9: a fake with methods named start/finish passed as attempt accounting. Contracts are now exact
+    signatures of the PR heads inspected, checked by parameter names and kinds."""
+    import types
 
-        def finish(self, attempt_id, *, result_hash, status):
-            return None
+    def register_evaluation(ledger, *, identity, windows, caller, fence=None, freeze=None, holding=0, token=None,
+                            supersedes=None):
+        return None
 
-    assert integration.conforms(Attempts(), "attempts")
-    assert not integration.conforms(object(), "attempts")
-    assert set(integration.CONTRACTS) == {"attempts", "evidence", "simulation", "execution_costs", "portfolio"}
+    good = types.SimpleNamespace(register_evaluation=register_evaluation)
+    assert integration.check("manhattan.access", "register_evaluation", module=good) == "match"
+
+    def start(*, executable, family, batch, spec_hash, data_hash, window, role):     # the old Protocol's shape
+        return "id"
+    bad = types.SimpleNamespace(register_evaluation=start)
+    assert integration.check("manhattan.access", "register_evaluation", module=bad).startswith("mismatch")
+    assert integration.check("manhattan.access", "register_evaluation", module=types.SimpleNamespace()) == "absent"
+
+    def classify(metadata, verifications=None, *, fence, config=None, protocol_hash=None):
+        return None
+    assert integration.check("manhattan.evidence", "classify",
+                             module=types.SimpleNamespace(classify=classify)) == "match"
+
+
+def test_s8_m9_interfaces_on_this_checkout_are_absent_or_match_never_mismatch():
+    """On main today #84 and #86 are absent; once either merges this test checks its interface is still the one
+    the equities adapters expect."""
+    res = integration.check_all()
+    assert all(v in ("absent", "match") for v in res.values()), res
+    assert set(integration.PINNED) == {"#84", "#86"}
+
+
+# ----------------------------------------------------------------------------- research gate (S8 H3, H4)
+def test_s8_h3_real_data_research_is_refused_until_approved():
+    assert evidence.EQUITY_RESEARCH_APPROVED is False
+    synth = sources.ContractRegistry([sources.synthetic_contract("prices_daily")])
+    evidence.require_research_scope(synth)
+    public = sources.ContractRegistry([sources.DataContract(
+        "edgar", "fundamentals_pit", "SEC", "public", "doc", "filing_acceptance_time", "vintaged", False,
+        ("descriptive",))])
+    with pytest.raises(EvidenceError, match="not approved"):
+        evidence.require_research_scope(public)
+    with pytest.raises(EvidenceError, match="declare"):
+        evidence.require_research_scope(sources.ContractRegistry())
+
+
+def test_s8_h3_scope_status_does_not_claim_pipeline_enforcement():
+    st = evidence.scope_status(config=config.load())
+    assert st["enforced_in_protected_pipeline"] is False
+    assert any("protected pipeline" in p for p in st["prerequisites"])
+    text = (ROOT / "docs/manhattan/equities/DESIGN.md").read_text(encoding="utf-8")
+    assert "not integrated into Manhattan's protected pipeline" in text
+
+
+def test_s8_h4_no_equity_module_or_test_constructs_a_window():
+    for p in list(PKG.glob("*.py")) + list((ROOT / "tests").glob("test_manhattan_equities_*.py")):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                f = node.func
+                name = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
+                assert name != "Window", f"{p.name}:{node.lineno} constructs a Window directly"
+
+
+def test_s8_h4_research_entry_point_reads_through_a_reader_and_respects_roles():
+    from datetime import date as D
+
+    from manhattan import roles
+    from manhattan.engine.pit import PitStore
+    from manhattan.equities import pairs, pit_bridge, research
+    from manhattan.equities import synthetic as syn
+    w = syn.world()
+    store = PitStore()
+    reg = sources.ContractRegistry([sources.synthetic_contract("prices_daily")])
+    pit_bridge.prices_to_pit(w.prices, store, reg.contract("prices_daily"), ["S01", "S02", "S07", "S08"],
+                             D(2004, 1, 2), D(2007, 12, 31))
+    fence = roles.Fence(exploration_end=D(2019, 12, 31), reserve={}, enabled=False)
+    win = research.open_window(store, domain="us_tech_equities_synthetic", start=D(2004, 1, 2),
+                               end=D(2007, 12, 31), fence=fence, contracts=reg)
+    bd = pairs.Boundary(D(2004, 1, 5), D(2005, 12, 30), D(2006, 1, 4), D(2006, 12, 29))
+    disc = research.discover_pairs(win, ["S01", "S02", "S07", "S08"], bd, pairs.PairRules(require_link=False),
+                                   calendar=w.calendar)
+    assert disc.attempts["considered"] == 6 == len(disc.result)
+    # a reserve-dated read is refused by the existing role check (no attempt, not the runner)
+    fence_r = roles.Fence(exploration_end=D(2005, 12, 31), reserve={"us_tech_equities_synthetic":
+                                                                    (D(2006, 1, 2), D(2007, 12, 31))}, enabled=True)
+    with pytest.raises(roles.RoleError):
+        research.open_window(store, domain="us_tech_equities_synthetic", start=D(2006, 1, 3), end=D(2006, 6, 30),
+                             fence=fence_r, contracts=reg)
+    public = sources.ContractRegistry([sources.DataContract(
+        "px", "prices_daily", "v", "public", "doc", "date_only", "immutable", False, ("descriptive",))])
+    with pytest.raises(EvidenceError):
+        research.open_window(store, domain="x", start=D(2004, 1, 2), end=D(2004, 6, 30), fence=fence, contracts=public)
 
 
 # ----------------------------------------------------------------------------- isolation
@@ -162,7 +252,7 @@ def test_package_reads_no_repository_data_and_writes_only_where_asked():
 
 def test_package_imports_only_existing_manhattan_modules_and_never_unfinished_ones():
     allowed = {"manhattan.spec", "manhattan.availability", "manhattan.engine.pit", "manhattan.ops",
-               "manhattan.ops.promotion", "manhattan"}
+               "manhattan.ops.promotion", "manhattan"}       # ``from manhattan import roles`` is module "manhattan"
     for p in _modules():
         tree = ast.parse(p.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -176,3 +266,32 @@ def test_catalogue_yaml_carries_no_retired_project_name():
     # parts so that this file itself passes that test.
     retired = "at" + "las"
     assert retired not in (PKG / "catalogue.yaml").read_text(encoding="utf-8").lower()
+
+
+# ----------------------------------------------------------------------------- catalogue: overlaps and data tiers
+def test_s8_catalogue_shared_families_keep_ids_and_group_overlaps():
+    cat = catalogue.load()
+    ids = [f["id"] for f in cat["families"]]
+    assert len(ids) == 39 and len(set(ids)) == 39            # nothing removed or renumbered
+    groups = {}
+    for f in cat["families"]:
+        if f.get("shared_family"):
+            groups.setdefault(f["shared_family"], set()).add(f["id"])
+            assert catalogue.family_draft(f)["shared_family"] == f["shared_family"]
+    assert {"TE-A03", "TE-C04"} <= groups["SF-REVISIONS"] and {"TE-A07", "TE-E01"} <= groups["SF-MOMENTUM"]
+    assert all(len(m) >= 2 for m in groups.values())
+    bad = dict(cat["families"][0], shared_family="SF-ALONE")
+    assert any("at least two" in e for e in catalogue.validate({"status": "draft", "families": [bad]}))
+
+
+def test_s8_catalogue_data_tiers_separate_runnable_from_blocked():
+    tiers = {f["id"]: catalogue.data_tier(f) for f in catalogue.load()["families"]}
+    assert all(t in catalogue.TIERS for t, _ in tiers.values())
+    for fid, (t, blocks) in tiers.items():
+        if t == "needs_unavailable_history":
+            assert blocks, fid
+    # families that need analyst estimates or borrow history can never be in the runnable tier
+    for f in catalogue.load()["families"]:
+        if {"analyst_estimates_pit", "borrow_availability"} & set(f["required_data"]):
+            assert catalogue.data_tier(f)[0] == "needs_unavailable_history"
+    assert sum(t == "prices_and_edgar" for t, _ in tiers.values()) >= 5

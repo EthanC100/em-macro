@@ -19,6 +19,11 @@ own public time. A query as of a date returns, per fiscal period, the latest vin
 (``vintage="latest_known"``) or the first one (``vintage="original"``). A restatement published after the date is
 invisible at the date.
 
+**Capture provenance.** A fact without ``capture_time`` is usable from its public time, but nothing shows that the
+vendor held it then: its history may have been rebuilt later. ``capture_known`` says which facts lack it, and the
+export to the PIT store marks such series ``reconstructed`` (never confirmatory evidence). ``require_capture=True``
+refuses them outright.
+
 **Fiscal calendars differ.** Cross-sectional comparisons use "the latest period known at ``t``" for each company,
 never a calendar-quarter label. ``ttm`` requires four consecutive fiscal quarters known at ``t``; ``growth``
 compares two periods as both were known at ``t`` (one knowledge state, so a restatement cannot mix vintages).
@@ -180,6 +185,10 @@ class FundamentalStore:
         if a.currency and b.currency and a.currency != b.currency:
             raise CurrencyError(f"{company_id}: {num} in {a.currency}, {den} in {b.currency}")
         return float(a.value / b.value)
+
+    def capture_known(self, company_id: str, metric: str) -> bool:
+        """Whether every fact of the series carries a vendor capture time."""
+        return all(f.capture_time is not None for f in self._facts.get((company_id, metric), []))
 
     def facts(self, company_id: str, metric: str) -> list[Fact]:
         return list(self._facts.get((company_id, metric), []))

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone  # noqa: F401
 
 from .errors import TemporalError
 
@@ -40,13 +40,14 @@ def require_aware(ts: datetime, what: str = "timestamp") -> datetime:
 
 
 def _zone(name: str):
+    """The IANA zone ``name``. Without a time-zone database this fails closed: a fixed offset would put every
+    summer-time release an hour off and move releases across the open or the close."""
     try:
         from zoneinfo import ZoneInfo
         return ZoneInfo(name)
-    except Exception:                                   # no tz database: a fixed offset is still explicit
-        if name == "America/New_York":
-            return timezone(timedelta(hours=-5), "EST-fixed")
-        raise TemporalError(f"time zone {name!r} is unavailable") from None
+    except Exception:
+        raise TemporalError(f"time zone {name!r} is unavailable (no tz database); refusing a fixed-offset "
+                            "substitute") from None
 
 
 @dataclass(frozen=True)

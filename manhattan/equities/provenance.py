@@ -8,6 +8,7 @@ the data roles. It contains no values, so it may be committed even when its inpu
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from manhattan import spec as S
@@ -19,6 +20,8 @@ from .sources import ContractRegistry
 def record(kind: str, *, inputs: dict, params: dict, boundary: dict, code_version: str,
            contracts: ContractRegistry | None = None, role: str = "exploration") -> dict:
     """A provenance mapping with its hash under ``"id"``. ``inputs`` maps names to SHA-256 hashes."""
+    if not (isinstance(code_version, str) and re.fullmatch(r"[0-9a-f]{7,40}", code_version)):
+        raise EvidenceError("code_version must be a git commit (7 to 40 hex characters), not free text")
     if role != "exploration":
         raise EvidenceError("research outputs of this package are exploration-role only")
     for k, v in inputs.items():

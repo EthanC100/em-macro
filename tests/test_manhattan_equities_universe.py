@@ -50,7 +50,7 @@ def test_future_data_cannot_change_a_snapshot(world):
         for d in w2.calendar.sessions_between(date(2006, 7, 3), date(2006, 7, 31)):
             w2.prices._bars.get(sid, {}).pop(d, None)
             w2.prices.add_bar(Bar(sid, d, 0.5, "USD", 1.0))
-    w2.classes.add(Classification("C01", "non_technology", date(2000, 1, 1), known_from=date(2006, 7, 5)))
+    w2.classes.add(Classification("C01", "non_technology", date(2000, 1, 1), None, known_from=date(2006, 7, 5)))
     after = builder(w2).snapshot(day)
     assert before.members == after.members and before.excluded == after.excluded
     assert before.membership_hash() == after.membership_hash()
@@ -90,9 +90,9 @@ def test_snapshot_must_match_the_computation_date(world):
 
 
 def test_classification_conflict_in_one_publication():
-    h = ClassificationHistory([Classification("C1", "cybersecurity", date(2005, 1, 1), known_from=date(2005, 1, 1))])
+    h = ClassificationHistory([Classification("C1", "cybersecurity", date(2005, 1, 1), None, known_from=date(2005, 1, 1))])
     with pytest.raises(EquityDataError):
-        h.add(Classification("C1", "networking", date(2005, 6, 1), known_from=date(2005, 1, 1)))
+        h.add(Classification("C1", "networking", date(2005, 6, 1), None, known_from=date(2005, 1, 1)))
 
 
 # ----------------------------------------------------------------------------- features

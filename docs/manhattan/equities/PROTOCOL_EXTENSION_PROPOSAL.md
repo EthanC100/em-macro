@@ -2,8 +2,9 @@
 
 Version 0.1, 2026-11-18. **A proposal for Ethan's review, not a protocol.** It changes no protected document: Protocol
 v3.0.0 and the draft v3.1, SIM_PREREG.md and SIM_PREREG_v2.md are unchanged. Nothing here is adopted or in force, and
-no equity hypothesis may be screened, forward-tested or promoted under the existing documents
-(`manhattan/equities/evidence.py` enforces this).
+no equity hypothesis may be screened, forward-tested or promoted under the existing documents. `manhattan/equities/evidence.py`
+refuses it **within this package** (research on non-synthetic sources and every promotion); the protected pipeline
+does not yet know about asset classes (section 3).
 
 ## 1. Why the existing protocol does not cover equities
 
@@ -33,6 +34,13 @@ no equity hypothesis may be screened, forward-tested or promoted under the exist
 | reserve | an equity reserve window on the iMac only, set in `config/manhattan.yaml` | Ethan |
 
 ## 3. What this PR adds towards it, without changing anything protected
+
+**Not done, and recorded as an owner decision (S8 H3):** scope enforcement in the protected pipeline. Today
+`manhattan.ops.promotion.promote`, `manhattan.engine.evaluate` and the runner do not look at a family's domain or
+asset class. A future change would make them refuse any domain that the adopted protocol version does not name (and
+read `EQUITY_RESEARCH_APPROVED` / `EQUITY_COVERING_PROTOCOLS`, or their successors, from one owner-controlled place).
+That touches owner-reviewed code and the protocol; it is Ethan's to authorise and is not done in this PR.
+
 
 - `evidence.EQUITY_COVERING_PROTOCOLS` (empty) as a second gate on top of `manhattan.ops.promotion`.
 - Feature and risk primitives from which equity core factors could be defined.

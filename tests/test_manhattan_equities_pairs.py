@@ -17,6 +17,8 @@ from manhattan.equities.pairs import (Boundary, PairDiscovery, PairRules, beta_n
                                       out_of_sample, position_from_z, feasibility, residual_spread, rolling_hedge)
 
 NOLINK = PairRules(require_link=False)
+COST = dict(half_spread=0.0005, commission=0.0001, impact=0.1, short_financing=0.0, long_financing=0.0,
+            recall_cost=0.002, reference="test assumption")
 SEEDS = range(20)
 
 
@@ -152,20 +154,20 @@ def test_short_leg_needs_borrow_and_its_cost():
     day = date(2006, 3, 1)
     betas = {"X": 0.9, "Y": 1.6}
     with pytest.raises(BorrowError, match="omission"):
-        feasibility(pos, day, EquityCostModel(), betas)
+        feasibility(pos, day, EquityCostModel(**COST), betas)
     with pytest.raises(BorrowError, match="no borrow information"):
-        feasibility(pos, day, EquityCostModel(borrow=BorrowBook()), betas)
+        feasibility(pos, day, EquityCostModel(**COST, borrow=BorrowBook()), betas)
     hard = BorrowBook([BorrowRecord("X", date(2006, 2, 28), date(2006, 3, 1), False, 0.25)])
     with pytest.raises(BorrowError, match="not borrowable"):
-        feasibility(pos, day, EquityCostModel(borrow=hard), betas)
+        feasibility(pos, day, EquityCostModel(**COST, borrow=hard), betas)
     ok = BorrowBook([BorrowRecord("X", date(2006, 2, 28), date(2006, 3, 1), True, 0.08, recall_prob_daily=0.01)])
-    rep = feasibility(pos, day, EquityCostModel(borrow=ok), betas, earnings_within={"Y": True})
+    rep = feasibility(pos, day, EquityCostModel(**COST, borrow=ok), betas, earnings_within={"Y": True})
     assert rep["borrow_fee_annual"] == 0.08 and rep["holding_cost_daily"] > 0
     assert rep["earnings_in_window"] and abs(rep["beta"]) > 0.05   # "neutral" in dollars, not in beta
     # a borrow record published after the decision day is not known at it
     late = BorrowBook([BorrowRecord("X", date(2006, 2, 28), date(2006, 3, 2), True, 0.01)])
     with pytest.raises(BorrowError):
-        feasibility(pos, day, EquityCostModel(borrow=late), betas)
+        feasibility(pos, day, EquityCostModel(**COST, borrow=late), betas)
 
 
 def test_events_in_evaluation_window_are_counted():
@@ -173,3 +175,97 @@ def test_events_in_evaluation_window_are_counted():
     c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
     rep = out_of_sample(c, days, {"Y": y, "X": x}, events=[days[100], days[600], days[700]])
     assert rep.events_in_window == 2
+
+
+# ----------------------------------------------------------------------------- S8 correction round: regressions
+def _run(seed, mutate=None, **kw):
+    days, y, x = syn.cointegrated_pair(seed, **kw)
+    if mutate is not None:
+        y, x = mutate(y.copy(), x.copy())
+    bd = boundary(days)
+    c = PairDiscovery(days, {"Y": y, "X": x}, bd, NOLINK).evaluate_pair("X", "Y")
+    if not c.passed:
+        return "rejected", c, None
+    r = out_of_sample(c, days, {"Y": y, "X": x})
+    return ("stable" if r.stable else "broken"), c, r
+
+
+def test_s8_m1_a_leg_that_stops_trading_is_never_reported_stable():
+    """S8 M1: with leg Y missing after observation 620 the pair was reported stable on the 115 remaining
+    observations (flags=())."""
+    def delist(y, x):
+        y[620:] = np.nan
+        return y, x
+    for s in SEEDS:
+        verdict, c, r = _run(s, delist)
+        if verdict != "rejected":
+            assert verdict == "broken" and any("stops trading" in f for f in r.flags), (s, r.flags)
+
+
+def test_s8_m1_missing_observations_and_discontinuities_are_flagged():
+    def holes(y, x):
+        y[[560, 600, 640, 680, 700, 720]] = np.nan
+        return y, x
+
+    def gap(y, x):
+        x[600:606] = np.nan
+        return y, x
+    for mut, word in ((holes, "missing"), (gap, "discontinuity")):
+        for s in SEEDS:
+            verdict, c, r = _run(s, mut)
+            if verdict != "rejected":
+                assert verdict == "broken" and any(word in f for f in r.flags), (s, r.flags)
+
+
+def test_s8_m1_formation_gaps_make_a_pair_insufficient_data():
+    days, y, x = syn.cointegrated_pair(2)
+    y = y.copy()
+    y[100:130] = np.nan
+    d = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK)
+    c = d.evaluate_pair("X", "Y")
+    assert not c.passed and any("discontinuity" in r for r in c.reasons)
+    assert d.attempts["insufficient_data"] == 1
+
+
+def test_s8_m2_embargo_of_at_least_one_session_is_enforced():
+    days, y, x = syn.cointegrated_pair(1)
+    no_gap = Boundary(days[0], days[499], days[500], days[-1])        # adjacent: zero sessions in between
+    with pytest.raises(TemporalError, match="embargo"):
+        PairDiscovery(days, {"Y": y, "X": x}, no_gap, NOLINK)
+    c = PairDiscovery(days, {"Y": y, "X": x}, boundary(days), NOLINK).evaluate_pair("X", "Y")
+    with pytest.raises(TemporalError, match="embargo"):
+        out_of_sample(c, days, {"Y": y, "X": x}, PairRules(require_link=False, embargo_sessions=10))
+    with pytest.raises(TemporalError):
+        PairRules(embargo_sessions=0)
+
+
+def test_s8_m3_reports_are_labelled_retrospective_and_usable_only_after_the_window():
+    verdict, c, r = _run(3)
+    assert r.kind == "retrospective" and r.usable_from == c.boundary.evaluation_end
+
+
+def test_s8_l8_every_pair_looked_at_is_counted():
+    days, y, x = syn.cointegrated_pair(4)
+    _, a, b = syn.correlated_walks(4)
+    prices = {"Y": y, "X": x, "A": a, "B": b}
+    link = lambda p, q, t: "same category" if {p, q} != {"A", "Y"} else None      # noqa: E731
+    d = PairDiscovery(days, prices, boundary(days), link=link)
+    passed = d.candidates()
+    assert d.attempts["considered"] == 6 == len(d.attempt_log)
+    assert d.attempts["no_link"] == 1 and d.attempts["passed"] == len(passed)
+    assert sum(d.attempts[k] for k in ("no_link", "insufficient_data", "rejected", "passed")) == 6
+
+
+def test_s8_adversarial_delayed_breaks_are_mostly_caught_by_segment_checks():
+    for kind in ("random_walk", "beta_shift"):
+        res = [_run(s, break_at=650, break_kind=kind)[0] for s in SEEDS]
+        passed = [v for v in res if v != "rejected"]
+        assert passed.count("broken") / len(passed) >= 0.85, (kind, res)
+
+
+def test_s8_adversarial_slow_mean_reversion_is_rejected_not_overconfidently_accepted():
+    """Low power, documented: a genuine but slow relationship (φ = 0.97 or 0.99) rarely passes formation. The
+    filter errs towards missing it, never towards calling a non-reverting spread a candidate."""
+    for phi in (0.97, 0.99):
+        res = [_run(s, phi=phi)[0] for s in SEEDS]
+        assert res.count("rejected") >= 18, (phi, res)

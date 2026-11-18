@@ -10,7 +10,8 @@ from datetime import date, datetime, time, timedelta, timezone
 import numpy as np
 import pytest
 
-from manhattan.engine.pit import PitStore, Window
+from manhattan import roles
+from manhattan.engine.pit import PitStore, Reader
 from manhattan.equities import pit_bridge, sources
 from manhattan.equities import synthetic as syn
 from manhattan.equities.errors import (ContractError, CorporateActionError, CurrencyError, EquityDataError,
@@ -19,15 +20,24 @@ from manhattan.equities.estimates import Estimate, EstimateBook
 from manhattan.equities.events import EarningsEvent, check_label, scheduled_known, surprise, usable_close
 from manhattan.equities.fundamentals import Fact, FundamentalStore
 from manhattan.equities.identity import Company, LifecycleEvent, Security, SecurityMaster, TickerInterval
-from manhattan.equities.prices import Bar, CorporateAction, DelistingPolicy, DelistingReturn, PriceBook
+from manhattan.equities.prices import Bar, CorporateAction, DelistingPolicy, DelistingReturn, PriceBook, ShareCount
 from manhattan.equities.sessions import MarketCalendar
 
 CAL = syn.calendar()
 NY = CAL.tz
 
 
+FENCE = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)
+EV = "recorded in the test (DATA_ACQUISITION.md section 4 checks)"
+
+
 def ny(d: date, hh: int, mm: int = 0) -> datetime:
     return datetime.combine(d, time(hh, mm), NY)
+
+
+def read(store, start, end):
+    """Every read goes through a Reader (exploration role); a Window is never constructed directly."""
+    return Reader(store, caller="session", domain="equities_test", fence=FENCE).window(start, end)
 
 
 # ----------------------------------------------------------------------------- sessions and timestamps
@@ -74,12 +84,12 @@ def test_calendar_refuses_duplicate_days():
 def test_unknown_timing_or_overwritten_history_cannot_be_a_signal():
     with pytest.raises(ContractError, match="timing"):
         sources.DataContract("v", "fundamentals_pit", "vendorX", "licensed", "doc", "unknown", "vintaged", True,
-                             ("signal",))
+                             ("signal",), coverage_evidence=EV)
     with pytest.raises(ContractError, match="overwritten"):
         sources.DataContract("v", "fundamentals_pit", "vendorX", "licensed", "doc", "filing_acceptance_time",
-                             "overwritten", True, ("signal",))
+                             "overwritten", True, ("signal",), coverage_evidence=EV)
     c = sources.DataContract("v", "fundamentals_pit", "vendorX", "licensed", "doc", "filing_acceptance_time",
-                             "overwritten", True, ("descriptive",))
+                             "overwritten", True, ("descriptive",), coverage_evidence=EV)
     assert c.permits("descriptive") and not c.permits("signal")
     with pytest.raises(ContractError):
         c.require("signal")
@@ -88,7 +98,7 @@ def test_unknown_timing_or_overwritten_history_cannot_be_a_signal():
 def test_outcome_prices_must_include_delistings():
     with pytest.raises(ContractError, match="delisted"):
         sources.DataContract("p", "prices_daily", "v", "public", "doc", "date_only", "immutable", True,
-                             ("evaluation_outcome",), includes_delisted=False)
+                             ("evaluation_outcome",), includes_delisted=False, coverage_evidence=EV)
 
 
 def test_alternative_data_is_descriptive_only_until_verified():
@@ -101,7 +111,7 @@ def test_alternative_data_is_descriptive_only_until_verified():
 
 def test_licensed_data_never_publishable_and_registry_requires_declarations():
     lic = sources.DataContract("n", "prices_daily", "vendor", "licensed", "doc", "date_only", "immutable", True,
-                               ("signal",), includes_delisted=True)
+                               ("signal",), includes_delisted=True, coverage_evidence=EV)
     with pytest.raises(ContractError, match="public repository"):
         lic.assert_publishable()
     reg = sources.ContractRegistry([sources.synthetic_contract("prices_daily")])
@@ -127,11 +137,14 @@ def _master():
     m = SecurityMaster()
     m.add_company(Company("C1", "one"))
     m.add_company(Company("C2", "two"))
-    m.add_security(Security("S1", "C1", "A", "common", "USD", date(2001, 1, 2), date(2005, 6, 30)))
-    m.add_security(Security("S2", "C2", "A", "common", "USD", date(2006, 1, 3)))
-    m.add_ticker(TickerInterval("S1", "ABC", "XNAS", date(2001, 1, 2), date(2003, 3, 31)))
-    m.add_ticker(TickerInterval("S1", "ABCD", "XNAS", date(2003, 4, 1), date(2005, 6, 30), known_from=date(2003, 3, 20)))
-    m.add_ticker(TickerInterval("S2", "ABC", "XNAS", date(2006, 1, 3)))      # the old ticker, reused
+    m.add_security(Security("S1", "C1", "A", "common", "USD", date(2001, 1, 2), date(2005, 6, 30),
+                            known_from=date(2000, 12, 1)))
+    m.add_security(Security("S2", "C2", "A", "common", "USD", date(2006, 1, 3), None, known_from=date(2005, 12, 1)))
+    m.add_ticker(TickerInterval("S1", "ABC", "XNAS", date(2001, 1, 2), date(2003, 3, 31), known_from=date(2001, 1, 2),
+                                end_known_from=date(2003, 3, 20)))
+    m.add_ticker(TickerInterval("S1", "ABCD", "XNAS", date(2003, 4, 1), date(2005, 6, 30), known_from=date(2003, 3, 20),
+                                end_known_from=date(2005, 6, 30)))
+    m.add_ticker(TickerInterval("S2", "ABC", "XNAS", date(2006, 1, 3), None, known_from=date(2006, 1, 3)))  # reused
     return m
 
 
@@ -151,16 +164,17 @@ def test_ticker_change_and_reuse_resolve_by_date():
 def test_duplicate_securities_and_overlapping_tickers_are_refused():
     m = _master()
     with pytest.raises(IdentityError, match="duplicate"):
-        m.add_security(Security("S1bis", "C1", "A", "common", "USD", date(2002, 1, 2)))
-    m.add_security(Security("S4", "C1", "B", "common", "USD", date(2002, 1, 2)))
+        m.add_security(Security("S1bis", "C1", "A", "common", "USD", date(2002, 1, 2), None, known_from=date(2002, 1, 2)))
+    m.add_security(Security("S4", "C1", "B", "common", "USD", date(2002, 1, 2), None, known_from=date(2002, 1, 2)))
     with pytest.raises(IdentityError, match="same time"):
-        m.add_ticker(TickerInterval("S4", "ABC", "XNAS", date(2002, 1, 2), date(2002, 12, 31)))
+        m.add_ticker(TickerInterval("S4", "ABC", "XNAS", date(2002, 1, 2), date(2002, 12, 31), known_from=date(2002, 1, 2),
+                                    end_known_from=date(2002, 12, 31)))
     with pytest.raises(IdentityError, match="outside the listing"):
-        m.add_ticker(TickerInterval("S2", "XYZ", "XNAS", date(2004, 1, 2)))
+        m.add_ticker(TickerInterval("S2", "XYZ", "XNAS", date(2004, 1, 2), None, known_from=date(2004, 1, 2)))
     with pytest.raises(IdentityError, match="redefined"):
-        m.add_security(Security("S2", "C1", "A", "common", "USD", date(2006, 1, 3)))
+        m.add_security(Security("S2", "C1", "A", "common", "USD", date(2006, 1, 3), None, known_from=date(2005, 12, 1)))
     # two share classes of one company are distinct securities, not duplicates
-    m.add_security(Security("S3", "C2", "B", "common", "USD", date(2006, 1, 3)))
+    m.add_security(Security("S3", "C2", "B", "common", "USD", date(2006, 1, 3), None, known_from=date(2005, 12, 1)))
     assert m.securities_of("C2", date(2007, 1, 2)) == ("S2", "S3")
 
 
@@ -397,7 +411,7 @@ def test_restatement_exported_to_pitstore_follows_the_stores_own_rules():
     store = PitStore()
     names = pit_bridge.fundamentals_to_pit(fs, store, sources.synthetic_contract("fundamentals_pit"))
     assert names == ["eq.fund.C1.revenue"]
-    w = Window(store, date(2005, 1, 3), date(2008, 12, 31), "exploration", "equities_test", "session")
+    w = read(store, date(2005, 1, 3), date(2008, 12, 31))
     _, v = w.as_of("eq.fund.C1.revenue", date(2006, 6, 1))
     assert list(v) == [100.0]
     _, v = w.as_of("eq.fund.C1.revenue", date(2007, 3, 1))
@@ -409,7 +423,7 @@ def test_restatement_exported_to_pitstore_follows_the_stores_own_rules():
 def test_bridge_refuses_licensed_or_unverified_sources():
     fs, _ = _fs()
     lic = sources.DataContract("lic", "fundamentals_pit", "v", "licensed", "doc", "filing_acceptance_time",
-                               "vintaged", True, ("signal",))
+                               "vintaged", True, ("signal",), coverage_evidence=EV)
     with pytest.raises(ContractError, match="public repository"):
         pit_bridge.fundamentals_to_pit(fs, PitStore(), lic)
     pit_bridge.fundamentals_to_pit(fs, PitStore(), lic, private_store=True)
@@ -424,6 +438,144 @@ def test_prices_bridge_includes_delisting_return():
     store = PitStore()
     pit_bridge.prices_to_pit(w.prices, store, sources.synthetic_contract("prices_daily"), ["S04"],
                              date(2006, 1, 3), date(2006, 12, 29))
-    win = Window(store, date(2006, 1, 3), date(2006, 12, 29), "exploration", "equities_test", "session")
+    win = read(store, date(2006, 1, 3), date(2006, 12, 29))
     p, v = win.as_of("eq.px.S04", date(2006, 12, 29))
     assert p[-1] == np.datetime64("2006-07-03") and v[-1] / v[-2] - 1 == pytest.approx(-0.35)
+
+
+# ----------------------------------------------------------------------------- S8 correction round: regressions
+def test_s8_h1_delisting_return_is_not_available_before_the_proceeds_were_known():
+    """S8 H1: the exported index showed the −35% delisting return on 2006-07-03, the session after the last trade,
+    although the proceeds were known only on 2006-07-20. Intermediate reads must not see it early."""
+    w = syn.world()
+    store = PitStore()
+    pit_bridge.prices_to_pit(w.prices, store, sources.synthetic_contract("prices_daily"), ["S04"],
+                             date(2006, 1, 3), date(2006, 12, 29))
+    win = read(store, date(2006, 1, 3), date(2006, 12, 29))
+    for t in (date(2006, 7, 3), date(2006, 7, 10), date(2006, 7, 19)):
+        p, v = win.as_of("eq.px.S04", t)
+        assert p[-1] == np.datetime64("2006-06-30"), t          # the index ends at the last traded close
+    p, v = win.as_of("eq.px.S04", date(2006, 7, 20))
+    assert p[-1] == np.datetime64("2006-07-03") and v[-1] / v[-2] - 1 == pytest.approx(-0.35)
+    _, _, avail = win.as_of_with_availability("eq.px.S04", date(2006, 12, 29))
+    assert avail[-1] == np.datetime64("2006-07-20") and not store._reconstructed
+
+
+def test_s8_h1_assumed_delisting_value_marks_the_store_reconstructed():
+    w = syn.world()
+    store = PitStore()
+    pol = DelistingPolicy.assume({"performance": -0.3}, "declared assumption for the test")
+    pit_bridge.prices_to_pit(w.prices, store, sources.synthetic_contract("prices_daily"), ["S04"],
+                             date(2006, 1, 3), date(2006, 7, 10), delisting=pol)
+    assert store._reconstructed                                 # never confirmatory historical evidence
+
+
+def test_s8_h1_known_days_never_precede_their_sessions():
+    w = syn.world()
+    r = w.prices.total_returns("S04", date(2006, 1, 3), date(2006, 12, 29), as_of=date(2006, 12, 29))
+    assert all(k >= d for k, d in zip(r.known, r.days))
+    assert r.known[-1] == date(2006, 7, 20) and r.days[-1] == date(2006, 7, 3)
+
+
+def test_s8_m4_knowledge_dates_have_no_defaults():
+    with pytest.raises(TypeError):
+        Security("S", "C", "A", "common", "USD", date(2001, 1, 2))           # listed_to and known_from required
+    with pytest.raises(IdentityError, match="known_from"):
+        Security("S", "C", "A", "common", "USD", date(2001, 1, 2), None, known_from=None)
+    with pytest.raises(IdentityError, match="end_known_from"):
+        TickerInterval("S", "X", "XNAS", date(2001, 1, 2), date(2002, 1, 2), known_from=date(2001, 1, 2))
+    with pytest.raises(ContractError, match="coverage_evidence"):
+        sources.DataContract("p", "prices_daily", "v", "public", "doc", "date_only", "immutable", True, ("signal",))
+
+
+def test_s8_m4_a_ticker_end_disclosed_late_is_not_applied_early():
+    m = SecurityMaster()
+    m.add_company(Company("C1", "one"))
+    m.add_security(Security("S1", "C1", "A", "common", "USD", date(2001, 1, 2), None, known_from=date(2001, 1, 2)))
+    m.add_ticker(TickerInterval("S1", "OLD", "XNAS", date(2001, 1, 2), date(2004, 6, 30), known_from=date(2001, 1, 2),
+                                end_known_from=date(2004, 9, 1)))
+    assert m.resolve("OLD", date(2004, 8, 2), as_known_at=date(2004, 8, 2)) == "S1"   # believed still in use
+    with pytest.raises(IdentityError):
+        m.resolve("OLD", date(2004, 8, 2), as_known_at=date(2004, 9, 2))
+
+
+def test_s8_m4_facts_without_capture_time_mark_the_export_reconstructed():
+    fs = FundamentalStore(CAL)
+    fs.add(Fact("C1", "revenue", date(2006, 3, 31), "quarter", 1.0, "USD", ny(date(2006, 5, 2), 8)))
+    assert not fs.capture_known("C1", "revenue")
+    st = PitStore()
+    pit_bridge.fundamentals_to_pit(fs, st, sources.synthetic_contract("fundamentals_pit"))
+    assert st._reconstructed
+    fs2 = FundamentalStore(CAL)
+    fs2.add(Fact("C1", "revenue", date(2006, 3, 31), "quarter", 1.0, "USD", ny(date(2006, 5, 2), 8),
+                 capture_time=ny(date(2006, 5, 2), 9)))
+    st2 = PitStore()
+    pit_bridge.fundamentals_to_pit(fs2, st2, sources.synthetic_contract("fundamentals_pit"))
+    assert not st2._reconstructed
+
+
+def test_s8_m6_market_cap_uses_split_adjusted_shares():
+    """S8 M6: after S01's 2:1 split, market cap halved until the next filing (626m -> 314m)."""
+    from manhattan.equities.universe import split_adjusted_shares
+    w = syn.world()
+    before, after = date(2006, 2, 28), date(2006, 3, 2)
+    px = lambda d: w.prices.bars("S01", d, d)[0].close                                    # noqa: E731
+    sh_b, _ = split_adjusted_shares(w.prices, w.fundamentals, "S01", "C01", before)
+    sh_a, _ = split_adjusted_shares(w.prices, w.fundamentals, "S01", "C01", after)
+    assert px(after) * sh_a == pytest.approx(px(before) * sh_b, rel=0.1)
+    # without price-book share counts, the reported count is adjusted for splits after its filing
+    w.prices._shares.clear()
+    sh_a2, why = split_adjusted_shares(w.prices, w.fundamentals, "S01", "C01", after)
+    assert sh_a2 == pytest.approx(2 * w.fundamentals.value("C01", "shares_outstanding", after).value) and not why
+
+
+def test_s8_m6_split_between_period_end_and_filing_is_ambiguous():
+    from manhattan.equities.universe import split_adjusted_shares
+    b = PriceBook(CAL)
+    b.add_bars("S1", CAL.sessions_between(date(2006, 3, 1), date(2006, 6, 30)), np.full(84, 10.0), currency="USD")
+    b.add_action(CorporateAction("S1", "split", date(2006, 4, 10), date(2006, 3, 20), ratio=2.0))
+    fs = FundamentalStore(CAL)
+    fs.add(Fact("C1", "shares_outstanding", date(2006, 3, 31), "quarter", 1e7, None, ny(date(2006, 5, 2), 8)))
+    sh, why = split_adjusted_shares(b, fs, "S1", "C1", date(2006, 6, 1))
+    assert sh is None and "ambiguous" in why
+
+
+def _crash_book(shares_after=None):
+    b = PriceBook(CAL)
+    days = CAL.sessions_between(date(2006, 2, 1), date(2006, 2, 28))
+    b.add_bars("S1", days, np.where(np.array(days) >= date(2006, 2, 15), 20.0, 40.0), currency="USD")
+    if shares_after is not None:
+        b.add_share_count(ShareCount("S1", date(2006, 2, 1), 1e7, date(2006, 2, 2)))
+        b.add_share_count(ShareCount("S1", date(2006, 2, 16), shares_after, date(2006, 2, 17)))
+    return b, days
+
+
+def test_s8_m7_genuine_crash_with_unchanged_shares_is_a_return_not_a_split():
+    """S8 M7: a genuine −50% day was refused as a missing split, so a crashed stock left the universe."""
+    b, days = _crash_book(shares_after=1e7)
+    r = b.total_returns("S1", days[0], days[-1], as_of=days[-1])
+    assert r.returns.min() == pytest.approx(-0.5) and r.genuine_moves == (date(2006, 2, 15),)
+
+
+def test_s8_m7_split_like_move_with_doubled_shares_is_a_missing_split():
+    b, days = _crash_book(shares_after=2e7)
+    with pytest.raises(CorporateActionError, match="missing"):
+        b.total_returns("S1", days[0], days[-1], as_of=days[-1])
+
+
+def test_s8_m7_no_share_evidence_is_unresolved_not_silently_either():
+    from manhattan.equities.prices import SuspectedSplitError
+    b, days = _crash_book()
+    with pytest.raises(SuspectedSplitError):
+        b.total_returns("S1", days[0], days[-1], as_of=days[-1])
+    assert b.action_issue("S1", days[0], days[-1], as_of=days[-1]) == "suspected_split"
+    # share counts published after the as-of date are not evidence at it
+    b2, _ = _crash_book(shares_after=1e7)
+    with pytest.raises(SuspectedSplitError):
+        b2.total_returns("S1", days[0], date(2006, 2, 16), as_of=date(2006, 2, 16))
+
+
+def test_s8_low_no_fixed_offset_time_zone_substitute():
+    from manhattan.equities.sessions import _zone
+    with pytest.raises(TemporalError, match="unavailable"):
+        _zone("Not/AZone")

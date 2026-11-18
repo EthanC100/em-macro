@@ -8,7 +8,8 @@
 **The boundary is enforced by construction.** ``PairDiscovery`` copies only the observations dated inside
 ``[formation_start, formation_end]``; it never holds a later price. Evaluation data are passed separately to
 ``out_of_sample``, which uses the hedge ratio, spread mean and spread standard deviation **frozen at formation**.
-An embargo of at least one session separates the two windows.
+At least ``rules.embargo_sessions`` sessions (one or more) must lie strictly between the two windows: both
+``PairDiscovery`` and ``out_of_sample`` count them in ``days`` and refuse otherwise (S8 M2).
 
 **Economic link first.** With ``rules.require_link`` (the default) a pair is considered only if ``link(a, b, t)``
 returns a reason at ``t = formation_end`` (same technology category, a supplier/customer edge in the relationship
@@ -17,11 +18,17 @@ graph usable at ``t`` ...). Statistics alone over all pairs of a few hundred sto
 **Correlation is not cointegration, and cointegration is not profit.** The filters are, in order: return
 correlation; the Engle–Granger test in **both** directions (the larger p-value is kept); a mean-reversion half-life
 within bounds; and stability across ``n_subperiods`` sub-windows of the formation window (hedge-ratio drift and a
-per-window ADF test). Passing them makes a pair a *candidate*. ``out_of_sample`` flags a relationship that has
-broken: a non-stationary spread, a variance blow-up, a shift of the spread's mean, or a hedge ratio re-estimated on
-the evaluation window that has moved. These are diagnostics of a candidate filter whose parameters (``PairRules``)
-must be frozen in a hypothesis spec before any designated evaluation; they are not Manhattan decision rules and
-none of them is a test of profitability.
+per-window ADF test of the full-window spread). Before any of them, a pair with either leg missing on more than
+``max_missing_frac`` of sessions or for more than ``max_gap_sessions`` in a row is ``insufficient_data``.
+Passing them makes a pair a *candidate*.
+
+``out_of_sample`` is a **retrospective** diagnostic (S8 M3): after the evaluation window has ended it classifies the
+relationship over that window as stable or broken — a non-stationary spread, a variance blow-up, a shift of the
+spread's mean (also per segment), a re-estimated hedge ratio that has moved, a leg missing, interrupted or no longer
+trading. It uses the whole window, so it is never a signal inside it. These are diagnostics of a candidate filter
+whose parameters (``PairRules``) must be frozen in a hypothesis spec before any designated evaluation; they are not
+Manhattan decision rules and none of them is a test of profitability. Their synthetic hit rates (tests) describe the
+code on one generator, not markets.
 
 Hedge ratios: ``ols_hedge`` (static), ``rolling_hedge`` (estimated on the ``window`` sessions strictly before each
 day), ``beta_neutral_hedge`` (the ratio that makes the spread's market beta zero) and ``residual_spread`` (spread
@@ -55,6 +62,8 @@ class Boundary:
 
 @dataclass(frozen=True)
 class PairRules:
+    """Declared parameters of the candidate filter and of the break diagnostics. Set by looking at synthetic cases
+    only; on real data they are a grid to freeze in a hypothesis spec, never something tuned on evaluation data."""
     min_obs: int = 250
     min_return_corr: float = 0.5
     max_eg_pvalue: float = 0.05
@@ -64,11 +73,22 @@ class PairRules:
     max_beta_drift: float = 0.35            # (max − min) of sub-window hedge ratios / |full-window ratio|
     max_sub_adf_pvalue: float = 0.20
     require_link: bool = True
-    # out-of-sample break diagnostics
+    embargo_sessions: int = 1               # sessions strictly between formation_end and evaluation_start (S8 M2)
+    max_missing_frac: float = 0.02          # share of sessions with either leg missing (S8 M1)
+    max_gap_sessions: int = 3               # longest run of sessions with either leg missing (S8 M1)
+    # retrospective break diagnostics on the evaluation window
     max_oos_adf_pvalue: float = 0.10
     max_variance_ratio: float = 3.0         # evaluation spread variance / formation spread variance
     max_mean_shift: float = 1.5             # |mean_eval − mean_form| / sd_form
     max_oos_beta_drift: float = 0.35
+    n_eval_segments: int = 2                # each segment is also checked, so a late break is not averaged away
+
+    def __post_init__(self):
+        if isinstance(self.embargo_sessions, bool) or not isinstance(self.embargo_sessions, int) \
+                or self.embargo_sessions < 1:
+            raise TemporalError("the embargo between formation and evaluation is at least one session")
+        if self.n_eval_segments < 1 or self.max_gap_sessions < 0 or not 0 <= self.max_missing_frac < 1:
+            raise EquityDataError("invalid pair rules")
 
 
 @dataclass(frozen=True)
@@ -99,6 +119,10 @@ class PairCandidate:
 
 @dataclass
 class StabilityReport:
+    """A **retrospective** classification of a candidate's relationship over a whole evaluation window, computed
+    after that window ended (S8 M3). It uses every observation of the window, so it is not a forecast, not a
+    trading signal and not usable at any date inside the window; and its synthetic error rates (tests) describe the
+    code on one generator, not how often real relationships break or persist."""
     pair: tuple
     n: int
     adf_pvalue: float
@@ -110,10 +134,32 @@ class StabilityReport:
     flags: tuple
     events_in_window: int = 0
     zscores: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    missing: int = 0
+    longest_gap: int = 0
+    kind: str = "retrospective"
+    usable_from: date | None = None          # the evaluation window's end: nothing here is known before it
 
     @property
     def stable(self) -> bool:
         return not self.flags
+
+
+def missing_profile(y: np.ndarray, x: np.ndarray) -> dict:
+    """Sessions with either leg missing: count, share, longest run, and whether a leg stops for good (a trailing
+    run: delisting, merger or a long suspension)."""
+    miss = ~(np.isfinite(np.asarray(y, float)) & np.isfinite(np.asarray(x, float)))
+    run = longest = 0
+    for m in miss:
+        run = run + 1 if m else 0
+        longest = max(longest, run)
+    trailing = int(len(miss) - np.flatnonzero(~miss)[-1] - 1) if (~miss).any() else len(miss)
+    return {"missing": int(miss.sum()), "share": float(miss.mean()) if miss.size else 1.0, "longest_gap": longest,
+            "trailing": trailing}
+
+
+def embargo_sessions(days, boundary: Boundary) -> int:
+    """Sessions in ``days`` strictly between the formation end and the evaluation start."""
+    return int(sum(1 for d in days if boundary.formation_end < d < boundary.evaluation_start))
 
 
 # ---------------------------------------------------------------- primitives
@@ -210,7 +256,12 @@ def _hash_arrays(*arrays) -> str:
 # ---------------------------------------------------------------- discovery
 class PairDiscovery:
     """Candidate pairs from formation-window data only. ``log_prices`` maps id -> log price array aligned with
-    ``days`` (log of a total-return index; NaN when not trading)."""
+    ``days`` (log of a total-return index; NaN when not trading).
+
+    **Every pair looked at is counted (S8 L8).** ``attempts`` records, for multiple-testing accounting, how many
+    pairs were considered and what happened to each: ``no_link``, ``insufficient_data`` (missing observations or
+    trading discontinuities), ``rejected`` (a statistical filter) or ``passed``; ``attempt_log`` lists them. The
+    number of candidates that passed is meaningless without the number tried."""
 
     def __init__(self, days, log_prices: dict, boundary: Boundary, rules: PairRules = PairRules(), *, link=None):
         days = np.asarray(days, dtype=object)
@@ -219,25 +270,45 @@ class PairDiscovery:
         for k, v in log_prices.items():
             if len(v) != len(days):
                 raise EquityDataError(f"{k}: price array does not match the days")
+        if embargo_sessions(days, boundary) < rules.embargo_sessions:
+            raise TemporalError(f"only {embargo_sessions(days, boundary)} sessions between formation end and "
+                                f"evaluation start; the rules declare an embargo of {rules.embargo_sessions}")
         m = np.array([boundary.formation_start <= d <= boundary.formation_end for d in days], dtype=bool)
         self.days = days[m]
         self.prices = {k: np.asarray(v, float)[m].copy() for k, v in sorted(log_prices.items())}
         self.boundary, self.rules, self.link = boundary, rules, link
         if rules.require_link and link is None:
             raise EquityDataError("rules require an economic link but no link function was given")
+        self.attempts = {"considered": 0, "no_link": 0, "insufficient_data": 0, "rejected": 0, "passed": 0}
+        self.attempt_log: list[tuple] = []
+
+    def _record(self, a: str, b: str, outcome: str) -> None:
+        self.attempts["considered"] += 1
+        self.attempts[outcome] += 1
+        self.attempt_log.append((a, b, outcome))
 
     def evaluate_pair(self, a: str, b: str) -> PairCandidate | None:
         r, bd = self.rules, self.boundary
         link = self.link(a, b, bd.formation_end) if self.link is not None else "none required"
         if r.require_link and not link:
+            self._record(a, b, "no_link")
             return None
         y, x = self.prices[a], self.prices[b]
+        mp = missing_profile(y, x)
         ok = np.isfinite(y) & np.isfinite(x)
-        reasons = []
+        short = []
         if ok.sum() < r.min_obs:
-            return PairCandidate(a, b, str(link), bd, *([float("nan")] * 8), (), (), (f"{int(ok.sum())} joint obs",),
+            short.append(f"{int(ok.sum())} joint obs")
+        if mp["share"] > r.max_missing_frac:
+            short.append(f"{mp['missing']} sessions with a leg missing")
+        if mp["longest_gap"] > r.max_gap_sessions:
+            short.append(f"trading discontinuity of {mp['longest_gap']} sessions")
+        if short:
+            self._record(a, b, "insufficient_data")
+            return PairCandidate(a, b, str(link), bd, *([float("nan")] * 8), (), (), tuple(short),
                                  _hash_arrays(y, x))
         y, x = y[ok], x[ok]
+        reasons = []
         ry, rx = np.diff(y), np.diff(x)
         corr = float(np.corrcoef(ry, rx)[0, 1])
         alpha, beta = ols_hedge(y, x)
@@ -263,6 +334,7 @@ class PairDiscovery:
             reasons.append(f"hedge ratio drift {drift:.2f} across formation sub-windows")
         if any(not p <= r.max_sub_adf_pvalue for p in sub_p):
             reasons.append("spread not stationary in every formation sub-window")
+        self._record(a, b, "rejected" if reasons else "passed")
         return PairCandidate(a, b, str(link), bd, corr, alpha, beta, eg, adf, hl, float(s.mean()),
                              float(s.std(ddof=1)), tuple(sub_b), tuple(sub_p), tuple(reasons), _hash_arrays(y, x))
 
@@ -275,19 +347,46 @@ class PairDiscovery:
         return out
 
 
-# ---------------------------------------------------------------- evaluation diagnostics
+# ---------------------------------------------------------------- retrospective evaluation diagnostics
+def _segment_flags(s: np.ndarray, c: PairCandidate, rules: PairRules) -> list[str]:
+    flags = []
+    vr = float(s.var(ddof=1) / c.spread_sd ** 2)
+    shift = float(abs(s.mean() - c.spread_mean) / c.spread_sd)
+    if vr > rules.max_variance_ratio:
+        flags.append(f"spread variance ratio {vr:.2f}")
+    if shift > rules.max_mean_shift:
+        flags.append(f"spread mean shifted {shift:.2f} formation sd")
+    return flags
+
+
 def out_of_sample(c: PairCandidate, days, log_prices: dict, rules: PairRules = PairRules(), *,
                   events=()) -> StabilityReport:
-    """Diagnostics of the candidate's spread on the evaluation window, with formation parameters frozen.
-    ``events`` are dates of earnings releases or corporate actions of either leg (counted, never hidden)."""
+    """Retrospective diagnostics of the candidate's spread over the evaluation window, with formation parameters
+    frozen. ``events`` are dates of earnings releases or corporate actions of either leg (counted, never hidden).
+    A leg that is missing, interrupted or stops trading is flagged, never dropped (S8 M1); the whole-window checks
+    are repeated on ``n_eval_segments`` consecutive segments so a late break is not averaged away."""
     days = np.asarray(days, dtype=object)
     bd = c.boundary
+    if embargo_sessions(days, bd) < rules.embargo_sessions:
+        raise TemporalError("the evaluation window starts inside the declared embargo")
     m = np.array([bd.evaluation_start <= d <= bd.evaluation_end for d in days], dtype=bool)
     y, x = np.asarray(log_prices[c.y], float)[m], np.asarray(log_prices[c.x], float)[m]
+    mp = missing_profile(y, x)
+    flags = []
+    if mp["trailing"] > 0:
+        flags.append(f"a leg stops trading {mp['trailing']} sessions before the window ends (delisting, merger or "
+                     "suspension): the pair ended")
+    if mp["share"] > rules.max_missing_frac:
+        flags.append(f"{mp['missing']} sessions with a leg missing")
+    if mp["longest_gap"] > rules.max_gap_sessions:
+        flags.append(f"trading discontinuity of {mp['longest_gap']} sessions")
     ok = np.isfinite(y) & np.isfinite(x)
     y, x = y[ok], x[ok]
     if y.size < 30:
-        raise EquityDataError(f"{c.y}/{c.x}: {y.size} evaluation observations")
+        flags.append(f"only {y.size} joint evaluation observations")
+        return StabilityReport((c.y, c.x), int(y.size), float("nan"), float("nan"), float("nan"), float("nan"),
+                               float("nan"), float("nan"), tuple(flags), 0, np.zeros(0), mp["missing"],
+                               mp["longest_gap"], usable_from=bd.evaluation_end)
     s = spread(y, x, c.alpha, c.beta)
     z = (s - c.spread_mean) / c.spread_sd
     adf, hl = adf_pvalue(s), half_life(s)
@@ -295,17 +394,21 @@ def out_of_sample(c: PairCandidate, days, log_prices: dict, rules: PairRules = P
     shift = float(abs(s.mean() - c.spread_mean) / c.spread_sd)
     _, b_eval = ols_hedge(y, x)
     drift = float(abs(b_eval - c.beta) / abs(c.beta)) if c.beta else float("inf")
-    flags = []
     if not adf <= rules.max_oos_adf_pvalue:
         flags.append(f"evaluation spread not stationary (ADF p {adf:.3f})")
-    if vr > rules.max_variance_ratio:
-        flags.append(f"spread variance ratio {vr:.2f}")
-    if shift > rules.max_mean_shift:
-        flags.append(f"spread mean shifted {shift:.2f} formation sd")
+    flags += _segment_flags(s, c, rules)
     if drift > rules.max_oos_beta_drift:
         flags.append(f"hedge ratio moved {drift:.2f} of its formation value")
+    if rules.n_eval_segments > 1:
+        cuts = np.linspace(0, s.size, rules.n_eval_segments + 1).astype(int)
+        for i in range(rules.n_eval_segments):
+            seg = s[cuts[i]:cuts[i + 1]]
+            if seg.size >= 20:
+                for f in _segment_flags(seg, c, rules):
+                    flags.append(f"segment {i + 1}/{rules.n_eval_segments}: {f}")
     n_ev = sum(1 for e in events if bd.evaluation_start <= e <= bd.evaluation_end)
-    return StabilityReport((c.y, c.x), int(y.size), adf, hl, vr, shift, float(b_eval), drift, tuple(flags), n_ev, z)
+    return StabilityReport((c.y, c.x), int(y.size), adf, hl, vr, shift, float(b_eval), drift, tuple(dict.fromkeys(flags)),
+                           n_ev, z, mp["missing"], mp["longest_gap"], usable_from=bd.evaluation_end)
 
 
 # ---------------------------------------------------------------- trading constraints

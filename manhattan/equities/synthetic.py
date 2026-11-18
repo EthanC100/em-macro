@@ -16,7 +16,7 @@ import numpy as np
 from .costs import BorrowBook, BorrowRecord
 from .fundamentals import Fact, FundamentalStore
 from .identity import Company, LifecycleEvent, Security, SecurityMaster, TickerInterval
-from .prices import Bar, CorporateAction, DelistingReturn, PriceBook
+from .prices import Bar, CorporateAction, DelistingReturn, PriceBook, ShareCount
 from .sessions import MarketCalendar
 from .universe import Classification, ClassificationHistory
 
@@ -83,6 +83,7 @@ class World:
 
 
 # id: (company, category, listed_from, listed_to, delisting reason, ticker, drift, beta)
+_END_KNOWN = {"S04": date(2006, 6, 30), "S06": date(2006, 12, 1)}     # when the delisting was announced
 _SPEC = {
     "S01": ("C01", "semiconductors", date(2004, 1, 2), None, None, "SEMA", 0.0003, 1.2),
     "S02": ("C02", "semiconductors", date(2004, 1, 2), None, None, "SEMB", 0.0002, 1.1),
@@ -111,8 +112,9 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
     logp = {}
     for sid, (cid, cat, lf, lt, reason, tick, drift, beta) in _SPEC.items():
         master.add_company(Company(cid, f"Synthetic {cid}"))
-        master.add_security(Security(sid, cid, "A", "common", "USD", listed_from=lf, listed_to=lt))
-        classes.add(Classification(cid, cat, date(2000, 1, 1), source="synthetic"))
+        master.add_security(Security(sid, cid, "A", "common", "USD", listed_from=lf, listed_to=lt,
+                                     known_from=lf - timedelta(days=21)))       # a prospectus or listing notice
+        classes.add(Classification(cid, cat, date(2000, 1, 1), None, known_from=date(2000, 1, 1), source="synthetic"))
         r = drift + beta * market + rng.normal(0, 0.015, n)
         live = np.array([lf <= d and (lt is None or d <= lt) for d in days])
         price = 30.0 * np.exp(np.cumsum(np.where(live, r, 0.0)))
@@ -135,6 +137,10 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
                 book.add_bar(Bar(sid, d, float(closes[i]), "USD", float(vol[i])))
         for a in book_actions:
             book.add_action(a)
+        for i, d in enumerate(days[::21]):              # monthly share counts, public five days later
+            if live[days == d][0]:
+                n_sh = 5e7 * (2 if sid == "S01" and d >= date(2006, 3, 1) else 1)
+                book.add_share_count(ShareCount(sid, d, n_sh, d + timedelta(days=5), "synthetic"))
         logp[sid] = lp
         for q in _quarters(lf, end):
             pub = _ts(cal, cal.session_on_or_before(q + timedelta(days=35)), 16, 30)    # after the close
@@ -150,10 +156,12 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
     # ticker intervals: S07 changes ticker (announced two weeks ahead); S04's ticker is reused by S09 from 2007
     for sid, (cid, cat, lf, lt, reason, tick, *_rest) in _SPEC.items():
         if sid == "S07":
-            master.add_ticker(TickerInterval(sid, "WEBA", "XNAS", lf, date(2006, 9, 29)))
-            master.add_ticker(TickerInterval(sid, "WEBX", "XNAS", date(2006, 10, 2), known_from=date(2006, 9, 15)))
+            master.add_ticker(TickerInterval(sid, "WEBA", "XNAS", lf, date(2006, 9, 29), known_from=lf,
+                                             end_known_from=date(2006, 9, 15)))
+            master.add_ticker(TickerInterval(sid, "WEBX", "XNAS", date(2006, 10, 2), None, known_from=date(2006, 9, 15)))
         else:
-            master.add_ticker(TickerInterval(sid, tick, "XNAS", lf, lt))
+            master.add_ticker(TickerInterval(sid, tick, "XNAS", lf, lt, known_from=lf,
+                                             end_known_from=_END_KNOWN.get(sid)))
     master.add_event(LifecycleEvent("S05", "ipo", date(2005, 9, 1), date(2005, 8, 15)))
     master.add_event(LifecycleEvent("S04", "delisting", date(2006, 6, 30), date(2006, 6, 30), reason="performance"))
     master.add_event(LifecycleEvent("S06", "acquisition", date(2007, 3, 30), date(2006, 12, 1),
@@ -164,7 +172,7 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
     book.mark_delisted("S04", date(2006, 6, 30), "performance")
     book.mark_delisted("S06", date(2007, 3, 30), "acquisition")
     # S08 reclassified to digital advertising from 2005, but the vendor published it only in 2007 (backfilled)
-    classes.add(Classification("C08", "digital_advertising", date(2005, 1, 1), known_from=date(2007, 1, 15)))
+    classes.add(Classification("C08", "digital_advertising", date(2005, 1, 1), None, known_from=date(2007, 1, 15)))
     # one restatement: C03's revenue for 2005-06-30, restated down in 2006
     fs.add(Fact("C03", "revenue", date(2005, 6, 30), "quarter", 50.0, "USD", _ts(cal, date(2006, 2, 1), 17),
                 vintage="restated", source="synthetic"))

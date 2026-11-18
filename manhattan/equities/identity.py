@@ -10,8 +10,9 @@
 (one share class, one listing). A company may have several securities at once (share classes, a primary listing
 and an ADR); a security belongs to exactly one company for its life. Neither identifier is ever reused.
 
-**Validity and knowledge.** Every ticker interval and lifecycle event has an effective date and a ``known_from`` date
-(the first day the record was public). A query ``as_known_at=d`` sees only records known by ``d``: a ticker change
+**Validity and knowledge.** Every security, ticker interval and lifecycle event has an effective date and a
+**required** ``known_from`` date (the first day the record was public); nothing defaults to its effective date. An
+ended ticker interval also states when its end was public (``end_known_from``). A query ``as_known_at=d`` sees only records known by ``d``: a ticker change
 announced after ``d`` is not used to interpret data at ``d``, and a ticker that is later reassigned to another
 issuer resolves, at each date, to the security that held it then.
 
@@ -51,8 +52,8 @@ class Security:
     security_type: str
     currency: str
     listed_from: date
-    listed_to: date | None = None          # last trading day; None while listed
-    known_from: date | None = None          # first day the security was public (default: listed_from)
+    listed_to: date | None              # last trading day; None while listed (stated explicitly)
+    known_from: date                    # first day the security was public (a prospectus or listing notice)
 
     def __post_init__(self):
         if not self.security_id or not self.company_id:
@@ -63,8 +64,9 @@ class Security:
             raise IdentityError(f"{self.security_id}: currency must be an ISO 4217 code")
         if self.listed_to is not None and self.listed_to < self.listed_from:
             raise IdentityError(f"{self.security_id}: delisted before it was listed")
-        if self.known_from is None:
-            object.__setattr__(self, "known_from", self.listed_from)
+        if not isinstance(self.known_from, date):
+            raise IdentityError(f"{self.security_id}: known_from is required (no default: a record is not known "
+                                "merely because it took effect)")
 
     def listed_on(self, day: date) -> bool:
         return self.listed_from <= day and (self.listed_to is None or day <= self.listed_to)
@@ -77,19 +79,27 @@ class TickerInterval:
     ticker: str
     exchange: str
     start: date
-    end: date | None = None
-    known_from: date | None = None
+    end: date | None                    # None while the ticker is in use (stated explicitly)
+    known_from: date                    # first day the assignment was public
+    end_known_from: date | None = None  # first day the end was public; required with ``end``
 
     def __post_init__(self):
         if not self.ticker or not self.exchange:
             raise IdentityError("a ticker interval needs a ticker and an exchange")
         if self.end is not None and self.end < self.start:
             raise IdentityError(f"{self.ticker}: interval ends before it starts")
-        if self.known_from is None:
-            object.__setattr__(self, "known_from", self.start)
+        if not isinstance(self.known_from, date):
+            raise IdentityError(f"{self.ticker}: known_from is required (no default)")
+        if self.end is not None and not isinstance(self.end_known_from, date):
+            raise IdentityError(f"{self.ticker}: an ended interval needs end_known_from (when the end was public)")
 
-    def covers(self, day: date) -> bool:
-        return self.start <= day and (self.end is None or day <= self.end)
+    def covers(self, day: date, known: date | None = None) -> bool:
+        """In force on ``day`` as believed at ``known`` (default: the true interval). An end that was not yet public
+        at ``known`` is not applied."""
+        end = self.end
+        if known is not None and end is not None and self.end_known_from > known:
+            end = None
+        return self.start <= day and (end is None or day <= end)
 
 
 @dataclass(frozen=True)
@@ -186,7 +196,7 @@ class SecurityMaster:
         """The one security that held ``ticker`` on ``on``, using records known by ``as_known_at`` (default ``on``)."""
         known = on if as_known_at is None else as_known_at
         hits = {t.security_id for t in self.tickers
-                if t.ticker == ticker and t.covers(on) and t.known_from <= known
+                if t.ticker == ticker and t.covers(on, known) and t.known_from <= known
                 and (exchange is None or t.exchange == exchange)}
         if not hits:
             raise IdentityError(f"no security held ticker {ticker} on {on} (as known at {known})")
@@ -197,7 +207,7 @@ class SecurityMaster:
     def ticker_of(self, security_id: str, on: date, *, as_known_at: date | None = None) -> str:
         known = on if as_known_at is None else as_known_at
         hits = sorted({t.ticker for t in self.tickers
-                       if t.security_id == security_id and t.covers(on) and t.known_from <= known})
+                       if t.security_id == security_id and t.covers(on, known) and t.known_from <= known})
         if len(hits) != 1:
             raise IdentityError(f"{security_id} on {on}: {'no' if not hits else 'several'} tickers {hits}")
         return hits[0]

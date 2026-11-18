@@ -182,3 +182,52 @@ def test_growth_stage_labels():
     assert A.growth_stage(0.4, -0.1) == "hypergrowth_unprofitable"
     assert A.growth_stage(0.05, 0.2) == "mature"
     assert A.growth_stage(float("nan"), 0.1) == "unknown"
+
+
+# ----------------------------------------------------------------------------- S8 correction round: regressions
+def _h2_pool(record_c5: bool):
+    p = A.AnaloguePool()
+    for i in range(6):
+        cid = f"C{i}"
+        p.add(obs(cid, date(2008, 3, 31), (0.1 * i, 0.5, 0.1, 0.1)))
+        if i != 5 or record_c5:
+            p.add_outcome(A.Outcome(cid, date(2008, 3, 31), date(2009, 3, 31), -0.9 if i == 5 else 0.1,
+                                    date(2009, 4, 2)))
+    return p
+
+
+def test_s8_h2_missing_observable_outcome_fails_closed():
+    """S8 H2: C5 (failed and delisted; outcome never recorded) was silently dropped from the training set."""
+    with pytest.raises(A.MissingOutcomeError, match="C5"):
+        A.match(_h2_pool(False), target(), T, k=10, purpose="training", horizon_days=H)
+    with pytest.raises(A.MissingOutcomeError):
+        A.sector_mean_baseline(_h2_pool(False), target(), T, H)
+    res = A.match(_h2_pool(True), target(), T, k=10, purpose="training", horizon_days=H)
+    assert "C5" in {m.company_id for m in res.matches}
+    # descriptive matching does not need outcomes
+    assert "C5" in {m.company_id for m in A.match(_h2_pool(False), target(), T, k=10).matches}
+
+
+def test_s8_h2_outcomes_not_yet_due_are_excluded_not_errors():
+    p = A.AnaloguePool()
+    p.add(obs("NEW", date(2009, 9, 30), (0.3, 0.7, 0.04, 0.16)))     # window ends 2010-09-30, after T
+    for i in range(4):
+        p.add(obs(f"OLD{i}", date(2008, 3, 31), (0.3 + 0.05 * i, 0.6 + 0.03 * i, 0.04 + 0.01 * i, 0.1 + 0.02 * i)))
+        p.add_outcome(A.Outcome(f"OLD{i}", date(2008, 3, 31), date(2009, 3, 31), 0.1, date(2009, 4, 2)))
+    res = A.match(p, target(), T, k=10, purpose="training", horizon_days=H)
+    assert {m.company_id for m in res.matches} == {"OLD0", "OLD1", "OLD2", "OLD3"}
+    assert res.excluded["not_yet_observable"] == 1
+    # within the grace period after the window ends, a missing outcome is not yet an error
+    p2 = A.AnaloguePool()
+    p2.add(obs("RECENT", date(2009, 6, 15), (0.3, 0.7, 0.04, 0.16)))  # ends 2010-06-15; due 2010-07-15 > T
+    assert A.match(p2, target(), T, k=10, purpose="training", horizon_days=H).excluded["not_yet_observable"] == 1
+    with pytest.raises(A.MissingOutcomeError):
+        A.match(p2, target(), T, k=10, purpose="training", horizon_days=H, outcome_grace_days=0)
+
+
+def test_s8_h2_outcome_window_must_match_the_horizon():
+    p = A.AnaloguePool()
+    p.add(obs("X", date(2008, 3, 31), (0.3, 0.7, 0.04, 0.16)))
+    p.add_outcome(A.Outcome("X", date(2008, 3, 31), date(2008, 6, 30), 0.1, date(2008, 7, 2)))
+    with pytest.raises(Exception, match="horizon"):
+        A.match(p, target(), T, k=10, purpose="training", horizon_days=H)

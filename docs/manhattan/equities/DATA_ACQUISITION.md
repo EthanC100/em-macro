@@ -22,10 +22,12 @@ deliberately not quoted: they change, and an unverified number would anchor a de
 
 **Tier 0: free and public (start here).**
 
-- **SEC EDGAR filings and XBRL financial data**: filings carry an acceptance date-time, which is the best public
-  publication time stamp for US filers; the XBRL "company facts" data give reported values by filing, so originals
-  and later amendments can be separated. Coverage of machine-readable financial data starts around 2009–2011
-  (phased XBRL adoption); earlier history needs another source. Licence: US government data. To verify: how
+- **SEC EDGAR filings and XBRL financial data**: filings carry an acceptance date-time, a candidate publication
+  time stamp for US filers (a press release can precede its filing, so the acceptance time is a conservative,
+  later bound for earnings); XBRL financial data are reported by filing, which may let originals and later
+  amendments be separated. Machine-readable financial data are believed to start around 2009–2011 (phased XBRL
+  adoption) — **unverified here**; earlier history needs another source. Licence: believed to be US government
+  data, to be confirmed. To verify: how
   amendments and restatements appear in the facts; tag consistency across companies (revenue tags changed with
   ASC 606).
 - **FINRA / exchange short-interest publications**: bimonthly short interest with publication dates. To verify:
@@ -43,7 +45,8 @@ point-in-time index membership. Candidates to evaluate (none verified):
   notes the private snapshot was not opened for equities). To verify: delisted coverage depth, whether delisting
   returns or final prices are provided, historical index constituents, and whether the existing licence covers
   equities.
-- **Sharadar (via Nasdaq Data Link)** price and fundamentals tables: often used for survivorship-free US research.
+- **Sharadar (via Nasdaq Data Link)** price and fundamentals tables: described by others as survivorship-free;
+  **not verified here**.
   To verify: whether fundamentals carry the filing date per value and keep original versus restated values, how
   delisted tickers are identified, and redistribution terms.
 - Other retail-priced vendors (e.g. EOD-style price APIs) usually lack delisted histories or delisting returns; use
@@ -84,4 +87,14 @@ or are recorded **forward only**:
 9. A sample download into the private store, checked by the package's own tools: `PriceBook.total_returns` (split
    detection, delisting returns), `FundamentalStore` (timestamp sanity), `UniverseBuilder` (coverage by date).
 
-Record each answer in the source's `DataContract` (`coverage_verified=True` only when 1–7 are answered from evidence).
+Record each answer in the source's `DataContract`: `coverage_verified=True` is accepted only with
+`coverage_evidence` naming where the answers to 1–7 are recorded (S8 M10: a bare claim is refused).
+
+## 5. What can run on prices and EDGAR alone
+
+`catalogue.data_tier` sorts the 39 families by what they need (HYPOTHESIS_CATALOGUE.md, "Data feasibility"): 12
+families need only a survivorship-free price source, EDGAR structured data and free public series; 2 also need
+EDGAR text parsed point in time; 25 need a history that is not affordable or not verifiably point in time (analyst
+estimate histories, borrow, implied volatility, call transcripts, relationship graphs, alternative data). The last
+group can be researched only through forward collection or after a data decision. Relative-value families in the
+first two groups still need borrow assumptions, flagged as such, for their short legs.

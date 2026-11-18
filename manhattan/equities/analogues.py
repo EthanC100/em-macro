@@ -19,6 +19,13 @@
 * **Training** eligibility further requires an outcome whose whole window ended, and whose value was observable
   (``known_from``), by ``T``; and keeps at most one observation per company per outcome horizon (the latest), so
   overlapping outcome windows of one company are not counted as independent analogues.
+* **A missing outcome fails closed (S8 H2).** An eligible observation whose outcome window ended at least
+  ``outcome_grace_days`` before ``T`` must have an outcome record. If it has none, ``MissingOutcomeError`` lists
+  them: dropping them would keep the companies whose outcomes happened to be recorded (typically the survivors) and
+  bias every training sample. A delisted company's outcome is its return including the delisting return. Missing
+  outcomes whose window has not had the grace period yet are excluded as ``not_yet_observable``; an outcome
+  recorded but not yet public (``known_from > T``) as ``outcome_unobservable``. An outcome whose window does not match
+  the horizon is refused.
 * The matcher never sees outcomes. ``match`` reads only features; outcomes are attached afterwards by ``forecast``,
   which re-checks that each is known at ``T``. A feature whose name looks like an outcome
   (``OUTCOME_LIKE``) is refused.
@@ -49,6 +56,10 @@ from .errors import EquityDataError, EvidenceError, TemporalError
 PURPOSES = ("descriptive", "training")
 METHODS = ("standardized", "mahalanobis", "trajectory")
 OUTCOME_LIKE = re.compile(r"(^|_)(fwd|forward|future|outcome|target|next|subsequent|realized|realised)(_|$)", re.I)
+
+
+class MissingOutcomeError(EvidenceError):
+    """Training analogues whose outcomes should be observable at T but are not recorded (survivorship hazard)."""
 
 
 @dataclass(frozen=True)
@@ -139,16 +150,18 @@ class AnaloguePool:
 
     def eligible(self, target: Observation, T: date, *, purpose: str, horizon_days: int | None = None,
                  exclude_self: bool = True, category: bool = False, stage: bool = False,
-                 regime: bool = False) -> tuple[list[Observation], dict]:
+                 regime: bool = False, outcome_grace_days: int = 30) -> tuple[list[Observation], dict]:
         if purpose not in PURPOSES:
             raise EquityDataError(f"purpose is one of {PURPOSES}")
         if target.as_of != T:
             raise TemporalError(f"the target is observed at {target.as_of}, the prediction is at {T}")
         if purpose == "training" and not horizon_days:
             raise EquityDataError("training eligibility needs the outcome horizon")
+        if outcome_grace_days < 0:
+            raise EquityDataError("outcome_grace_days cannot be negative")
         excl = {"future": 0, "self": 0, "not_in_universe": 0, "constraint": 0, "outcome_unobservable": 0,
-                "overlapping_horizon": 0}
-        keep = []
+                "not_yet_observable": 0, "overlapping_horizon": 0}
+        keep, missing = [], []
         for o in self._obs:
             if o.as_of > T:
                 excl["future"] += 1
@@ -160,9 +173,25 @@ class AnaloguePool:
                     or (regime and o.regime != target.regime):
                 excl["constraint"] += 1
             elif purpose == "training" and self.outcome(o.company_id, o.as_of, T) is None:
-                excl["outcome_unobservable"] += 1
+                rec = self._out.get((o.company_id, o.as_of))
+                due = o.as_of + timedelta(days=horizon_days + outcome_grace_days)
+                if rec is not None:
+                    excl["outcome_unobservable"] += 1           # recorded, not yet public at T
+                elif due <= T:
+                    missing.append((o.company_id, o.as_of))
+                else:
+                    excl["not_yet_observable"] += 1
             else:
+                if purpose == "training":
+                    rec = self._out[(o.company_id, o.as_of)]
+                    if abs((rec.end - rec.start).days - horizon_days) > 7:
+                        raise EquityDataError(f"{o.company_id} {o.as_of}: outcome window of {(rec.end - rec.start).days}"
+                                              f" days, horizon {horizon_days}")
                 keep.append(o)
+        if missing:
+            raise MissingOutcomeError(f"{len(missing)} eligible observations have no outcome although it should be "
+                                      f"observable at {T}: {missing[:5]}; record their outcomes (with delisting "
+                                      "returns) instead of dropping them")
         if purpose == "training":                   # one observation per company per horizon: the latest
             keep.sort(key=lambda o: (o.company_id, o.as_of), reverse=True)
             thinned, last = [], {}
@@ -227,14 +256,16 @@ def _pair_distance(zt: np.ndarray, zc: np.ndarray, names, *, min_overlap: int, c
 
 def match(pool: AnaloguePool, target: Observation, T: date, *, k: int = 10, purpose: str = "descriptive",
           method: str = "standardized", features=None, horizon_days: int | None = None, min_overlap: int = 3,
-          trajectory_len: int = 4, shrink: float = 0.2, **constraints) -> MatchResult:
+          trajectory_len: int = 4, shrink: float = 0.2, outcome_grace_days: int = 30,
+          **constraints) -> MatchResult:
     if method not in METHODS:
         raise EquityDataError(f"method is one of {METHODS}")
     names = sorted(features or target.features)
     for n in names:
         if OUTCOME_LIKE.search(n):
             raise EvidenceError(f"feature {n!r} looks like an outcome")
-    cands, excl = pool.eligible(target, T, purpose=purpose, horizon_days=horizon_days, **constraints)
+    cands, excl = pool.eligible(target, T, purpose=purpose, horizon_days=horizon_days,
+                                outcome_grace_days=outcome_grace_days, **constraints)
     centre, scale = robust_scale(cands, names)
     zt = _z(target, names, centre, scale)
     cov_inv = None

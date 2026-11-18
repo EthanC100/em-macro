@@ -10,53 +10,84 @@ Generated from `manhattan/equities/catalogue.yaml` by `python -m manhattan.equit
 
 Lexicographic: min(leakage safety, data feasibility), then plausibility, distinctiveness, research cost, simplicity.
 
-| # | id | family | approach | sign | horizon | costs | plaus. | data | cost | simpl. | distinct. | leak-safe |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | TE-E03 | Short-term reversal | relative_value | - | 5-20 trading days | high | 4 | 4 | 4 | 4 | 1 | 4 |
-| 2 | TE-E01 | Price momentum within technology | directional | + | 20-120 trading days | medium | 3 | 4 | 5 | 5 | 1 | 4 |
-| 3 | TE-E02 | Technology sub-industry momentum | directional | + | 20-120 trading days | low | 3 | 4 | 4 | 4 | 1 | 4 |
-| 4 | TE-E05 | Investment, issuance and stock-compensation dilution | relative_value | - | 60-250 trading days | low | 4 | 3 | 4 | 4 | 2 | 3 |
-| 5 | TE-C01 | Post-earnings-announcement drift | relative_value | + | 5-60 trading days | medium | 4 | 3 | 4 | 4 | 1 | 3 |
-| 6 | TE-E04 | Profitability and earnings quality | directional | + | 60-250 trading days | low | 4 | 3 | 4 | 4 | 1 | 3 |
-| 7 | TE-E07 | Cash runway and balance-sheet strength | directional | + | 60-250 trading days | medium | 3 | 3 | 4 | 4 | 2 | 3 |
-| 8 | TE-A01 | Peer-spread reversion within technology sub-industries | relative_value | - | 3-20 trading days | high | 3 | 4 | 4 | 3 | 2 | 3 |
-| 9 | TE-A07 | Residual (idiosyncratic) momentum | relative_value | + | 20-120 trading days | medium | 3 | 3 | 4 | 3 | 2 | 4 |
-| 10 | TE-E06 | Intangible-adjusted value | directional | + | 120-500 trading days | low | 3 | 3 | 3 | 3 | 2 | 3 |
-| 11 | TE-A06 | Parent-subsidiary and carve-out stub mispricing | relative_value | + | 60-500 trading days | medium | 4 | 2 | 2 | 2 | 4 | 3 |
-| 12 | TE-D01 | Foundry and chipmaker capex diffusion to equipment suppliers | directional | + | 60-250 trading days | low | 4 | 2 | 2 | 2 | 4 | 2 |
-| 13 | TE-A02 | Short-sale-constrained overpricing in technology stocks | relative_value | - | 20-60 trading days | high | 4 | 2 | 3 | 3 | 3 | 2 |
-| 14 | TE-A08 | Index reconstitution flow in technology stocks | relative_value | + | 5-30 trading days | medium | 4 | 2 | 3 | 2 | 3 | 3 |
-| 15 | TE-A05 | Customer-to-supplier price lead-lag | relative_value | + | 5-40 trading days | medium | 4 | 2 | 2 | 2 | 3 | 2 |
-| 16 | TE-C02 | Revenue surprise in technology firms | directional | + | 5-60 trading days | medium | 4 | 2 | 3 | 4 | 2 | 3 |
-| 17 | TE-A03 | Peer-relative consensus revisions | relative_value | + | 20-60 trading days | medium | 4 | 2 | 3 | 3 | 2 | 2 |
-| 18 | TE-F01 | Discount-rate shocks and equity duration | relative_value | - | 5-60 trading days | medium | 4 | 4 | 3 | 3 | 2 | 2 |
-| 19 | TE-D04 | Customer-industry conditions and vertical software vendors | relative_value | + | 20-120 trading days | medium | 3 | 2 | 2 | 2 | 4 | 2 |
-| 20 | TE-B02 | Implied growth versus historical base rates | relative_value | - | 120-500 trading days | low | 3 | 2 | 3 | 3 | 3 | 2 |
-| 21 | TE-B03 | Inventory and margin cycle analogues | relative_value | - | 60-250 trading days | low | 3 | 3 | 3 | 3 | 3 | 2 |
-| 22 | TE-F05 | Currency moves and international revenue exposure | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 3 | 3 | 3 |
-| 23 | TE-F06 | Volatility regimes and crowding unwinds | directional | - | 5-60 trading days | medium | 3 | 2 | 2 | 2 | 3 | 2 |
-| 24 | TE-C04 | Analyst revision breadth | directional | + | 20-60 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
-| 25 | TE-C05 | Analyst disagreement under short-sale constraints | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
-| 26 | TE-A04 | Fundamentals-implied valuation residual within peers | relative_value | + | 60-250 trading days | low | 3 | 2 | 3 | 3 | 2 | 3 |
-| 27 | TE-F02 | Credit conditions and financing-dependent technology | relative_value | - | 20-120 trading days | medium | 3 | 4 | 3 | 3 | 2 | 2 |
-| 28 | TE-F04 | Semiconductor and industrial cycle rotation | relative_value | + | 60-250 trading days | low | 3 | 3 | 3 | 3 | 2 | 2 |
-| 29 | TE-F03 | Energy costs and data-centre-intensive firms | relative_value | - | 20-120 trading days | medium | 2 | 3 | 3 | 3 | 3 | 2 |
-| 30 | TE-D02 | Cloud and AI compute demand diffusion to infrastructure suppliers | directional | + | 60-250 trading days | low | 4 | 1 | 2 | 2 | 4 | 1 |
-| 31 | TE-C03 | Management guidance surprise | directional | + | 5-60 trading days | medium | 4 | 1 | 2 | 3 | 3 | 2 |
-| 32 | TE-B04 | Business-model transition analogues | directional | + | 120-500 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
-| 33 | TE-D05 | Data-centre build-out diffusion to power and thermal suppliers | directional | + | 60-250 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
-| 34 | TE-C06 | Forward margin revisions | directional | + | 20-120 trading days | medium | 3 | 1 | 2 | 3 | 3 | 2 |
-| 35 | TE-D06 | End-device product cycles and component suppliers | relative_value | + | 20-120 trading days | medium | 3 | 1 | 2 | 2 | 3 | 1 |
-| 36 | TE-C07 | Earnings-call language | directional | + | 5-60 trading days | medium | 3 | 1 | 1 | 2 | 3 | 1 |
-| 37 | TE-B01 | Growth-stage trajectory analogues | directional | + | 120-500 trading days | low | 2 | 2 | 2 | 2 | 4 | 1 |
-| 38 | TE-B05 | Thematic episode analogues | directional | - | 60-500 trading days | low | 2 | 3 | 2 | 2 | 4 | 1 |
-| 39 | TE-D03 | Security-incident diffusion to cybersecurity vendors | directional | + | 60-250 trading days | low | 2 | 1 | 2 | 2 | 4 | 1 |
+| # | id | family | shared family | data tier | approach | sign | horizon | costs | plaus. | data | cost | simpl. | distinct. | leak-safe |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | TE-E03 | Short-term reversal | SF-REVERSAL | prices_and_edgar | relative_value | - | 5-20 trading days | high | 4 | 4 | 4 | 4 | 1 | 4 |
+| 2 | TE-E01 | Price momentum within technology | SF-MOMENTUM | prices_and_edgar | directional | + | 20-120 trading days | medium | 3 | 4 | 5 | 5 | 1 | 4 |
+| 3 | TE-E02 | Technology sub-industry momentum | SF-MOMENTUM | prices_and_edgar | directional | + | 20-120 trading days | low | 3 | 4 | 4 | 4 | 1 | 4 |
+| 4 | TE-E05 | Investment, issuance and stock-compensation dilution |  | prices_and_edgar | relative_value | - | 60-250 trading days | low | 4 | 3 | 4 | 4 | 2 | 3 |
+| 5 | TE-C01 | Post-earnings-announcement drift | SF-EARNINGS-SURPRISE | needs_unavailable_history | relative_value | + | 5-60 trading days | medium | 4 | 3 | 4 | 4 | 1 | 3 |
+| 6 | TE-E04 | Profitability and earnings quality |  | prices_and_edgar | directional | + | 60-250 trading days | low | 4 | 3 | 4 | 4 | 1 | 3 |
+| 7 | TE-E07 | Cash runway and balance-sheet strength |  | prices_and_edgar | directional | + | 60-250 trading days | medium | 3 | 3 | 4 | 4 | 2 | 3 |
+| 8 | TE-A01 | Peer-spread reversion within technology sub-industries | SF-REVERSAL | prices_and_edgar | relative_value | - | 3-20 trading days | high | 3 | 4 | 4 | 3 | 2 | 3 |
+| 9 | TE-A07 | Residual (idiosyncratic) momentum | SF-MOMENTUM | prices_and_edgar | relative_value | + | 20-120 trading days | medium | 3 | 3 | 4 | 3 | 2 | 4 |
+| 10 | TE-E06 | Intangible-adjusted value | SF-VALUATION | prices_and_edgar | directional | + | 120-500 trading days | low | 3 | 3 | 3 | 3 | 2 | 3 |
+| 11 | TE-A06 | Parent-subsidiary and carve-out stub mispricing |  | needs_unavailable_history | relative_value | + | 60-500 trading days | medium | 4 | 2 | 2 | 2 | 4 | 3 |
+| 12 | TE-D01 | Foundry and chipmaker capex diffusion to equipment suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 2 | 2 | 2 | 4 | 2 |
+| 13 | TE-A02 | Short-sale-constrained overpricing in technology stocks | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-60 trading days | high | 4 | 2 | 3 | 3 | 3 | 2 |
+| 14 | TE-A08 | Index reconstitution flow in technology stocks |  | prices_and_edgar | relative_value | + | 5-30 trading days | medium | 4 | 2 | 3 | 2 | 3 | 3 |
+| 15 | TE-A05 | Customer-to-supplier price lead-lag | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 5-40 trading days | medium | 4 | 2 | 2 | 2 | 3 | 2 |
+| 16 | TE-C02 | Revenue surprise in technology firms | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 2 | 3 | 4 | 2 | 3 |
+| 17 | TE-A03 | Peer-relative consensus revisions | SF-REVISIONS | needs_unavailable_history | relative_value | + | 20-60 trading days | medium | 4 | 2 | 3 | 3 | 2 | 2 |
+| 18 | TE-F01 | Discount-rate shocks and equity duration |  | needs_unavailable_history | relative_value | - | 5-60 trading days | medium | 4 | 4 | 3 | 3 | 2 | 2 |
+| 19 | TE-D04 | Customer-industry conditions and vertical software vendors |  | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 2 | 2 | 2 | 4 | 2 |
+| 20 | TE-B02 | Implied growth versus historical base rates | SF-VALUATION | needs_unavailable_history | relative_value | - | 120-500 trading days | low | 3 | 2 | 3 | 3 | 3 | 2 |
+| 21 | TE-B03 | Inventory and margin cycle analogues | SF-ANALOGUES | needs_unavailable_history | relative_value | - | 60-250 trading days | low | 3 | 3 | 3 | 3 | 3 | 2 |
+| 22 | TE-F05 | Currency moves and international revenue exposure |  | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 3 | 3 | 3 |
+| 23 | TE-F06 | Volatility regimes and crowding unwinds |  | needs_unavailable_history | directional | - | 5-60 trading days | medium | 3 | 2 | 2 | 2 | 3 | 2 |
+| 24 | TE-C04 | Analyst revision breadth | SF-REVISIONS | needs_unavailable_history | directional | + | 20-60 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
+| 25 | TE-C05 | Analyst disagreement under short-sale constraints | SF-SHORT-CONSTRAINTS | needs_unavailable_history | relative_value | - | 20-120 trading days | medium | 3 | 2 | 3 | 4 | 2 | 2 |
+| 26 | TE-A04 | Fundamentals-implied valuation residual within peers | SF-VALUATION | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 2 | 3 | 3 | 2 | 3 |
+| 27 | TE-F02 | Credit conditions and financing-dependent technology |  | prices_and_edgar | relative_value | - | 20-120 trading days | medium | 3 | 4 | 3 | 3 | 2 | 2 |
+| 28 | TE-F04 | Semiconductor and industrial cycle rotation |  | needs_unavailable_history | relative_value | + | 60-250 trading days | low | 3 | 3 | 3 | 3 | 2 | 2 |
+| 29 | TE-F03 | Energy costs and data-centre-intensive firms |  | prices_and_edgar_text | relative_value | - | 20-120 trading days | medium | 2 | 3 | 3 | 3 | 3 | 2 |
+| 30 | TE-D02 | Cloud and AI compute demand diffusion to infrastructure suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 4 | 1 | 2 | 2 | 4 | 1 |
+| 31 | TE-C03 | Management guidance surprise | SF-EARNINGS-SURPRISE | needs_unavailable_history | directional | + | 5-60 trading days | medium | 4 | 1 | 2 | 3 | 3 | 2 |
+| 32 | TE-B04 | Business-model transition analogues | SF-ANALOGUES | needs_unavailable_history | directional | + | 120-500 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
+| 33 | TE-D05 | Data-centre build-out diffusion to power and thermal suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | directional | + | 60-250 trading days | low | 3 | 1 | 2 | 2 | 4 | 1 |
+| 34 | TE-C06 | Forward margin revisions | SF-REVISIONS | needs_unavailable_history | directional | + | 20-120 trading days | medium | 3 | 1 | 2 | 3 | 3 | 2 |
+| 35 | TE-D06 | End-device product cycles and component suppliers | SF-SUPPLY-CHAIN | needs_unavailable_history | relative_value | + | 20-120 trading days | medium | 3 | 1 | 2 | 2 | 3 | 1 |
+| 36 | TE-C07 | Earnings-call language |  | needs_unavailable_history | directional | + | 5-60 trading days | medium | 3 | 1 | 1 | 2 | 3 | 1 |
+| 37 | TE-B01 | Growth-stage trajectory analogues | SF-ANALOGUES | prices_and_edgar | directional | + | 120-500 trading days | low | 2 | 2 | 2 | 2 | 4 | 1 |
+| 38 | TE-B05 | Thematic episode analogues | SF-ANALOGUES | prices_and_edgar_text | directional | - | 60-500 trading days | low | 2 | 3 | 2 | 2 | 4 | 1 |
+| 39 | TE-D03 | Security-incident diffusion to cybersecurity vendors |  | needs_unavailable_history | directional | + | 60-250 trading days | low | 2 | 1 | 2 | 2 | 4 | 1 |
+
+## Shared hypothesis families
+
+Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts), but if frozen they are registered as hypotheses of one Manhattan family (or linked by `parent_family`) and counted together for multiple testing: their evaluations are not independent evidence.
+
+| shared family | members |
+|---|---|
+| SF-ANALOGUES | TE-B01, TE-B03, TE-B04, TE-B05 |
+| SF-EARNINGS-SURPRISE | TE-C01, TE-C02, TE-C03 |
+| SF-MOMENTUM | TE-A07, TE-E01, TE-E02 |
+| SF-REVERSAL | TE-A01, TE-E03 |
+| SF-REVISIONS | TE-A03, TE-C04, TE-C06 |
+| SF-SHORT-CONSTRAINTS | TE-A02, TE-C05 |
+| SF-SUPPLY-CHAIN | TE-A05, TE-D01, TE-D02, TE-D05, TE-D06 |
+| SF-VALUATION | TE-A04, TE-B02, TE-E06 |
+
+## Data feasibility
+
+Computed from each family's required data (`catalogue.data_tier`); unverified until the checks of DATA_ACQUISITION.md section 4 are done.
+
+- **prices_and_edgar**: one survivorship-free price source, EDGAR structured data and free public series.
+- **prices_and_edgar_text**: also EDGAR text parsed point in time.
+- **needs_unavailable_history**: a history that is unaffordable or not verifiably point in time; forward collection or a data decision first.
+
+Caveat: relative-value families in the first two tiers do not list borrow history among their data, but their short legs need it. Without an affordable borrow history they can be studied only with explicit, flagged borrow assumptions (a `costs.BorrowBook` with no record refuses the short), and any such result says so.
+
+| tier | families | blocked by |
+|---|---|---|
+| prices_and_edgar | 12: TE-A01, TE-A07, TE-A08, TE-B01, TE-E01, TE-E02, TE-E03, TE-E04, TE-E05, TE-E06, TE-E07, TE-F02 |  |
+| prices_and_edgar_text | 2: TE-B05, TE-F03 |  |
+| needs_unavailable_history | 25: TE-A02, TE-A03, TE-A04, TE-A05, TE-A06, TE-B02, TE-B03, TE-B04, TE-C01, TE-C02, TE-C03, TE-C04, TE-C05, TE-C06, TE-C07, TE-D01, TE-D02, TE-D03, TE-D04, TE-D05, TE-D06, TE-F01, TE-F04, TE-F05, TE-F06 | analyst_estimates_pit, borrow_availability, cloud_capex, developer_adoption, earnings_call_text, options_implied_vol, product_adoption, product_releases, relationship_graph, semiconductor_supply_chain |
 
 ## Families
 
 ### TE-A01 Peer-spread reversion within technology sub-industries
 
-*A_relative_value, relative_value, mechanism class flow, sign -, horizon 3-20 trading days, implementation medium.*
+*A_relative_value, relative_value, mechanism class flow, sign -, horizon 3-20 trading days, implementation medium; data tier prices_and_edgar; shared family SF-REVERSAL.*
 
 **Rationale.** Close economic substitutes (firms with the same products, customers and cost structure) should share most of their non-idiosyncratic return. When the price spread between a stock and its closest peers widens without a matching change in fundamentals, part of the move is temporary price pressure from liquidity-demanding trades. Liquidity providers who bet on convergence are paid for absorbing it.
 
@@ -88,7 +119,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A02 Short-sale-constrained overpricing in technology stocks
 
-*A_relative_value, relative_value, mechanism class structural, sign -, horizon 20-60 trading days, implementation medium.*
+*A_relative_value, relative_value, mechanism class structural, sign -, horizon 20-60 trading days, implementation medium; data tier needs_unavailable_history (blocked by borrow_availability); shared family SF-SHORT-CONSTRAINTS.*
 
 **Rationale.** When short selling is costly or constrained, prices reflect the views of the most optimistic holders. Technology stocks with contested narratives often carry high short interest and high borrow fees, so pessimistic information enters prices slowly. High and rising shorting demand relative to lendable supply should precede negative hedged returns.
 
@@ -120,7 +151,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A03 Peer-relative consensus revisions
 
-*A_relative_value, relative_value, mechanism class informational, sign +, horizon 20-60 trading days, implementation medium.*
+*A_relative_value, relative_value, mechanism class informational, sign +, horizon 20-60 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-REVISIONS.*
 
 **Rationale.** Analysts revise forecasts gradually and herd towards each other, so revisions are autocorrelated and prices adjust to the cumulative change with a lag. Comparing a firm's revisions with those of its sub-industry peers removes common sector news and isolates firm-specific information that is likely to be underweighted.
 
@@ -152,7 +183,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A04 Fundamentals-implied valuation residual within peers
 
-*A_relative_value, relative_value, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation medium.*
+*A_relative_value, relative_value, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-VALUATION.*
 
 **Rationale.** Within a sub-industry, valuation multiples should be explained by observable growth, margins and reinvestment. A stock trading below the multiple implied by its own fundamentals, relative to peers, may be mispriced because investors overweight narratives and recent price moves. As fundamentals are reported the residual should partly close.
 
@@ -184,7 +215,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A05 Customer-to-supplier price lead-lag
 
-*A_relative_value, relative_value, mechanism class informational, sign +, horizon 5-40 trading days, implementation high.*
+*A_relative_value, relative_value, mechanism class informational, sign +, horizon 5-40 trading days, implementation high; data tier needs_unavailable_history (blocked by relationship_graph); shared family SF-SUPPLY-CHAIN.*
 
 **Rationale.** Investors with limited attention price news about a firm's major customers into the customer's stock quickly but into its suppliers' stocks slowly. In technology, supplier revenue is often concentrated in a few large customers, so the customers' recent returns should predict suppliers' subsequent hedged returns.
 
@@ -216,7 +247,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A06 Parent-subsidiary and carve-out stub mispricing
 
-*A_relative_value, relative_value, mechanism class structural, sign +, horizon 60-500 trading days, implementation high.*
+*A_relative_value, relative_value, mechanism class structural, sign +, horizon 60-500 trading days, implementation high; data tier needs_unavailable_history (blocked by borrow_availability).*
 
 **Rationale.** When a listed technology parent holds a large stake in a listed subsidiary or a recent carve-out, the market value of the stake can exceed or approach the parent's own value, implying a stub value that is implausibly low or negative. Short-sale constraints on the subsidiary and benchmark frictions slow convergence, but corporate actions and the eventual distribution of shares tend to force it.
 
@@ -248,7 +279,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A07 Residual (idiosyncratic) momentum
 
-*A_relative_value, relative_value, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation medium.*
+*A_relative_value, relative_value, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation medium; data tier prices_and_edgar; shared family SF-MOMENTUM.*
 
 **Rationale.** Total-return momentum mixes firm-specific underreaction with time-varying factor exposure, which causes its crashes. Momentum in returns after removing market, industry and style factors isolates gradual incorporation of firm-specific news and should be steadier. Technology stocks carry large factor loadings, so the separation should matter more here than elsewhere.
 
@@ -280,7 +311,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-A08 Index reconstitution flow in technology stocks
 
-*A_relative_value, relative_value, mechanism class flow, sign +, horizon 5-30 trading days, implementation high.*
+*A_relative_value, relative_value, mechanism class flow, sign +, horizon 5-30 trading days, implementation high; data tier prices_and_edgar.*
 
 **Rationale.** Index funds must buy additions and sell deletions at or near the effective date regardless of price. Technology stocks migrate across size and style indices often because of large price moves, so predictable reconstitution demand is frequent. Stocks predicted to be added should outperform peers into the effective date and partly reverse after it.
 
@@ -312,7 +343,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-B01 Growth-stage trajectory analogues
 
-*B_analogues, directional, mechanism class behavioural, sign +, horizon 120-500 trading days, implementation high.*
+*B_analogues, directional, mechanism class behavioural, sign +, horizon 120-500 trading days, implementation high; data tier prices_and_edgar; shared family SF-ANALOGUES.*
 
 **Rationale.** Investors tend to extrapolate a firm's recent growth rather than use the historical distribution of outcomes for firms at the same stage. Matching a firm's revenue growth, margin and reinvestment path to past firms at the same stage gives an outside-view forecast of future fundamentals. Where the analogue forecast is better than the market-implied path, returns should be higher.
 
@@ -344,7 +375,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-B02 Implied growth versus historical base rates
 
-*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 120-500 trading days, implementation medium.*
+*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 120-500 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-VALUATION.*
 
 **Rationale.** Valuations imply a path of future growth. Historical base rates show how rarely firms of a given size sustain very high growth for many years. Firms whose implied growth requires an outcome that is rare in the base-rate distribution should, on average, disappoint and underperform.
 
@@ -376,7 +407,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-B03 Inventory and margin cycle analogues
 
-*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation medium.*
+*B_analogues, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation medium; data tier needs_unavailable_history (blocked by semiconductor_supply_chain); shared family SF-ANALOGUES.*
 
 **Rationale.** Hardware and semiconductor firms go through inventory build-ups that precede margin compression. Investors focusing on current revenue growth tend to miss the pattern. A firm whose inventory, receivables and gross-margin trajectory resembles past pre-downturn trajectories should underperform peers.
 
@@ -408,7 +439,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-B04 Business-model transition analogues
 
-*B_analogues, directional, mechanism class behavioural, sign +, horizon 120-500 trading days, implementation high.*
+*B_analogues, directional, mechanism class behavioural, sign +, horizon 120-500 trading days, implementation high; data tier needs_unavailable_history (blocked by earnings_call_text); shared family SF-ANALOGUES.*
 
 **Rationale.** Software and hardware firms moving from licences or one-off sales to subscriptions show a predictable dip in reported revenue and margins before recurring revenue builds. Investors focused on reported figures may over-penalise the dip. Firms whose transition path matches past successful-transition analogues should outperform once recurring revenue becomes visible.
 
@@ -440,7 +471,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-B05 Thematic episode analogues
 
-*B_analogues, directional, mechanism class behavioural, sign -, horizon 60-500 trading days, implementation high.*
+*B_analogues, directional, mechanism class behavioural, sign -, horizon 60-500 trading days, implementation high; data tier prices_and_edgar_text; shared family SF-ANALOGUES.*
 
 **Rationale.** Technology themes go through episodes of rapid valuation expansion, heavy issuance and rising valuation dispersion, sometimes followed by sharp reversals. If a current theme's valuation, issuance and breadth pattern resembles past theme peaks, subsequent returns of the theme's constituents may be lower.
 
@@ -472,7 +503,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C01 Post-earnings-announcement drift
 
-*C_earnings, relative_value, mechanism class behavioural, sign +, horizon 5-60 trading days, implementation low.*
+*C_earnings, relative_value, mechanism class behavioural, sign +, horizon 5-60 trading days, implementation low; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-EARNINGS-SURPRISE.*
 
 **Rationale.** Prices underreact to earnings news, so stocks with positive surprises continue to drift up and those with negative surprises drift down for weeks after the announcement. Limited attention and anchoring are the usual explanations; technology stocks have heavy announcement-day volume but also many small-cap names with thin coverage.
 
@@ -504,7 +535,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C02 Revenue surprise in technology firms
 
-*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation low.*
+*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation low; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-EARNINGS-SURPRISE.*
 
 **Rationale.** For growth-oriented technology firms, revenue is harder to manage than earnings and carries more information about demand. Investors focus on headline earnings and may underreact to the revenue component. Revenue surprises, especially when they diverge from earnings surprises, should predict subsequent returns.
 
@@ -536,7 +567,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C03 Management guidance surprise
 
-*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation medium.*
+*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-EARNINGS-SURPRISE.*
 
 **Rationale.** Management forward guidance conveys private information about pipeline and bookings. Guidance raised or lowered relative to consensus is news that analysts take time to absorb into their own forecasts, so prices may adjust gradually. In technology, guidance often matters more than the reported quarter.
 
@@ -568,7 +599,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C04 Analyst revision breadth
 
-*C_earnings, directional, mechanism class informational, sign +, horizon 20-60 trading days, implementation low.*
+*C_earnings, directional, mechanism class informational, sign +, horizon 20-60 trading days, implementation low; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-REVISIONS.*
 
 **Rationale.** The share of analysts revising up versus down captures how widely new information has spread among forecasters, independent of the size of any one revision. Broad, one-sided revisions indicate a shift in fundamentals that prices may not yet fully reflect.
 
@@ -600,7 +631,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C05 Analyst disagreement under short-sale constraints
 
-*C_earnings, relative_value, mechanism class behavioural, sign -, horizon 20-120 trading days, implementation low.*
+*C_earnings, relative_value, mechanism class behavioural, sign -, horizon 20-120 trading days, implementation low; data tier needs_unavailable_history (blocked by analyst_estimates_pit, borrow_availability); shared family SF-SHORT-CONSTRAINTS.*
 
 **Rationale.** When opinions diverge and short selling is costly, prices reflect optimists' valuations. High dispersion of analyst forecasts is a proxy for divergence of opinion and should precede lower returns as uncertainty resolves. Technology firms with uncertain product outcomes often show wide dispersion.
 
@@ -632,7 +663,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C06 Forward margin revisions
 
-*C_earnings, directional, mechanism class informational, sign +, horizon 20-120 trading days, implementation medium.*
+*C_earnings, directional, mechanism class informational, sign +, horizon 20-120 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit); shared family SF-REVISIONS.*
 
 **Rationale.** Technology firms have high operating leverage: small revenue changes produce large margin changes. Consensus revisions can be decomposed into revenue-driven and margin-driven parts. Investors may treat margin-driven upgrades as less durable than they are, so revisions to forward operating margin should predict returns beyond revenue revisions.
 
@@ -664,7 +695,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-C07 Earnings-call language
 
-*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation high.*
+*C_earnings, directional, mechanism class informational, sign +, horizon 5-60 trading days, implementation high; data tier needs_unavailable_history (blocked by earnings_call_text).*
 
 **Rationale.** Management tone, specificity and evasiveness in the question-and-answer part of earnings calls carry information about future results that is not in the numbers. Processing long transcripts is costly, so the information may enter prices slowly.
 
@@ -696,7 +727,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D01 Foundry and chipmaker capex diffusion to equipment suppliers
 
-*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high.*
+*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high; data tier needs_unavailable_history (blocked by relationship_graph, semiconductor_supply_chain); shared family SF-SUPPLY-CHAIN.*
 
 **Rationale.** Capital-expenditure plans announced by chipmakers and foundries are orders for equipment and materials suppliers several quarters later. Investors in suppliers may not fully map customer capex guidance into supplier revenue paths, especially for smaller suppliers with concentrated customer bases.
 
@@ -728,7 +759,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D02 Cloud and AI compute demand diffusion to infrastructure suppliers
 
-*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high.*
+*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high; data tier needs_unavailable_history (blocked by cloud_capex, developer_adoption, product_releases, relationship_graph); shared family SF-SUPPLY-CHAIN.*
 
 **Rationale.** Hyperscale cloud operators and AI model providers buy accelerators, memory, networking, storage and servers. Their capex plans and adoption signals propagate to infrastructure suppliers over quarters. Investors may price the most visible suppliers quickly but second-tier component and networking suppliers slowly.
 
@@ -760,7 +791,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D03 Security-incident diffusion to cybersecurity vendors
 
-*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high.*
+*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high; data tier needs_unavailable_history (blocked by relationship_graph).*
 
 **Rationale.** Disclosed security incidents and new disclosure rules in a customer industry raise security budgets in that industry with a lag. Vendors with revenue concentrated in affected industries should see higher demand, which investors may not map from incident news to vendor revenue.
 
@@ -792,7 +823,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D04 Customer-industry conditions and vertical software vendors
 
-*D_diffusion, relative_value, mechanism class informational, sign +, horizon 20-120 trading days, implementation high.*
+*D_diffusion, relative_value, mechanism class informational, sign +, horizon 20-120 trading days, implementation high; data tier needs_unavailable_history (blocked by relationship_graph).*
 
 **Rationale.** Software vendors serving specific customer industries (vertical software) depend on those industries' budgets. Customer-industry earnings and returns lead vendor bookings with a lag. Investors who analyse vendors as generic software may underreact to customer-industry conditions.
 
@@ -824,7 +855,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D05 Data-centre build-out diffusion to power and thermal suppliers
 
-*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high.*
+*D_diffusion, directional, mechanism class informational, sign +, horizon 60-250 trading days, implementation high; data tier needs_unavailable_history (blocked by cloud_capex, relationship_graph); shared family SF-SUPPLY-CHAIN.*
 
 **Rationale.** Data-centre construction requires power distribution, cooling and electrical equipment, and grid interconnection is a binding constraint. Announced data-centre capacity and power-procurement filings lead supplier revenue. Investors focused on compute suppliers may underreact for power and thermal equipment suppliers within or adjacent to the technology sector.
 
@@ -856,7 +887,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-D06 End-device product cycles and component suppliers
 
-*D_diffusion, relative_value, mechanism class informational, sign +, horizon 20-120 trading days, implementation high.*
+*D_diffusion, relative_value, mechanism class informational, sign +, horizon 20-120 trading days, implementation high; data tier needs_unavailable_history (blocked by product_adoption, product_releases, relationship_graph); shared family SF-SUPPLY-CHAIN.*
 
 **Rationale.** Launches and adoption of new end devices change demand for specific components (sensors, displays, radio-frequency parts, memory). Product-adoption signals reach component suppliers' revenue with a lag and component investors may not map device adoption to their holdings.
 
@@ -888,7 +919,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E01 Price momentum within technology
 
-*E_factor, directional, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation low.*
+*E_factor, directional, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation low; data tier prices_and_edgar; shared family SF-MOMENTUM.*
 
 **Rationale.** Stocks with high returns over the past year, skipping the most recent month, tend to continue outperforming over the following months, usually attributed to underreaction and later overreaction. This family is the reference point every other technology signal must beat, not a novel idea.
 
@@ -920,7 +951,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E02 Technology sub-industry momentum
 
-*E_factor, directional, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation low.*
+*E_factor, directional, mechanism class behavioural, sign +, horizon 20-120 trading days, implementation low; data tier prices_and_edgar; shared family SF-MOMENTUM.*
 
 **Rationale.** Industry-wide news diffuses slowly across firms in a sub-industry, so sub-industries that have performed well continue to do so. This is a between-industry effect, distinct from firm-specific momentum.
 
@@ -952,7 +983,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E03 Short-term reversal
 
-*E_factor, relative_value, mechanism class flow, sign -, horizon 5-20 trading days, implementation medium.*
+*E_factor, relative_value, mechanism class flow, sign -, horizon 5-20 trading days, implementation medium; data tier prices_and_edgar; shared family SF-REVERSAL.*
 
 **Rationale.** Stocks with extreme returns over the past week or month tend to partly reverse because those returns include temporary price pressure from liquidity demand. Liquidity providers are paid for absorbing it.
 
@@ -984,7 +1015,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E04 Profitability and earnings quality
 
-*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low.*
+*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low; data tier prices_and_edgar.*
 
 **Rationale.** More profitable firms with cash-backed earnings tend to earn higher subsequent returns than less profitable firms, which investors may undervalue relative to growth stories. In technology, profitability measures must deal with stock-based compensation and capitalised development costs.
 
@@ -1016,7 +1047,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E05 Investment, issuance and stock-compensation dilution
 
-*E_factor, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation low.*
+*E_factor, relative_value, mechanism class behavioural, sign -, horizon 60-250 trading days, implementation low; data tier prices_and_edgar.*
 
 **Rationale.** Firms that grow assets quickly or issue equity (including through stock-based compensation) tend to underperform, consistent with managers timing issuance when shares are overvalued and investors underweighting dilution. Technology firms dilute heavily through compensation, which may be underweighted relative to headline issuance.
 
@@ -1048,7 +1079,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E06 Intangible-adjusted value
 
-*E_factor, directional, mechanism class risk_premium, sign +, horizon 120-500 trading days, implementation medium.*
+*E_factor, directional, mechanism class risk_premium, sign +, horizon 120-500 trading days, implementation medium; data tier prices_and_edgar; shared family SF-VALUATION.*
 
 **Rationale.** Book value understates the capital of technology firms because research and development and much of selling expense are expensed. Capitalising these expenditures gives a value measure that is more comparable across firms, so cheap firms on an intangible-adjusted basis may earn a value premium.
 
@@ -1080,7 +1111,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-E07 Cash runway and balance-sheet strength
 
-*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low.*
+*E_factor, directional, mechanism class behavioural, sign +, horizon 60-250 trading days, implementation low; data tier prices_and_edgar.*
 
 **Rationale.** Cash-burning technology firms with short runway face dilution or distress, and investors may underweight these costs. Longer runway and stronger balance sheets should predict higher returns relative to firms that will need to raise capital soon.
 
@@ -1112,7 +1143,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F01 Discount-rate shocks and equity duration
 
-*F_macro, relative_value, mechanism class behavioural, sign -, horizon 5-60 trading days, implementation medium.*
+*F_macro, relative_value, mechanism class behavioural, sign -, horizon 5-60 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit).*
 
 **Rationale.** Long-duration technology equities, whose cash flows lie far in the future, are more sensitive to real yields and policy-rate expectations. If benchmark-constrained investors adjust slowly, real-yield and policy-path shocks may be reflected gradually in the relative prices of long- versus short-duration firms.
 
@@ -1144,7 +1175,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F02 Credit conditions and financing-dependent technology
 
-*F_macro, relative_value, mechanism class risk_premium, sign -, horizon 20-120 trading days, implementation medium.*
+*F_macro, relative_value, mechanism class risk_premium, sign -, horizon 20-120 trading days, implementation medium; data tier prices_and_edgar.*
 
 **Rationale.** Unprofitable, cash-burning technology firms depend on equity and convertible issuance to fund operations. When credit spreads widen or lending standards tighten, their cost of external finance rises and the probability of dilutive or distressed raises increases. If investors price this funding channel slowly, financing-dependent firms should underperform self-funding peers after credit tightening.
 
@@ -1176,7 +1207,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F03 Energy costs and data-centre-intensive firms
 
-*F_macro, relative_value, mechanism class structural, sign -, horizon 20-120 trading days, implementation medium.*
+*F_macro, relative_value, mechanism class structural, sign -, horizon 20-120 trading days, implementation medium; data tier prices_and_edgar_text.*
 
 **Rationale.** Electricity is a large operating cost for data-centre operators, hosting providers and semiconductor fabrication. Power contracts reprice with a lag, so an energy-price shock reaches reported margins one or more quarters later. If investors wait for reported margins, energy-intensive technology firms should underperform less energy-intensive peers after energy-price increases.
 
@@ -1208,7 +1239,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F04 Semiconductor and industrial cycle rotation
 
-*F_macro, relative_value, mechanism class informational, sign +, horizon 60-250 trading days, implementation low.*
+*F_macro, relative_value, mechanism class informational, sign +, horizon 60-250 trading days, implementation low; data tier needs_unavailable_history (blocked by semiconductor_supply_chain).*
 
 **Rationale.** Semiconductor demand is cyclical, driven by inventory swings at customers and tied to the broader industrial cycle, while software revenue is more recurring. Public leading indicators (manufacturing new orders, inventory-to-shipment ratios, semiconductor billings) turn before semiconductor earnings. If investors extrapolate recent sector earnings, improving indicators should predict semiconductors outperforming software.
 
@@ -1240,7 +1271,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F05 Currency moves and international revenue exposure
 
-*F_macro, relative_value, mechanism class informational, sign -, horizon 20-120 trading days, implementation medium.*
+*F_macro, relative_value, mechanism class informational, sign -, horizon 20-120 trading days, implementation medium; data tier needs_unavailable_history (blocked by analyst_estimates_pit).*
 
 **Rationale.** Many technology firms earn a large share of revenue abroad. A stronger home currency reduces translated revenue and earnings, but analysts often update forecasts only when companies report or guide on the translation effect. If prices follow analysts, firms with high foreign revenue share should underperform domestically focused peers after currency appreciation.
 
@@ -1272,7 +1303,7 @@ Lexicographic: min(leakage safety, data feasibility), then plausibility, distinc
 
 ### TE-F06 Volatility regimes and crowding unwinds
 
-*F_macro, directional, mechanism class flow, sign -, horizon 5-60 trading days, implementation high.*
+*F_macro, directional, mechanism class flow, sign -, horizon 5-60 trading days, implementation high; data tier needs_unavailable_history (blocked by options_implied_vol).*
 
 **Rationale.** Technology stocks are frequently held in common by leveraged and risk-targeting investors. When market volatility rises, risk limits force these investors to cut exposure at the same time, so crowded names fall more than fundamentals justify. A crowding measure combined with rising implied volatility should predict underperformance of crowded names, which a long-only ranking can avoid.
 

@@ -6,19 +6,26 @@ from datetime import date
 import numpy as np
 import pytest
 
-from manhattan.engine.pit import PitStore, Window
+from manhattan import roles
+from manhattan.engine.pit import PitStore, Reader
 from manhattan.equities import macro, risk
 from manhattan.equities import synthetic as syn
 from manhattan.equities.costs import BorrowBook, BorrowRecord, EquityCostModel
 from manhattan.equities.errors import BorrowError, EquityDataError, TemporalError
 from manhattan.equities.graph import Relationship, RelationshipGraph
-from manhattan.equities.integration import conforms
 
 CAL = syn.calendar()
 
 
-def rel(s, d, t="supplier_of", vf=date(2005, 1, 3), pf=date(2005, 1, 3), rf=date(2005, 1, 3), conf=0.8, vt=None):
-    return Relationship(s, d, t, vf, pf, rf, "synthetic filing note", conf, vt)
+FENCE = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)
+COST = dict(half_spread=0.0005, commission=0.0001, impact=0.1, short_financing=0.0, long_financing=0.0,
+            recall_cost=0.002, reference="test assumption")
+
+
+def rel(s, d, t="supplier_of", vf=date(2005, 1, 3), pf=date(2005, 1, 3), rf=date(2005, 1, 3), conf=0.8, vt=None,
+        tk=None):
+    return Relationship(s, d, t, vf, pf, rf, "synthetic filing note", conf, vt,
+                        termination_known_from=(vt if tk is None else tk) if vt is not None else None)
 
 
 # ----------------------------------------------------------------------------- graph
@@ -87,16 +94,16 @@ def test_borrow_is_point_in_time_and_stale_records_expire():
 
 
 def test_cost_model_prices_trades_and_holding():
-    m = EquityCostModel(half_spread=0.0005, commission=0.0001, impact=0.1,
+    m = EquityCostModel(half_spread=0.0005, commission=0.0001, impact=0.1, short_financing=0.0, long_financing=0.0,
+                        recall_cost=0.002, reference="test assumption",
                         borrow=BorrowBook([BorrowRecord("S2", date(2006, 3, 1), date(2006, 3, 1), True, 0.0365)]))
     assert m.trade_cost(1e6, 1e8, 0.02) == pytest.approx(0.0006 + 0.1 * 0.02 * 0.1)
     w = {"S1": 0.5, "S2": -0.5}
     assert m.holding_cost_daily(w, date(2006, 3, 1)) == pytest.approx(0.5 * 0.0365 / 365)
     with pytest.raises(BorrowError, match="omission"):
-        EquityCostModel().holding_cost_daily(w, date(2006, 3, 1))
+        EquityCostModel(**COST).holding_cost_daily(w, date(2006, 3, 1))
     with pytest.raises(EquityDataError):
         m.turnover_cost({}, {"S1": 0.1}, 1e6, {}, {})
-    assert conforms(m, "execution_costs")
 
 
 # ----------------------------------------------------------------------------- exposure reports
@@ -201,6 +208,41 @@ def test_macro_reads_go_through_the_existing_window():
     store = PitStore()
     store.add("real_yield_10y", np.array(["2006-03-01", "2006-03-01"], dtype="datetime64[D]"), [1.0, 1.2],
               available=np.array(["2006-03-02", "2006-04-10"], dtype="datetime64[D]"))   # a revision
-    w = Window(store, date(2006, 1, 2), date(2006, 12, 29), "exploration", "macro_test", "session")
+    w = Reader(store, caller="session", domain="macro_test", fence=FENCE).window(date(2006, 1, 2), date(2006, 12, 29))
     assert list(macro.macro_as_of(w, "real_yield_10y", date(2006, 3, 15))[1]) == [1.0]
     assert list(macro.macro_as_of(w, "real_yield_10y", date(2006, 4, 10))[1]) == [1.2]
+
+
+# ----------------------------------------------------------------------------- S8 correction round: regressions
+def test_s8_m5_termination_disclosed_late_is_not_applied_early():
+    """S8 M5: an edge that ended on 2006-06-30 but whose end was disclosed on 2007-01-15 disappeared from the
+    2006-09-01 view, which used knowledge not yet public."""
+    g = RelationshipGraph([rel("A", "B", vt=date(2006, 6, 30), tk=date(2007, 1, 15))])
+    assert len(g.edges(date(2006, 9, 1)).edges) == 1               # still believed active
+    assert len(g.edges(date(2007, 1, 15)).edges) == 0
+    with pytest.raises(TemporalError, match="termination_known_from"):
+        Relationship("A", "B", "supplier_of", date(2005, 1, 3), date(2005, 1, 3), date(2005, 1, 3), "n", 0.5,
+                     valid_to=date(2006, 6, 30))
+    with pytest.raises(TemporalError, match="before it happens"):
+        rel("A", "B", vt=date(2006, 6, 30), tk=date(2006, 6, 1))
+
+
+def test_s8_m8_effective_bets_refused_for_hedged_books_and_hedged_risk_reported():
+    """S8 M8: a long/short pair of 0.99-correlated stocks reported about 200 effective bets."""
+    rng = np.random.default_rng(0)
+    f = rng.normal(0, 0.02, 2000)
+    R = np.column_stack([f + rng.normal(0, 0.002, 2000), f + rng.normal(0, 0.002, 2000)])
+    cov = np.cov(R, rowvar=False)
+    with pytest.raises(EquityDataError, match="long-only"):
+        risk.effective_bets({"A": 0.5, "B": -0.5}, cov, ("A", "B"))
+    h = risk.hedged_book_risk({"A": 0.5, "B": -0.5}, cov, ("A", "B"))
+    assert h["netted_share"] > 0.8 and h["top_component_share"] > 0.9      # one spread: one risk
+
+
+def test_s8_m10_cost_models_have_no_optimistic_defaults():
+    with pytest.raises(TypeError):
+        EquityCostModel()
+    with pytest.raises(EquityDataError, match="reference"):
+        EquityCostModel(**{**COST, "reference": " "})
+    with pytest.raises(EquityDataError):
+        EquityCostModel(**{**COST, "impact": float("nan")})

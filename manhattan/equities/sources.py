@@ -92,6 +92,7 @@ class DataContract:
     coverage_note: str = ""
     includes_delisted: bool | None = None       # price-like kinds: does history include delisted securities?
     notes: tuple = field(default_factory=tuple)
+    coverage_evidence: str = ""                  # where the verification is recorded; required when verified
 
     def __post_init__(self):
         if not _text(self.name):
@@ -108,6 +109,9 @@ class DataContract:
             raise ContractError(f"{self.name}: revision behaviour must be one of {REVISION_BEHAVIOURS}")
         if not isinstance(self.coverage_verified, bool):
             raise ContractError(f"{self.name}: coverage_verified must be a boolean")
+        if self.coverage_verified and not _text(self.coverage_evidence):
+            raise ContractError(f"{self.name}: coverage_verified needs coverage_evidence (where the checks of "
+                                "DATA_ACQUISITION.md section 4 are recorded); a bare claim is not verification")
         roles = tuple(self.roles)
         if not roles or any(r not in ROLES for r in roles) or len(set(roles)) != len(roles):
             raise ContractError(f"{self.name}: roles must be distinct values from {ROLES}")
@@ -192,6 +196,7 @@ def synthetic_contract(kind: str, roles=("signal", "universe", "risk", "descript
     base = dict(name=f"synthetic_{kind}", kind=kind, vendor="synthetic", licence="synthetic",
                 reference="manhattan.equities.synthetic", timestamp_semantics="event_time_tz",
                 revision_behaviour="vintaged", coverage_verified=True, roles=tuple(roles),
+                coverage_evidence="synthetic fixture: generated, so its coverage is known by construction",
                 includes_delisted=True if kind == "prices_daily" else None)
     base.update(over)
     return DataContract(**base)

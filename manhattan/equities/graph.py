@@ -12,6 +12,11 @@ data. An edge is usable for research at ``t`` only if ``valid_from ≤ t ≤ val
 ``recorded_from = 2020``: it is not usable in 2012 however true it was. ``edges(..., retrospective=True)`` shows the
 back-dated view for description only and marks the result ``retrospective``.
 
+**Endings are disclosed late, too (S8 M5).** A supplier relationship that ended in June may be disclosed only in
+the next annual report. An edge with ``valid_to`` must say when its end became known (``termination_known_from``,
+the later of disclosure and recording). Until then a point-in-time view still shows the edge as active — that is
+what a researcher would have believed — and only from that day is the end applied.
+
 **Confidence** is the source's own reliability in ``[0, 1]`` (``uncertainty`` describes how it was derived). It is
 metadata, not an estimate of predictive value.
 
@@ -42,6 +47,7 @@ class Relationship:
     provenance: str
     confidence: float
     valid_to: date | None = None
+    termination_known_from: date | None = None
     uncertainty: str = ""
 
     def __post_init__(self):
@@ -57,15 +63,26 @@ class Relationship:
             raise TemporalError(f"{self.source}->{self.destination}: valid_to before valid_from")
         if self.recorded_from < self.public_from:
             raise TemporalError(f"{self.source}->{self.destination}: recorded before it was public")
+        if self.valid_to is not None:
+            if not isinstance(self.termination_known_from, date):
+                raise TemporalError(f"{self.source}->{self.destination}: an ended relationship needs "
+                                    "termination_known_from (when its end became known)")
+            if self.termination_known_from < self.valid_to:
+                raise TemporalError(f"{self.source}->{self.destination}: an end cannot be known before it happens")
+        elif self.termination_known_from is not None:
+            raise TemporalError(f"{self.source}->{self.destination}: termination_known_from without valid_to")
 
     @property
     def backdated(self) -> bool:
         """Recorded after the relationship started: usable only from ``recorded_from``."""
         return self.recorded_from > self.valid_from
 
+    def believed_active(self, t: date) -> bool:
+        """Active as believed at ``t``: an end not yet known at ``t`` is not applied."""
+        return self.valid_to is None or t <= self.valid_to or self.termination_known_from > t
+
     def usable(self, t: date) -> bool:
-        return self.valid_from <= t and (self.valid_to is None or t <= self.valid_to) \
-            and self.public_from <= t and self.recorded_from <= t
+        return self.valid_from <= t and self.believed_active(t) and self.public_from <= t and self.recorded_from <= t
 
 
 @dataclass(frozen=True)

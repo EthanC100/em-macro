@@ -8,6 +8,11 @@
 # favourable end (more plausible, cheaper data, cheaper research, simpler, more distinct, safer from leakage).
 #
 # Universe descriptions are generic on purpose: no tickers or company names appear in this catalogue.
+#
+# shared_family (S8 correction round): entries that test overlapping mechanisms or near-identical signals are marked
+# as members of one shared hypothesis family. Their ids are kept (drafts; nothing is renumbered or removed), but if
+# they are ever frozen they are registered as hypotheses of ONE Manhattan family (or carry parent_family links) and
+# counted together for multiple testing: their evaluations are not independent evidence.
 
 version: 1
 status: draft            # catalogue of untested hypothesis families; nothing here is evidence
@@ -19,6 +24,7 @@ families:
 
   - id: TE-A01
     name: Peer-spread reversion within technology sub-industries
+    shared_family: SF-REVERSAL   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: flow
@@ -89,6 +95,7 @@ families:
 
   - id: TE-A02
     name: Short-sale-constrained overpricing in technology stocks
+    shared_family: SF-SHORT-CONSTRAINTS   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: structural
@@ -155,6 +162,7 @@ families:
 
   - id: TE-A03
     name: Peer-relative consensus revisions
+    shared_family: SF-REVISIONS   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: informational
@@ -217,6 +225,7 @@ families:
 
   - id: TE-A04
     name: Fundamentals-implied valuation residual within peers
+    shared_family: SF-VALUATION   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: behavioural
@@ -279,6 +288,7 @@ families:
 
   - id: TE-A05
     name: Customer-to-supplier price lead-lag
+    shared_family: SF-SUPPLY-CHAIN   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: informational
@@ -403,6 +413,7 @@ families:
 
   - id: TE-A07
     name: Residual (idiosyncratic) momentum
+    shared_family: SF-MOMENTUM   # one hypothesis family with the other members; tests are not independent
     research_family: A_relative_value
     approach: relative_value
     mechanism_class: behavioural
@@ -526,6 +537,7 @@ families:
 
   - id: TE-B01
     name: Growth-stage trajectory analogues
+    shared_family: SF-ANALOGUES   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: directional
     mechanism_class: behavioural
@@ -590,6 +602,7 @@ families:
 
   - id: TE-B02
     name: Implied growth versus historical base rates
+    shared_family: SF-VALUATION   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: relative_value
     mechanism_class: behavioural
@@ -648,6 +661,7 @@ families:
 
   - id: TE-B03
     name: Inventory and margin cycle analogues
+    shared_family: SF-ANALOGUES   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: relative_value
     mechanism_class: behavioural
@@ -705,6 +719,7 @@ families:
 
   - id: TE-B04
     name: Business-model transition analogues
+    shared_family: SF-ANALOGUES   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: directional
     mechanism_class: behavioural
@@ -762,6 +777,7 @@ families:
 
   - id: TE-B05
     name: Thematic episode analogues
+    shared_family: SF-ANALOGUES   # one hypothesis family with the other members; tests are not independent
     research_family: B_analogues
     approach: directional
     mechanism_class: behavioural
@@ -823,6 +839,7 @@ families:
 
   - id: TE-C01
     name: Post-earnings-announcement drift
+    shared_family: SF-EARNINGS-SURPRISE   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: relative_value
     mechanism_class: behavioural
@@ -883,6 +900,7 @@ families:
 
   - id: TE-C02
     name: Revenue surprise in technology firms
+    shared_family: SF-EARNINGS-SURPRISE   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: directional
     mechanism_class: informational
@@ -937,6 +955,7 @@ families:
 
   - id: TE-C03
     name: Management guidance surprise
+    shared_family: SF-EARNINGS-SURPRISE   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: directional
     mechanism_class: informational
@@ -993,6 +1012,7 @@ families:
 
   - id: TE-C04
     name: Analyst revision breadth
+    shared_family: SF-REVISIONS   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: directional
     mechanism_class: informational
@@ -1048,6 +1068,7 @@ families:
 
   - id: TE-C05
     name: Analyst disagreement under short-sale constraints
+    shared_family: SF-SHORT-CONSTRAINTS   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: relative_value
     mechanism_class: behavioural
@@ -1105,6 +1126,7 @@ families:
 
   - id: TE-C06
     name: Forward margin revisions
+    shared_family: SF-REVISIONS   # one hypothesis family with the other members; tests are not independent
     research_family: C_earnings
     approach: directional
     mechanism_class: informational
@@ -1219,6 +1241,7 @@ families:
 
   - id: TE-D01
     name: Foundry and chipmaker capex diffusion to equipment suppliers
+    shared_family: SF-SUPPLY-CHAIN   # one hypothesis family with the other members; tests are not independent
     research_family: D_diffusion
     approach: directional
     mechanism_class: informational
@@ -1277,6 +1300,7 @@ families:
 
   - id: TE-D02
     name: Cloud and AI compute demand diffusion to infrastructure suppliers
+    shared_family: SF-SUPPLY-CHAIN   # one hypothesis family with the other members; tests are not independent
     research_family: D_diffusion
     approach: directional
     mechanism_class: informational
@@ -1444,6 +1468,7 @@ families:
 
   - id: TE-D05
     name: Data-centre build-out diffusion to power and thermal suppliers
+    shared_family: SF-SUPPLY-CHAIN   # one hypothesis family with the other members; tests are not independent
     research_family: D_diffusion
     approach: directional
     mechanism_class: informational
@@ -1500,6 +1525,7 @@ families:
 
   - id: TE-D06
     name: End-device product cycles and component suppliers
+    shared_family: SF-SUPPLY-CHAIN   # one hypothesis family with the other members; tests are not independent
     research_family: D_diffusion
     approach: relative_value
     mechanism_class: informational
@@ -1558,6 +1584,7 @@ families:
 
   - id: TE-E01
     name: Price momentum within technology
+    shared_family: SF-MOMENTUM   # one hypothesis family with the other members; tests are not independent
     research_family: E_factor
     approach: directional
     mechanism_class: behavioural
@@ -1610,6 +1637,7 @@ families:
 
   - id: TE-E02
     name: Technology sub-industry momentum
+    shared_family: SF-MOMENTUM   # one hypothesis family with the other members; tests are not independent
     research_family: E_factor
     approach: directional
     mechanism_class: behavioural
@@ -1662,6 +1690,7 @@ families:
 
   - id: TE-E03
     name: Short-term reversal
+    shared_family: SF-REVERSAL   # one hypothesis family with the other members; tests are not independent
     research_family: E_factor
     approach: relative_value
     mechanism_class: flow
@@ -1817,6 +1846,7 @@ families:
 
   - id: TE-E06
     name: Intangible-adjusted value
+    shared_family: SF-VALUATION   # one hypothesis family with the other members; tests are not independent
     research_family: E_factor
     approach: directional
     mechanism_class: risk_premium

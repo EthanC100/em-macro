@@ -41,8 +41,42 @@ REQUIRED = ("id", "name", "research_family", "approach", "mechanism_class", "sig
             "validation_requirements", "failure_conditions", "kill_condition", "tail_exposure",
             "implementation_complexity", "grouped_variants", "ranking")
 _ID = re.compile(r"^TE-([A-F])\d{2}$")
+_SF = re.compile(r"^SF-[A-Z][A-Z-]+$")
+
+# Data feasibility tiers (S8 correction round). What a family needs, against what can realistically be had point in
+# time on a budget of about S$500/month (DATA_ACQUISITION.md). Unverified until the checks there are done.
+PRICE_KINDS = frozenset({"security_master", "prices_daily", "corporate_actions", "delisting_returns", "market_calendar",
+                         "index_membership", "fx_rates", "macro_pit"})          # one paid price source + public macro
+EDGAR_KINDS = frozenset({"fundamentals_pit", "segment_reporting", "earnings_events", "classification_history"})
+EDGAR_TEXT_KINDS = frozenset({"regulatory_filings_text", "customer_concentration", "guidance_events"})
+FREE_PUBLIC_KINDS = frozenset({"short_interest"})                               # FINRA publications
+UNAVAILABLE_KINDS = frozenset({"analyst_estimates_pit", "borrow_availability", "options_implied_vol",
+                               "earnings_call_text", "relationship_graph", "patents", "product_releases",
+                               "developer_adoption", "cloud_capex", "semiconductor_supply_chain", "hiring",
+                               "product_adoption"})
+TIERS = ("prices_and_edgar", "prices_and_edgar_text", "needs_unavailable_history")
 # a catalogue states no performance: no percentages, Sharpe ratios or return figures
-_PERF = re.compile(r"(\d\s*%|sharpe\s*(ratio)?\s*(of|=|:)?\s*\d|\d+\s*(bp|bps)\b|annuali[sz]ed return of)", re.I)
+_PERF = re.compile(r"(\d\s*%|sharpe\s*(ratio)?\s*(of|=|:|above|near)?\s*\d|\d+\s*(bp|bps)\b|annuali[sz]ed return of"
+                   r"|information ratio\s*(of|=|:)?\s*\d|t-stat(istic)?\s*(of|=|:)?\s*\d|earn(s|ed)\s+\d)", re.I)
+
+
+def data_tier(f: dict) -> tuple[str, tuple]:
+    """(tier, the kinds that block it). ``prices_and_edgar``: a survivorship-free price source, EDGAR structured data
+    (filing acceptance times, XBRL facts, 8-K item 2.02 times as a conservative release proxy, SIC codes from filing
+    headers as a classification proxy) and free public series. ``prices_and_edgar_text``: also needs EDGAR text
+    parsed point in time. ``needs_unavailable_history``: needs a history that is not affordable or not verifiably
+    point in time (estimates, borrow, implied volatility, call transcripts, relationship graphs, alternative data);
+    it can be researched only by forward collection or after a data decision."""
+    need = set(f.get("required_data") or [])
+    blocked = tuple(sorted(need & UNAVAILABLE_KINDS))
+    if blocked:
+        return "needs_unavailable_history", blocked
+    unknown = need - PRICE_KINDS - EDGAR_KINDS - EDGAR_TEXT_KINDS - FREE_PUBLIC_KINDS
+    if unknown:
+        return "needs_unavailable_history", tuple(sorted(unknown))
+    if need & EDGAR_TEXT_KINDS:
+        return "prices_and_edgar_text", ()
+    return "prices_and_edgar", ()
 
 
 def load(path: Path = PATH) -> dict:
@@ -60,6 +94,13 @@ def validate(cat: dict) -> list[str]:
     names = [str(f.get("name", "")).strip().lower() for f in fams]
     if len(set(names)) != len(names):
         errs.append("duplicate family names (near-identical families must be grouped)")
+    shared: dict = {}
+    for f in fams:
+        if f.get("shared_family"):
+            shared.setdefault(f["shared_family"], []).append(f.get("id"))
+    for g, members in shared.items():
+        if len(members) < 2:
+            errs.append(f"{g}: a shared family needs at least two members ({members})")
     for f in fams:
         fid = f.get("id", "?")
         for k in REQUIRED:
@@ -92,6 +133,9 @@ def validate(cat: dict) -> list[str]:
             errs.append(f"{fid}: ranking must have exactly {RANKS}")
         elif any(isinstance(r[k], bool) or not isinstance(r[k], int) or not 1 <= r[k] <= 5 for k in RANKS):
             errs.append(f"{fid}: rankings are integers from 1 to 5")
+        sf = f.get("shared_family")
+        if sf is not None and not _SF.match(str(sf)):
+            errs.append(f"{fid}: shared_family must look like SF-NAME")
         text = yaml.safe_dump(f)
         if _PERF.search(text):
             errs.append(f"{fid}: states a performance figure ({_PERF.search(text).group(0)!r})")
@@ -104,8 +148,10 @@ def validate(cat: dict) -> list[str]:
 
 
 def family_draft(f: dict) -> dict:
-    """A Manhattan family spec built from a catalogue entry: a draft, never registered or frozen here."""
-    return S.family(mechanism=" ".join(str(f["rationale"]).split()), mechanism_class=f["mechanism_class"],
+    """A Manhattan family spec built from a catalogue entry: a draft, never registered or frozen here. Members of a
+    shared family carry ``shared_family`` so a freeze can register them as hypotheses of one family."""
+    extra = {"shared_family": f["shared_family"]} if f.get("shared_family") else {}
+    return S.family(**extra, mechanism=" ".join(str(f["rationale"]).split()), mechanism_class=f["mechanism_class"],
                     sign=f["sign"], counterparty=" ".join(str(f["counterparty"]).split()),
                     kill_condition=" ".join(str(f["kill_condition"]).split()),
                     tail_exposure=" ".join(str(f["tail_exposure"]).split()),
@@ -140,20 +186,51 @@ def render(cat: dict) -> str:
            "## Priority order", "",
            "Lexicographic: min(leakage safety, data feasibility), then plausibility, distinctiveness, research cost, "
            "simplicity.", "",
-           "| # | id | family | approach | sign | horizon | costs | plaus. | data | cost | simpl. | distinct. | "
-           "leak-safe |",
-           "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+           "| # | id | family | shared family | data tier | approach | sign | horizon | costs | plaus. | data | cost | "
+           "simpl. | distinct. | leak-safe |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for i, f in enumerate(prioritised(cat), 1):
         r = f["ranking"]
-        out.append(f"| {i} | {f['id']} | {f['name']} | {f['approach']} | {f['sign']} | {f['holding_horizon']} | "
+        out.append(f"| {i} | {f['id']} | {f['name']} | {f.get('shared_family', '')} | {data_tier(f)[0]} | "
+                   f"{f['approach']} | {f['sign']} | {f['holding_horizon']} | "
                    f"{f['transaction_costs']} | {r['economic_plausibility']} | {r['data_feasibility']} | "
                    f"{r['research_cost']} | {r['implementation_simplicity']} | {r['distinctiveness']} | "
                    f"{r['leakage_safety']} |")
+    shared: dict = {}
+    for f in fams:
+        if f.get("shared_family"):
+            shared.setdefault(f["shared_family"], []).append(f["id"])
+    out += ["", "## Shared hypothesis families", "",
+            "Entries that test overlapping mechanisms or near-identical signals. Their ids are kept (drafts), but if "
+            "frozen they are registered as hypotheses of one Manhattan family (or linked by `parent_family`) and "
+            "counted together for multiple testing: their evaluations are not independent evidence.", "",
+            "| shared family | members |", "|---|---|"]
+    out += [f"| {g} | {', '.join(m)} |" for g, m in sorted(shared.items())]
+    out += ["", "## Data feasibility", "",
+            "Computed from each family's required data (`catalogue.data_tier`); unverified until the checks of "
+            "DATA_ACQUISITION.md section 4 are done.", "",
+            "- **prices_and_edgar**: one survivorship-free price source, EDGAR structured data and free public "
+            "series.",
+            "- **prices_and_edgar_text**: also EDGAR text parsed point in time.",
+            "- **needs_unavailable_history**: a history that is unaffordable or not verifiably point in time; forward "
+            "collection or a data decision first.", "",
+            "Caveat: relative-value families in the first two tiers do not list borrow history among their data, but "
+            "their short legs need it. Without an affordable borrow history they can be studied only with explicit, "
+            "flagged borrow assumptions (a `costs.BorrowBook` with no record refuses the short), and any such result "
+            "says so.", "",
+            "| tier | families | blocked by |", "|---|---|---|"]
+    for t in TIERS:
+        ids = [f["id"] for f in fams if data_tier(f)[0] == t]
+        blocks = sorted({k for f in fams if data_tier(f)[0] == t for k in data_tier(f)[1]})
+        out.append(f"| {t} | {len(ids)}: {', '.join(ids)} | {', '.join(blocks)} |")
     out += ["", "## Families", ""]
     for f in fams:
+        tier, blocks = data_tier(f)
         out += [f"### {f['id']} {f['name']}", "",
                 f"*{f['research_family']}, {f['approach']}, mechanism class {f['mechanism_class']}, sign "
-                f"{f['sign']}, horizon {f['holding_horizon']}, implementation {f['implementation_complexity']}.*", "",
+                f"{f['sign']}, horizon {f['holding_horizon']}, implementation {f['implementation_complexity']}; "
+                f"data tier {tier}{' (blocked by ' + ', '.join(blocks) + ')' if blocks else ''}"
+                f"{'; shared family ' + f['shared_family'] if f.get('shared_family') else ''}.*", "",
                 f"**Rationale.** {' '.join(str(f['rationale']).split())}", "",
                 f"**Counterparty.** {' '.join(str(f['counterparty']).split())}", "",
                 f"**Universe.** {' '.join(str(f['target_universe']).split())}", "",

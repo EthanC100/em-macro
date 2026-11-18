@@ -1,7 +1,8 @@
 # Technology equities research programme: design report
 
-Version 0.1, 2026-11-18, branch `claude/phase4-tech-equities-i44jdx` (Project Manhattan, session 5). Status: **research
-infrastructure on synthetic data only.** Nothing here reads market data, runs a strategy search, produces evidence,
+Version 0.2, 2026-11-18, branch `claude/phase4-tech-equities-i44jdx` (Project Manhattan, session 5; revised in the
+S8 correction round, see [CORRECTIONS.md](CORRECTIONS.md)). Status: **research infrastructure on synthetic data
+only.** Equity research on real data and every promotion are disabled (section 5). Nothing here reads market data, runs a strategy search, produces evidence,
 or changes Manhattan's protocol, pre-registrations, ledger, PIT reader, operational store, attempt reconciler,
 statistics or simulation. Companion documents:
 
@@ -11,8 +12,9 @@ statistics or simulation. Companion documents:
   can and cannot buy, and the verification each candidate source needs first.
 - [PROTOCOL_EXTENSION_PROPOSAL.md](PROTOCOL_EXTENSION_PROPOSAL.md): why Protocol v3.1 does not cover single equities
   and what a future version would need, for Ethan's review.
+- [CORRECTIONS.md](CORRECTIONS.md): the S8 audit findings, what changed, and the counterexamples before and after.
 
-Code: `manhattan/equities/` (22 modules and `catalogue.yaml`). Tests: `tests/test_manhattan_equities_*.py` (6 files).
+Code: `manhattan/equities/` (23 modules and `catalogue.yaml`). Tests: `tests/test_manhattan_equities_*.py` (6 files).
 
 ## 1. Objectives
 
@@ -77,12 +79,13 @@ Layers, each of which only reads the layer below and none of which writes to an 
 | `analogues` | eligibility (descriptive vs training); robust normalisation; distances; explanations; baselines | — |
 | `macro` | PIT macro reads; sensitivities; incremental-information diagnostic | `manhattan.engine.pit.Window` |
 | `costs` | trade and holding costs; borrow availability and fees; recall | — |
-| `risk` | long/short and directional reports; effective bets; cross-book factor aggregation | — |
-| `evidence` | candidate/evidence boundary; equity-scope gate | `manhattan.ops.promotion` |
+| `risk` | long/short and directional reports; effective bets (long-only); hedged-book risk; cross-book factor aggregation | — |
+| `evidence` | candidate/evidence boundary; research gate; promotion gate (both local to this package) | `manhattan.ops.promotion` |
 | `provenance` | content hash of research outputs | `manhattan.spec.spec_hash` |
 | `pit_bridge` | export to the existing PIT store | `manhattan.engine.pit.PitStore` |
 | `catalogue` | catalogue validation, ranking, rendering, family drafts | `manhattan.spec` |
-| `integration` | protocols for unfinished interfaces (attempts, evidence classes, simulation, costs, portfolio) | — |
+| `research` | the authorized entry points: research gate, `Reader`-opened windows, reads as of the boundary | `manhattan.engine.pit.Reader` |
+| `integration` | exact signatures of PR #86 and #84 interfaces, pinned to the inspected heads; a checker | — |
 | `synthetic` | deterministic fixtures | — |
 
 **What was deliberately not built.** A second backtester (the existing `manhattan.engine.backtest` takes a `Window`;
@@ -181,13 +184,18 @@ behaviour. No family that depends on them can be evaluated until then (their cat
 | E factors | `features` (momentum, industry-relative, residual momentum, reversal, beta, fundamental ratios, growth, valuation yields; verified neutralisation; exposures vs candidate signals) | equity core-factor definitions for the protocol's core hedge (an owner decision: PROTOCOL_EXTENSION_PROPOSAL §2) |
 | F macro | `macro` (PIT reads through the existing `Window`, past-only sensitivities, incremental-information diagnostic), `risk.aggregate_factor_exposure` (one factor counted once across books) | macro series themselves (the existing macro infrastructure, unchanged) |
 
-**Pair diagnostics on synthetic data** (tests, 20 fixed seeds; these describe the code, not markets): of stable
-cointegrated pairs that pass formation, at least 85% are classified stable out of sample; of pairs whose
-cointegration breaks (residual becomes a random walk) or whose hedge ratio shifts at the evaluation start, at least
-90% are flagged broken; a break inside the formation window is rejected at discovery in at least 18 of 20 cases;
-highly correlated random walks (return correlation above 0.8) are never accepted. The filter parameters in
-`PairRules` were set by looking at these synthetic cases only; on real data they are a hypothesis grid to be frozen,
-never tuned on an evaluation window.
+**Retrospective break classification on one synthetic generator** (tests, 20 fixed seeds). `out_of_sample` is a
+*retrospective* diagnostic: it looks at a whole evaluation window after it has ended, so it is never a forecast or a
+signal inside that window (`StabilityReport.kind == "retrospective"`, `usable_from` = the window's end). On the
+synthetic generator of `manhattan.equities.synthetic` (an AR(1) residual with φ = 0.9 around a random-walk leg):
+at least 85% of stable pairs that pass formation are classified stable; at least 90% of breaks at the evaluation
+start and at least 85% of breaks two-fifths of the way in are flagged; breaks inside formation, gaps, missing
+legs and a leg that stops trading are flagged; slow but genuine reversion (φ = 0.97, 0.99) is almost always rejected
+at formation (low power, accepted). **These numbers describe the code on that generator. They are not predictive
+performance, not error rates for real relationships, and not evidence that pair trading works.** The `PairRules`
+parameters were set by looking at these synthetic cases only; on real data they are a grid to be frozen, never tuned
+on an evaluation window. Every pair looked at is counted (`PairDiscovery.attempts`), including those without an
+economic link and those rejected, so the number of candidates can be read against the number tried.
 
 ## 5. Scientific integration
 
@@ -195,17 +203,30 @@ never tuned on an evaluation window.
    `manhattan.spec.validate_family`, marked `status: draft`, never registered or frozen here. Hypotheses would add
    domain (`us_tech_equities_daily`, proposed), data sources with publication contracts, the signal, the bounded
    grid (`PairRules`, analogue `k`/method/constraints, feature look-backs) and the primary binding.
-2. **PIT.** Equity data reach the engine only through `pit_bridge` → `PitStore` → `Reader` → `Window`, so
-   `manhattan.roles.check_read` and the exploration cap (2019-12-31) apply unchanged.
-3. **Attempts.** No reserve or forward evaluation may begin until binding attempt accounting (session 1's work) is
-   implemented and approved. `integration.AttemptAccounting` is the two-call interface the equities layer will use.
+2. **PIT.** `pit_bridge` exports equity data to the existing `PitStore` with knowledge-day availability, and the
+   authorized entry points (`manhattan.equities.research`) read them only through `pit.Reader(...).window(...)`, so
+   `manhattan.roles.check_read` and the exploration cap (2019-12-31) apply. Nothing **forces** other code to use
+   that path: the numerical primitives (`pairs`, `analogues`, `features`, ...) take whatever arrays a caller gives
+   them, and say so. No equities code or test constructs a `Window` directly (a test checks this; under PR #86 it
+   would raise).
+3. **Attempts.** No reserve or forward evaluation may begin until binding attempt accounting (PR #86) is merged and
+   approved. `integration.EXPECTED` pins its exact interface (`access.register_evaluation(ledger, *, identity,
+   windows, caller, fence, freeze, holding, token, supersedes)` → `AttemptContext`); the adapter is written after it
+   merges.
 4. **Multiple testing.** Families, not variants, are the unit (ARCHITECTURE §3). Grids are bounded
-   (`manhattan.spec.MAX_GRID`); near-identical families are grouped (the catalogue test refuses duplicate names).
+   (`manhattan.spec.MAX_GRID`); overlapping catalogue entries are marked as members of a shared hypothesis family
+   (`shared_family`) and would be frozen as one family; pair discovery counts every pair it looks at.
    Pair and analogue *candidates* are not tests; a family built on them is one hypothesis whatever the number of
    candidate pairs it trades.
 5. **Forward e-process, e-LOND, tiers, dormancy.** Used as they are, once a protocol version covers equities; not
-   re-implemented. `evidence.promote` refuses every promotion, twice gated (`manhattan.ops.promotion` and
-   `EQUITY_COVERING_PROTOCOLS`, empty).
+   re-implemented. **What is enforced, and where.** `evidence.promote` refuses every promotion (Manhattan's
+   `manhattan.ops.promotion` gate, called, and the empty `EQUITY_COVERING_PROTOCOLS`), and the research entry
+   points refuse non-synthetic sources while `EQUITY_RESEARCH_APPROVED` is False. Both gates are local to this
+   package: they are **not integrated into Manhattan's protected pipeline**. `manhattan.ops.promotion.promote`,
+   `manhattan.engine.evaluate` and the runner do not know about asset classes; an equity family pushed through them
+   would meet only their own gates (no adopted protocol, `claims.enabled: false`, attempt registration after #86).
+   Making the protected pipeline refuse out-of-scope domains is an owner decision
+   ([PROTOCOL_EXTENSION_PROPOSAL.md](PROTOCOL_EXTENSION_PROPOSAL.md) section 3) and is not claimed here.
 6. **Audit.** Every research output can carry a provenance record (`provenance.record`): input hashes, parameters,
    boundary, code version, contracts; no values, so it may be committed even when inputs are licensed.
 
@@ -218,16 +239,22 @@ Long/short books: gross, net, beta-weighted net, industry net, factor exposures,
 HHI, effective names), borrow cost (a missing fee raises: an omission is not zero), short-squeeze names (days to
 cover), earnings-event and corporate-action gross, liquidity (days to exit at a participation rate). Directional
 books: beta, sector concentration, factor exposures (growth, value), rate sensitivity, liquidity, one-way turnover,
-drawdown description. `effective_bets` (squared diversification ratio) shows that ten technology names on one factor
-are about one bet. `aggregate_factor_exposure` adds exposures across books and lists factors carried by more than
-one, so a rate or growth exposure is not counted as several independent sources. No existing portfolio or execution
-system is touched; `integration.PortfolioSink` is the future interface.
+drawdown description. For **long-only** books `effective_bets` (squared diversification ratio) shows that ten
+technology names on one factor are about one bet. It is refused for books with shorts: in a hedged pair the
+denominator is the small residual variance and the ratio would report hundreds of "bets" for one spread (S8 M8).
+Hedged books use `hedged_book_risk` (book volatility, leg volatility without netting, the share netting removed, and
+the share of variance in the largest principal component). `aggregate_factor_exposure` adds exposures across books
+and lists factors carried by more than one, so a rate or growth exposure is not counted as several independent
+sources. No existing portfolio or execution system is touched; a future portfolio interface is not specified until
+one exists.
 
 ## 7. Costs
 
 `costs.EquityCostModel`: half-spread, commission, square-root impact on daily volatility and participation, borrow fee
 from a point-in-time `BorrowBook` (no record = not shortable), recall probability × buy-in cost, short and leverage
-financing spreads. These are assumptions with explicit parameters. Protocol v3.1 §10.3 re-estimates cost models from
+financing spreads. These are assumptions: **every parameter must be stated, with a `reference` for where it came
+from**; none has a default (S8 M10), because a default spread or impact makes a strategy look cheap by omission.
+Protocol v3.1 §10.3 re-estimates cost models from
 recorded spreads; nothing here replaces that. Shorting costs are typically the binding constraint for
 relative-value families in small and mid-cap technology names, and historical borrow data are the hardest data to
 obtain (DATA_ACQUISITION §3).
@@ -238,10 +265,16 @@ obtain (DATA_ACQUISITION §3).
   gaps and conventions the contracts do not yet name.
 - **Daily resolution.** Intraday reaction windows are reduced to closes; the conservative mapping costs some power
   around releases.
-- **Pair and analogue filters are heuristics** with declared parameters, not tests; their synthetic error rates
-  (section 4) do not transfer to markets.
-- **Effective-bets and cost models are approximations.** Diversification ratio depends on the covariance estimate;
-  impact parameters are placeholders.
+- **Pair and analogue filters are heuristics** with declared parameters, not tests; their synthetic hit rates
+  (section 4) are retrospective classifications on one generator and do not transfer to markets.
+- **Slow mean reversion is rarely accepted** by the pair filter (low power, by design conservative).
+- **Effective bets and cost models are approximations.** The diversification ratio depends on the covariance
+  estimate and is defined for long-only books only; cost parameters must be supplied and referenced.
+- **Unresolved split-like moves are holds.** Without share counts, a −50% day cannot be told from a missing 2:1
+  split; such securities are excluded with a stated reason and listed in `Snapshot.holds` for review, which biases
+  the universe until they are resolved.
+- **Gates are local.** The research and promotion gates bind this package's code; the protected pipeline does not yet
+  know about asset classes (section 5).
 - **The universe builder is O(securities × history)** per snapshot; fine for research sizes, not optimised.
 - **Classification history** depends on a vendor's archived assignments; most vendors publish only current codes.
 - **ADR and foreign-filer timing** is declared per contract but not exercised by a fixture.

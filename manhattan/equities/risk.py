@@ -38,10 +38,16 @@ def _need(ids, table: dict, what: str) -> np.ndarray:
 
 
 def effective_bets(weights: dict, cov: np.ndarray, cov_ids: tuple) -> float:
-    """Effective number of independent bets: the squared diversification ratio
+    """Effective number of independent bets of a **long-only** book: the squared diversification ratio
     ``(Σ |w_i| σ_i)² / (w' Σ w)`` (Choueifaty and Coignard 2008). It equals N for N equal, independent positions
-    of equal volatility and approaches 1 when every position loads on one factor."""
+    of equal volatility and approaches 1 when every position loads on one factor.
+
+    Refused for books with shorts (S8 M8): in a hedged pair the denominator is the small residual variance, so the
+    ratio reports hundreds of "bets" for what is one spread. Use ``hedged_book_risk`` for long/short books."""
     ids, w = _w(weights)
+    if (w < 0).any():
+        raise EquityDataError("effective_bets is defined for long-only books; a hedged book's diversification "
+                              "ratio counts its hedge as bets (use hedged_book_risk)")
     idx = {s: j for j, s in enumerate(cov_ids)}
     if any(i not in idx for i in ids):
         raise EquityDataError("every position needs a row in the covariance matrix")
@@ -51,6 +57,26 @@ def effective_bets(weights: dict, cov: np.ndarray, cov_ids: tuple) -> float:
     if var <= 0:
         return 0.0
     return float((np.abs(w) @ np.sqrt(np.clip(np.diag(S), 0, None))) ** 2 / var)
+
+
+def hedged_book_risk(weights: dict, cov: np.ndarray, cov_ids: tuple) -> dict:
+    """Risk of a long/short book without pretending a hedge is diversification: the book's volatility, the
+    volatility of its legs added without netting, how much of that the netting removed, and the share of the book's
+    variance that comes from its single largest principal component (one spread is one risk: close to 1)."""
+    ids, w = _w(weights)
+    idx = {s: j for j, s in enumerate(cov_ids)}
+    if any(i not in idx for i in ids):
+        raise EquityDataError("every position needs a row in the covariance matrix")
+    sel = [idx[i] for i in ids]
+    S = np.asarray(cov, float)[np.ix_(sel, sel)]
+    var = float(w @ S @ w)
+    legs = float(np.abs(w) @ np.sqrt(np.clip(np.diag(S), 0, None)))
+    lam, E = np.linalg.eigh((S + S.T) / 2)
+    contrib = (E.T @ w) ** 2 * np.clip(lam, 0, None)
+    top = float(contrib.max() / contrib.sum()) if contrib.sum() > 0 else 0.0
+    vol = float(np.sqrt(max(var, 0.0)))
+    return {"volatility": vol, "legs_volatility": legs, "netted_share": float(1 - vol / legs) if legs > 0 else 0.0,
+            "top_component_share": top}
 
 
 def concentration(w: np.ndarray) -> dict:
