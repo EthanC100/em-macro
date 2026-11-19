@@ -473,7 +473,7 @@ def test_prt04_licensed_and_non_synthetic_equity_sources_are_refused():
 
 
 _NEW_CODE = ("manhattan/hte", "manhattan/execution", "manhattan/equities", "manhattan/evidence.py",
-             "manhattan/access.py")
+             "manhattan/access.py", "manhattan/execution_realism")
 _NETWORK = {"socket", "requests", "urllib", "urllib.request", "http.client", "ftplib", "smtplib", "paramiko",
             "boto3", "httpx", "aiohttp"}
 _PRIVATE_STRINGS = ("EM_MACRO_DATA", "DATA_REPO_READ_TOKEN", "DATA_REPO_URL", "em-macro-data")

@@ -49,3 +49,26 @@ def test_harness02_probes_never_raise_and_name_their_source():
         assert isinstance(s["present"], bool) and s["detail"] and s["source"], name
     assert CAP.probe("no-such-capability") == (False, "unknown capability 'no-such-capability'")
     assert CAP.blocked_reason(("no-such-capability",)).startswith("BLOCKED[no-such-capability]")
+
+
+@pytest.mark.acceptance(id="HARNESS-03", area="harness", requires=())
+def test_harness03_an_unimplemented_or_unbound_adapter_never_passes(monkeypatch):
+    """Phase 2: every adapter acceptance case carries its adapter's capability, so a missing adapter is BLOCKED; a
+    present adapter with no binding fails as UNBOUND; and oracle results are reported under ORC- ids only."""
+    import s16_drivers as DRV
+    for kind, cap in DRV.ADAPTER_CAPABILITY.items():
+        adapter, oracle = DRV.driver_params(kind, "X-01", "integration", ("hte",))
+        (am,), (om,) = adapter.marks, oracle.marks
+        assert am.kwargs["id"] == "X-01" and cap in am.kwargs["requires"]
+        assert om.kwargs["id"] == "ORC-X-01" and cap not in om.kwargs["requires"] and om.kwargs["area"] == "harness"
+        assert DRV.ADAPTER_BINDINGS[kind] is None                           # S16 binds nothing it has not seen
+        with pytest.raises(pytest.fail.Exception, match=r"UNBOUND\[" + cap):
+            DRV.get(kind, DRV.ADAPTER)
+    # as shipped, an adapter whose probe is absent is BLOCKED by its own capability
+    monkeypatch.setattr(CAP, "probe", lambda name: (name != "adapter:hte->access", "S16 harness simulation"))
+    assert CAP.blocked_reason(("hte", "adapter:hte->access")).startswith("BLOCKED[adapter:hte->access]")
+    # an oracle pass never satisfies an adapter id in the verdict
+    tests = _all()
+    tests = [t if t["id"] != "ACC86-01" else _t("ACC86-01", RUN.BLOCKED_) for t in tests]
+    v = RUN.verdict(tests, pytest_exit=0)
+    assert v["verdict"] == "NOT_READY" and v["by_id"]["ORC-ACC86-01"] == RUN.PASS and v["by_id"]["ACC86-01"] == "BLOCKED"

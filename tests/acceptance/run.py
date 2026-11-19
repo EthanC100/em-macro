@@ -43,7 +43,11 @@ REQUIRED_IDS = (
     "ADV-PRT-01", "ADV-PRT-02", "ADV-PRT-03", "ADV-PRT-04", "ADV-PRT-05",
     "ADV-OBS-01", "ADV-OBS-02",
     "GAP-01", "GAP-02", "GAP-03", "GAP-04", "GAP-05", "GAP-06", "GAP-07",
-    "HARNESS-01", "HARNESS-02",
+    "HARNESS-01", "HARNESS-02", "HARNESS-03",
+    # phase 2: integration adapters (HTE -> PR #86 candidate accounting; HTE -> PR #93 delayed execution)
+    *(f"{p}ACC86-{n:02d}" for p in ("", "ORC-") for n in range(1, 7)),
+    *(f"CON93-{n:02d}" for n in range(1, 7)),
+    *(f"{p}DEX93-{n:02d}" for p in ("", "ORC-") for n in range(1, 7)),
 )
 
 

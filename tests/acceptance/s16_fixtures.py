@@ -164,3 +164,21 @@ def execution_world(n_days: int = 10):
     policy = X.ExecutionPolicy(base_currency="USD", roll=X.RollPolicy(buffer_days=35, roll_before_notice_days=10))
     return {"days": days, "spec": spec, "market": market, "terms": terms, "scenario": scenario, "policy": policy,
             "liq": liq, "px": px, "close": close, "published": published}
+
+
+# ------------------------------------------------------------------------------- forged ledger records (adversarial)
+
+def forge(book, type_: str, payload: dict) -> dict:
+    """A hostile or buggy writer with file access: append a hash-valid record without any API rule. Only the
+    reconciler (or an independent cross-check) can catch what this writes."""
+    import json
+    from datetime import datetime, timezone
+    from manhattan import ledger as L, spec
+    rec = {"seq": len(book) + 1, "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "type": type_, "writer": book.writer, "protocol": book.protocol,
+           "payload": json.loads(spec.canonical_bytes(payload)), "prev_hash": book.head}
+    rec["hash"] = L.record_hash(rec)
+    with book.path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
+    book._index(rec)
+    return rec

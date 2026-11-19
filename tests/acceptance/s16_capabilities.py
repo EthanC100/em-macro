@@ -42,6 +42,12 @@ PROBES = {
     "access": Probe("access", "component", "PR #86", "manhattan.access + attempts: binding attempt accounting"),
     "execution": Probe("execution", "component", "PR #85", "manhattan.execution: synthetic futures execution"),
     "equities": Probe("equities", "component", "PR #87", "manhattan.equities: synthetic equities research data"),
+    "hte_identity_levels": Probe("hte_identity_levels", "component", "PR #90 (S11, stacked on #89)",
+                                 "HTE binding and executable identity levels, executable_accounting"),
+    "execution_realism": Probe("execution_realism", "component", "PR #93 (S14)",
+                               "manhattan.execution_realism: lagged, costed, provenance-labelled execution"),
+    "adapter:hte->delayed-execution": Probe("adapter:hte->delayed-execution", "integration", "S14 / HTE owner (X5)",
+                                            "HTE candidates evaluated with an execution lag through PR #93"),
     "adapter:hte->access": Probe("adapter:hte->access", "integration", "S11 / PR #86 D-1, D-10, B4",
                                  "HTE attempts registered in the Manhattan Ledger (hte.adapters.Pr86AccessAdapter)"),
     "adapter:hte->execution": Probe("adapter:hte->execution", "integration", "S11 / PR #85 E1-E4",
@@ -163,6 +169,31 @@ def _probe(name: str) -> tuple[bool, str]:
         if m.TRUSTED_AUTHORITIES:
             return True, f"TRUSTED_AUTHORITIES = {sorted(m.TRUSTED_AUTHORITIES)}"
         return False, "evidence.TRUSTED_AUTHORITIES is empty: every classification is unverified"
+    if name == "hte_identity_levels":
+        m, err = _import("manhattan.hte.adapters")
+        if m is None:
+            return False, err
+        need = ("evaluation_binding_hash", "executable_spec", "lineage", "executable_accounting")
+        missing = [n for n in need if not hasattr(m, n)]
+        return (not missing), ("hte.adapters has " + ", ".join(need) if not missing
+                               else "hte.adapters lacks " + ", ".join(missing) + " (PR #90 not merged)")
+    if name == "execution_realism":
+        m, err = _import("manhattan.execution_realism.screening")
+        return (m is not None), (err or "manhattan.execution_realism importable")
+    if name == "adapter:hte->delayed-execution":
+        if not (ROOT / "manhattan" / "hte").is_dir():
+            return False, "manhattan.hte absent (PR #89 not merged)"
+        if not (ROOT / "manhattan" / "execution_realism").is_dir():
+            return False, "manhattan.execution_realism absent (PR #93 not merged)"
+        hits = production_importers("manhattan.execution_realism", within="manhattan/hte")
+        hits += production_importers("manhattan.hte", within="manhattan/execution_realism")
+        pol, _ = _import("manhattan.hte.policy")
+        if pol is not None and "lag" in getattr(pol.Policy, "__dataclass_fields__", {}):
+            hits.append("manhattan/hte/policy.py: Policy.lag")
+        if hits:
+            return True, "HTE <-> PR #93 binding found: " + ", ".join(hits)
+        return False, ("no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and "
+                       "nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)")
     if name == "decision:D-1":
         m, err = _import("manhattan.hte.adapters")
         if m is None:
