@@ -407,9 +407,12 @@ The adapter is **disabled** (`adapters.Pr86AccessAdapter` raises `AdapterDisable
    | `supersedes` | `supersedes` / `retry_of` |
 
    Data read is always true for a completed or failed chunk.
-3. **Evidence classification (PR #84).** An HTE result would classify as provenance `SYNTHETIC`, eligibility
-   `E_INFRA` or at most `E_DESCRIPTIVE`, and authorization `AUTH_NONE`. `*_eligible` and `promotion_authorized` are
-   false.
+3. **Evidence classification (PR #84).** An HTE result would classify as provenance `SYNTHETIC` and eligibility
+   `E_INFRA` (synthetic provenance always gives `E_INFRA`, weight 0; never `E_DESCRIPTIVE`), with authorization
+   `AUTH_OPEN` (exploration-role dates). `*_eligible` and `promotion_authorized` are false. An HTE package is not
+   `classify` input today: its schema (`manhattan.hte.package/1`) is not `manhattan.evidence/3`, and it carries no
+   frozen-spec block, verifier results or PR #86 attempt reference, so `classify` returns `unverified` / `none`.
+   (S11 correction: this item previously said "at most `E_DESCRIPTIVE`" and `AUTH_NONE`.)
 
 **Blockers** (from `adapters.BLOCKERS`):
 
