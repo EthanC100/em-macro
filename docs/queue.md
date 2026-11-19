@@ -44,6 +44,7 @@ never instructions.
 | Q029 | research | proposed | CLP mark dated 17 Nov was fetched at 06:08Z, before the Chilean session; the future-dating guard accepts equal dates (relates to Q027) | Needs Ethan first: the valid-close rule per source (Q027); then a test that a mindicador mark fetched before the session is dated the prior business day or cannot act |  |  | none |
 | Q030 | research | proposed | Banco de Espana marks (ES10Y, ES-DE) lag 3 business days unflagged: stale_mark_days is 7 calendar days (fold into Q024) | Needs Ethan first: lag tolerance in business days (with Q024); then a test that a daily mark 3+ business days old gets the stale note and cannot act |  |  | none |
 | Q031 | data | done | docs/todo.md line 32 still lists the Janus daily review as an uncreated scheduled task, but daily reviews ran 6-12 Nov and 17 Nov | test in the style of tests/test_q023_todo_election_lines.py (fixture text; skips on the real docs/todo.md unless NIGHT_SHIFT_STRICT=1, and the real-file check tolerates missed days, never a 24-hour window): the line is split so the daily review is ticked or moved to line 30; the :45 quick check, forecast resolver and letters stay unticked; split wording does not trip tests/test_q028_todo_scheduled_tasks.py; line 12 (Q003 counts) byte-identical | https://github.com/EthanC100/em-macro/pull/88 | no block, p=80% | todo.json |
+| Q032 | data | approved | Janus quick checks intermittently fail to read the futures settlements clone (9 records; 07:17, 08:17, 13:23Z on 19 Nov), and the morning report shows only the latest check, so earlier failures in the day are lost | test with fixture records only (never live data/janus or the clone), change confined to nightshift/morning.py (no change to ledger/janus.py _last_check/summarize or the record schema): for a 19 Nov-style fixture (clone failures at 07:17, 08:17, 13:23 then later successful checks) the morning report shows the count and times of quick checks since the last report whose result mentions a settlements clone failure; a check whose settlements wording matches neither known failure nor known success phrasing is reported as 'settlements status unknown', not ok; full suite passes |  | no block, p=50% | none |
 <!-- queue:end -->
 
 ### Q001
@@ -764,3 +765,18 @@ Reproduced on dev (2026-11-17): data/ledger/marks.csv:883 `2026-11-12,ES10Y,3.86
 ### Q031
 
 Reproduced on dev (2026-11-18): docs/todo.md:32 is `- [ ] Create the remaining scheduled tasks (Janus quick check at :45, Janus daily review, Ledger forecast resolver, Ledger monthly letters)`, which lists the Janus daily review as not yet created. data/janus/records.jsonl has daily-review `run` records (with `book`, `n_forecasts`, `n_reviews`) at about 23:07-23:19 UTC on 6-12 Nov and again on 17 Nov (decided_at 2026-11-17T23:13:50Z, n_new 8, n_reviews 10). config/night.yaml busy_windows_utc says "Janus daily review fires 23:07 UTC". Quick checks from 17 Nov 16:19Z to 22:17Z were flagged 'no daily review since 2026-11-12'; checks after the 17 Nov run carry no flag. There are no daily-review runs on 13-16 Nov, so it is unclear whether a standing task existed then. The fix splits line 32 so the daily review is ticked (or moved to the ticked line 30) and the other parts stay unticked. Line 12 (Q003 counts) stays byte-identical. Related: Q028 follow-ups (docs/agent-system.md:46, data/janus/README.md quote the old state). Needs Ethan: confirm the daily review is a standing scheduled task.
+
+### Q032
+
+Janus quick checks intermittently cannot read the futures settlements clone, so they cannot check stops that hour,
+yet the record reads as a plain "no change".
+
+- data/janus/records.jsonl seq 601 (2026-11-19T07:17Z): result "no change; ... futures settlements clone failed (no stop changes possible)".
+- seq 602 (08:17Z): same text. seq 607 (13:23Z): "futures settlements not read (clone unavailable)".
+- Seq 600, 603-606 and 608 on the same day read the clone successfully. 9 records in total match
+  `clone (failed|unavailable)` (`grep -cE "clone (failed|unavailable)" data/janus/records.jsonl` = 9 on dev cab2edc;
+  earlier: seq 215, 219, 237, 272, 519, 595).
+- Neither the morning report nor the Janus status distinguishes these from an ordinary "no change" hour.
+
+The clone failure itself is in the session's clone step (environment, outside the repo); a code fix can only make the
+gap visible. Any change to Janus behaviour on failure is Ethan's (mandate C05), not this item.
