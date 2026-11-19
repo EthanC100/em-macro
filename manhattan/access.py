@@ -122,6 +122,41 @@ def _days(a: date, b: date):
         d += timedelta(days=1)
 
 
+_ALLOWED_READS: dict = {}
+_ALLOWED_READS_MAX = 4096
+
+
+def _allowed_role(caller: str, dw: DeclaredWindow, *, fence: roles.Fence, freeze: date | None, holding: int,
+                  token) -> str:
+    """``roles.check_read`` for one declared window, remembering allowed token-free reads (Manhattan phase 3).
+
+    ``check_read`` is a pure function of its arguments: it walks every day of the window (about 2 ms for an 8.8-year
+    window), which dominated registering and reconciling large batches of attempts on one window. Only an *allowed*
+    read without a token is remembered, keyed by the value of every argument (the fence by its content, the dates
+    with their types) and by the identity of ``check_read``, ``role_of`` and ``_busdays_between``, so a replaced
+    function is never bypassed. A refusal, a reserve read (token) or anything that cannot be keyed is decided anew
+    every time. The decision is unchanged; only its repetition is saved."""
+    def decide() -> str:
+        return roles.check_read(caller, dw.domain, dw.start, dw.end, fence, freeze=freeze, holding=holding,
+                                token=token, window_id=dw.id)
+    if token is not None or type(fence) is not roles.Fence:
+        return decide()
+    try:
+        key = (roles.check_read, roles.role_of, roles._busdays_between, caller, dw.domain, type(dw.start), dw.start,
+               type(dw.end), dw.end, _fence_key(fence), type(fence.exploration_end), type(freeze), freeze,
+               type(holding), holding, dw.id)
+        hash(key)
+    except (TypeError, ValueError, AttributeError):
+        return decide()
+    role = _ALLOWED_READS.get(key)
+    if role is None:
+        role = decide()
+        if len(_ALLOWED_READS) >= _ALLOWED_READS_MAX:
+            _ALLOWED_READS.clear()
+        _ALLOWED_READS[key] = role
+    return role
+
+
 def _role_now(kind: str, dw: DeclaredWindow, *, caller: str, fence: roles.Fence, freeze: date | None, holding: int,
               token: roles.RunnerToken | None) -> None:
     """Re-derive the role of one declared window from the fence; raise ``AccessError`` (or ``RoleError``)."""
@@ -140,8 +175,7 @@ def _role_now(kind: str, dw: DeclaredWindow, *, caller: str, fence: roles.Fence,
             if (freeze is None or d <= freeze) and _near_reserve(d, dw.domain, fence, holding):
                 raise AccessError("a forward observation window reaches reserve dates before the freeze")
         return
-    role = roles.check_read(caller, dw.domain, dw.start, dw.end, fence, freeze=freeze, holding=holding, token=token,
-                            window_id=dw.id)
+    role = _allowed_role(caller, dw, fence=fence, freeze=freeze, holding=holding, token=token)
     if role != dw.role:
         raise AccessError(f"declared role {dw.role} but the fence gives {role}")
 
