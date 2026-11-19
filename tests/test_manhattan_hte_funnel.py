@@ -274,8 +274,9 @@ def test_corrupted_result_file_is_refused(tmp_path, panel):
     raw = bytearray(f.read_bytes())
     raw[-3] ^= 0x10
     f.write_bytes(bytes(raw))
-    with pytest.raises(store.CorruptFile):
-        reconcile(ws, out["run_id"])
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "corrupted"
+    assert {v["code"] for v in rec["violations"]} >= {"attempt_file_corrupt"}
     with pytest.raises(store.CorruptFile):
         Runner(ws, panel, Policy()).run(verify_rerun=True)
 
@@ -675,3 +676,89 @@ def test_f2_a_forked_child_never_holds_the_workspace_lock(tmp_path):
             pass
     finally:
         os.kill(child, signal.SIGKILL)
+
+
+
+# -- S10 review, F3: reconciliation against the close record -------------------------------------------------------
+
+def test_f3_rewritten_results_file_is_detected_even_with_an_anchor(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    anchor = AttemptLog(ws.log_path).head()
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "closed" and rec["violations"] == []
+    f = ws.run_dir(out["run_id"]) / "results.bin"
+    good = f.read_bytes()
+    t = store.bytes_to_arrays(good)
+    t["stats3"][:, 0] += 0.001                          # the S10 counterexample: a valid file, inflated means
+    f.write_bytes(store.arrays_to_bytes(t))
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "corrupted"
+    assert "results_tampered" in {v["code"] for v in rec["violations"]}
+    f.unlink()
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "corrupted" and "results_missing" in {v["code"] for v in rec["violations"]}
+    f.write_bytes(good)
+    assert reconcile(ws, out["run_id"], anchor)["state"] == "closed"
+
+
+def test_f3_a_tampered_package_is_detected(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    p = next((ws.run_dir(out["run_id"]) / "packages").glob("*.json"))
+    p.write_text(p.read_text().replace('"confirmatory": false', '"confirmatory": true'))
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "corrupted" and "package_tampered" in {v["code"] for v in rec["violations"]}
+
+
+def test_f3_results_rebuild_from_attempt_files(tmp_path, panel):
+    """The close hash is checked against a rebuild from the hash-verified attempt files, so swapping both the
+    results file and the close record's view of it is caught by the rebuild (and the log anchor)."""
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    rec = reconcile(ws, out["run_id"])
+    assert rec["final_status"]["s3"]["not_run"] == 0 and rec["state"] == "closed"
+
+
+def test_f3_incomplete_runs_are_not_read_as_results(tmp_path, panel):
+    p = _sub(tmp_path, "exit_after_start:10")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    run_id = AttemptLog(ws.log_path).of_type("run_started")[-1]["payload"]["run_id"]
+    (ws.run_dir(run_id) / "results.bin").write_bytes(b"not of record")
+    rec = reconcile(ws, run_id)
+    assert rec["state"] == "incomplete" and rec["unrecorded_results_file"] is True and rec["final_status"] is None
+
+
+# -- S10 review, F4: concurrent registry changes and failure accounting ---------------------------------------------
+
+def test_f4_runner_built_before_another_writer_registers_completes(tmp_path, panel, baseline):
+    ws = _ws(tmp_path)
+    run = Runner(ws, panel, Policy(), chunk_size=32)                    # built first ...
+    fam = R.family("later", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    ws.registry().submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                           "vol_halflife": [20],
+                                                                           "rebalance": [1]}))])
+    out = run.run()                                                     # ... run after another writer registered
+    assert out["result_root"] == baseline[1]["result_root"]
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "closed" and rec["violations"] == [] and rec["failed_invocations"] == []
+
+
+def test_f4_a_failure_in_any_phase_is_recorded(tmp_path, panel, monkeypatch):
+    from manhattan.hte import package as PK
+    ws = _ws(tmp_path)
+
+    def boom(*a, **k):
+        raise KeyError("injected stage-4 failure")
+
+    monkeypatch.setattr(PK, "build", boom)
+    with pytest.raises(KeyError):
+        Runner(ws, panel, Policy(), chunk_size=40).run()
+    failed = AttemptLog(ws.log_path).of_type("run_failed")
+    assert len(failed) == 1 and failed[0]["payload"]["phase"] == "stage4"
+    assert failed[0]["payload"]["error_class"] == "KeyError"
+    run_id = failed[0]["payload"]["run_id"]
+    rec = reconcile(ws, run_id)
+    assert rec["state"] == "incomplete" and rec["failed_invocations"][0]["phase"] == "stage4"
+    monkeypatch.undo()
+    out = Runner(ws, panel, Policy(), chunk_size=40).run()              # the next invocation closes the run
+    assert out["run_id"] == run_id and reconcile(ws, run_id)["state"] == "closed"

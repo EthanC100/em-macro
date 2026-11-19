@@ -367,6 +367,7 @@ class Runner:
         fos, self.families = self.view.family_of_spec()
         self.fam_of_spec = fos
         self.timings: dict[str, float] = {}
+        self._phase = "init"
         self.worker_cache: dict[str, float] = {}
         self._starts_this_invocation = 0
         self._files_this_invocation = 0
@@ -411,13 +412,40 @@ class Runner:
             with locked(self.log.path):
                 recover_torn_tail(self.log.path)
                 self.log.refresh()                      # records written by any other writer since __init__
-                return self._run(verify_rerun=verify_rerun)
+                self._snapshot()
+                self._phase = "start"
+                try:
+                    return self._run(verify_rerun=verify_rerun)
+                except BaseException as e:
+                    # every failed invocation is recorded (S10 F4); an injected hard exit never reaches here
+                    try:
+                        self.log.append("run_failed", {"run_id": self.run_id, "phase": self._phase,
+                                                       "error_class": type(e).__name__})
+                    except Exception:
+                        pass
+                    raise
         except LogError as e:
             if "another writer" in str(e):
                 raise RunError("another runner holds this workspace") from None
             raise
 
     BYTES_PER_CANDIDATE = 2048       # preflight: about 3x the measured ~0.6 KB per candidate (BENCHMARKS.md)
+
+    def _snapshot(self) -> None:
+        """Consistent registry snapshot (S10 F4): under the workspace lock, reload the registry from the log so
+        that the registry, the log and the run agree for the whole invocation (the lock keeps other writers out
+        until it ends). The run stays bound to its frozen root: an append-only registry cannot change it, and a
+        frozen version that no longer reproduces is refused."""
+        self.reg.records, self.reg.spec_hashes, self.reg.segments = {}, [], []
+        self.reg._load()
+        view = self.reg.frozen(root=self.view.root)
+        if not (np.array_equal(view.cand, self.view.cand) and np.array_equal(view.spec_index, self.view.spec_index)):
+            raise RunError("the run's frozen registry version changed on disk")
+        self.view = view
+        fos, fams = self.view.family_of_spec()
+        if fams != self.families:
+            raise RunError("the run's families changed on disk")
+        self.fam_of_spec = fos
 
     def _run(self, *, verify_rerun: bool) -> dict:
         t0 = time.perf_counter()
@@ -438,9 +466,11 @@ class Runner:
             self.log.append("run_refused", {"run_id": self.run_id, "reason": "insufficient_disk",
                                             "need_bytes": need, "free_bytes": free})
             raise RunError(f"preflight: about {need} bytes needed, {free} free")
+        self._phase = "warm"
         self._warm()
         self.timings["warm_s"] = time.perf_counter() - t0
         t1 = time.perf_counter()
+        self._phase = "pass_A"
         self._pass("A", verify=verify_rerun)
         self.timings["pass_A_s"] = time.perf_counter() - t1
         incomplete = self._uncovered("A")
@@ -451,9 +481,11 @@ class Runner:
                 return self._verified(closed[-1]["payload"])
             return self._close(stage3=False)
         t2 = time.perf_counter()
+        self._phase = "selection"
         self._select()
         self.timings["selection_s"] = time.perf_counter() - t2
         t3 = time.perf_counter()
+        self._phase = "pass_B"
         self._pass("B", verify=verify_rerun)
         self.timings["pass_B_s"] = time.perf_counter() - t3
         incomplete = self._uncovered("B")
@@ -696,25 +728,7 @@ class Runner:
 
     # loading results of record ----------------------------------------------------------------------------
     def _load_pass(self, pas: str, restrict: tuple | None = None) -> dict:
-        parts = []
-        for p in sorted(self._completed(pas), key=lambda p: p["lo"]):
-            if restrict and not (p["lo"] < restrict[1] and restrict[0] < p["hi"]):
-                continue
-            a = store.read_arrays(self.dir / p["file"], p["sha256"])
-            a["_lo"] = p["lo"]
-            parts.append(a)
-        if not parts:
-            raise RunError(f"no results for pass {pas}")
-        keys = [k for k in parts[0] if not k.startswith("spa_") and k != "_lo"]
-        out = {k: np.concatenate([a[k] for a in parts]) for k in keys}
-        if restrict:
-            pos = np.concatenate([np.arange(a["_lo"], a["_lo"] + a[keys[0]].shape[0]) for a in parts])
-            sel = (pos >= restrict[0]) & (pos < restrict[1])
-            out = {k: v[sel] for k, v in out.items()}
-        if pas == "B":
-            out["_spa"] = [(int(f), float(T), m[0], m[1], m[2], int(c)) for a in parts
-                           for f, T, m, c in zip(a["spa_family"], a["spa_T"], a["spa_max"], a["spa_n"])]
-        return out
+        return load_pass(self.dir, self._completed(pas), pas, restrict)
 
     # selection --------------------------------------------------------------------------------------------
     def _selection_record(self) -> dict:
@@ -806,36 +820,12 @@ class Runner:
 
     # closing ----------------------------------------------------------------------------------------------
     def results_table(self, stage3: bool) -> dict:
-        A = self._load_pass("A")
-        N = len(self.view)
-        table = {"s1": A["s1"], "s2": A["s2"], "reason1": A["reason"], "stats2": A["stats2"],
-                 "fingerprint": A["fingerprint"]}
-        if stage3:
-            sel = self._selection()
-            B = self._load_pass("B")
-            s3 = sel["planned"].copy()
-            stats3 = np.full((N, len(kernels.S3_COLS)), np.nan)
-            h3 = np.zeros((N, 32), np.uint8)
-            r3 = np.zeros(N, np.uint8)
-            s3[B["idx"]] = B["s3"]
-            stats3[B["idx"]] = B["stats3"]
-            h3[B["idx"]] = B["series_sha256"]
-            r3[B["idx"]] = B["reason"]
-            al = sel["alias_of"] >= 0
-            src = sel["alias_of"][al]
-            copy = s3[src] == S3["computed"]
-            ai = np.flatnonzero(al)[copy]
-            stats3[ai] = stats3[sel["alias_of"][ai]]
-            h3[ai] = h3[sel["alias_of"][ai]]
-            # an alias whose representative failed in stage 3 fails with it
-            fi = np.flatnonzero(al)[s3[src] == S3["failed"]]
-            s3[fi] = S3["skipped_failed_upstream"]
-            table.update({"s3": s3, "reason3": r3, "stats3": stats3, "series_sha256": h3,
-                          "alias_of": sel["alias_of"], "cross_family_behaviour": sel["cross_family_behaviour"]})
-        return table
+        return build_results_table(self._load_pass("A"), self._load_pass("B") if stage3 else None,
+                                   self._selection() if stage3 else None, len(self.view))
 
     def _close(self, stage3: bool) -> dict:
         from . import package as PK
+        self._phase = "close"
         t0 = time.perf_counter()
         table = self.results_table(stage3)
         raw = store.arrays_to_bytes(table)
@@ -846,7 +836,9 @@ class Runner:
             spa = self._load_pass("B")["_spa"]
         pk = {}
         if 4 in self.stages:
+            self._phase = "stage4"
             pk = PK.build(self, table, spa)
+            self._phase = "close"
         self.timings["stage4_s"] = time.perf_counter() - t0
         rec = reconcile(self.ws, self.run_id)
         payload = {"run_id": self.run_id, "results_file": "results.bin", "results_sha256": sha,
@@ -858,12 +850,75 @@ class Runner:
         return dict(payload, reused=False, timings=self.timings, cache=cache)
 
 
+# -- results of record: one implementation for the runner and the auditor ------------------------------------
+
+def load_pass(run_dir: Path, completed: list, pas: str, restrict: tuple | None = None) -> dict:
+    """Concatenate the hash-verified files of the completed (non-verification) attempts of one pass."""
+    parts = []
+    for p in sorted(completed, key=lambda p: p["lo"]):
+        if restrict and not (p["lo"] < restrict[1] and restrict[0] < p["hi"]):
+            continue
+        a = store.read_arrays(Path(run_dir) / p["file"], p["sha256"])
+        a["_lo"] = p["lo"]
+        parts.append(a)
+    if not parts:
+        raise RunError(f"no results for pass {pas}")
+    keys = [k for k in parts[0] if not k.startswith("spa_") and k != "_lo"]
+    out = {k: np.concatenate([a[k] for a in parts]) for k in keys}
+    if restrict:
+        pos = np.concatenate([np.arange(a["_lo"], a["_lo"] + a[keys[0]].shape[0]) for a in parts])
+        sel = (pos >= restrict[0]) & (pos < restrict[1])
+        out = {k: v[sel] for k, v in out.items()}
+    if pas == "B":
+        out["_spa"] = [(int(f), float(T), m[0], m[1], m[2], int(c)) for a in parts
+                       for f, T, m, c in zip(a["spa_family"], a["spa_T"], a["spa_max"], a["spa_n"])]
+    return out
+
+
+def build_results_table(A: dict, B: dict | None, sel: dict | None, N: int) -> dict:
+    """The canonical per-candidate table: a pure function of the pass-A files, the selection and the pass-B
+    files of record. ``results.bin`` is exactly these bytes, which lets ``reconcile`` rebuild and compare it."""
+    table = {"s1": A["s1"], "s2": A["s2"], "reason1": A["reason"], "stats2": A["stats2"],
+             "fingerprint": A["fingerprint"]}
+    if B is not None:
+        s3 = sel["planned"].copy()
+        stats3 = np.full((N, len(kernels.S3_COLS)), np.nan)
+        h3 = np.zeros((N, 32), np.uint8)
+        r3 = np.zeros(N, np.uint8)
+        s3[B["idx"]] = B["s3"]
+        stats3[B["idx"]] = B["stats3"]
+        h3[B["idx"]] = B["series_sha256"]
+        r3[B["idx"]] = B["reason"]
+        al = sel["alias_of"] >= 0
+        src = sel["alias_of"][al]
+        copy = s3[src] == S3["computed"]
+        ai = np.flatnonzero(al)[copy]
+        stats3[ai] = stats3[sel["alias_of"][ai]]
+        h3[ai] = h3[sel["alias_of"][ai]]
+        # an alias whose representative failed in stage 3 fails with it
+        fi = np.flatnonzero(al)[s3[src] == S3["failed"]]
+        s3[fi] = S3["skipped_failed_upstream"]
+        table.update({"s3": s3, "reason3": r3, "stats3": stats3, "series_sha256": h3,
+                      "alias_of": sel["alias_of"], "cross_family_behaviour": sel["cross_family_behaviour"]})
+    return table
+
+
 # -- reconciliation (reads persisted records only) ----------------------------------------------------------
+
+INTEGRITY_CODES = frozenset({"results_missing", "results_tampered", "close_record_inconsistent",
+                             "results_not_reproducible_from_attempts", "attempt_files_unreadable",
+                             "attempt_file_corrupt", "package_tampered", "package_missing"})
+
 
 def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
     """Audit one run from the log and the files it names. Every registered candidate must have exactly one
     completed (non-verification) attempt per executed pass; every attempt must have exactly one terminal.
-    Returns counts and violations; never certifies access completeness (``access_reconciled`` is False)."""
+
+    ``state`` is ``closed`` (a close record exists and every artifact matches it), ``corrupted`` (a close record
+    exists but the results file, a package or an attempt file does not match its recorded hash, or the results
+    do not rebuild from the attempt files), or ``incomplete`` (no close record; any results file present is not
+    of record and is reported as ``unrecorded_results_file``). Returns counts and violations; never certifies
+    access completeness (``access_reconciled`` is False)."""
     from .log import verify
     verify(ws.log_path, anchor)
     log = AttemptLog(ws.log_path)
@@ -916,7 +971,11 @@ def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
             size = int(store.read_arrays(ws.run_dir(run_id) / sel[-1]["file"], sel[-1]["sha256"])["selected"].size)
         cov = np.zeros(size, np.int64)
         for p in comp:
-            store.read_verified(ws.run_dir(run_id) / p["file"], p["sha256"])
+            try:
+                store.read_verified(ws.run_dir(run_id) / p["file"], p["sha256"])
+            except (OSError, store.CorruptFile) as e:
+                violations.append({"code": "attempt_file_corrupt", "pass": pas, "file": p["file"],
+                                   "error_class": type(e).__name__})
             cov[p["lo"]:p["hi"]] += 1
         if (cov > 1).any():
             violations.append({"code": "double_coverage", "pass": pas, "n": int((cov > 1).sum())})
@@ -928,12 +987,45 @@ def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
             attempts_per[p["lo"]:p["hi"]] += 1
     closed = [r for r in recs if r["type"] == "run_closed"]
     final = None
-    if closed or (ws.run_dir(run_id) / "results.bin").exists():
+    state = "incomplete"
+    rdir = ws.run_dir(run_id)
+    if closed:
+        # the close record is the authority: the results file must carry the recorded hash, and the table rebuilt
+        # from the hash-verified attempt files must reproduce it bit for bit (S10 F3)
+        state = "closed"
+        cp = closed[0]["payload"]
+        raw = None
         try:
-            t = store.bytes_to_arrays((ws.run_dir(run_id) / "results.bin").read_bytes())
-            final = {"s1": {k: int((t["s1"] == v).sum()) for k, v in S1.items()}}
-            if "s3" in t:
-                final["s3"] = {k: int((t["s3"] == v).sum()) for k, v in S3.items()}
+            raw = (rdir / cp["results_file"]).read_bytes()
+        except OSError:
+            violations.append({"code": "results_missing"})
+        if raw is not None and ids.sha256_bytes(raw) != cp["results_sha256"]:
+            violations.append({"code": "results_tampered", "file": cp["results_file"]})
+        if cp["results_sha256"] != cp["result_root"]:
+            violations.append({"code": "close_record_inconsistent"})
+        try:
+            comp = {pas: [r["payload"] for r in recs if r["type"] == "attempt_completed"
+                          and r["payload"]["pass"] == pas
+                          and not starts.get(r["payload"]["attempt_id"], {}).get("verification")]
+                    for pas in ("A", "B")}
+            selr = [r["payload"] for r in recs if r["type"] == "selection"]
+            sel = store.read_arrays(rdir / selr[-1]["file"], selr[-1]["sha256"]) if selr and comp["B"] else None
+            table = build_results_table(load_pass(rdir, comp["A"], "A"),
+                                        load_pass(rdir, comp["B"], "B") if comp["B"] else None, sel, N)
+            if ids.sha256_bytes(store.arrays_to_bytes(table)) != cp["result_root"]:
+                violations.append({"code": "results_not_reproducible_from_attempts"})
+            final = {"s1": {k: int((table["s1"] == v).sum()) for k, v in S1.items()}}
+            if "s3" in table:
+                final["s3"] = {k: int((table["s3"] == v).sum()) for k, v in S3.items()}
+        except Exception as e:
+            violations.append({"code": "attempt_files_unreadable", "error_class": type(e).__name__})
+        for name, h in cp.get("packages", {}).items():
+            try:
+                if ids.sha256_bytes((rdir / "packages" / name).read_bytes()) != h:
+                    violations.append({"code": "package_tampered", "file": name})
+            except OSError:
+                violations.append({"code": "package_missing", "file": name})
+        if final:
             for st, codes in final.items():
                 if sum(codes.values()) != N:
                     violations.append({"code": "status_total_mismatch", "stage": st})
@@ -941,12 +1033,19 @@ def reconcile(ws: Workspace, run_id: str, anchor: dict | None = None) -> dict:
                 violations.append({"code": "candidate_without_stage1_status", "n": final["s1"]["not_run"]})
             if "s3" in final and final["s3"]["not_run"]:
                 violations.append({"code": "candidate_without_stage3_status", "n": final["s3"]["not_run"]})
-        except Exception as e:                           # a damaged results file is a violation, not a crash
-            violations.append({"code": "results_unreadable", "error_class": type(e).__name__})
+        if any(v["code"] in INTEGRITY_CODES for v in violations):
+            state = "corrupted"
+    elif any(r["type"] == "run_incomplete" for r in recs) or unfinished or by["failed"]:
+        state = "incomplete"
+    failed_inv = [{"seq": r["seq"], "phase": r["payload"]["phase"], "error_class": r["payload"]["error_class"]}
+                  for r in recs if r["type"] == "run_failed"]
+    unrecorded = (not closed) and (rdir / "results.bin").exists()
     return {"run_id": run_id, "registered": {"candidates": N, **view.payload["counts"]},
             "invocations": len(started), "attempts": {"started": len(starts), **by},
             "attempts_per_candidate_max": int(attempts_per.max()) if N else 0,
-            "passes": passes, "final_status": final, "violations": violations,
+            "passes": passes, "final_status": final, "violations": violations, "state": state,
+            "failed_invocations": failed_inv,
+            "unrecorded_results_file": unrecorded,
             "access_reconciled": False, "independent_statistical_tests": None}
 
 
