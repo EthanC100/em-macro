@@ -260,5 +260,6 @@ def test_pr86_interrupted_attempt_resumes_only_under_its_own_engine_and_environm
     book.end_attempt(stale, status="aborted", reason="interrupted", data_read=False)
     assert _complete(book, b, _start(book, b), "r" * 64)["type"] == "evaluation"
     assert len(book.records("evaluation_started")) == 4 and len(book.records("attempt_aborted")) == 1
-    assert book.unfinished() == [] and book.looks() == 2
+    # PR #86 keeps the superseded original visible as unfinished (ATTEMPT_ACCOUNTING.md): nothing is hidden
+    assert [r["hash"] for r in book.unfinished()] == [first] and book.looks() == 2
     assert L.verify(book.path) == []
