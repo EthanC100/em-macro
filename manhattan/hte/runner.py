@@ -339,7 +339,8 @@ def run_identity(view, data_hash: str, policy: Policy, fence: int, code: dict, p
                  stages: tuple = (1, 2, 3, 4)) -> dict:
     return {"registry_root": view.root, "data_hash": data_hash, "engine_sha256": code["engine_sha256"],
             "policy_hash": policy.hash(), "warmup": policy.warmup, "fence": fence, "methodology": METHODOLOGY,
-            "pass_a": pass_a, "stages": list(stages), "execution": kernels.EXECUTION_TIMING}
+            "pass_a": pass_a, "stages": list(stages), "execution": kernels.EXECUTION_TIMING,
+            "numeric_environment_sha256": code["numeric_environment_sha256"]}
 
 
 def boot_seed(family_hash: str, data_hash: str, policy: Policy, fence: int) -> int:
@@ -369,9 +370,15 @@ def _family_counts(ctx: dict, family_hash: str) -> np.ndarray:
 class Runner:
     def __init__(self, ws: Workspace, panel, policy: Policy = Policy(), *, chunk_size: int = 256,
                  workers: int = 1, cache_enabled: bool = True, disk_cache: bool = True,
-                 stages: tuple = (1, 2, 3, 4), registry_root: str | None = None):
+                 stages: tuple = (1, 2, 3, 4), registry_root: str | None = None,
+                 allow_new_environment: bool = False):
         """``registry_root`` binds the run to one frozen registry version (default: the latest). Pass the root
-        of an interrupted run to resume it after a newer freeze."""
+        of an interrupted run to resume it after a newer freeze.
+
+        ``allow_new_environment``: the numerical environment is part of the run identity (S10 F9). If an
+        unfinished run of the same candidates, data, code and policy exists under another environment, this run is
+        refused (resume it where it started) unless the caller explicitly starts a separate run here, which is
+        logged as ``environment_changed``."""
         if chunk_size < 1 or workers < 1:
             raise ValueError("chunk_size and workers must be positive")
         if 5 in stages:
@@ -391,6 +398,7 @@ class Runner:
         self.pass_a = "stage1_only" if self.stages == (1,) else "stages_1_2"
         self.ident = run_identity(self.view, self.data_hash, policy, panel.fence, self.code, self.pass_a,
                                   self.stages)
+        self.allow_new_environment = allow_new_environment
         self.run_hash = ids.full_hash(self.ident)
         self.run_id = "HR-" + self.run_hash[:16]
         self.dir = ws.run_dir(self.run_id)
@@ -479,8 +487,29 @@ class Runner:
             raise RunError("the run's families changed on disk")
         self.fam_of_spec = fos
 
+    def _check_environment(self) -> None:
+        """Refuse to start a run that would continue, under another numerical environment, an unfinished run of the
+        same candidates, data, code, policy and stages (S10 F9)."""
+        key = {k: v for k, v in self.ident.items() if k != "numeric_environment_sha256"}
+        closed = {r["payload"]["run_id"] for r in self.log.of_type("run_closed")}
+        others = sorted({r["payload"]["run_id"] for r in self.log.of_type("run_started")
+                         if r["payload"]["run_id"] != self.run_id and r["payload"]["run_id"] not in closed
+                         and {k: v for k, v in r["payload"]["identity"].items()
+                              if k != "numeric_environment_sha256"} == key})
+        if not others:
+            return
+        if not self.allow_new_environment:
+            self.log.append("environment_mismatch_refused", {"run_id": self.run_id, "unfinished_runs": others,
+                                                             "numeric_environment": self.code["numeric_environment"]})
+            raise RunError(f"unfinished run(s) {others} of these candidates exist under another numerical "
+                           "environment: resume there, or pass allow_new_environment=True for a separate run")
+        if not any(r["payload"]["run_id"] == self.run_id for r in self.log.of_type("environment_changed")):
+            self.log.append("environment_changed", {"run_id": self.run_id, "unfinished_runs": others,
+                                                    "numeric_environment": self.code["numeric_environment"]})
+
     def _run(self, *, verify_rerun: bool) -> dict:
         t0 = time.perf_counter()
+        self._check_environment()
         closed = self._recs("run_closed")
         invocation = len(self._recs("run_started")) + 1
         self.log.append("run_started", {"run_id": self.run_id, "identity": self.ident, "invocation": invocation,

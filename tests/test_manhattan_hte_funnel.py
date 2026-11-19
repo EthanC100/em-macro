@@ -946,3 +946,39 @@ def test_f8_pr85_boundary_is_disabled():
         adapters.to_pr85_decisions()
     src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
     assert "import manhattan.execution" not in src and "from manhattan.execution" not in src
+
+
+# -- S10 review, F9: numerical environment identity ------------------------------------------------------------------
+
+def test_f9_environment_is_recorded_in_every_run_identity(baseline):
+    ws, out = baseline
+    rec = AttemptLog(ws.log_path).of_type("run_started")[0]["payload"]
+    env = rec["code"]["numeric_environment"]
+    assert env["numpy"] == np.__version__ and env["blas"]["name"] and "runtime_core" in env["blas"]
+    assert rec["identity"]["numeric_environment_sha256"] == ids.full_hash(env)
+
+
+def test_f9_an_interrupted_run_cannot_resume_under_another_environment(tmp_path, panel, baseline, monkeypatch):
+    p = _sub(tmp_path, "exit_after_start:3")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    old_run = AttemptLog(ws.log_path).of_type("run_started")[-1]["payload"]["run_id"]
+    real = ids.numeric_environment
+
+    def other_blas():
+        env = real()
+        env["blas"] = dict(env["blas"], runtime_core="SomeOtherCore", version="0.0.0")
+        return env
+
+    monkeypatch.setattr(ids, "numeric_environment", other_blas)
+    r = Runner(ws, panel, Policy(), chunk_size=16)
+    assert r.run_id != old_run                                          # another environment, another identity
+    with pytest.raises(RN.RunError, match="another numerical environment"):
+        r.run()
+    assert "environment_mismatch_refused" in _types(ws)
+    out = Runner(ws, panel, Policy(), chunk_size=16, allow_new_environment=True).run()
+    assert out["run_id"] != old_run and "environment_changed" in _types(ws)
+    assert reconcile(ws, old_run)["state"] == "incomplete"              # the old run is never mixed or "completed"
+    monkeypatch.undo()
+    resumed = Runner(ws, panel, Policy(), chunk_size=40).run()          # back in its own environment it resumes
+    assert resumed["run_id"] == old_run and resumed["result_root"] == baseline[1]["result_root"]

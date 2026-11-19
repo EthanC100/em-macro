@@ -76,6 +76,50 @@ def merkle_root_array(digests: np.ndarray) -> str:
     return level[0].hex()
 
 
+def numeric_environment() -> dict:
+    """The numerical environment results depend on (S10 F9): NumPy and Python versions, the BLAS library (name,
+    version, build configuration and, for DYNAMIC_ARCH builds, the kernel chosen at run time), NumPy's SIMD
+    dispatch targets and the machine type. Two runs whose environments differ can differ in the last bits (BLAS
+    kernels, SIMD transcendental functions), so the environment is part of every run identity."""
+    env: dict = {"numpy": np.__version__, "python": platform.python_version(), "machine": platform.machine()}
+    try:
+        cfg = np.show_config(mode="dicts")
+        b = cfg.get("Build Dependencies", {}).get("blas", {})
+        env["blas"] = {"name": b.get("name"), "version": b.get("version"),
+                       "build": b.get("openblas configuration")}
+        env["simd"] = sorted(cfg.get("SIMD Extensions", {}).get("found", []) or [])
+    except Exception:
+        env["blas"] = {"name": "unknown"}
+        env["simd"] = []
+    env["blas"]["runtime_core"] = _openblas_core()
+    return env
+
+
+def _openblas_core() -> str:
+    import ctypes
+    np.dot(np.ones(2), np.ones(2))                 # make sure the BLAS library is loaded
+    try:
+        libs = sorted({ln.split()[-1] for ln in open("/proc/self/maps")
+                       if "openblas" in ln.lower() and ln.split()[-1].endswith(".so")})
+    except OSError:
+        return "unknown"
+    for path in libs:
+        try:
+            lib = ctypes.CDLL(path)
+        except OSError:
+            continue
+        for name in ("scipy_openblas_get_corename64_", "scipy_openblas_get_corename", "openblas_get_corename64_",
+                     "openblas_get_corename"):
+            f = getattr(lib, name, None)
+            if f is not None:
+                f.restype = ctypes.c_char_p
+                try:
+                    return f().decode()
+                except Exception:
+                    return "unknown"
+    return "unknown"
+
+
 def code_identity(root: Path = ROOT) -> dict:
     """The code that evaluates: SHA-256 of every ``manhattan/hte/*.py`` and of ``DEPENDENCIES`` (path and bytes,
     sorted), the numeric stack, and the git commit when it is known. ``engine_sha256`` alone decides whether two runs used the same
@@ -90,11 +134,14 @@ def code_identity(root: Path = ROOT) -> dict:
                                 timeout=10).stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
         commit = None
+    env = numeric_environment()
     return {
         "engine_sha256": h.hexdigest(),
         "commit": commit,
         "numpy": np.__version__,
         "python": platform.python_version(),
+        "numeric_environment": env,
+        "numeric_environment_sha256": full_hash(env),
     }
 
 
