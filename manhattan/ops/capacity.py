@@ -83,7 +83,7 @@ _PIT = None
 def _init():
     global _PIT
     from manhattan.engine.pit import PitStore
-    st = PitStore()
+    st = PitStore(synthetic=True)      # an operational diagnostic: never evidence (pit.diagnostic_window)
     by = {}
     for s, p, v in D.synthetic_rows(date(2019, 12, 31)):
         by.setdefault(s, ([], []))
@@ -97,15 +97,16 @@ def _init():
 def _work(args):
     mode, idx = args
     from manhattan.engine import backtest
+    from manhattan.engine.pit import diagnostic_window
     out = 0
     for x in _slice(*idx):
         if mode == "full":
-            w = D.forward_window(_PIT, "syn_daily", *FULL)
+            w = diagnostic_window(_PIT, *FULL, role="forward", domain="syn_daily")
             res = backtest.run(w, x.strategy())
             out += len(res.result_hash())
         else:
             start = FORWARD_START - timedelta(days=x.warmup_days)
-            w = D.forward_window(_PIT, "syn_daily", start, FORWARD_START + timedelta(days=1))
+            w = diagnostic_window(_PIT, start, FORWARD_START + timedelta(days=1), role="forward", domain="syn_daily")
             res = backtest.run(w, x.strategy())
             i = res.dates.size - 1
             payload = {"executable": x.id, "date": str(res.dates[i]), "net": round(float(res.net[i]), 12),
@@ -152,7 +153,8 @@ def measure_ledger(n: int) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         remote = Path(tmp) / "ledger.git"
         subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
-        intents = [ST.Intent("observation", ("observation", f"AP-{i:016x}", "2026-11-16"),
+        # a diagnostic record of an observation's size; evidence types are written through manhattan.access only
+        intents = [ST.Intent("capacity_probe", ("capacity_probe", f"AP-{i:016x}", "2026-11-16"),
                              {"net": round(float(rng.normal(0, 0.01)), 12),
                               "exposure": [round(float(e), 12) for e in rng.normal(0, 0.2, 6)], "evidential_weight": 1})
                    for i in range(n)]

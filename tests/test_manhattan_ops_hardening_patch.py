@@ -33,5 +33,6 @@ def test_owner_patch_keeps_schedule_and_permissions_unchanged(tmp_path):
 def test_lock_has_only_exact_versions_and_wheel_hashes():
     lines = [s for s in (ROOT / "requirements-manhattan-runner.lock").read_text().splitlines()
              if s and not s.startswith("#")]
-    assert len(lines) == 6
+    assert len(lines) == 7                  # six runner dependencies and PyYAML, hash-pinned (owner decision D-12)
     assert all(re.fullmatch(r"[a-z0-9-]+==[0-9.]+ --hash=sha256:[a-f0-9]{64}", s) for s in lines)
+    assert "pyyaml==6.0.3 --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc" in lines

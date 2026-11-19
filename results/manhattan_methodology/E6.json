@@ -1,0 +1,136 @@
+{
+ "experiment": "E6",
+ "quick": false,
+ "seconds": 137.8,
+ "environment": {
+  "commit": "3f56acdcc77576b829acd74311b115bb86f0bd21",
+  "manhattan_tree_dirty": false,
+  "python": "3.13.18",
+  "numpy": "2.5.3",
+  "machine": "x86_64",
+  "master_seed": 20261119
+ },
+ "registration_after_look|pi1=0.0": {
+  "K_mined": 1000,
+  "r_registered": 50,
+  "reps": 400,
+  "pi1": 0.0,
+  "fdr_same_window": 1.0,
+  "p_any_false_same_window": 1.0,
+  "fdr_fresh_window": 0.2,
+  "p_any_false_fresh_window": 0.2,
+  "mean_true_portfolio_sharpe_of_registered": 0.0,
+  "mean_estimate_on_selection_window": 0.7935438789150416,
+  "mean_estimate_on_fresh_window": 0.002420138212622933
+ },
+ "registration_after_look|pi1=0.05": {
+  "K_mined": 1000,
+  "r_registered": 50,
+  "reps": 400,
+  "pi1": 0.05,
+  "fdr_same_window": 0.47572959183673474,
+  "p_any_false_same_window": 1.0,
+  "fdr_fresh_window": 0.09538329370594642,
+  "p_any_false_fresh_window": 0.885,
+  "mean_true_portfolio_sharpe_of_registered": 0.550970013621331,
+  "mean_estimate_on_selection_window": 1.0801557834966191,
+  "mean_estimate_on_fresh_window": 0.5505483013500924
+ },
+ "rerun_shopping_oracle": [
+  {
+   "rerun_corr": 0.5,
+   "k=1": {
+    "size_0.05": 0.04962,
+    "size_0.2": 0.19745
+   },
+   "k=2": {
+    "size_0.05": 0.08209,
+    "size_0.2": 0.29053
+   },
+   "k=5": {
+    "size_0.05": 0.15987,
+    "size_0.2": 0.47483
+   },
+   "k=10": {
+    "size_0.05": 0.25066,
+    "size_0.2": 0.62712
+   },
+   "k=20": {
+    "size_0.05": 0.36245,
+    "size_0.2": 0.75425
+   }
+  },
+  {
+   "rerun_corr": 0.9,
+   "k=1": {
+    "size_0.05": 0.05034,
+    "size_0.2": 0.19975
+   },
+   "k=2": {
+    "size_0.05": 0.06516,
+    "size_0.2": 0.24109
+   },
+   "k=5": {
+    "size_0.05": 0.09472,
+    "size_0.2": 0.3144
+   },
+   "k=10": {
+    "size_0.05": 0.12219,
+    "size_0.2": 0.37105
+   },
+   "k=20": {
+    "size_0.05": 0.15016,
+    "size_0.2": 0.42271
+   }
+  },
+  {
+   "rerun_corr": 0.99,
+   "k=1": {
+    "size_0.05": 0.04942,
+    "size_0.2": 0.19976
+   },
+   "k=2": {
+    "size_0.05": 0.054,
+    "size_0.2": 0.21304
+   },
+   "k=5": {
+    "size_0.05": 0.06168,
+    "size_0.2": 0.23576
+   },
+   "k=10": {
+    "size_0.05": 0.06796,
+    "size_0.2": 0.25191
+   },
+   "k=20": {
+    "size_0.05": 0.07319,
+    "size_0.2": 0.26455
+   }
+  }
+ ],
+ "seed_shopping_spa": {
+  "families": 200,
+  "by_k": {
+   "1": {
+    "size_0.05": 0.05,
+    "size_0.2": 0.215
+   },
+   "2": {
+    "size_0.05": 0.05,
+    "size_0.2": 0.22
+   },
+   "5": {
+    "size_0.05": 0.05,
+    "size_0.2": 0.22
+   },
+   "10": {
+    "size_0.05": 0.05,
+    "size_0.2": 0.22
+   },
+   "20": {
+    "size_0.05": 0.055,
+    "size_0.2": 0.225
+   }
+  },
+  "mean_sd_of_p_c_across_seeds": 0.010138377397743379
+ }
+}
