@@ -108,8 +108,22 @@ def _fault(kind: str) -> int | None:
     return None
 
 
-def _positions_window(cache, d, policy, fence):
+def signed_positions(cache, d) -> np.ndarray:
+    """A template's positions in the direction its family predicts (S10 F5). Templates are written for the "+"
+    direction; a "-" family holds exactly the negated positions (negation is exact in floating point, so every
+    statistic of a "-" candidate is the bit-exact mirror of its "+" counterpart where the statistic is odd in the
+    positions). The only place positions enter an evaluation."""
     P = TP.positions(cache, d["template"], d["domain"], d["params"], d["sizing"])
+    sign = d.get("sign")
+    if sign == "-":
+        P = -P + 0.0                                  # + 0.0: no negative zeros in fingerprints
+    elif sign != "+":
+        raise RunError(f"family sign {sign!r} is not '+' or '-'")
+    return P
+
+
+def _positions_window(cache, d, policy, fence):
+    P = signed_positions(cache, d)
     R = cache.panel.returns(d["domain"])
     return kernels.align(P, R, policy.warmup, fence)
 

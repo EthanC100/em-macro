@@ -762,3 +762,44 @@ def test_f4_a_failure_in_any_phase_is_recorded(tmp_path, panel, monkeypatch):
     monkeypatch.undo()
     out = Runner(ws, panel, Policy(), chunk_size=40).run()              # the next invocation closes the run
     assert out["run_id"] == run_id and reconcile(ws, run_id)["state"] == "closed"
+
+
+# -- S10 review, F5: the family's predicted sign -------------------------------------------------------------------
+
+def _signed_pair():
+    g = X.small_grids()["trend"]
+    out = []
+    for name, sign in (("trend-up", "+"), ("trend-down", "-")):
+        f = R.family(name, "TEST: same rule, opposite predicted sign", sign, "dense")
+        h = R.hypothesis(f, "fx")
+        out.append(R.Bundle(f, h, R.strategy_spec(h, "trend", g, cost_models=("c1", "c2"))))
+    return out
+
+
+def test_f5_negative_sign_families_hold_the_opposite_position(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, bundles=_signed_pair(), chunk_size=64)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    r = Runner(ws, panel, Policy())
+    sign = np.array([r.reg.records[r.view.describe(i)["family_hash"]]["sign"] for i in range(len(r.view))])
+    up, down = np.flatnonzero(sign == "+"), np.flatnonzero(sign == "-")
+    assert up.size == down.size == 24
+    # canonical order sorts by spec hash, so pair candidates by their (identical) grid index
+    up = up[np.argsort(r.view.grid_index[up])]
+    down = down[np.argsort(r.view.grid_index[down])]
+    c = {k: i for i, k in enumerate(kernels.S2_COLS)}
+    s2u, s2d = t["stats2"][up], t["stats2"][down]
+    assert np.array_equal(s2d[:, c["gross_mean"]], -s2u[:, c["gross_mean"]])     # exact mirror (odd)
+    for k in ("holder_bound", "lin_cost", "turnover", "exposure", "active_frac"):  # even in the positions
+        assert np.array_equal(s2d[:, c[k]], s2u[:, c[k]]), k
+    assert not np.array_equal(s2d[:, c["net_mean"]], s2u[:, c["net_mean"]])
+    assert not np.any(np.all(t["fingerprint"][up] == t["fingerprint"][down], axis=1))
+
+
+def test_f5_planted_effect_is_found_only_in_the_predicted_direction(tmp_path):
+    planted = D.generate(D.PanelParams(seed=7, n_days=760, protected_days=100, planted=0.6))
+    ws, out = _run(tmp_path, planted, bundles=_signed_pair(), chunk_size=64)
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
+    assert pk["trend-up"]["family"]["sign"] == "+" and pk["trend-down"]["family"]["sign"] == "-"
+    assert pk["trend-up"]["spa"]["p_c"] < 0.05
+    assert pk["trend-down"]["spa"]["p_c"] > 0.5

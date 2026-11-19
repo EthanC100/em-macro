@@ -486,7 +486,8 @@ class FrozenView:
         hyp = self.reg.records[spec["hypothesis"]]
         return {"template": spec["template"], "domain": hyp["domain"], "params": params, "cost_model": cost,
                 "sizing": sizing, "spec_hash": self.reg.spec_hashes[int(self.spec_index[i])],
-                "hypothesis_hash": spec["hypothesis"], "family_hash": hyp["family"]}
+                "hypothesis_hash": spec["hypothesis"], "family_hash": hyp["family"],
+                "sign": self.reg.records[hyp["family"]]["sign"]}
 
     def canonical_config(self, i: int) -> dict:
         """The candidate's canonical serialised configuration; its full hash is the candidate's identity."""
