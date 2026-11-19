@@ -94,7 +94,7 @@ def synthetic_contracts(root: str, instrument_id: str, first_year: int, last_yea
     return out
 
 
-def _value(seed: int, *parts) -> float:
+def _synthetic_fraction(seed: int, *parts) -> float:
     """A deterministic number in [0, 1) from the parts (SHA-256; no RNG state, so order never matters)."""
     h = hashlib.sha256(json.dumps([seed, *map(str, parts)]).encode()).digest()
     return int.from_bytes(h[:8], "big") / 2 ** 64
@@ -107,8 +107,8 @@ def synthetic_price(seed: int, root: str, cid: str, d: date) -> float:
     t = (d - date(2000, 1, 3)).days
     _, y, m = parse_contract(cid)
     months_out = (y * 12 + m) - (d.year * 12 + d.month)
-    base = 50.0 + 10.0 * math.sin(t / 300.0 + _value(seed, root) * 6) + 0.15 * months_out
-    return round(base + 2.0 * (_value(seed, root, cid, d) - 0.5), 2)
+    base = 50.0 + 10.0 * math.sin(t / 300.0 + _synthetic_fraction(seed, root) * 6) + 0.15 * months_out
+    return round(base + 2.0 * (_synthetic_fraction(seed, root, cid, d) - 0.5), 2)
 
 
 # ---------------------------------------------------------------- synthetic Norgate-layout export
@@ -135,11 +135,11 @@ def synthetic_norgate_export(contracts: dict, asof: date, seed: int = 0, *, drop
             if (cid, d) in drop:
                 continue
             s = revise.get((cid, d), synthetic_price(seed, root, cid, d))
-            spread = round(0.2 + _value(seed, "rng", cid, d), 2)
-            o = round(s + 0.5 * (_value(seed, "o", cid, d) - 0.5), 2)
+            spread = round(0.2 + _synthetic_fraction(seed, "rng", cid, d), 2)
+            o = round(s + 0.5 * (_synthetic_fraction(seed, "o", cid, d) - 0.5), 2)
             hi, lo = round(max(o, s) + spread, 2), round(min(o, s) - spread, 2)
-            vol = int(1000 * _value(seed, "v", cid, d))
-            oi = int(5000 * _value(seed, "oi", cid, d))
+            vol = int(1000 * _synthetic_fraction(seed, "v", cid, d))
+            oi = int(5000 * _synthetic_fraction(seed, "oi", cid, d))
             w.writerow([d.isoformat(), f"{o:.2f}", f"{hi:.2f}", f"{lo:.2f}", f"{s:.2f}", vol, oi])
             n, first, last = n + 1, first or d, d
         rel = f"contracts/{market_of(cid)}/{cid}.csv"
@@ -208,8 +208,8 @@ def synthetic_databento_statistics(contracts: dict, inst: Instrument, start: dat
             for stat, flags, px, qty, recv in (
                     (3, 0, prelim, 0, close + prelim_delay),
                     (3, 1, final, 0, close + final_delay),
-                    (6, 1, 0, int(1000 * _value(seed, "v", cid, d)), close + final_delay),
-                    (9, 1, 0, int(5000 * _value(seed, "oi", cid, d)), close + final_delay)):
+                    (6, 1, 0, int(1000 * _synthetic_fraction(seed, "v", cid, d)), close + final_delay),
+                    (9, 1, 0, int(5000 * _synthetic_fraction(seed, "oi", cid, d)), close + final_delay)):
                 rows.append([_ns(recv), _ns(recv) - 1000, 24, 1, 1000 + len(symbol_map), ref,
                              int(round(px * 1e9)) if stat == 3 else 9223372036854775807, qty, len(rows), 0, stat,
                              0, 1, flags, raw])
