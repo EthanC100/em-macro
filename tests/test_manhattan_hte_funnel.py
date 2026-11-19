@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -457,7 +458,11 @@ def test_pr86_adapter_is_disabled_and_identity_shape_matches_contract(baseline, 
     assert tuple(sorted(ident)) == tuple(sorted(adapters.PR86_IDENTITY_FIELDS))
     assert ident["role"] == "exploration" and ident["designated"] is False and ident["channel"] == "blind"
     spec = adapters.evaluation_spec(r.view, 3, policy=Policy(), fence=panel.fence)
-    assert ident["spec_hash"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
+    # S11: spec_hash is the executable (binding + engine + numerical environment); the binding is this spec's hash
+    lin = adapters.lineage(r.view, 3, code=r.code, policy=Policy(), fence=panel.fence)
+    assert lin["binding"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
+    assert ident["spec_hash"] == ident["executable"] == lin["executable"]
+    assert ident["spec_hash"] == ids.full_hash(adapters.executable_spec(lin["binding"], r.code))
 
 
 def test_hte_does_not_import_pr86_private_names():
@@ -975,7 +980,10 @@ def test_f8_pr85_boundary_is_disabled():
     with pytest.raises(adapters.AdapterDisabled):
         adapters.to_pr85_decisions()
     src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
-    assert "import manhattan.execution" not in src and "from manhattan.execution" not in src
+    # written as a regular expression so that PR #85's repository-wide scan for the dotted module name (its
+    # test_nothing_in_production_imports_the_execution_model) does not read this check as an import
+    assert re.search(r"(?m)^\s*(?:import|from)\s+manhattan\.execution\b|from\s+manhattan\s+import[^\n]*\bexecution\b",
+                     src) is None
 
 
 # -- S10 review, F9: numerical environment identity ------------------------------------------------------------------

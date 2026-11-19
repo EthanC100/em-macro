@@ -56,8 +56,11 @@ can be evaluated with several code versions or synthetic datasets, and each such
 look. This matches PR #86's attempt identity, which keeps `spec_hash`, `data_hash` and `code_version` as separate
 fields.
 
-The one deviation from ARCHITECTURE §3 is that a Manhattan executable (`AX-`) folds the code version into the
-spec. `adapters.to_pr86_identity` maps HTE's candidate plus engine digest onto PR #86's `executable` field (§7).
+A Manhattan executable (`AX-`) folds the code version into its spec, and PR #86 decides evaluation, rerun or
+nondeterminism by `(spec_hash, data_hash, window id)` alone. The adapter therefore maps an HTE evaluation to PR #86
+at two levels (S11, §7): the code-free **binding** (the scientific evaluation) and the **executable** (binding +
+engine digest + numerical environment), whose hash is PR #86's `spec_hash`. A new engine or environment is a new
+executable of the same binding, as a bug-fixed code version is a new executable of the same Manhattan variant.
 
 ## 3. Registry (stage 0)
 
@@ -377,9 +380,17 @@ The adapter is **disabled** (`adapters.Pr86AccessAdapter` raises `AdapterDisable
 1. **Identity.** `adapters.to_pr86_identity(view, i, run_id=, data_hash=, code=, window=)` returns exactly the field
    set of PR #86 `ledger.IDENTITY_FIELDS`: `executable, variant, hypothesis, family, batch, role, channel, designated,
    spec_hash, data_hash, window, code_version`. It uses `role="exploration"`, `channel="blind"` and
-   `designated=False`. `spec_hash` is the hash of `adapters.evaluation_spec`, which holds the candidate, the family
-   sign, the template version, the resolved cost coefficients, the sizing constants, every policy field, the window,
-   the stages, the execution timing and the methodology. `executable` binds that spec to the engine digest (S10 F7).
+   `designated=False`. The **binding** (`adapters.evaluation_binding_hash`) is the hash of
+   `adapters.evaluation_spec`, which holds the candidate, the family sign, the template version, the resolved cost
+   coefficients, the sizing constants, every policy field, the window, the stages, the execution timing and the
+   methodology (S10 F7). `spec_hash` and `executable` are the hash of `adapters.executable_spec`: the binding plus
+   `engine_sha256` and `numeric_environment_sha256` (S11), and `code_version` carries both digests. PR #86's key
+   `(spec_hash, data_hash, window id)` therefore separates engines and environments: a new one is an `evaluation`,
+   never a `rerun` of another engine's look nor a `nondeterminism` that suspends the family, while the same
+   executable keeps PR #86's rerun and nondeterminism rules. `adapters.lineage` lists every level and
+   `adapters.executable_accounting` counts completions, looks, executables and the scientific units (family,
+   hypothesis, variant, candidate, binding) separately; families whose result changed across executables of one
+   binding are held. Tests: `tests/test_manhattan_hte_identity_levels.py` (the PR #86 cases need PR #86 merged).
 
    Two evaluations that differ in any evaluation-affecting parameter never share an identity (tested field by
    field). The identities were checked against PR #86 at `bab1a4d` in a scratch checkout: its
@@ -396,9 +407,12 @@ The adapter is **disabled** (`adapters.Pr86AccessAdapter` raises `AdapterDisable
    | `supersedes` | `supersedes` / `retry_of` |
 
    Data read is always true for a completed or failed chunk.
-3. **Evidence classification (PR #84).** An HTE result would classify as provenance `SYNTHETIC`, eligibility
-   `E_INFRA` or at most `E_DESCRIPTIVE`, and authorization `AUTH_NONE`. `*_eligible` and `promotion_authorized` are
-   false.
+3. **Evidence classification (PR #84).** An HTE result would classify as provenance `SYNTHETIC` and eligibility
+   `E_INFRA` (synthetic provenance always gives `E_INFRA`, weight 0; never `E_DESCRIPTIVE`), with authorization
+   `AUTH_OPEN` (exploration-role dates). `*_eligible` and `promotion_authorized` are false. An HTE package is not
+   `classify` input today: its schema (`manhattan.hte.package/1`) is not `manhattan.evidence/3`, and it carries no
+   frozen-spec block, verifier results or PR #86 attempt reference, so `classify` returns `unverified` / `none`.
+   (S11 correction: this item previously said "at most `E_DESCRIPTIVE`" and `AUTH_NONE`.)
 
 **Blockers** (from `adapters.BLOCKERS`):
 
@@ -508,7 +522,7 @@ and F10, which are a convention and text. Each has a regression test whose name 
 | F4 | a runner built before another writer registered a spec crashed in stage 4, with nothing recorded | `KeyError` in stage 4; log ended at `attempt_completed` | registry snapshot under the lock; `run_failed` with phase for every failed invocation |
 | F5 | negative-sign families evaluated in the positive direction | a `+` and a `-` family had identical gross means | `signed_positions`: exact negation; odd statistics mirror exactly; planted effect found only in the predicted direction |
 | F6 | unrelated registrations re-drew every family's bootstrap (seed included the registry root) | carry `p_c` 0.643 → 0.617, trend 0.517 → 0.536 after adding one commodity spec | seed bound to family and evaluation identity; family-major bootstrap groups; old candidates bit-identical after an unrelated registration |
-| F7 | PR #86 identity collision across policies or costs | two policies gave identical identities | `evaluation_spec`; validated against PR #86 `bab1a4d` |
+| F7 | PR #86 identity collision across policies or costs | two policies gave identical identities | `evaluation_spec`; validated against PR #86 `bab1a4d`. Residual (S11): engine and environment were outside PR #86's key; now in `spec_hash` via `executable_spec` |
 | F8 | same-close execution, unlike PR #85's delayed execution | by design (timing convention) | convention in run identity and packages; use restricted to throughput testing; disabled PR #85 boundary |
 | F9 | no numerical environment in the identity; cross-environment resume possible | identity held the engine digest only | environment (NumPy, BLAS build and run-time kernel, SIMD, machine) in the run identity; cross-environment resume refused |
 | F10 | reporting: log records vs attempts, registration time, CPU vs billed vCPU-hours, computed vs aliased simulations, null calibration | as reported | BENCHMARKS.md rewritten from records that state each quantity separately; package null note corrected (the null share is far below 5% because returns are net of costs) |
