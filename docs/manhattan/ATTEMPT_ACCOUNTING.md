@@ -1,5 +1,9 @@
 # Phase 4A-1a: partial implementation and architecture gate
 
+> Superseded in part by Phase 4B (`BINDING_ACCOUNTING.md`): protected reads now require a registered attempt, the
+> operational Store carries attempt records, and `attempts.reconcile` covers both stores. This record of 4A-1a is
+> kept as written.
+
 Starting main: `5781bca521577381e150814eceb308003685ccee`.
 This is a lifecycle foundation, not complete research-access accounting. No scientific
 rule, decision threshold, protected file, production control or schedule changes.

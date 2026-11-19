@@ -8,6 +8,8 @@ from manhattan.availability import AvailabilityError
 from manhattan.engine import evaluate, pit
 from manhattan.ops import data as D, timing as TM
 from test_manhattan_ops_runner import setup
+import manhattan_attempt_fixtures as F
+from manhattan import ledger as L, roles
 
 
 @pytest.mark.parametrize('source', D.SOURCES.values())
@@ -38,14 +40,20 @@ def test_conflicting_declarations():
         D.capture_registry([source, replace(source, source_reference='different')])
 
 
-def test_forward_evaluator_refuses_unattributable_reconstruction(monkeypatch):
+def test_forward_evaluator_refuses_unattributable_reconstruction(monkeypatch, tmp_path):
     store = pit.PitStore()
     store.add('x', ['2010-01-01'], [1], lag_days=0, reconstructed=True)
     store.add('x', ['2010-01-04'], [2], lag_days=0)
-    window = pit.Window(store, date(2010, 1, 4), date(2010, 1, 5), 'forward', 'test', 'runner')
+    # Phase 4B: a forward window exists only for a registered attempt (synthetic fence, freeze before the window)
+    book = L.Ledger(tmp_path / 'ledger.jsonl', writer='fixture', protocol='0' * 64)
+    fence = roles.Fence(exploration_end=date(2009, 12, 31), reserve={}, enabled=False)
+    ctx = F.register(book, store, domain='test', start=date(2010, 1, 4), end=date(2010, 1, 5), role='forward',
+                     fence=fence, freeze=date(2010, 1, 3))
+    window = ctx.window(store)
     monkeypatch.setattr(evaluate.backtest, 'run', lambda *a: pytest.fail('must reject before evaluation'))
     with pytest.raises(pit.PitError, match='per-observation provenance'):
-        evaluate.evaluate(window, None, ledger=None, executable={}, variant={}, hypothesis={}, family={})
+        evaluate.evaluate(window, None, ledger=book, **F.spec_kwargs(), attempt=ctx)
+    assert book.records()[-1]['type'] == 'attempt_failed' and not ctx.data_read
 
 
 def test_nightly_forward_survives_reconstructed_warmup(setup):

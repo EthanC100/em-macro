@@ -36,13 +36,16 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from manhattan import access as A
 from manhattan import ledger as L
+from manhattan import roles
 from manhattan import spec as S
-from manhattan.engine import backtest
+from manhattan.engine import evaluate as EV
 
 from . import blinding as B
 from . import compiler as CP
 from . import data as D
+from . import forward as FW
 from . import promotion
 from . import store as ST
 from . import timing as TM
@@ -67,6 +70,18 @@ class RunConfig:
     lock_ttl_minutes: int = 75
     crash_at: str | None = None
     extra: dict = field(default_factory=dict)
+    config_sha256: str | None = None    # optional explicit pin of config/manhattan.yaml (D-12)
+
+
+def run_fence(cfg: RunConfig) -> A.VerifiedFence:
+    """The fence for forward-observation attempts, from ``config/manhattan.yaml`` verified against its pinned
+    identity: byte-identical to the file at the run's commit (the attempts' registered code identity) and, if
+    ``cfg.config_sha256`` is set, hashing to it; parsed with ``yaml.safe_load`` (owner decision D-12). A caller
+    cannot inject a fence. PyYAML is imported only here, so the runner module imports without it (S7 H1); the
+    hash-locked runner environment now pins PyYAML. Fails closed (``AccessError``) when the configuration is
+    unavailable or mismatched, before any attempt is registered. Returns the ``access.VerifiedFence`` capability
+    that forward registration requires (S7 F1)."""
+    return A.verified_fence(cfg.commit, expected_sha256=cfg.config_sha256)
 
 
 # ---------------------------------------------------------------- the frozen batches (public specs)
@@ -135,51 +150,63 @@ def registrations(ledger: ST.Store) -> dict:
 
 # ---------------------------------------------------------------- observation
 
-def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: CP.Executable,
-                        asof: date) -> tuple[list[ST.Intent], dict]:
-    """Observation (or missed-observation) intents for one prediction up to ``asof``."""
-    cal = TM.calendar(exe.universe.calendar)
+def code_identity(commit: str) -> dict:
+    """The runner's code identity for an attempt: the checked-out commit and the engine's content digest. Fails
+    closed (``LedgerError``) on an unknown or all-zero commit."""
+    version = {"commit": commit, "engine_sha256": EV.code_version()["engine_sha256"]}
+    L.require_code_identity(version)
+    return version
+
+
+def forward_attempt(reg: dict, exe: CP.Executable, asof: date, data_hash: str, version: dict,
+                    sources: tuple) -> A.StoreAttempt:
+    """The declaration of one night's forward observation of one prediction (an accounting unit, not a test:
+    BINDING_ACCOUNTING.md section 2). Evaluation window: first observation to ``asof`` + 7 days; signal warm-up:
+    the executable's warm-up days before it."""
     start = date.fromisoformat(reg["first_observation"])
-    series = [p for _, p in exe.universe.instruments]
-    srcs = [D.SOURCES[s] for s in exe.universe.sources]
-    lag = max(s.lag_days for s in srcs)
-    grace = max(s.grace_days for s in srcs)
-    monitoring = min(fs.monitoring_start.get(s.id, asof) for s in srcs)
+    end = asof + timedelta(days=7)
+    wid = f"forward:{reg['prediction']}:{asof.isoformat()}"
+    windows = [A.DeclaredWindow(wid, exe.universe.domain, start, end, roles.FORWARD, "evaluation", data_hash)]
+    if exe.warmup_days > 0:
+        windows.insert(0, A.DeclaredWindow(wid + ":warmup", exe.universe.domain, start - timedelta(days=exe.warmup_days),
+                                           start - timedelta(days=1), roles.FORWARD, "signal_warmup", data_hash))
+    identity = {"executable": exe.id, "variant": S.spec_id(exe.variant), "hypothesis": S.spec_id(exe.hypothesis),
+                "family": S.spec_id(exe.family), "batch": reg["batch"], "role": roles.FORWARD,
+                "channel": reg.get("channel", "blind"), "designated": False, "spec_hash": exe.spec_hash,
+                "data_hash": data_hash, "window": {"id": wid, "start": start.isoformat(), "end": end.isoformat(),
+                                                   "frequency": "daily"},
+                "code_version": version}
+    return A.StoreAttempt("forward_observation", identity, tuple(windows),
+                          {"prediction": reg["prediction"], "asof": asof.isoformat(),
+                           "sources": ",".join(sorted(sources))},
+                          freeze=date.fromisoformat(reg["registration_utc"][:10]))
+
+
+def observation_intents(ledger: ST.Store, fs: D.FirstSeen, pit, reg: dict, exe: CP.Executable,
+                        asof: date, *, attempt: A.AttemptContext) -> tuple[list[ST.Intent], dict]:
+    """Observation (or missed-observation) intents for one prediction up to ``asof``, read through the forward
+    window of its registered, active forward-observation ``attempt``. The executable's strategy is compiled from
+    its registered specs and computed once (``access.run_bound``); the intents are ``forward.plan``, which the
+    completion recomputes from the Store's own captures and registration (S7 F2, G-1)."""
     counts = {"new": 0, "reconstructed": 0, "missed": 0, "expected": 0}
+    start = date.fromisoformat(reg["first_observation"])
     if asof <= start:
         return [], counts
     # the window ends a settlement lag after asof, so the marks of asof itself (seen after its close) are in it;
     # nothing dated after asof exists in the captures, and decisions only see what was available at each close
-    window = D.forward_window(pit, exe.universe.domain, start - timedelta(days=exe.warmup_days),
-                              asof + timedelta(days=7))
-    res = backtest.run(window, exe.strategy())
-    at = {str(d): i for i, d in enumerate(res.dates.astype("datetime64[D]"))}
-    out = []
-    for d in cal.sessions(start + timedelta(days=1), asof):
-        ds = d.isoformat()
-        counts["expected"] += 1
-        if fs.complete(series, ds) and ds in at:
-            i = at[ds]
-            base = cal.prev_session(d).isoformat()             # the return runs from the previous close
-            recon = fs.reconstructed(series, ds) or (fs.complete(series, base) and fs.reconstructed(series, base)) \
-                or d < monitoring
-            weight = 0 if (recon or not reg["eligible"] or reg["evidential_weight"] == 0) else 1
-            payload = {"prediction": reg["prediction"], "executable": exe.id, "date": ds,
-                       "net": round(float(res.net[i]), 12), "gross": round(float(res.gross[i]), 12),
-                       "cost": round(float(res.cost[i]), 12), "turnover": round(float(res.turnover[i]), 12),
-                       "exposure": [round(float(e), 12) for e in res.exposure[i]],
-                       "eligible": bool(reg["eligible"]), "reconstructed": bool(recon), "evidential_weight": weight,
-                       "registration_status": reg["registration_status"], "role": "forward"}
-            if ledger.get(("observation", reg["prediction"], ds)) is None:
+    window = D.forward_window(attempt, pit)
+    if (window.start, window.end, window.signal_start) != (start - timedelta(days=exe.warmup_days),
+                                                           asof + timedelta(days=7), start):
+        raise A.AccessError("the attempt did not declare this prediction's forward window")
+    res = A.run_bound(attempt, window, exe)
+    out, counts["expected"] = FW.plan(fs, reg, exe, asof, res)
+    for it in out:
+        if ledger.get(it.key) is None:
+            if it.type == "observation":
                 counts["new"] += 1
-                counts["reconstructed"] += int(recon)
-            out.append(ST.Intent("observation", ("observation", reg["prediction"], ds), payload,
-                                 source=",".join(exe.universe.sources)))
-        elif d + timedelta(days=lag + grace) < asof:
-            if ledger.get(("missed_observation", reg["prediction"], ds)) is None:
+                counts["reconstructed"] += int(it.payload["reconstructed"])
+            else:
                 counts["missed"] += 1
-            out.append(ST.Intent("missed_observation", ("missed_observation", reg["prediction"], ds),
-                                 {"prediction": reg["prediction"], "date": ds, "reason": "data_not_available_by_grace"}))
     return out, counts
 
 
@@ -193,6 +220,15 @@ def missed_run_intents(ledger: ST.Store, asof: date, cal: TM.Calendar) -> list[S
 
 
 # ---------------------------------------------------------------- the nightly run
+
+def _fail_attempts(s: ST.Store, ctxs: list, require_lock: bool = False) -> None:
+    """Close every attempt of a failed batch as ``failed: execution_error`` (no result of the batch was written).
+    Best effort: when this write fails too (or the lock is gone), the attempts stay unfinished and the next run's
+    recovery aborts them."""
+    try:
+        A.commit_failures(s, ctxs, require_lock=require_lock)
+    except Exception:                                           # noqa: BLE001 - recovery covers it
+        traceback.print_exc()
 
 def _counts(health: dict, **kw) -> None:
     for k, v in kw.items():
@@ -225,6 +261,12 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
             lk = s.acquire(timedelta(minutes=cfg.lock_ttl_minutes))
             health["lock_status"], health["locks_broken"] = lk["status"], lk["broken"]
             health["checkpoints"].append("lock")
+            stage = "attempts"
+            # Finish, under the lock, any entry an earlier run pushed while it still held its lock; then every
+            # unfinished forward attempt is a dead run's and can never finish (BINDING_ACCOUNTING.md section 8).
+            health["journal_reconciled"] += s.reconcile()
+            health["attempts_recovered"] = A.commit_recovery(s, epoch=True, require_lock=True)
+            health["checkpoints"].append("attempts")
             stage = "missed"
             missed = missed_run_intents(s, cfg.asof, TM.calendar(cfg.run_calendar))
             new_missed = [m for m in missed if s.get(m.key) is None]
@@ -269,18 +311,38 @@ def nightly(cfg: RunConfig, fetchers: dict, *, clock: Callable[[], datetime] = S
                     exes[prediction_id(S.spec_hash(manifest), x.spec_hash)] = x
             fs = D.first_seen(s, cfg.sources)
             pit = fs.pit_store()
-            intents = []
+            plans = []
             for pred, reg in sorted(regs.items()):
                 x = exes.get(pred)
                 if x is None or not set(x.universe.sources) <= set(cfg.sources):
                     continue
-                its, c = observation_intents(s, fs, pit, reg, x, cfg.asof)
-                intents += its
-                _counts(health, observations_new=c["new"], observations_reconstructed=c["reconstructed"],
-                        missed_observations=c["missed"], observations_expected=c["expected"])
-            before = len(s.of_type("conflict"))
-            if intents:
-                s.write(intents, f"observations to {cfg.asof}")
+                if cfg.asof <= date.fromisoformat(reg["first_observation"]):
+                    continue                                         # nothing to observe yet
+                plans.append((reg, x))
+            ctxs = []
+            if plans:
+                # Registration before exposure: every start is durable on the remote before any window opens.
+                version, data_hash = code_identity(cfg.commit), pit.data_hash()
+                ctxs = A.register_store_attempts(
+                    s, [forward_attempt(reg, x, cfg.asof, data_hash, version, cfg.sources) for reg, x in plans],
+                    fence=run_fence(cfg), label=f"forward attempts {cfg.asof}", require_lock=True)
+            health["attempts_registered"] = len(ctxs)
+            intents, terminals = [], []
+            try:
+                for (reg, x), ctx in zip(plans, ctxs):
+                    its, c = observation_intents(s, fs, pit, reg, x, cfg.asof, attempt=ctx)
+                    intents += its
+                    terminals.append(A.completion(ctx, s, its))
+                    _counts(health, observations_new=c["new"], observations_reconstructed=c["reconstructed"],
+                            missed_observations=c["missed"], observations_expected=c["expected"])
+                before = len(s.of_type("conflict"))
+                if intents or terminals:
+                    # Results and their attempts' terminals: one journal entry, so a crash leaves both or neither;
+                    # refused (Locked) if another run has broken this run's lock meanwhile.
+                    A.commit_results(s, intents, terminals, f"observations to {cfg.asof}", require_lock=True)
+            except Exception:
+                _fail_attempts(s, ctxs, require_lock=True)
+                raise
             health["conflicts"] = len(s.of_type("conflict")) - before
             health["batches"] = len({r["batch"] for r in regs.values()})
             health["predictions_registered"] = len(regs)
@@ -436,25 +498,46 @@ def screen(ledger: ST.Store, exes: list[CP.Executable], pit, fence, start: date,
     """Run each executable on exploration-role data (``roles.check_read`` decides the role, as a session) and
     record a ``screening`` record in the **private** ledger, labelled exploration with evidential weight 0.
     Returns {hypothesis hash: (n_days, n_variants) array of daily net returns} for the effective-count report,
-    in memory only."""
+    in memory only.
+
+    Phase 4B: each executable's screening is a registered attempt (kind ``screening``), written durably before any
+    window opens; the screening records and their completions are one journalled write."""
     from manhattan.engine.pit import Reader
     import numpy as np
 
-    out, intents = {}, []
+    version, data_hash = code_identity(ledger.commit), pit.data_hash()
+    declared = []
     for x in exes:
-        w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence).window(start, end)
-        res = backtest.run(w, x.strategy())
-        summ = res.summary()
-        intents.append(ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
-                                 {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
-                                  "label": "exploration: no evidential weight", "evidential_weight": 0,
-                                  "window": {"start": str(start), "end": str(end)}, "data_hash": w.data_hash(),
-                                  "result_hash": res.result_hash(),
-                                  "summary": {k: (round(v, 10) if isinstance(v, float) and v == v else None)
-                                              if isinstance(v, float) else v for k, v in summ.items()}},
-                                 source="exploration"))
-        out.setdefault(S.spec_hash(x.hypothesis), []).append(res.returns)
-    ledger.write(intents, f"screening {start}:{end}")
+        wid = f"{x.universe.domain}:{start}:{end}"
+        identity = {"executable": x.id, "variant": S.spec_id(x.variant), "hypothesis": S.spec_id(x.hypothesis),
+                    "family": S.spec_id(x.family), "batch": "pre-freeze", "role": roles.EXPLORATION,
+                    "channel": x.variant.get("channel", "blind"), "designated": False, "spec_hash": x.spec_hash,
+                    "data_hash": data_hash,
+                    "window": {"id": wid, "start": str(start), "end": str(end), "frequency": "daily"},
+                    "code_version": version}
+        declared.append(A.StoreAttempt("screening", identity,
+                                       (A.DeclaredWindow(wid, x.universe.domain, start, end, roles.EXPLORATION,
+                                                         "evaluation", data_hash),),
+                                       {"window": f"{start}:{end}"}, caller="session"))
+    ctxs = A.register_store_attempts(ledger, declared, fence=fence, label=f"screening attempts {start}:{end}")
+    out, intents, terminals = {}, [], []
+    try:
+        for x, ctx in zip(exes, ctxs):
+            w = Reader(pit, caller="session", domain=x.universe.domain, fence=fence, attempt=ctx).window(start, end)
+            res = A.run_bound(ctx, w, x)                        # compiled from its specs, computed once
+            it = ST.Intent("screening", ("screening", x.spec_hash, f"{start}:{end}"),
+                           {"executable": x.id, "hypothesis": S.spec_id(x.hypothesis), "role": w.role,
+                            "label": "exploration: no evidential weight", "evidential_weight": 0,
+                            "window": {"start": str(start), "end": str(end)}, "data_hash": data_hash,
+                            **A.screening_values(res)},
+                           source="exploration")
+            intents.append(it)
+            terminals.append(A.completion(ctx, ledger, [it]))
+            out.setdefault(S.spec_hash(x.hypothesis), []).append(res.returns)
+        A.commit_results(ledger, intents, terminals, f"screening {start}:{end}")
+    except Exception:
+        _fail_attempts(ledger, ctxs)
+        raise
     return {h: np.column_stack(v) for h, v in out.items()}
 
 
@@ -488,6 +571,7 @@ def main(argv=None) -> int:
             p.add_argument("--asof", default=datetime.now(timezone.utc).date().isoformat())
             p.add_argument("--sources", default="fred_DEXBZUS,fred_DEXMXUS,fred_DEXSFUS")
             p.add_argument("--mirror", default=os.environ.get("MANHATTAN_MIRROR_URL") or None)
+            p.add_argument("--config-sha256", default=os.environ.get("MANHATTAN_CONFIG_SHA256") or None)
         else:
             p.add_argument("--batch", type=int, required=True)
             p.add_argument("--pr-json", required=True)
@@ -525,6 +609,7 @@ def _run_cli(a) -> int:
     if a.cmd == "nightly":
         cfg.sources = tuple(x for x in a.sources.split(",") if x)
         cfg.mirror = a.mirror
+        cfg.config_sha256 = a.config_sha256
         fetchers = {sid: (lambda src=D.SOURCES[sid]: D.fetch_fred(src)) for sid in cfg.sources
                     if D.SOURCES[sid].kind == "fred"}
         rec = nightly(cfg, fetchers)
