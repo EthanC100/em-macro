@@ -2,7 +2,7 @@
 
 A back-adjusted continuous series changes its whole history at every roll, so a series computed once over the full
 sample and then read "as of" an earlier date leaks every later roll gap into the past. Here a continuous series is
-always computed for one decision day ``t``, from a ``manhattan.engine.pit.Window`` (so the fence has already
+always computed for one decision day ``t``, from an authorized point-in-time reader window (so the fence has already
 decided what may be read) and from values known at ``t`` only:
 
 * **Roll schedule** from contract reference data alone (last trade and first notice dates are scheduled in
