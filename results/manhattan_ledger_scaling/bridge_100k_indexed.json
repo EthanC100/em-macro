@@ -1,0 +1,80 @@
+{
+ "bridge_begin": {
+  "cpu_s": 33.308,
+  "wall_s": 51.22
+ },
+ "bridge_complete": {
+  "cpu_s": 35.738,
+  "wall_s": 51.124
+ },
+ "bytes": {
+  "hte_results_bin": 24490116,
+  "ledger": 354235189,
+  "ledger_per_candidate": 3558.3,
+  "ledger_records": 199104,
+  "outcome_batches": 43814283,
+  "registration_file": 6371406
+ },
+ "candidates": 99552,
+ "chunk": 512,
+ "completion_writer": "Ledger.record_evaluation, supplied by this script (owner decision A-1)",
+ "consistent": true,
+ "crosscheck": {
+  "cpu_s": 39.524,
+  "wall_s": 39.718
+ },
+ "crosscheck_parts_s": {
+  "bridge_checks": 24.369,
+  "pr86_reconciler": 12.286
+ },
+ "evidence": "none: synthetic infrastructure measurement",
+ "hardware": {
+  "blas": "scipy-openblas 0.3.34.106.0",
+  "blas_threads_env": "1",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "cpu_flags": "avx2,avx512f,fma",
+  "logical_cpus": 4,
+  "mem_gib": 15.7,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "hte_chunk_attempts": 343,
+ "hte_registration": {
+  "cpu_s": 2.703,
+  "wall_s": 2.786
+ },
+ "hte_run": {
+  "cpu_s": 165.526,
+  "wall_s": 47.186
+ },
+ "ledger_bytes_after_begin": 174038974,
+ "max_batch_rows": 512,
+ "outcome_batches": 195,
+ "overhead": {
+  "accounting_wall_s": 142.062,
+  "hte_run_wall_s": 47.186,
+  "per_candidate_ms": 1.427,
+  "ratio_to_hte_run": 3.01
+ },
+ "peak_rss_mib": 2760.4,
+ "pr86_attempts": 99552,
+ "pr86_reconciler_violations": 0,
+ "synthetic": true,
+ "target": 100000,
+ "terminals": {
+  "evaluation": 99552
+ },
+ "units": {
+  "bindings": 99552,
+  "candidates": 99552,
+  "completed_evaluation_keys": 99552,
+  "executables": 99552,
+  "families": 5,
+  "hypotheses": 15,
+  "registered_executions": 99552,
+  "variants": 24888
+ },
+ "violations": [],
+ "workers": 4
+}

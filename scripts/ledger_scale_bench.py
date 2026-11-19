@@ -94,7 +94,12 @@ def run(n: int, root: Path, impl_root: Path | None, layout: str = "single") -> d
     if impl_root is not None:
         sys.path.insert(0, str(impl_root))
     from manhattan import access as A, attempts as AT, ledger as L, roles
-    out: dict = {"n": n, "impl": str(impl_root or "this checkout"), "layout": layout, "synthetic": True,
+    try:
+        commit = subprocess.run(["git", "-C", str(impl_root), "rev-parse", "--short", "HEAD"], capture_output=True,
+                                text=True, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = "unknown"
+    out: dict = {"n": n, "impl": commit, "layout": layout, "synthetic": True,
                  "evidence": "none: synthetic infrastructure measurement"}
     fence = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)
     win = A.DeclaredWindow(WINDOW["id"], "hte-synthetic:bench", date(2000, 1, 3), date(2008, 10, 31),
