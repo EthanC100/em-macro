@@ -591,28 +591,68 @@ def test_no_file_network_environment_subprocess_or_broker():
             assert word not in text, (f.name, word)
 
 
-def test_nothing_in_the_repository_imports_it():
-    me = Path(__file__).resolve()
-    # the one allowed importer: the dormant HTE execution bridge (docs/manhattan/HTE_EXECUTION_BRIDGE.md), which is
-    # itself imported by nothing but its own tests
-    bridge = ROOT / "manhattan/hte_execution_bridge"
-    bridge_test = ROOT / "tests/test_manhattan_hte_execution_bridge.py"
-    for f in ROOT.rglob("*.py"):
-        if PKG in f.parents or f.resolve() == me or ".git" in f.parts or bridge in f.parents or f == bridge_test:
+# Test directories authorised to import this package: S16's system acceptance suite (PR #91) exercises it from the
+# test tree, the same exemption as AUTHORISED_TEST_DIRS in tests/test_manhattan_execution.py. Production code may not
+# import it, except the dormant HTE bridge below.
+AUTHORISED_TEST_DIRS = ("tests/acceptance/",)
+
+
+def _importers(root: Path, skip) -> list:
+    """Files under ``root`` that import this package (imports, not mentions: a scanner that names the package in
+    a string is not an importer)."""
+    out = []
+    for f in root.rglob("*.py"):
+        if ".git" in f.parts or skip(f):
             continue
         try:
             tree = ast.parse(f.read_text(errors="ignore"))
         except (OSError, SyntaxError):
             continue
-        # imports, not mentions: a scanner that names the package in a string is not an importer
         for node in ast.walk(tree):
             names = ([a.name for a in node.names] if isinstance(node, ast.Import)
                      else [node.module or ""] + [a.name for a in node.names] if isinstance(node, ast.ImportFrom)
                      else [])
-            assert not any("execution_realism" in n for n in names), f
+            hit = any("execution_realism" in n for n in names)
             if isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", "")) in (
                     "import_module", "__import__"):
-                assert "execution_realism" not in ast.unparse(node), f
+                hit = hit or "execution_realism" in ast.unparse(node)
+            if hit:
+                out.append(f.relative_to(root).as_posix())
+                break
+    return out
+
+
+def test_nothing_in_the_repository_imports_it():
+    me = Path(__file__).resolve()
+    # the one allowed production importer: the dormant HTE execution bridge (docs/manhattan/HTE_EXECUTION_BRIDGE.md),
+    # itself imported by nothing but its own tests
+    bridge = ROOT / "manhattan/hte_execution_bridge"
+    bridge_test = ROOT / "tests/test_manhattan_hte_execution_bridge.py"
+    found = _importers(ROOT, lambda f: PKG in f.parents or f.resolve() == me or bridge in f.parents
+                       or f == bridge_test)
+    in_dirs = [r for r in found if r.startswith(AUTHORISED_TEST_DIRS)]
+    assert [r for r in found if r not in in_dirs] == []
+    assert all(d.startswith("tests/") and d.endswith("/") for d in AUTHORISED_TEST_DIRS)
+    present = {d for d in AUTHORISED_TEST_DIRS if (ROOT / d).is_dir()}
+    assert {d for d in present if any(r.startswith(d) for r in in_dirs)} == present, "stale test-directory exemption"
+
+
+def test_the_import_exemption_is_narrow(tmp_path):
+    for rel, text in {"manhattan/ops/leak.py": "from manhattan.execution_realism import adapter\n",
+                      "manhattan/hte/leak2.py": "import importlib\nimportlib.import_module('manhattan.execution_realism')\n",
+                      "scripts/leak3.py": "from manhattan import execution_realism\n",
+                      "tests/test_other.py": "import manhattan.execution_realism\n",
+                      "tests/acceptance_evil/x.py": "import manhattan.execution_realism\n",
+                      "tests/acceptance/ok.py": "from manhattan.execution_realism import screening\n",
+                      "manhattan/mention.py": "X = 'manhattan.execution_realism is a package name'\n"}.items():
+        f = tmp_path / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    found = _importers(tmp_path, lambda f: False)
+    prohibited = sorted(r for r in found if not r.startswith(AUTHORISED_TEST_DIRS))
+    assert prohibited == ["manhattan/hte/leak2.py", "manhattan/ops/leak.py", "scripts/leak3.py",
+                          "tests/acceptance_evil/x.py", "tests/test_other.py"]
+    assert "tests/acceptance/ok.py" in found and "manhattan/mention.py" not in found
 
 
 def test_running_it_leaves_the_manhattan_config_unchanged():

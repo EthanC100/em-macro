@@ -765,10 +765,7 @@ def test_nothing_in_production_imports_the_execution_model():
     assert used == set(AUTHORISED_TEST_REFERENCES), "an authorised exemption is stale: remove it"
     assert all(r.startswith("tests/") for r in AUTHORISED_TEST_REFERENCES)
     assert all(d.startswith("tests/") and d.endswith("/") for d in AUTHORISED_TEST_DIRS)
-    # a declared directory that exists must be in use; one not yet in this tree (S16's suite before PR #91 merges)
-    # exempts nothing, and is enforced as soon as it exists
-    present = {d for d in AUTHORISED_TEST_DIRS if (ROOT / d).is_dir()}
-    assert {d for d in present if any(r.startswith(d) for r in in_dirs)} == present, \
+    assert {d for d in AUTHORISED_TEST_DIRS if any(r.startswith(d) for r in in_dirs)} == set(AUTHORISED_TEST_DIRS), \
         "an authorised test directory is stale: remove it"
     assert hits == []
 

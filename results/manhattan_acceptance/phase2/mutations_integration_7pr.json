@@ -1,0 +1,432 @@
+{
+ "schema": "manhattan.s16.mutations/1",
+ "tree": "scratch merge (local, never pushed): main 37e3eb4 + #84-#87 + #90 (incl. #89) + #93",
+ "all_caught": true,
+ "mutations": [
+  {
+   "id": "M01",
+   "mutation": "HTE does not check the results hash",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-01"
+   ],
+   "failing_ids": [
+    "ADV-COR-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M02",
+   "mutation": "HTE synthetic-panel check bypassed",
+   "file": "manhattan/hte/data.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-03",
+    "E2E-03"
+   ],
+   "failing_ids": [
+    "ADV-COR-03",
+    "E2E-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M03",
+   "mutation": "HTE PIT probe skipped at registration",
+   "file": "manhattan/hte/registry.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-LA-01"
+   ],
+   "failing_ids": [
+    "ADV-LA-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M04",
+   "mutation": "HTE registers duplicate specs",
+   "file": "manhattan/hte/registry.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-DUP-01"
+   ],
+   "failing_ids": [
+    "ADV-DUP-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M05",
+   "mutation": "HTE recomputes an identical closed run",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-DUP-02"
+   ],
+   "failing_ids": [
+    "ADV-DUP-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M06",
+   "mutation": "HTE run record claims confirmatory",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "E2E-08",
+    "ADV-PRO-04"
+   ],
+   "failing_ids": [
+    "ADV-PRO-04",
+    "E2E-08"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M07",
+   "mutation": "HTE stage 5 allowed",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-PRT-02"
+   ],
+   "failing_ids": [
+    "ADV-PRT-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M08",
+   "mutation": "evidence honours a forged weight",
+   "file": "manhattan/evidence.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-PRO-01"
+   ],
+   "failing_ids": [
+    "ADV-PRO-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M09",
+   "mutation": "execution fills at the decision's own close",
+   "file": "manhattan/execution/account.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "E2E-11",
+    "ADV-LA-03"
+   ],
+   "failing_ids": [
+    "ADV-LA-03",
+    "E2E-11"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M10",
+   "mutation": "execution fills at an already-seen price",
+   "file": "manhattan/execution/costs.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-LA-03"
+   ],
+   "failing_ids": [
+    "ADV-LA-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M11",
+   "mutation": "attempt reconciler ignores unfinished attempts",
+   "file": "manhattan/attempts.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-INT-02"
+   ],
+   "failing_ids": [
+    "ADV-INT-02",
+    "ORC-ACC86-04"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M12",
+   "mutation": "HTE resume skips interrupted-attempt recovery",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-INT-01"
+   ],
+   "failing_ids": [
+    "ADV-INT-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M13",
+   "mutation": "HTE does not check package hashes",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-01"
+   ],
+   "failing_ids": [
+    "ADV-COR-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX01",
+   "mutation": "executable identity ignores the numerical environment",
+   "file": "manhattan/hte/adapters.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-ACC86-03",
+    "ORC-DEX93-02"
+   ],
+   "failing_ids": [
+    "ORC-ACC86-03",
+    "ORC-ACC86-04",
+    "ORC-DEX93-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX02",
+   "mutation": "binding identity ignores cost assumptions",
+   "file": "manhattan/hte/adapters.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-ACC86-03"
+   ],
+   "failing_ids": [
+    "ORC-ACC86-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX03",
+   "mutation": "executable accounting never flags divergent executables",
+   "file": "manhattan/hte/adapters.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-ACC86-05"
+   ],
+   "failing_ids": [
+    "ORC-ACC86-05"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX04",
+   "mutation": "delayed alignment ignores the lag",
+   "file": "manhattan/execution_realism/screening.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "CON93-03",
+    "ORC-DEX93-01"
+   ],
+   "failing_ids": [
+    "CON93-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX05",
+   "mutation": "volatility scale does not move with the lag (reads the future)",
+   "file": "manhattan/execution_realism/screening.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "CON93-04"
+   ],
+   "failing_ids": [
+    "CON93-04"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX06",
+   "mutation": "result identity omits the execution policy",
+   "file": "manhattan/execution_realism/adapter.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "CON93-02"
+   ],
+   "failing_ids": [
+    "CON93-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX07",
+   "mutation": "lag 0 (same close) accepted silently",
+   "file": "manhattan/execution_realism/timing.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "CON93-01",
+    "ORC-DEX93-03"
+   ],
+   "failing_ids": [
+    "CON93-01",
+    "ORC-DEX93-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MX08",
+   "mutation": "cost model id ignores the cost terms",
+   "file": "manhattan/execution_realism/costs.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "CON93-02"
+   ],
+   "failing_ids": [
+    "CON93-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MO1",
+   "mutation": "accounting adapter ignores the engine and environment it ran under",
+   "file": "tests/acceptance/s16_drivers.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-ACC86-03",
+    "ORC-ACC86-04"
+   ],
+   "failing_ids": [
+    "ORC-ACC86-03",
+    "ORC-ACC86-04",
+    "ORC-ACC86-05"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MO2",
+   "mutation": "accounting adapter ignores the evaluation policy",
+   "file": "tests/acceptance/s16_drivers.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-ACC86-03",
+    "ORC-ACC86-04"
+   ],
+   "failing_ids": [
+    "ORC-ACC86-03",
+    "ORC-ACC86-04"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MO3",
+   "mutation": "delayed adapter leaves the lag out of the executable identity",
+   "file": "tests/acceptance/s16_drivers.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-DEX93-02"
+   ],
+   "failing_ids": [
+    "ORC-DEX93-02",
+    "ORC-DEX93-05"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MO4",
+   "mutation": "delayed adapter executes at the same close whatever the lag",
+   "file": "tests/acceptance/s16_drivers.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-DEX93-01"
+   ],
+   "failing_ids": [
+    "ORC-DEX93-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MO5",
+   "mutation": "delayed adapter reads the next day's return",
+   "file": "tests/acceptance/s16_drivers.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ORC-DEX93-03",
+    "ORC-DEX93-01"
+   ],
+   "failing_ids": [
+    "ORC-DEX93-01",
+    "ORC-DEX93-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MU1",
+   "mutation": "PR #86 accounting adapter enabled but not bound",
+   "file": "manhattan/hte/adapters.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ACC86-01",
+    "GAP-01"
+   ],
+   "failing_ids": [
+    "ACC86-01",
+    "ACC86-02",
+    "ACC86-03",
+    "ACC86-04",
+    "ACC86-05",
+    "ACC86-06",
+    "GAP-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "MU2",
+   "mutation": "an HTE <-> PR #93 binding appears but is not bound",
+   "file": "manhattan/hte/workload.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "DEX93-01"
+   ],
+   "failing_ids": [
+    "DEX93-01",
+    "DEX93-02",
+    "DEX93-03",
+    "DEX93-04",
+    "DEX93-05",
+    "DEX93-06"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  }
+ ]
+}
