@@ -1,6 +1,6 @@
 {
  "cache": {
-  "compute_s": 355.6857460381243,
+  "compute_s": 275.9327130139752,
   "corrupt": 0,
   "disk_hits": 0,
   "mem_hits": 0,
@@ -8,10 +8,12 @@
  },
  "chunk": 256,
  "cpu_hours": {
-  "per_100k": 1.1070082576050528,
-  "per_1k": 0.011070082576050529,
-  "per_1m_linear_extrapolation": 11.070082576050527
+  "note": "process CPU time (user+system, parent and workers); not billed time",
+  "per_100k": 0.9118685040173582,
+  "per_1k": 0.009118685040173581,
+  "per_1m_linear_extrapolation": 9.118685040173583
  },
+ "execution_timing": "same_close_fill_next_day_return/v1",
  "feature_cache": false,
  "hardware": {
   "blas": "scipy-openblas 0.3.34.106.0",
@@ -21,12 +23,18 @@
   "logical_cpus": 4,
   "mem_gib": 15.7,
   "numpy": "2.5.3",
-  "os": "Linux-6.18.44-fc-v595-x86_64-with-glibc2.39",
+  "os": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
   "python": "3.13.18"
  },
+ "log": {
+  "attempt_records": 150,
+  "attempts_started": 75,
+  "records_this_run": 153,
+  "records_total": 160
+ },
  "memory": {
-  "peak_rss_largest_child_mib": 197.8828125,
-  "peak_rss_parent_mib": 62.82421875
+  "peak_rss_largest_child_mib": 235.48046875,
+  "peak_rss_parent_mib": 60.05859375
  },
  "panel": {
   "assets": {
@@ -76,7 +84,7 @@
   "violations": []
  },
  "registration": {
-  "candidates_per_s": 6802.892439392381,
+  "candidates_per_s": 8144.8971406033725,
   "counts": {
    "candidates": 10344,
    "families": 5,
@@ -85,7 +93,7 @@
    "strategy_specs": 30,
    "variants": 2586
   },
-  "cpu_s": 1.2714889999999999,
+  "cpu_s": 1.168501,
   "report": {
    "duplicate_submissions": 0,
    "registered_candidates": 10344,
@@ -94,28 +102,34 @@
    "submitted": 30
   },
   "scale": 2.0535250264571463,
-  "seconds": 1.52052969999977
+  "seconds": 1.2699976219998916
  },
  "run": {
   "closed": true,
-  "cpu_s": 412.232163,
-  "cpu_utilisation": 0.9002488821906035,
-  "result_root": "93c8032d4b7bdb03642220651f0dacc26a44063e103010365c7c5ca8ac5162f0",
-  "run_id": "HR-450c9932daa3ebca",
+  "cpu_s": 339.56524099999996,
+  "cpu_utilisation": 0.9184791450739707,
+  "result_root": "79d00a98cfd1f620bcb27446456012cc1ada351b50cd0b73a50688c679fc13f4",
+  "run_id": "HR-10e62638d25c608d",
   "timings": {
-   "pass_A_s": 41.49180823000006,
-   "pass_B_s": 37.71397408900066,
-   "selection_s": 0.03325917900019704,
-   "stage4_s": 35.17682920599964,
-   "warm_s": 0.0013029209999331215
+   "pass_A_s": 34.064623973999915,
+   "pass_B_s": 28.516804797000077,
+   "selection_s": 0.03164314200012086,
+   "stage4_s": 29.77703334800003,
+   "warm_s": 0.0010783069999433792
   },
-  "wall_s": 114.47727710499976
+  "wall_s": 92.42595295199999
  },
  "selection_counts": {
   "alias": 1744,
   "computed": 8528,
   "cross_family_behaviour": 0,
   "skipped_degenerate": 72
+ },
+ "stage3_accounting": {
+  "computed_simulations": 8528,
+  "degenerate_not_simulated": 72,
+  "dominated_not_simulated": 0,
+  "exact_aliases_not_simulated": 1744
  },
  "stages": [
   1,
@@ -124,24 +138,32 @@
   4
  ],
  "storage_bytes": {
-  "attempt_log": 104558,
+  "attempt_log": 105647,
   "feature_cache": 0,
-  "packages": 22069,
+  "packages": 26800,
   "pass_A": 1361419,
-  "pass_B": 2440265,
-  "per_candidate_excluding_cache": 759.6444315545243,
+  "pass_B": 1912270,
+  "per_candidate_excluding_cache": 716.5888437741686,
   "registry": 1212702,
   "results": 2544948,
-  "total": 7857762
+  "total": 7412395
  },
  "synthetic": true,
  "target": 10000,
  "throughput": {
-  "end_to_end_candidates_per_s": 90.3585432986179,
-  "pass_A_candidates_per_s": 249.30222232447605,
+  "end_to_end_including_registration_candidates_per_s": 110.39964840135156,
+  "end_to_end_including_registration_s": 93.69595057399988,
+  "pass_A_candidates_per_s": 303.6581295567841,
   "pass_A_label": "stages 1+2 (screen + screening stats)",
-  "pass_B_candidates_per_s": 226.12308052911362,
-  "pass_B_computed": 8528
+  "pass_B_candidates_per_s": 299.05173671129984,
+  "pass_B_computed": 8528,
+  "run_candidates_per_s": 111.91661724463906
+ },
+ "use_restriction": "throughput measurement on synthetic data with same-close execution; no return figure here is realistic or evidence",
+ "vcpu_hours_reserved": {
+  "note": "wall time (registration included) x the machine's vCPUs: what an instance of this size bills, whatever the CPU utilisation",
+  "this_run": 0.10410661174888876,
+  "vcpus": 4
  },
  "workers": 4
 }

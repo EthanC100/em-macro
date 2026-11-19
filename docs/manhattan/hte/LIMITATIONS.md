@@ -21,8 +21,11 @@ This page says why, what is missing, and what to build next.
    registration, and it counts repeated looks in the packages. It does **not** adjust any statistic for them. The SPA
    is refused when the variant set is incomplete, but a family that was looked at under several policies still shows
    the latest run's SPA. The look count says how many such runs exist.
-5. **Self-review only.** The adversarial pass (ARCHITECTURE.md §8) was done by the author. It does not replace an
-   independent reviewer.
+5. **Returns are optimistic by construction.** Positions fill at the same close as the decision, with no execution
+   delay. That is one day earlier than PR #85's lag >= 1 (S10 F8). Every package says its use is restricted to
+   synthetic throughput and pipeline testing (`realistic_return_claims: false`).
+6. **Reviews.** The author's adversarial passes and an agent's code read (ARCHITECTURE.md §8) preceded S10's
+   independent review. The S10 corrections (§9) have not themselves been re-reviewed.
 
 ## 2. What prevents trustworthy forward evidence
 
@@ -31,14 +34,15 @@ Each of the following would have to be resolved by its owner. None of them can b
 | # | blocker | owner |
 |---|---|---|
 | A1 | Stage 5 is disabled in code (`protected.py`); no caller can enable it | design |
-| A2 | PR #86 (binding attempt accounting, sealed PIT windows) is unmerged and dormant; its identity validator has never been run on HTE output | Ethan / PR #86 |
+| A2 | PR #86 (binding attempt accounting, sealed PIT windows) is unmerged and dormant. Its identity validator accepts HTE identities in a scratch checkout of `bab1a4d` (S10 F7), but nothing is wired | Ethan / PR #86 |
 | A3 | PR #86 decisions D-1 (counting unit), D-8 (screening recovery), D-10 (exploration registration) are open | Ethan |
 | A4 | no independently retained anchor for the HTE log; a whole-file replacement is undetectable without one | integration |
 | A5 | `config/manhattan.yaml`: `reserve.enabled: false`, `claims.enabled: false`, `screening_method: null` (SIM_PREREG_v2 has not chosen the method) | Ethan |
 | A6 | no real data path exists by design: no Norgate/Databento loader, no em-macro-data access; the synthetic-only guard refuses anything else | by design |
 | A7 | no forward capture: HTE evaluates fixed historical-style windows; it has no daily observation, timestamping or e-process | future work |
 | A8 | the HTE methodology (`hte-eval/1`) is not pre-registered: cost model, vol targeting, block length and window are engineering defaults | Ethan, if ever used |
-| A9 | cross-platform reproducibility is to rounding only (BLAS); the code identity does not yet pin the BLAS build | engineering |
+| A9 | cross-platform reproducibility is to rounding only (BLAS). The numerical environment is pinned in the run identity and cross-environment resume is refused (S10 F9), but results from two environments are different runs, not interchangeable ones | engineering |
+| A10 | same-close execution (S10 F8): HTE returns are not a realistic return estimate; the PR #85 execution boundary is disabled (E1-E4) | PR #85 / design |
 
 ## 3. Engineering limitations
 
@@ -63,12 +67,12 @@ Each of the following would have to be resolved by its owner. None of them can b
 
 ## 4. What the next engineer should implement (in order)
 
-1. **Wire the identity contract test against PR #86** once it merges: feed `adapters.to_pr86_identity` to
-   `ledger.validate_attempt_identity`. Change nothing else until D-1, D-10 and B4 (chunk-to-attempt cardinality) are
-   decided.
+1. **Make the PR #86 identity test permanent.** It exists (`test_f7_identities_validate_against_pr86_and_never_collide`)
+   but runs only with a scratch checkout of PR #86. Once #86 merges, drop the skip. Change nothing else until D-1,
+   D-10 and B4 (chunk-to-attempt cardinality) are decided.
 2. **Add a memory preflight and feature-cache size accounting.** The workspace lock and the disk preflight exist.
-3. **Pin the BLAS build in `code_identity()`** (`numpy.show_config`), so that cross-platform reruns are new run
-   identities rather than silent tolerance comparisons.
+3. **Add an execution lag** (positions earn the return `lag` days later, as PR #85 does) as a policy field with
+   default 1, and re-benchmark. Until then, results stay restricted to throughput testing (S10 F8).
 4. **Add a contract-level stage 3 behind the same funnel**, using PR #85 execution once it merges. Run it only on the
    stage-3 representatives, so aliases and degenerate candidates keep their savings.
 5. **Add an anchor export.** Write the log head (`AttemptLog.head()`) to the public index or an external timestamp at

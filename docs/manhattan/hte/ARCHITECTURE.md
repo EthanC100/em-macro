@@ -1,10 +1,11 @@
 # Manhattan HTE: high-throughput hypothesis-evaluation engine
 
 Status: **research infrastructure, synthetic data only, not in force.** Branch `claude/manhattan-hypothesis-engine-jypgud`
-(session S9, 2026-11-18). Validation on this branch:
+(session S9, 2026-11-18; S10 corrections 2026-11-19, §9). Validation on this branch at `4355fa1`:
 
-- HTE tests: 153 passed.
-- Full repository suite: 2,123 passed, 132 skipped, and 1 error, the known local Q019 E2BIG, which also fails on clean
+- HTE tests: 177 passed, 1 skipped. The skipped test runs PR #86's validator from a scratch checkout of `bab1a4d`; it
+  passed locally.
+- Full repository suite: 2,147 passed, 133 skipped, and 1 error, the known local Q019 E2BIG, which also fails on clean
   main (1,970 passed, 132 skipped, the same error).
 - `nightshift.protected` passes on every changed path. Code: `manhattan/hte/`. Tests: `tests/test_manhattan_hte_core.py` and
 `tests/test_manhattan_hte_funnel.py`. Measured throughput: [BENCHMARKS.md](BENCHMARKS.md). Limitations and blockers:
@@ -43,7 +44,7 @@ The engine has the following properties:
 | behavioural class | positions fingerprint | candidates whose windowed positions and cost binding are bit-identical | package `behavioural_classes`; `alias` status |
 | screening attempt | attempt ID = hash of its `attempt_started` record | one chunk of pass A (stages 1+2) | `reconcile().attempts`; `history()` per candidate |
 | full evaluation attempt | same | one chunk of pass B (stage 3) | same |
-| run | `HR-` | registry root × data hash × code digest × policy hash × window | `run_started`; packages count `runs_on_this_registry` |
+| run | `HR-` | registry root × data hash × code digest × policy hash × window × stages × execution timing × numerical environment | `run_started`; packages count `runs_on_this_registry` |
 | independent statistical tests | **not computed** | `null`, with a reason, everywhere | owner decision D-1 of PR #86 |
 
 Each child record holds its parent's full hash, so a link cannot change without changing the child's identity
@@ -68,7 +69,11 @@ following:
 - every grid value against the template's schema (type, range, choices);
 - duplicate grid values, which would register duplicate candidates;
 - that each point's look-back fits the warm-up;
-- the template's **PIT probe** (§6.4), run once per template version and logged as `pit_probe`.
+- the template's **PIT probe** (§6.4), logged as `pit_probe` with its probe panel and coverage. A stored result is
+  reused only for the same template version, template and feature code, and probe panel, and only if it had full
+  coverage. The canonical probe always runs; a caller's `probe_panel` can add a probe, never replace it;
+- templates marked `test_only`, which are refused unless `submit(..., allow_test_templates=True)` is passed. The
+  allowance is recorded in the segment (S10 F1).
 
 Invalid specs register nothing and are logged as `submission_rejected` with their reasons.
 
@@ -144,13 +149,26 @@ Stage 3 is a daily simulation:
 - the net series' SHA-256 and summary statistics;
 - a one-sided stationary-bootstrap p-value for a positive mean (descriptive).
 
-It also computes, per family, **partial maxima of Hansen's SPA statistics**. Every candidate in a run shares one
-bootstrap index set. That is the Protocol's joint bootstrap, from `manhattan.stats.bootstrap`. Because of that
-shared set, a family's SPA statistics are maxima over its variants. Floating-point `max` is exact, associative and
+It also computes, per family, **partial maxima of Hansen's SPA statistics**. Every variant of a family shares one
+bootstrap index set (the Protocol's joint bootstrap, from `manhattan.stats.bootstrap`), drawn from a seed that is a
+hash of the family's identity and the evaluation (data, window, B, L, methodology) only (`runner.boot_seed`). The
+seed does not depend on the registry root, so registering or freezing other specs never re-draws a family's
+bootstrap (S10 F6). Because of that shared set, a family's SPA statistics are maxima over its variants. Floating-point `max` is exact, associative and
 commutative, so partial maxima from any chunking combine to the bit-identical family statistic. The result equals
 `manhattan.stats.spa.spa_test` on the same draws (tested).
 
 The stored series hashes let stage 4 recompute any series and prove that it describes the series of record.
+
+**Family sign.** Templates are written for the `+` direction. A `-` family holds exactly the negated positions
+(`runner.signed_positions`, the one place positions enter an evaluation), so a family is always evaluated in the
+direction it predicts (S10 F5).
+
+**Execution timing (S10 F8).** A position set from data through the close of day t is assumed traded *at* that close
+and earns day t+1's return (`kernels.EXECUTION_TIMING`). PR #85 executes at the settlement of the lag-th close
+strictly after a decision (lag >= 1), so HTE is optimistic by one day by construction. The convention is part of
+every run identity and every package. Packages state that their use is restricted to synthetic throughput and
+pipeline testing, with `realistic_return_claims: false`. The PR #85 boundary (`adapters.Pr85ExecutionAdapter`) is
+disabled; §7 describes it.
 
 ### 4.3 Selection and policy
 
@@ -229,13 +247,40 @@ range, SPA partial maxima included. A difference gives the verification attempt 
 reason `nondeterminism`), logs `nondeterminism` and raises. A verification that completes must also rebuild the
 closed `result_root`, and then logs `run_verified`. Results and packages of record are never rewritten.
 
-**Run identity** is the registry root, data hash, engine digest, policy hash, window and the requested stages. A
-stage-1-2 run and a full run of the same candidates are therefore two counted looks. A run is bound to the frozen
+**Run identity** is the registry root, data hash, engine digest, policy hash, window, requested stages, execution
+timing and numerical environment. A stage-1-2 run and a full run of the same candidates are therefore two counted
+looks.
+
+**Numerical environment (S10 F9).** `ids.numeric_environment()` records:
+
+- the NumPy and Python versions;
+- the BLAS name, version and build configuration;
+- for an OpenBLAS DYNAMIC_ARCH build, the kernel chosen at run time;
+- NumPy's SIMD dispatch targets and the machine type.
+
+Its hash is part of the run identity, so chunks computed in different environments are never mixed. If an unfinished
+run of the same candidates, data, code, policy and stages exists under another environment, a new run is refused
+(`environment_mismatch_refused`). The caller must resume it where it started, or explicitly start a separate run
+(`allow_new_environment=True`, logged `environment_changed`). A run is bound to the frozen
 version whose root is in its identity. `Runner(registry_root=...)` resumes an interrupted run after a newer freeze,
 and `reconcile` and `history` always use the run's own version.
 
+**Failures and snapshots (S10 F4).** Under the workspace lock, a runner reloads its registry from the log before any
+work. It checks that its frozen version and its families are unchanged; the lock keeps other writers out until the
+invocation ends. Any exception in an invocation logs `run_failed` with its phase and error class before it
+propagates.
+
 **Reconciliation.** `runner.reconcile(ws, run_id, anchor)` reads only persisted records and the files they name,
-with hashes verified. It checks the following and returns counts and violations:
+with hashes verified. The close record is the authority (S10 F3). A run is in one of three states:
+
+- **`closed`:** `results.bin` carries the hash in `run_closed`, it rebuilds bit for bit from the hash-verified attempt
+  files through the same `build_results_table` the runner uses, and every package matches its recorded hash.
+- **`corrupted`:** a close record exists, but an artifact fails one of those checks. The integrity violations are
+  named.
+- **`incomplete`:** there is no close record. A results file found without one is never read as of record and is
+  reported as `unrecorded_results_file`.
+
+It also reports failed invocations. It checks the following and returns counts and violations:
 
 - exactly one completed, non-verification attempt per candidate per pass;
 - one terminal per attempt;
@@ -266,7 +311,7 @@ places needed care, and each was found by measurement or a failing test:
 | component | problem | fix |
 |---|---|---|
 | `long_run_var` (stats module) | ends in `acov @ w`, a BLAS matrix-vector product whose per-row bits depend on the number of rows (found by `test_stage3_rows_do_not_depend_on_the_batch`) | ω is computed one row at a time; `manhattan/stats` is not modified |
-| bootstrap means | a matrix product's per-column bits depend on the other columns (measured) | products run on fixed groups of 64 positions in the selected list (`kernels.BOOT_GROUP`); pass-B chunks are whole groups, so the same group is always the same product |
+| bootstrap means | a matrix product's per-column bits depend on the other columns (measured) | pass B runs in family-major order (`selection.b_order`). Products run on fixed groups of at most 64 candidates *of one family* (`kernels.BOOT_GROUP`), and pass-B chunks are whole groups. The same group is always the same product, and no family's groups depend on another family's candidates (S10 F6) |
 | negative zero | `-0.0` would change a fingerprint | positions are normalised (`w += 0.0`) |
 
 The same group being the same product is about 7.6× faster than one matrix-vector product per candidate, which is
@@ -332,8 +377,14 @@ The adapter is **disabled** (`adapters.Pr86AccessAdapter` raises `AdapterDisable
 1. **Identity.** `adapters.to_pr86_identity(view, i, run_id=, data_hash=, code=, window=)` returns exactly the field
    set of PR #86 `ledger.IDENTITY_FIELDS`: `executable, variant, hypothesis, family, batch, role, channel, designated,
    spec_hash, data_hash, window, code_version`. It uses `role="exploration"`, `channel="blind"` and
-   `designated=False`. `spec_hash` is the candidate's full hash and `executable` is
-   `sha256(candidate, engine digest, methodology)`. Shape is tested; PR #86's validator is not called (blocker B1).
+   `designated=False`. `spec_hash` is the hash of `adapters.evaluation_spec`, which holds the candidate, the family
+   sign, the template version, the resolved cost coefficients, the sizing constants, every policy field, the window,
+   the stages, the execution timing and the methodology. `executable` binds that spec to the engine digest (S10 F7).
+
+   Two evaluations that differ in any evaluation-affecting parameter never share an identity (tested field by
+   field). The identities were checked against PR #86 at `bab1a4d` in a scratch checkout: its
+   `validate_attempt_identity` accepts them and its `same_identity` distinguishes every variant
+   (`test_f7_identities_validate_against_pr86_and_never_collide`, run with `HTE_PR86_CHECKOUT`; skipped in CI).
 2. **Lifecycle mapping.**
 
    | HTE record | PR #86 equivalent |
@@ -361,6 +412,24 @@ The adapter is **disabled** (`adapters.Pr86AccessAdapter` raises `AdapterDisable
 
 The smallest next step after PR #86 merges is a test that feeds `to_pr86_identity` output to PR #86's
 `validate_attempt_identity`. Nothing else should be wired before B2-B4 are decided.
+
+**PR #85 boundary (disabled, S10 F8).** `adapters.Pr85ExecutionAdapter` and `adapters.to_pr85_decisions` refuse. The
+intended mapping:
+
+- HTE position row t (data through close t) becomes a PR #85 `Decision(root, contracts, decided_at=close t,
+  inputs_known_at=close t)`, with `ExecutionPolicy(lag >= 1)`;
+- contracts come from target weight × capital / (price × point value), rounded by PR #85.
+
+Blockers E1-E4:
+
+| id | blocker |
+|---|---|
+| E1 | PR #85 is unmerged |
+| E2 | the timing conventions differ |
+| E3 | PR #85 evaluates one position plan at a time, so it would be a new, heavier stage 3 run only on representatives |
+| E4 | PR #85 is uncalibrated, and HTE has no contract-level synthetic market |
+
+HTE imports nothing from `manhattan.execution` (tested).
 
 ## 8. Self-review: what was attacked, and what it found
 
@@ -424,3 +493,27 @@ at stage 1, not stage 0.
 | 12 | torn-tail recovery was not crash-atomic | fsynced copy before the cut; unrecorded copies logged later |
 
 Neither review is a substitute for an independent human reviewer. Its findings are limited by my own model of the system.
+
+## 9. Independent review S10: ten findings and their corrections
+
+S10 reproduced the 10^6 benchmark and found five merge blockers (F1-F5), four activation and integration blockers
+(F6-F9) and reporting inaccuracies (F10). Each defect was reproduced in this session before it was fixed, except F8
+and F10, which are a convention and text. Each has a regression test whose name starts with `test_f<N>_`.
+
+| # | finding | reproduction | correction |
+|---|---|---|---|
+| F1 | PIT look-ahead bypass: a short `probe_panel` gave a passing probe with **0 checks**, reused later | a leaky test template registered with `checks: 0, passed: true`, then registered again without a probe | full coverage required; probe results keyed by panel; canonical probe always runs; stored zero-check passes never reused; `test_only` needs an explicit, recorded allowance |
+| F2 | orphaned workers kept the inherited `flock` after the parent was killed: resume refused for ever | `kill -9` of the parent left 2 workers; resume raised "another runner" | `os.register_at_fork` closes lock descriptors in every child; pool workers exit with the parent (`PR_SET_PDEATHSIG` plus a `getppid` watchdog); tested with SIGKILL |
+| F3 | a rewritten `results.bin` passed reconciliation even with an anchor | stage-3 means inflated in a valid file: `violations: []` | close hash checked; table rebuilt from attempt files; packages checked; states `closed`/`corrupted`/`incomplete` |
+| F4 | a runner built before another writer registered a spec crashed in stage 4, with nothing recorded | `KeyError` in stage 4; log ended at `attempt_completed` | registry snapshot under the lock; `run_failed` with phase for every failed invocation |
+| F5 | negative-sign families evaluated in the positive direction | a `+` and a `-` family had identical gross means | `signed_positions`: exact negation; odd statistics mirror exactly; planted effect found only in the predicted direction |
+| F6 | unrelated registrations re-drew every family's bootstrap (seed included the registry root) | carry `p_c` 0.643 → 0.617, trend 0.517 → 0.536 after adding one commodity spec | seed bound to family and evaluation identity; family-major bootstrap groups; old candidates bit-identical after an unrelated registration |
+| F7 | PR #86 identity collision across policies or costs | two policies gave identical identities | `evaluation_spec`; validated against PR #86 `bab1a4d` |
+| F8 | same-close execution, unlike PR #85's delayed execution | by design (timing convention) | convention in run identity and packages; use restricted to throughput testing; disabled PR #85 boundary |
+| F9 | no numerical environment in the identity; cross-environment resume possible | identity held the engine digest only | environment (NumPy, BLAS build and run-time kernel, SIMD, machine) in the run identity; cross-environment resume refused |
+| F10 | reporting: log records vs attempts, registration time, CPU vs billed vCPU-hours, computed vs aliased simulations, null calibration | as reported | BENCHMARKS.md rewritten from records that state each quantity separately; package null note corrected (the null share is far below 5% because returns are net of costs) |
+
+The review also exposed a fault in my own F2 fix: the parent-death watchdog was installed in the main process when
+`workers=1`. A fork-with-threads warning revealed it, and it was corrected before commit.
+
+This round's corrections, like the earlier ones, have not been independently re-reviewed.

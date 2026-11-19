@@ -5,6 +5,9 @@ were run on **synthetic data** from `manhattan.hte.data.generate`. They are engi
 time, memory, storage, cache counts and funnel counts. They say nothing about any market, and none of them is
 evidence.
 
+They were recorded at commit `4355fa1`, after the S10 corrections. Every positions-based return in them uses
+same-close execution, so they measure throughput only.
+
 The commands, the hardware and the interpretation are in
 [docs/manhattan/hte/BENCHMARKS.md](../../docs/manhattan/hte/BENCHMARKS.md).
 
