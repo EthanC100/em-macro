@@ -13,7 +13,7 @@ owner decisions are made, HTE attempts would be registered there. This module st
 Mapping decisions (docs/manhattan/hte/ARCHITECTURE.md section 7):
 
     HTE                          PR #86 identity field
-    evaluation spec + engine     executable   (PR #86 binds code into the executable; HTE keeps it on the attempt)
+    executable spec hash         executable   (the same hash as spec_hash, see below)
     variant full hash            variant
     hypothesis full hash         hypothesis
     family full hash             family
@@ -21,11 +21,29 @@ Mapping decisions (docs/manhattan/hte/ARCHITECTURE.md section 7):
     "exploration"                role         (the only role HTE could ever map to; reserve/forward refused)
     "blind"                      channel      (HTE workloads are declared grids; adaptive additions are post_look)
     False                        designated   (HTE never makes a designated evaluation)
-    evaluation_spec hash         spec_hash    (candidate + every policy, cost, sizing, sign, window, stage and
-                                              timing parameter: S10 F7)
+    executable spec hash         spec_hash    (binding + engine digest + numerical environment: S11, below)
     panel data hash              data_hash
     {id, start, end, frequency}  window       (synthetic dates of the evaluation window)
-    {commit, engine_sha256}      code_version
+    {commit, engine_sha256,      code_version
+     numeric_environment_sha256}
+
+Identity levels (S11, the residual of S10 F7). PR #86 decides whether a completion is a new look, a rerun or a
+nondeterminism by ``Ledger.key`` = ``(spec_hash, data_hash, window id)`` alone; ``code_version`` is recorded but is
+not in the key. Manhattan's own executables carry the code version *inside* ``spec_hash`` (``manhattan.spec.executable``;
+ARCHITECTURE section 3: "a bug-fixed code version is a new executable of the same variant"). HTE therefore keeps
+two levels apart:
+
+    binding     ``evaluation_binding_hash``: the hash of ``evaluation_spec``: the scientific evaluation (candidate,
+                sign, costs, sizing, policy, window, stages, timing, methodology). No code, no environment.
+    executable  ``executable_spec``: {binding, engine_sha256, numeric_environment_sha256}. Its hash is PR #86's
+                ``spec_hash`` and ``executable``: one executable evaluation instance.
+
+So a change of engine code or of numerical environment is a new executable of the same binding: a new PR #86 key,
+an ``evaluation`` record, never a ``rerun`` of another engine's look and never a false ``nondeterminism`` that would
+suspend the family. The same binding, engine and environment keep one key, so PR #86's rerun and nondeterminism
+rules keep their meaning: different bits there are a real nondeterminism. No identity is arbitrary: each is a
+content hash of what ran, and an executable never adds a variant, hypothesis, family or binding, so no scientific
+count moves (``executable_accounting``).
 
 Blockers (any one keeps the adapter disabled):
     B1  PR #86 is not merged; its API is not stable from this branch's point of view.
@@ -75,26 +93,124 @@ def evaluation_spec(view, i: int, *, policy, fence: int, stages=(1, 2, 3, 4)) ->
     }
 
 
-def to_pr86_identity(view, i: int, *, run_id: str, data_hash: str, code: dict, window: dict, policy, fence: int,
-                     stages=(1, 2, 3, 4)) -> dict:
-    """The PR #86 schema-2 attempt identity of one HTE evaluation. ``spec_hash`` is the hash of
-    ``evaluation_spec`` (so two evaluations that differ in any evaluation-affecting parameter never share it);
-    ``executable`` binds that spec to the engine digest."""
+EXECUTABLE_LEVEL = "hte_executable"
+EXECUTABLE_SCHEMA = 1
+# PR #86 ``ledger.Ledger.key``: the fields that decide evaluation / rerun / nondeterminism (stated, not imported: B1)
+PR86_KEY = ("spec_hash", "data_hash", "window.id")
+
+
+def _sha(name: str, value) -> str:
+    if not isinstance(value, str) or not _HEX64.match(value) or set(value) == {"0"}:
+        raise ValueError(f"{name} is not a 64-hex SHA-256")
+    return value
+
+
+def evaluation_binding_hash(view, i: int, *, policy, fence: int, stages=(1, 2, 3, 4)) -> str:
+    """The scientific evaluation of candidate ``i``: the hash of ``evaluation_spec``. Code- and environment-free,
+    so every executable that evaluates the same thing on any engine or machine shares it."""
+    from . import ids
+    return ids.full_hash(evaluation_spec(view, i, policy=policy, fence=fence, stages=stages))
+
+
+def executable_spec(binding: str, code: dict) -> dict:
+    """One executable evaluation instance: a binding run by one engine digest in one numerical environment.
+    Refuses a code identity without both digests, and one whose environment digest does not match the environment
+    it carries (an environment is accounted for explicitly or not at all)."""
+    from . import ids
+    if not isinstance(code, dict):
+        raise ValueError("code identity must be the mapping of ids.code_identity()")
+    env_sha = _sha("numeric_environment_sha256", code.get("numeric_environment_sha256"))
+    if "numeric_environment" in code and ids.full_hash(code["numeric_environment"]) != env_sha:
+        raise ValueError("numeric_environment_sha256 does not match the numeric environment it describes")
+    return {"level": EXECUTABLE_LEVEL, "schema": EXECUTABLE_SCHEMA, "binding": _sha("binding", binding),
+            "engine_sha256": _sha("engine_sha256", code.get("engine_sha256")),
+            "numeric_environment_sha256": env_sha}
+
+
+def lineage(view, i: int, *, code: dict, policy, fence: int, stages=(1, 2, 3, 4)) -> dict:
+    """Every identity level of one HTE evaluation, scientific first: family > hypothesis > variant > candidate >
+    binding (all code-free), then the executable with the engine and environment it adds. PR #86's identity has no
+    field for the binding; HTE keeps this mapping (it is a pure function of the frozen registry and the run)."""
     from . import ids
     d = view.describe(int(i))
-    variant = bytes(view.variant[int(i)]).hex()
-    spec_hash = ids.full_hash(evaluation_spec(view, i, policy=policy, fence=fence, stages=stages))
-    exe = ids.full_hash({"evaluation_spec": spec_hash, "engine_sha256": code["engine_sha256"]})
+    binding = evaluation_binding_hash(view, i, policy=policy, fence=fence, stages=stages)
+    exe = executable_spec(binding, code)
+    return {"family": d["family_hash"], "hypothesis": d["hypothesis_hash"],
+            "variant": bytes(view.variant[int(i)]).hex(), "candidate": view.candidate_hash(int(i)),
+            "binding": binding, "executable": ids.full_hash(exe), "engine_sha256": exe["engine_sha256"],
+            "numeric_environment_sha256": exe["numeric_environment_sha256"]}
+
+
+def to_pr86_identity(view, i: int, *, run_id: str, data_hash: str, code: dict, window: dict, policy, fence: int,
+                     stages=(1, 2, 3, 4)) -> dict:
+    """The PR #86 schema-2 attempt identity of one HTE evaluation. ``spec_hash`` and ``executable`` are the hash of
+    ``executable_spec``: the binding (every evaluation-affecting parameter, S10 F7) plus the engine digest and the
+    numerical environment (S11), so PR #86's key separates engines and environments as Manhattan executables do."""
+    lin = lineage(view, i, code=code, policy=policy, fence=fence, stages=stages)
     out = {
-        "executable": exe, "variant": variant, "hypothesis": d["hypothesis_hash"], "family": d["family_hash"],
-        "batch": f"hte-{run_id}", "role": "exploration", "channel": "blind", "designated": False,
-        "spec_hash": spec_hash, "data_hash": data_hash, "window": dict(window),
-        "code_version": {"commit": code.get("commit"), "engine_sha256": code["engine_sha256"]},
+        "executable": lin["executable"], "variant": lin["variant"], "hypothesis": lin["hypothesis"],
+        "family": lin["family"], "batch": f"hte-{run_id}", "role": "exploration", "channel": "blind",
+        "designated": False, "spec_hash": lin["executable"], "data_hash": data_hash, "window": dict(window),
+        "code_version": {"commit": code.get("commit"), "engine_sha256": lin["engine_sha256"],
+                         "numeric_environment_sha256": lin["numeric_environment_sha256"]},
     }
     for k in ("spec_hash", "data_hash"):
         if not _HEX64.match(out[k]):
             raise ValueError(f"{k} is not a 64-hex SHA-256")
     return out
+
+
+def executable_accounting(completions, lineage_of: dict) -> dict:
+    """Read-only counts of HTE completions at every identity level, so that executions are never mistaken for tests.
+
+    ``completions``: PR #86 completion records (``{"type", "payload"}``, type ``evaluation``, ``rerun`` or
+    ``nondeterminism``) of HTE executables; ``lineage_of``: executable hash -> ``lineage(...)``. A completion whose
+    executable has no lineage is refused (it cannot be placed in a family).
+
+    ``looks`` counts PR #86 keys (as ``Ledger.looks``); ``completions`` counts every record (reruns included).
+    ``scientific`` counts distinct families, hypotheses, variants, candidates and bindings: engine and environment
+    changes never move these. ``cross_executable`` lists every (binding, data, window) evaluated by more than one
+    executable; ``divergent`` is true when their results differ (an engine or environment changed the answer),
+    and such families are listed in ``hold_families`` with the families PR #86 marks nondeterministic. This counts;
+    it never decides which unit is a statistical test (owner decision D-1)."""
+    recs = list(completions)
+    groups: dict = {}
+    sci = {k: set() for k in ("family", "hypothesis", "variant", "candidate", "binding")}
+    keys, exes, hold = set(), set(), set()
+    for r in recs:
+        if r.get("type") not in ("evaluation", "rerun", "nondeterminism"):
+            raise ValueError(f"not a completion record: {r.get('type')!r}")
+        p = r["payload"]
+        lin = lineage_of.get(p["executable"])
+        if lin is None or lin["executable"] != p["spec_hash"] or lin["family"] != p["family"]:
+            raise ValueError("a completion's executable has no matching HTE lineage")
+        for k in sci:
+            sci[k].add(lin[k])
+        keys.add((p["spec_hash"], p["data_hash"], p["window"]["id"]))
+        exes.add(p["executable"])
+        if r["type"] == "nondeterminism":
+            hold.add(p["family"])
+        g = groups.setdefault((lin["binding"], p["data_hash"], p["window"]["id"]),
+                              {"family": lin["family"], "executables": set(), "engines": set(),
+                               "environments": set(), "results": set()})
+        g["executables"].add(p["executable"])
+        g["engines"].add(lin["engine_sha256"])
+        g["environments"].add(lin["numeric_environment_sha256"])
+        g["results"].add(p["result_hash"])
+    cross = []
+    for (binding, data, win), g in sorted(groups.items()):
+        if len(g["executables"]) > 1:
+            divergent = len(g["results"]) > 1
+            if divergent:
+                hold.add(g["family"])
+            cross.append({"binding": binding, "data_hash": data, "window": win, "family": g["family"],
+                          "executables": len(g["executables"]), "engines": len(g["engines"]),
+                          "environments": len(g["environments"]), "distinct_results": len(g["results"]),
+                          "divergent": divergent})
+    return {"completions": len(recs), "looks": len(keys), "executables": len(exes),
+            "scientific": {k: len(v) for k, v in sci.items()}, "cross_executable": cross,
+            "hold_families": sorted(hold), "independent_statistical_tests": None,
+            "independent_statistical_tests_reason": "owner decision D-1 (PR #86): the counting unit is open"}
 
 
 class Pr86AccessAdapter:

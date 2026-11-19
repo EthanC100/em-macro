@@ -457,7 +457,11 @@ def test_pr86_adapter_is_disabled_and_identity_shape_matches_contract(baseline, 
     assert tuple(sorted(ident)) == tuple(sorted(adapters.PR86_IDENTITY_FIELDS))
     assert ident["role"] == "exploration" and ident["designated"] is False and ident["channel"] == "blind"
     spec = adapters.evaluation_spec(r.view, 3, policy=Policy(), fence=panel.fence)
-    assert ident["spec_hash"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
+    # S11: spec_hash is the executable (binding + engine + numerical environment); the binding is this spec's hash
+    lin = adapters.lineage(r.view, 3, code=r.code, policy=Policy(), fence=panel.fence)
+    assert lin["binding"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
+    assert ident["spec_hash"] == ident["executable"] == lin["executable"]
+    assert ident["spec_hash"] == ids.full_hash(adapters.executable_spec(lin["binding"], r.code))
 
 
 def test_hte_does_not_import_pr86_private_names():
