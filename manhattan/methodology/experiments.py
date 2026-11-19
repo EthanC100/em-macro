@@ -37,6 +37,7 @@ import numpy as np
 from scipy.special import ndtri
 
 from manhattan.stats import eprocess, elond, spa
+from manhattan.stats.schedule import gamma
 
 from . import evaluate, maxnull, worlds
 
@@ -45,6 +46,7 @@ ALPHAS = (0.05, 0.20)
 SCALES = {"protocol": (100, 15), "large": (120, 100), "huge": (120, 1000)}
 DAYS_RESERVE = 1750
 YEARS_RESERVE = DAYS_RESERVE / 252
+FIRST_SCREENING_BAR = 0.20 * float(gamma(1, 120)) / 15
 
 
 def rng_for(cell: str) -> np.random.Generator:
@@ -105,16 +107,21 @@ def e1(reps: int, workers: int, ms=(6, 60, 600, 3000), rhos=(0.5, 0.9)) -> dict:
 
 def e1b() -> dict:
     ms = (1, 6, 20, 200, 1_000, 10_000, 51_214, 100_000, 1_000_000, 10_000_000)
+    first_bar = FIRST_SCREENING_BAR
     rows = []
     for rho in (0.0, 0.5, 0.9):
         for m in ms:
             c = maxnull.critical(0.05, m, rho)
             d = maxnull.mde_single(0.05, 0.8, m, rho)
+            d1 = maxnull.mde_single(first_bar, 0.8, m, rho)
             rows.append({"m": m, "rho": rho, "critical_t_0.05": c, "mde_se_80": d,
                          "mde_sharpe_reserve_6.9y": maxnull.sharpe_from_se(d, YEARS_RESERVE),
-                         "mde_sharpe_hte_8.8y": maxnull.sharpe_from_se(d, 2220 / 252)})
-    return {"rows": rows, "note": "51,214 is the HTE 10^6 workload's variants per family (256,068 / 5); "
-                                  "manhattan.spec.MAX_GRID is 200 points per hypothesis."}
+                         "mde_sharpe_hte_8.8y": maxnull.sharpe_from_se(d, 2220 / 252),
+                         "mde_sharpe_reserve_6.9y_first_screening_bar": maxnull.sharpe_from_se(d1, YEARS_RESERVE)})
+    return {"rows": rows, "first_screening_bar": first_bar,
+            "note": "51,214 is the HTE 10^6 workload's variants per family (256,068 / 5); manhattan.spec.MAX_GRID "
+                    "is 200 points per hypothesis. The first screening bar is candidate (i)'s threshold for the "
+                    "first rejection in batch 1 of 15 families: 0.20 x gamma(1; 120) / 15 (Protocol v3.1 4.2-4.3)."}
 
 
 # ----------------------------------------------------------------------------------------------- programme runs
