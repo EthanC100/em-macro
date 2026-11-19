@@ -720,19 +720,52 @@ def test_no_order_routing_or_broker_names_exist():
         assert not any(bad in n for n in names), bad
 
 
+# Test files explicitly authorised to reference the execution model. Each runs PR #85's model only as a reference in
+# a cross-check that is skipped unless EXEC_REALISM_PR85_CHECKOUT is set. Production code has no exemption: the
+# dormant HTE bridge and the execution-realism adapter must not reference manhattan.execution at all.
+AUTHORISED_TEST_REFERENCES = {
+    "tests/test_manhattan_hte_execution_bridge.py": "EXEC_REALISM_PR85_CHECKOUT",
+}
+# ``\b``: ``manhattan.execution_realism`` is a different package and is not a reference to this model
+EXECUTION_REF = re.compile(r"manhattan\.execution\b|from manhattan import[^\n]*\bexecution\b")
+
+
 def test_nothing_in_production_imports_the_execution_model():
-    pat = re.compile(r"manhattan\.execution|from manhattan import[^\n]*\bexecution\b")
-    hits = []
+    pat = EXECUTION_REF
+    hits, used = [], set()
     for p in ROOT.rglob("*.py"):
         rel = p.relative_to(ROOT).as_posix()
         if rel.startswith(("manhattan/execution/", "tests/test_manhattan_execution.py", ".git/")):
             continue
-        if pat.search(p.read_text(encoding="utf-8", errors="replace")):
+        text = p.read_text(encoding="utf-8", errors="replace")
+        if pat.search(text):
+            gate = AUTHORISED_TEST_REFERENCES.get(rel)
+            if gate is not None and gate in text:
+                used.add(rel)
+                continue
             hits.append(rel)
+    assert used == set(AUTHORISED_TEST_REFERENCES), "an authorised exemption is stale: remove it"
+    assert all(r.startswith("tests/") for r in AUTHORISED_TEST_REFERENCES)
     for p in (ROOT / ".github/workflows").glob("*.yml"):
         if "manhattan.execution" in p.read_text(encoding="utf-8") or "manhattan/execution" in p.read_text(encoding="utf-8"):
             hits.append(p.name)
     assert hits == []
+
+
+def test_the_import_scanner_still_catches_every_reference_form():
+    for ref in ("import manhattan.execution", "import manhattan.execution as X", "from manhattan.execution import run",
+                "from manhattan.execution.account import Decision", "from manhattan import execution",
+                "from manhattan import config, execution as X", 'importlib.import_module("manhattan.execution")',
+                "importlib.import_module('manhattan.execution.costs')"):
+        assert EXECUTION_REF.search(ref), ref
+    for other in ("from manhattan.execution_realism import adapter", "import manhattan.execution_realism.demo",
+                  "from manhattan import execution_realism"):
+        assert not EXECUTION_REF.search(other), other
+    # no production path is exempt, and the dormant packages contain no reference of any form
+    assert not any(r.startswith("manhattan/") for r in AUTHORISED_TEST_REFERENCES)
+    for pkg in ("manhattan/execution_realism", "manhattan/hte_execution_bridge"):
+        for p in (ROOT / pkg).glob("*.py"):
+            assert not EXECUTION_REF.search(p.read_text(encoding="utf-8")), p
 
 
 def test_running_the_model_changes_no_switch_and_writes_no_file(tmp_path, monkeypatch):

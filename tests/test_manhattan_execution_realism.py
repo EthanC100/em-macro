@@ -601,10 +601,18 @@ def test_nothing_in_the_repository_imports_it():
         if PKG in f.parents or f.resolve() == me or ".git" in f.parts or bridge in f.parents or f == bridge_test:
             continue
         try:
-            text = f.read_text(errors="ignore")
-        except OSError:
+            tree = ast.parse(f.read_text(errors="ignore"))
+        except (OSError, SyntaxError):
             continue
-        assert "execution_realism" not in text, f
+        # imports, not mentions: a scanner that names the package in a string is not an importer
+        for node in ast.walk(tree):
+            names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                     else [node.module or ""] + [a.name for a in node.names] if isinstance(node, ast.ImportFrom)
+                     else [])
+            assert not any("execution_realism" in n for n in names), f
+            if isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", "")) in (
+                    "import_module", "__import__"):
+                assert "execution_realism" not in ast.unparse(node), f
 
 
 def test_running_it_leaves_the_manhattan_config_unchanged():

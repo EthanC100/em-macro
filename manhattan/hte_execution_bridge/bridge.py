@@ -47,7 +47,7 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 CONNECTION_REQUIREMENTS = (
     ("C1", "PR #85 and PR #93 merged; the #93 conformance tests made permanent (no checkout skip), or the "
-           "adapter's fill delegated to manhattan.execution.fill_order."),
+           "adapter's fill delegated to PR #85's fill_order (manhattan/execution/costs.py)."),
     ("C2", "PR #89 merged. HTE gains a policy field `lag` (default 1) and a contract-execution stage that calls "
            "this bridge only on stage-3 representatives (aliases copy results). HTE's own stage-3 vol scale is "
            "replaced by the decision-time scale (scaling.py), and `kernels.EXECUTION_TIMING` in "
