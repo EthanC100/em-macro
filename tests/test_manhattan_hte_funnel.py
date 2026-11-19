@@ -440,17 +440,24 @@ def test_stage5_is_disabled_whatever_the_caller_passes(tmp_path, panel):
     assert (ROOT / "config" / "manhattan.yaml").read_bytes() == cfg
 
 
+WINDOW = {"id": "synthetic", "start": "2001-03-01", "end": "2002-07-15", "frequency": "daily"}
+
+
+def _pr86_ident(r, policy, i, stages=(1, 2, 3, 4)):
+    return adapters.to_pr86_identity(r.view, i, run_id="HR-test", data_hash=r.data_hash, code=r.code,
+                                     window=WINDOW, policy=policy, fence=r.panel.fence, stages=stages)
+
+
 def test_pr86_adapter_is_disabled_and_identity_shape_matches_contract(baseline, panel):
     ws, out = baseline
     with pytest.raises(adapters.AdapterDisabled):
         adapters.Pr86AccessAdapter()
     r = Runner(ws, panel, Policy())
-    ident = adapters.to_pr86_identity(r.view, 3, run_id=out["run_id"], data_hash=r.data_hash, code=r.code,
-                                      window={"id": "synthetic", "start": "2001-03-01", "end": "2002-07-15",
-                                              "frequency": "daily"})
+    ident = _pr86_ident(r, Policy(), 3)
     assert tuple(sorted(ident)) == tuple(sorted(adapters.PR86_IDENTITY_FIELDS))
     assert ident["role"] == "exploration" and ident["designated"] is False and ident["channel"] == "blind"
-    assert ident["spec_hash"] == r.view.candidate_hash(3)
+    spec = adapters.evaluation_spec(r.view, 3, policy=Policy(), fence=panel.fence)
+    assert ident["spec_hash"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
 
 
 def test_hte_does_not_import_pr86_private_names():
@@ -848,3 +855,94 @@ def test_f6_seed_is_a_function_of_family_and_evaluation_only():
     assert s != boot_seed("b" * 64, "d" * 64, pol, 660)                 # another family: other draws
     assert s != boot_seed("a" * 64, "e" * 64, pol, 660)                 # other data: other draws
     assert s != boot_seed("a" * 64, "d" * 64, Policy(bootstrap_B=499), 660)
+
+
+
+# -- S10 review, F7: every evaluation-affecting parameter is in the identity ----------------------------------------
+
+def test_f7_policy_cost_stage_and_sign_changes_never_share_an_identity(baseline, panel, monkeypatch):
+    import dataclasses
+    ws, _ = baseline
+    r = Runner(ws, panel, Policy())
+    base = _pr86_ident(r, Policy(), 3)
+    seen = {base["spec_hash"]}
+    # every single policy field, changed alone
+    changes = {"name": "x", "version": 2, "warmup": 301, "skip_stage3_if_dominated": False,
+               "dedup_behavioural": False, "vol_target_ann": 0.2, "vol_halflife": 21, "vol_min_obs": 21,
+               "leverage_cap": 4.0, "bootstrap_B": 499, "bootstrap_L": 21, "meff_cap": 999, "benchmark_only": True}
+    assert set(changes) | {"stage3_selection", "top_k"} == {f.name for f in dataclasses.fields(Policy)}
+    for k, v in changes.items():
+        h = _pr86_ident(r, dataclasses.replace(Policy(), **{k: v}), 3)["spec_hash"]
+        assert h not in seen, k
+        seen.add(h)
+    gated = Policy(stage3_selection="top_k_per_spec", top_k=2, benchmark_only=True)
+    assert _pr86_ident(r, gated, 3)["spec_hash"] not in seen
+    assert _pr86_ident(r, Policy(), 3, stages=(1, 2))["spec_hash"] not in seen
+    dom = r.view.describe(3)["domain"]
+    monkeypatch.setitem(kernels.COSTS, dom, (kernels.COSTS[dom][0] * 2, kernels.COSTS[dom][1]))
+    assert _pr86_ident(r, Policy(), 3)["spec_hash"] not in seen
+    monkeypatch.undo()
+    assert _pr86_ident(r, Policy(), 3) == base                       # and it is deterministic
+    # different candidates (including the c1/c2 cost binding) never collide
+    hs = {_pr86_ident(r, Policy(), i)["spec_hash"] for i in range(len(r.view))}
+    assert len(hs) == len(r.view)
+
+
+PR86_CHECK = """
+import json, sys
+from manhattan import ledger as L
+ids = json.load(sys.stdin)
+for x in ids:
+    L.validate_attempt_identity(x)
+same = [[L.same_identity(a, b) for b in ids] for a in ids]
+print(json.dumps(same))
+"""
+
+
+@pytest.mark.skipif(not os.environ.get("HTE_PR86_CHECKOUT"),
+                    reason="needs a checkout of PR #86 (bab1a4d) in HTE_PR86_CHECKOUT; run locally")
+def test_f7_identities_validate_against_pr86_and_never_collide(baseline, panel):
+    import dataclasses
+    ws, _ = baseline
+    r = Runner(ws, panel, Policy())
+    idents = [_pr86_ident(r, Policy(), 3), _pr86_ident(r, Policy(vol_target_ann=0.2), 3),
+              _pr86_ident(r, Policy(bootstrap_B=499), 3), _pr86_ident(r, Policy(), 3, stages=(1, 2)),
+              _pr86_ident(r, dataclasses.replace(Policy(), leverage_cap=1.0), 3), _pr86_ident(r, Policy(), 4)]
+    p = subprocess.run([sys.executable, "-c", PR86_CHECK], input=json.dumps(idents), capture_output=True,
+                       text=True, cwd=os.environ["HTE_PR86_CHECKOUT"],
+                       env=dict(os.environ, PYTHONPATH=os.environ["HTE_PR86_CHECKOUT"]), timeout=120)
+    assert p.returncode == 0, p.stderr[-2000:]
+    same = json.loads(p.stdout)
+    n = len(idents)
+    assert all(same[i][i] for i in range(n))
+    assert not any(same[i][j] for i in range(n) for j in range(n) if i != j)   # PR #86 sees distinct identities
+
+
+# -- S10 review, F8: same-close execution is restricted to throughput testing ---------------------------------------
+
+def test_f8_execution_timing_is_in_the_identity_and_every_package(baseline):
+    ws, out = baseline
+    started = AttemptLog(ws.log_path).of_type("run_started")[0]["payload"]["identity"]
+    assert started["execution"] == kernels.EXECUTION_TIMING
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        pk = json.loads(p.read_text())
+        assert pk["execution_timing"] == kernels.EXECUTION_TIMING
+        assert pk["realistic_return_claims"] is False
+        assert "throughput" in pk["use_restriction"] and "PR #85" in pk["use_restriction"]
+        assert any("SAME-CLOSE" in w for w in pk["warnings"])
+
+
+def test_f8_changing_the_timing_convention_is_a_new_run(tmp_path, panel, monkeypatch):
+    ws = _ws(tmp_path)
+    a = Runner(ws, panel, Policy()).run_id
+    monkeypatch.setattr(kernels, "EXECUTION_TIMING", "delayed/v1")
+    assert Runner(ws, panel, Policy()).run_id != a
+
+
+def test_f8_pr85_boundary_is_disabled():
+    with pytest.raises(adapters.AdapterDisabled, match="lag"):
+        adapters.Pr85ExecutionAdapter()
+    with pytest.raises(adapters.AdapterDisabled):
+        adapters.to_pr85_decisions()
+    src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
+    assert "import manhattan.execution" not in src and "from manhattan.execution" not in src

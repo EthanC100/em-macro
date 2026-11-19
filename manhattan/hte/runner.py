@@ -339,7 +339,7 @@ def run_identity(view, data_hash: str, policy: Policy, fence: int, code: dict, p
                  stages: tuple = (1, 2, 3, 4)) -> dict:
     return {"registry_root": view.root, "data_hash": data_hash, "engine_sha256": code["engine_sha256"],
             "policy_hash": policy.hash(), "warmup": policy.warmup, "fence": fence, "methodology": METHODOLOGY,
-            "pass_a": pass_a, "stages": list(stages)}
+            "pass_a": pass_a, "stages": list(stages), "execution": kernels.EXECUTION_TIMING}
 
 
 def boot_seed(family_hash: str, data_hash: str, policy: Policy, fence: int) -> int:

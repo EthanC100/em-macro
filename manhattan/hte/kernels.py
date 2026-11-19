@@ -48,6 +48,11 @@ from manhattan.stats import bootstrap
 # per-unit-notional costs per domain: (linear spread, impact coefficient on |trade|^1.5); synthetic, uncalibrated
 COSTS = {"commodity": (4e-4, 2e-3), "rates": (1e-4, 5e-4), "fx": (1.5e-4, 8e-4)}
 DOMINANCE_MARGIN = 1e-9
+# execution-timing convention (S10 F8): a position set from data through the close of day t is assumed traded AT
+# that close and earns day t+1's return. This is a same-close fill with no execution delay, unlike PR #85's
+# delayed execution. It is part of every evaluation identity and makes HTE results suitable for synthetic
+# throughput and pipeline testing only, never for realistic return estimates.
+EXECUTION_TIMING = "same_close_fill_next_day_return/v1"
 
 # per-candidate stage 2 statistic columns
 S2_COLS = ("gross_mean", "net_mean", "net_std", "t_stat", "sharpe_ann", "turnover", "exposure", "active_frac",

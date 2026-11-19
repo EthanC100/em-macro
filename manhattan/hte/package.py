@@ -25,6 +25,9 @@ from . import ids, kernels, store
 from . import templates as TP
 
 SCHEMA = "manhattan.hte.package/1"
+USE_RESTRICTION = ("synthetic throughput and pipeline testing only: positions fill at the same close as the "
+                   "decision (no execution delay, unlike PR #85's lag >= 1), on uncalibrated synthetic costs and "
+                   "data; no statistic here estimates a realistic return")
 QS = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)
 
 
@@ -176,11 +179,14 @@ def build(runner, table: dict, spa_parts) -> dict:
                       "invocations_on_this_registry": len(runs_on_root),
                       "runs_on_any_registry_version": len(looked_runs.get(fh, ())),
                       "post_look_specs": sorted(h for h in spec_hashes if h in post)},
+            "execution_timing": kernels.EXECUTION_TIMING, "use_restriction": USE_RESTRICTION,
+            "realistic_return_claims": False,
             "independent_statistical_tests": None,
             "independent_statistical_tests_reason": "the counting unit for a multiple-testing denominator is an "
                                                     "owner decision (PR #86 D-1); M_eff below is descriptive only",
             "warnings": ["SYNTHETIC DATA: no statement here is about any market",
-                         "screening and descriptive statistics only; nothing here is evidence"]
+                         "screening and descriptive statistics only; nothing here is evidence",
+                         "SAME-CLOSE EXECUTION: returns are optimistic by construction; throughput testing only"]
             + (["some candidates repeat the economics or the positions of another family's candidates: the "
                 "families are not independent"] if cross_sem[idx].any() or (
                     "cross_family_behaviour" in table and table["cross_family_behaviour"][idx].any()) else []),

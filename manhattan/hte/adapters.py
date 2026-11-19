@@ -13,7 +13,7 @@ owner decisions are made, HTE attempts would be registered there. This module st
 Mapping decisions (docs/manhattan/hte/ARCHITECTURE.md section 7):
 
     HTE                          PR #86 identity field
-    candidate + engine digest    executable   (PR #86 binds code into the executable; HTE keeps it on the attempt)
+    evaluation spec + engine     executable   (PR #86 binds code into the executable; HTE keeps it on the attempt)
     variant full hash            variant
     hypothesis full hash         hypothesis
     family full hash             family
@@ -21,7 +21,8 @@ Mapping decisions (docs/manhattan/hte/ARCHITECTURE.md section 7):
     "exploration"                role         (the only role HTE could ever map to; reserve/forward refused)
     "blind"                      channel      (HTE workloads are declared grids; adaptive additions are post_look)
     False                        designated   (HTE never makes a designated evaluation)
-    candidate full hash          spec_hash
+    evaluation_spec hash         spec_hash    (candidate + every policy, cost, sizing, sign, window, stage and
+                                              timing parameter: S10 F7)
     panel data hash              data_hash
     {id, start, end, frequency}  window       (synthetic dates of the evaluation window)
     {commit, engine_sha256}      code_version
@@ -53,16 +54,41 @@ class AdapterDisabled(RuntimeError):
     pass
 
 
-def to_pr86_identity(view, i: int, *, run_id: str, data_hash: str, code: dict, window: dict) -> dict:
+def evaluation_spec(view, i: int, *, policy, fence: int, stages=(1, 2, 3, 4)) -> dict:
+    """Everything that can change an HTE evaluation of candidate ``i`` other than data and code (S10 F7): the
+    candidate, the family's predicted sign, the template version, the resolved cost coefficients of its domain
+    and cost model, the sizing constants, every policy field, the evaluation window, the requested stages, the
+    execution-timing convention and the methodology. Data and code are separate identity fields."""
+    from . import kernels
+    from . import templates as TP
+    d = view.describe(int(i))
+    c, k = kernels.cost_coefficients(d["domain"], TP.COST_MODELS[d["cost_model"]])
+    spec = view.reg.spec(int(view.spec_index[int(i)]))
+    return {
+        "candidate": view.candidate_hash(int(i)), "sign": d["sign"], "template": d["template"],
+        "template_version": spec["template_version"], "domain": d["domain"],
+        "costs": {"linear": c, "impact": k, "impact_power": 1.5},
+        "sizing": {"rule": d["sizing"], "ann_risk": TP.ANN_RISK, "vol_halflife": 60},
+        "policy": policy.as_dict(), "window": {"warmup": int(policy.warmup), "fence": int(fence)},
+        "stages": sorted(int(x) for x in stages), "execution": kernels.EXECUTION_TIMING,
+        "methodology": METHODOLOGY,
+    }
+
+
+def to_pr86_identity(view, i: int, *, run_id: str, data_hash: str, code: dict, window: dict, policy, fence: int,
+                     stages=(1, 2, 3, 4)) -> dict:
+    """The PR #86 schema-2 attempt identity of one HTE evaluation. ``spec_hash`` is the hash of
+    ``evaluation_spec`` (so two evaluations that differ in any evaluation-affecting parameter never share it);
+    ``executable`` binds that spec to the engine digest."""
     from . import ids
     d = view.describe(int(i))
-    cand = view.candidate_hash(int(i))
     variant = bytes(view.variant[int(i)]).hex()
-    exe = ids.full_hash({"candidate": cand, "engine_sha256": code["engine_sha256"], "methodology": METHODOLOGY})
+    spec_hash = ids.full_hash(evaluation_spec(view, i, policy=policy, fence=fence, stages=stages))
+    exe = ids.full_hash({"evaluation_spec": spec_hash, "engine_sha256": code["engine_sha256"]})
     out = {
         "executable": exe, "variant": variant, "hypothesis": d["hypothesis_hash"], "family": d["family_hash"],
         "batch": f"hte-{run_id}", "role": "exploration", "channel": "blind", "designated": False,
-        "spec_hash": cand, "data_hash": data_hash, "window": dict(window),
+        "spec_hash": spec_hash, "data_hash": data_hash, "window": dict(window),
         "code_version": {"commit": code.get("commit"), "engine_sha256": code["engine_sha256"]},
     }
     for k in ("spec_hash", "data_hash"):
@@ -76,3 +102,34 @@ class Pr86AccessAdapter:
 
     def __init__(self, *args, **kwargs):
         raise AdapterDisabled("the PR #86 accounting adapter is disabled: " + "; ".join(BLOCKERS))
+
+
+# -- PR #85 (synthetic futures execution, cost and roll model): disabled boundary (S10 F8) ---------------------------
+
+PR85_BLOCKERS = (
+    "E1 PR #85 is not merged; its API (manhattan.execution: run, Decision, ExecutionPolicy, MarketData) is not "
+    "stable from this branch",
+    "E2 timing differs: HTE fills at the decision close (EXECUTION_TIMING); PR #85 executes at the settlement of "
+    "the lag-th close strictly after the decision (lag >= 1). HTE results are therefore optimistic by one day and "
+    "are restricted to synthetic throughput testing",
+    "E3 PR #85 works on one position plan at a time (contracts, rolls, ticks, liquidity caps, FX); HTE stage 3 is "
+    "vectorised over candidates on continuous synthetic returns. Wiring it in is a new, heavier stage 3, run only "
+    "on stage-3 representatives",
+    "E4 PR #85 is uncalibrated (CALIBRATED = False) and takes caller-supplied markets; HTE has no contract-level "
+    "synthetic market to give it",
+)
+
+
+def to_pr85_decisions(*args, **kwargs):
+    """The intended mapping (not implemented): HTE position row t (data through close t) -> a PR #85
+    ``Decision(root, contracts, decided_at = close t, inputs_known_at = close t)`` with
+    ``ExecutionPolicy(lag >= 1)``, contracts from target weight x capital / (price x point value) rounded by PR #85.
+    Refuses until E1-E4 are resolved."""
+    raise AdapterDisabled("the PR #85 execution boundary is disabled: " + "; ".join(PR85_BLOCKERS))
+
+
+class Pr85ExecutionAdapter:
+    enabled = False
+
+    def __init__(self, *args, **kwargs):
+        raise AdapterDisabled("the PR #85 execution adapter is disabled: " + "; ".join(PR85_BLOCKERS))

@@ -81,8 +81,12 @@ def run_bench(target: int, workers: int, chunk: int, stages: tuple, root: Path, 
     ws_root = root / f"ws-{target}-{workers}-{'-'.join(map(str, stages))}"
     if ws_root.exists():
         shutil.rmtree(ws_root)
+    from .kernels import EXECUTION_TIMING
     out: dict = {"target": target, "workers": workers, "chunk": chunk, "stages": list(stages),
-                 "feature_cache": cache, "hardware": _hardware(), "synthetic": True}
+                 "feature_cache": cache, "hardware": _hardware(), "synthetic": True,
+                 "execution_timing": EXECUTION_TIMING,
+                 "use_restriction": "throughput measurement on synthetic data with same-close execution; "
+                                    "no return figure here is realistic or evidence"}
     u0, t0 = _usage(), time.perf_counter()
     bundles, scale = W.build(target)
     ws = Workspace(ws_root)
