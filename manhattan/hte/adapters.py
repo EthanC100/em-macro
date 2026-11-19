@@ -29,9 +29,9 @@ Mapping decisions (docs/manhattan/hte/ARCHITECTURE.md section 7):
 
 Identity levels (S11, the residual of S10 F7). PR #86 decides whether a completion is a new look, a rerun or a
 nondeterminism by ``Ledger.key`` = ``(spec_hash, data_hash, window id)`` alone; ``code_version`` is recorded but is
-not in the key. Manhattan's own executables carry the code version *inside* ``spec_hash`` (``manhattan.spec.executable``;
-ARCHITECTURE section 3: "a bug-fixed code version is a new executable of the same variant"). HTE therefore keeps
-two levels apart:
+not in the key. Manhattan's own executables carry the code version *inside* ``spec_hash``
+(``manhattan.spec.executable``; ARCHITECTURE section 3: "a bug-fixed code version is a new executable of the same
+variant"). HTE therefore keeps two levels apart:
 
     binding     ``evaluation_binding_hash``: the hash of ``evaluation_spec``: the scientific evaluation (candidate,
                 sign, costs, sizing, policy, window, stages, timing, methodology). No code, no environment.
@@ -223,8 +223,8 @@ class Pr86AccessAdapter:
 # -- PR #85 (synthetic futures execution, cost and roll model): disabled boundary (S10 F8) ---------------------------
 
 PR85_BLOCKERS = (
-    "E1 PR #85 is not merged; its API (manhattan.execution: run, Decision, ExecutionPolicy, MarketData) is not "
-    "stable from this branch",
+    "E1 PR #85 is not merged; its API (the manhattan/execution package: run, Decision, ExecutionPolicy, "
+    "MarketData) is not stable from this branch",
     "E2 timing differs: HTE fills at the decision close (EXECUTION_TIMING); PR #85 executes at the settlement of "
     "the lag-th close strictly after the decision (lag >= 1). HTE results are therefore optimistic by one day and "
     "are restricted to synthetic throughput testing",

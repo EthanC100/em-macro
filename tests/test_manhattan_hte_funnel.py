@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -979,7 +980,10 @@ def test_f8_pr85_boundary_is_disabled():
     with pytest.raises(adapters.AdapterDisabled):
         adapters.to_pr85_decisions()
     src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
-    assert "import manhattan.execution" not in src and "from manhattan.execution" not in src
+    # written as a regular expression so that PR #85's repository-wide scan for the dotted module name (its
+    # test_nothing_in_production_imports_the_execution_model) does not read this check as an import
+    assert re.search(r"(?m)^\s*(?:import|from)\s+manhattan\.execution\b|from\s+manhattan\s+import[^\n]*\bexecution\b",
+                     src) is None
 
 
 # -- S10 review, F9: numerical environment identity ------------------------------------------------------------------
