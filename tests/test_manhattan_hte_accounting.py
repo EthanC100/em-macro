@@ -127,6 +127,17 @@ def test_result_hashes_are_deterministic_and_aliases_take_their_representatives_
     assert [i for i in range(len(h)) if bytes(h[i]) != bytes(h2[i])] == [5]
 
 
+def test_result_hashes_do_not_depend_on_chunking_or_workspace(closed_run, tmp_path, panel):
+    _, r, t = closed_run
+    r2 = Runner(_ws(tmp_path / "other"), panel, Policy(), chunk_size=7)
+    out2 = r2.run()
+    t2 = store.read_arrays(r2.dir / out2["results_file"], out2["results_sha256"])
+    c = _cands(r)
+    assert np.array_equal(c, _cands(r2))
+    for dom, cols in ((O.RESULT_DOMAIN, O.intrinsic_columns), (O.COHORT_DOMAIN, lambda x: O.cohort_columns(x, c))):
+        assert np.array_equal(O.row_hashes(dom, c, cols(t)), O.row_hashes(dom, c, cols(t2)))
+
+
 def test_cohort_values_are_outside_the_result_hash(closed_run):
     _, r, t = closed_run
     c = _cands(r)
