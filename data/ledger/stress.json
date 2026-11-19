@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 8.478,
+    "janus": 8.487,
     "me": 0.526
    },
    "positions": [
@@ -295,7 +295,7 @@
      "book": "janus",
      "id": "J026",
      "instrument": "GB10Y",
-     "pnl_pct": -0.049,
+     "pnl_pct": -0.043,
      "move": "4.5611 -> 4.6467 (2008-08-29 to 2008-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -304,7 +304,7 @@
      "book": "janus",
      "id": "J027",
      "instrument": "DE10Y",
-     "pnl_pct": -0.068,
+     "pnl_pct": -0.065,
      "move": "4.27 -> 4.08 (2008-08-29 to 2008-10-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
@@ -411,7 +411,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 2.404,
+    "janus": 2.394,
     "me": 0.29
    },
    "positions": [
@@ -716,7 +716,7 @@
      "book": "janus",
      "id": "J026",
      "instrument": "GB10Y",
-     "pnl_pct": 0.06,
+     "pnl_pct": 0.052,
      "move": "0.5035 -> 0.419 (2020-02-28 to 2020-03-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -725,7 +725,7 @@
      "book": "janus",
      "id": "J027",
      "instrument": "DE10Y",
-     "pnl_pct": 0.05,
+     "pnl_pct": 0.048,
      "move": "-0.61 -> -0.47 (2020-02-28 to 2020-03-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
@@ -820,7 +820,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -2.553,
+    "janus": -2.349,
     "me": 0.317
    },
    "positions": [
@@ -1125,7 +1125,7 @@
      "book": "janus",
      "id": "J026",
      "instrument": "GB10Y",
-     "pnl_pct": -1.847,
+     "pnl_pct": -1.607,
      "move": "1.013 -> 3.6952 (2021-12-31 to 2022-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -1134,7 +1134,7 @@
      "book": "janus",
      "id": "J027",
      "instrument": "DE10Y",
-     "pnl_pct": 0.875,
+     "pnl_pct": 0.839,
      "move": "-0.24 -> 2.19 (2021-12-30 to 2022-10-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
