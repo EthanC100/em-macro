@@ -22,8 +22,6 @@ from datetime import date, datetime
 
 import numpy as np
 
-from manhattan.engine.pit import Window
-
 from .errors import MarketDataError
 from .schema import AdjustmentEvent, Contract, session_dates
 from .vintages import series_name
@@ -47,7 +45,7 @@ def roll_schedule(contracts, start: date, end: date, roll_sessions: int = 5) -> 
     return [(d, front_contract(contracts, d, roll_sessions).contract_id) for d in session_dates(start, end)]
 
 
-def build(window: Window, source_id: str, instrument_id: str, contracts, t: date, *, method: str = "difference",
+def build(window, source_id: str, instrument_id: str, contracts, t: date, *, method: str = "difference",
           field: str = "settle", roll_sessions: int = 5, adjustments=(), decision_time: datetime | None = None):
     """(sessions, values, held contract ids) of the continuous series as known at day ``t``."""
     if method not in METHODS:
