@@ -183,19 +183,16 @@ def _task_A(task: dict) -> dict:
 
 
 def _task_B(task: dict) -> dict:
-    """Stage 3 for the canonical indices ``task['idx']``: positions ``[lo, hi)`` of the selected list, with
-    ``lo`` a multiple of ``kernels.BOOT_GROUP`` (bootstrap groups are fixed by list position, never by chunk)."""
+    """Stage 3 for the canonical indices ``task['idx']``: positions ``[lo, hi)`` of the pass-B order (family-major,
+    ``selection.b_order``). ``task['groups']`` are the offsets of the bootstrap groups inside the task: whole
+    groups of at most ``kernels.BOOT_GROUP`` candidates of one family, fixed by the selection, never by chunk."""
     ctx = _CTX
     if task.get("raise"):
         raise RuntimeError("injected worker failure")
-    G = kernels.BOOT_GROUP
-    if task["lo"] % G or (task["hi"] % G and task["hi"] != task["total"]):
-        raise RunError("pass-B chunk is not aligned to bootstrap groups")
+    groups = list(task["groups"])
+    if not groups or groups[0] != 0:
+        raise RunError("pass-B chunk does not start at a bootstrap group")
     view, policy, cache = ctx["view"], ctx["policy"], ctx["cache"]
-    if "boot" not in ctx:
-        ctx["boot"] = kernels.boot_counts(cache.panel.fence - policy.warmup, policy.bootstrap_B,
-                                          policy.bootstrap_L, ctx["boot_seed"])
-    C = ctx["boot"]
     fence = cache.panel.fence
     n = fence - policy.warmup
     idx = np.asarray(task["idx"], dtype=np.int64)
@@ -251,13 +248,18 @@ def _task_B(task: dict) -> dict:
             hashes[j] = np.frombuffer(hashlib.sha256(np.ascontiguousarray(out["net"][r]).tobytes()).digest(),
                                       np.uint8)
             ok[j] = True
-    # bootstrap and SPA partial maxima per fixed group of list positions
+    # bootstrap and SPA partial maxima per fixed group (one family per group, that family's own draws)
     partials: list[tuple] = []
     mcol, ocol, pcol = (kernels.S3_COLS.index(c) for c in ("mean", "omega", "p_boot"))
-    for g0 in range(0, m, G):
-        rows = [j for j in range(g0, min(m, g0 + G)) if ok[j]]
+    bounds = groups + [m]
+    for g0, g1 in zip(bounds[:-1], bounds[1:]):
+        fams = set(fam[g0:g1].tolist())
+        if len(fams) != 1:
+            raise RunError("a bootstrap group spans more than one family")
+        rows = [j for j in range(g0, g1) if ok[j]]
         if not rows:
             continue
+        C = _family_counts(ctx, ctx["families"][int(fam[g0])])
         p, z = kernels.stage3_boot(C, net[rows], stats[rows, mcol], stats[rows, ocol])
         stats[rows, pcol] = p
         for j in rows:
@@ -265,7 +267,7 @@ def _task_B(task: dict) -> dict:
         for gval, parts in kernels.spa_partial(z, stats[rows, mcol], stats[rows, ocol], n, fam[rows]).items():
             partials.append((gval, parts))
     fam_ids = sorted({g for g, _ in partials})
-    B = C.shape[0]
+    B = policy.bootstrap_B
     spaT = np.zeros(len(fam_ids))
     spa = np.zeros((len(fam_ids), 3, B))
     spa_n = np.zeros(len(fam_ids), np.int64)
@@ -340,12 +342,28 @@ def run_identity(view, data_hash: str, policy: Policy, fence: int, code: dict, p
             "pass_a": pass_a, "stages": list(stages)}
 
 
-def boot_seed(view, data_hash: str, policy: Policy, fence: int) -> int:
-    """The bootstrap seed is a function of registered identities only: no caller can choose it, so a bootstrap
-    cannot be re-drawn until a p-value looks better without a new, logged run identity."""
-    h = ids.full_hash({"registry_root": view.root, "data_hash": data_hash, "warmup": policy.warmup,
-                       "fence": fence, "B": policy.bootstrap_B, "L": policy.bootstrap_L})
+def boot_seed(family_hash: str, data_hash: str, policy: Policy, fence: int) -> int:
+    """A family's bootstrap seed (S10 F6): a function of the family's immutable identity and of the evaluation
+    (data, window, B, L, methodology) only. No caller can choose it, and registering or freezing *other* specs
+    cannot re-draw a family's bootstrap: re-drawing needs a different family identity, which is a new, flagged
+    family (semantic duplicates, post-look by economics)."""
+    h = ids.full_hash({"family": family_hash, "data_hash": data_hash, "warmup": policy.warmup, "fence": fence,
+                       "B": policy.bootstrap_B, "L": policy.bootstrap_L, "methodology": METHODOLOGY})
     return int(h[:16], 16)
+
+
+BOOT_CACHE_MAX = 4                    # count matrices (about 18 MB each at 2,220 days) kept per worker
+
+
+def _family_counts(ctx: dict, family_hash: str) -> np.ndarray:
+    cache = ctx.setdefault("boot", {})
+    if family_hash not in cache:
+        if len(cache) >= BOOT_CACHE_MAX:
+            cache.pop(next(iter(cache)))
+        pol, panel = ctx["policy"], ctx["cache"].panel
+        cache[family_hash] = kernels.boot_counts(panel.fence - pol.warmup, pol.bootstrap_B, pol.bootstrap_L,
+                                                 boot_seed(family_hash, panel.data_hash, pol, panel.fence))
+    return cache[family_hash]
 
 
 class Runner:
@@ -570,7 +588,7 @@ class Runner:
     def _work_items(self, pas: str) -> np.ndarray:
         if pas == "A":
             return np.arange(len(self.view), dtype=np.int64)
-        return self._selection()["selected"]
+        return self._selection()["b_order"]
 
     def _covered(self, pas: str) -> np.ndarray:
         items = self._work_items(pas)
@@ -595,8 +613,8 @@ class Runner:
         ranges = []
         cs = self.chunk_size
         if pas == "B":                                # pass-B chunks are whole bootstrap groups
-            G = kernels.BOOT_GROUP
-            cs = -(-cs // G) * G
+            self._execute(pas, self._group_ranges(cov), verification=False)
+            return
         if pending.size:
             # contiguous runs of pending positions, cut into chunks
             breaks = np.flatnonzero(np.diff(pending) != 1) + 1
@@ -604,6 +622,29 @@ class Runner:
                 for s in range(0, run.size, cs):
                     ranges.append((int(run[s]), int(run[min(s + cs, run.size) - 1]) + 1))
         self._execute(pas, ranges, verification=False)
+
+    def _group_ranges(self, cov: np.ndarray) -> list[tuple]:
+        """Pass-B chunks: consecutive uncovered bootstrap groups packed up to ``chunk_size`` (at least one group)."""
+        starts = np.flatnonzero(self._selection()["b_group_start"]).tolist() + [cov.size]
+        ranges, cur = [], None
+        for g0, g1 in zip(starts[:-1], starts[1:]):
+            done = cov[g0:g1]
+            if done.any() and not done.all():
+                raise RunError("a bootstrap group is partly covered")
+            if done.all():
+                if cur:
+                    ranges.append(cur)
+                cur = None
+                continue
+            if cur and g1 - cur[0] <= self.chunk_size:
+                cur = (cur[0], g1)
+            else:
+                if cur:
+                    ranges.append(cur)
+                cur = (g0, g1)
+        if cur:
+            ranges.append(cur)
+        return ranges
 
     def _prior_failed(self, pas: str) -> list[tuple]:
         """Every failed or interrupted attempt of this pass: a new attempt names each one whose range it overlaps,
@@ -622,11 +663,12 @@ class Runner:
         rdir = self.dir / pas
         rdir.mkdir(parents=True, exist_ok=True)
         items = self._work_items(pas)
+        gstart = self._selection()["b_group_start"] if pas == "B" else None
         sel_sha = self._selection_record()["sha256"] if pas == "B" else None
         prior = self._prior_failed(pas)
         inflight = max(1, 2 * self.workers)
         ctx = {"view": self.view, "policy": self.policy, "cache": self.cache, "fam_of_spec": self.fam_of_spec,
-               "boot_seed": boot_seed(self.view, self.data_hash, self.policy, self.panel.fence)}
+               "families": self.families}
         pool = None
         if self.workers > 1:
             # ProcessPoolExecutor, not multiprocessing.Pool: when a worker dies (killed, out of memory) Pool loses
@@ -655,7 +697,7 @@ class Runner:
             t = {"path": str(rdir / fname), "lo": lo, "hi": hi, "stage2": self.pass_a == "stages_1_2"}
             if pas == "B":
                 t["idx"] = items[lo:hi]
-                t["total"] = int(items.size)
+                t["groups"] = np.flatnonzero(gstart[lo:hi]).tolist()
             self._tasks_dispatched += 1
             if raise_at is not None and self._tasks_dispatched == raise_at:
                 t["raise"] = True
@@ -807,8 +849,19 @@ class Runner:
                 fams_per.setdefault(g, set()).add(f)
             multi = np.array([len(fams_per[g]) > 1 for g in inv.tolist()], bool)
             cross[li] = multi
-        return {"selected": np.flatnonzero(eligible).astype(np.int64), "alias_of": alias_of, "planned": planned,
-                "cross_family_behaviour": cross}
+        selected = np.flatnonzero(eligible).astype(np.int64)
+        # pass-B order: family-major (families by hash), canonical order within a family; bootstrap groups are
+        # consecutive blocks of BOOT_GROUP inside one family, so a family's groups and draws never depend on other
+        # families' candidates (S10 F6)
+        b_order = selected[np.lexsort((selected, fam[selected]))]
+        b_group_start = np.zeros(b_order.size, bool)
+        if b_order.size:
+            fb = fam[b_order]
+            first = np.r_[True, fb[1:] != fb[:-1]]
+            rank = np.arange(b_order.size) - np.maximum.accumulate(np.where(first, np.arange(b_order.size), 0))
+            b_group_start = (rank % kernels.BOOT_GROUP) == 0
+        return {"selected": selected, "alias_of": alias_of, "planned": planned, "cross_family_behaviour": cross,
+                "b_order": b_order.astype(np.int64), "b_group_start": b_group_start}
 
     def _select(self) -> None:
         sel = self.compute_selection()
@@ -1081,7 +1134,7 @@ def history(ws: Workspace, run_id: str, canonical_index: int) -> list[dict]:
         else:
             if sel is None:
                 s = [x["payload"] for x in recs if x["type"] == "selection"][-1]
-                sel = store.read_arrays(ws.run_dir(run_id) / s["file"], s["sha256"])["selected"]
+                sel = store.read_arrays(ws.run_dir(run_id) / s["file"], s["sha256"])["b_order"]
             hit = canonical_index in set(sel[p["lo"]:p["hi"]].tolist())
         if hit:
             out.append({"attempt_id": r["hash"], "pass": p["pass"], "seq": r["seq"],

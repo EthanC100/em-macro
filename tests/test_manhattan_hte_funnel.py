@@ -561,7 +561,9 @@ def test_renamed_family_keeps_its_own_complete_spa_and_is_flagged(tmp_path, pane
           for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
     a, c = pk["synthetic-trend"], pk["renamed-trend"]
     assert a["spa"]["computed"] and c["spa"]["computed"]
-    assert a["spa"]["variants"] == c["spa"]["variants"] and a["spa"]["p_c"] == c["spa"]["p_c"]
+    # same series, so the same SPA statistic; each family has its own bootstrap draws (seed bound to the family's
+    # identity, S10 F6), which is why a renamed copy must be flagged rather than trusted
+    assert a["spa"]["variants"] == c["spa"]["variants"] and a["spa"]["T"] == c["spa"]["T"]
     for p in (a, c):
         assert p["denominators"]["cross_family_semantic_duplicates"] == p["denominators"]["candidates"]
         assert p["denominators"]["cross_family_behavioural_duplicates"] > 0
@@ -803,3 +805,46 @@ def test_f5_planted_effect_is_found_only_in_the_predicted_direction(tmp_path):
     assert pk["trend-up"]["family"]["sign"] == "+" and pk["trend-down"]["family"]["sign"] == "-"
     assert pk["trend-up"]["spa"]["p_c"] < 0.05
     assert pk["trend-down"]["spa"]["p_c"] > 0.5
+
+
+
+# -- S10 review, F6: bootstrap draws bound to the family --------------------------------------------------------------
+
+def test_f6_unrelated_registrations_do_not_change_a_familys_draws(tmp_path, panel):
+    """The S10 counterexample: registering an unrelated spec and re-freezing re-drew every family's bootstrap."""
+    ws, o1 = _run(tmp_path, panel, chunk_size=64)
+    fam = R.family("unrelated", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "commodity")
+    reg = ws.registry()
+    reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                  "vol_halflife": [20], "rebalance": [1]}))])
+    reg.freeze()
+    o2 = Runner(ws, panel, Policy(), chunk_size=200).run()
+    assert o2["run_id"] != o1["run_id"]
+
+    def by_family(o):
+        return {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+                for p in (ws.run_dir(o["run_id"]) / "packages").glob("*.json")}
+
+    a, b = by_family(o1), by_family(o2)
+    for name in a:
+        assert a[name]["spa"] == b[name]["spa"], name                 # bit-identical SPA, every family
+    t1 = store.read_arrays(ws.run_dir(o1["run_id"]) / "results.bin", o1["results_sha256"])
+    t2 = store.read_arrays(ws.run_dir(o2["run_id"]) / "results.bin", o2["results_sha256"])
+    r1, r2 = Runner(ws, panel, Policy(), registry_root=reg.frozen(0).root), Runner(ws, panel, Policy())
+    k1 = {bytes(r1.view.cand[i]): i for i in range(len(r1.view))}
+    for j in range(len(r2.view)):
+        i = k1.get(bytes(r2.view.cand[j]))
+        if i is not None:                                               # every old candidate: identical stage 3
+            assert np.array_equal(t1["stats3"][i], t2["stats3"][j], equal_nan=True)
+    assert "unrelated" in b and "unrelated" not in a
+
+
+def test_f6_seed_is_a_function_of_family_and_evaluation_only():
+    from manhattan.hte.runner import boot_seed
+    pol = Policy()
+    s = boot_seed("a" * 64, "d" * 64, pol, 660)
+    assert s == boot_seed("a" * 64, "d" * 64, pol, 660)
+    assert s != boot_seed("b" * 64, "d" * 64, pol, 660)                 # another family: other draws
+    assert s != boot_seed("a" * 64, "e" * 64, pol, 660)                 # other data: other draws
+    assert s != boot_seed("a" * 64, "d" * 64, Policy(bootstrap_B=499), 660)
