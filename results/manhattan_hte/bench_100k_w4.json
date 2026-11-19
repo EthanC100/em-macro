@@ -1,0 +1,169 @@
+{
+ "cache": {
+  "compute_s": 3.666926456997544,
+  "corrupt": 0,
+  "disk_hits": 8,
+  "mem_hits": 459450,
+  "misses": 631
+ },
+ "chunk": 512,
+ "cpu_hours": {
+  "note": "process CPU time (user+system, parent and workers); not billed time",
+  "per_100k": 0.05353135296126647,
+  "per_1k": 0.0005353135296126647,
+  "per_1m_linear_extrapolation": 0.5353135296126647
+ },
+ "execution_timing": "same_close_fill_next_day_return/v1",
+ "feature_cache": true,
+ "hardware": {
+  "blas": "scipy-openblas 0.3.34.106.0",
+  "blas_threads_env": "1",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags": "avx2,avx512f,fma",
+  "logical_cpus": 4,
+  "mem_gib": 15.7,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "log": {
+  "attempt_records": 686,
+  "attempts_started": 343,
+  "records_this_run": 689,
+  "records_total": 696
+ },
+ "memory": {
+  "peak_rss_largest_child_mib": 386.23828125,
+  "peak_rss_parent_mib": 320.671875
+ },
+ "panel": {
+  "assets": {
+   "commodity": 12,
+   "fx": 10,
+   "rates": 8
+  },
+  "data_hash": "435bbc92b04d5c4beaad96ec199467480c0c84e2502d28aab86e4a70579f615e",
+  "evaluated_days": 2220
+ },
+ "reconciliation": {
+  "attempts": {
+   "completed": 343,
+   "failed": 0,
+   "interrupted": 0,
+   "started": 343,
+   "unfinished": 0,
+   "verification": 0
+  },
+  "final_status": {
+   "s1": {
+    "degenerate": 456,
+    "dominated": 0,
+    "failed": 0,
+    "not_run": 0,
+    "pass": 99096
+   },
+   "s3": {
+    "alias": 23628,
+    "computed": 75468,
+    "failed": 0,
+    "not_run": 0,
+    "skipped_degenerate": 456,
+    "skipped_dominated": 0,
+    "skipped_failed_upstream": 0,
+    "skipped_not_selected": 0
+   }
+  },
+  "registered": {
+   "candidates": 99552,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 24888
+  },
+  "violations": []
+ },
+ "registration": {
+  "candidates_per_s": 29797.429006876166,
+  "counts": {
+   "candidates": 99552,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 24888
+  },
+  "cpu_s": 3.2305960000000002,
+  "report": {
+   "duplicate_submissions": 0,
+   "registered_candidates": 99552,
+   "registered_specs": 30,
+   "rejected": 0,
+   "submitted": 30
+  },
+  "scale": 23.71373705661655,
+  "seconds": 3.3409593819999372
+ },
+ "run": {
+  "closed": true,
+  "cpu_s": 191.849517,
+  "cpu_utilisation": 0.8759775760557249,
+  "result_root": "3c26657bd405b3ed557f34b89e4f0bd895e09be7fa23dd0fe97a14d26c57bbcd",
+  "run_id": "HR-ed1305324cce5874",
+  "timings": {
+   "pass_A_s": 21.249280974000158,
+   "pass_B_s": 22.549859653000112,
+   "selection_s": 0.2689149970001381,
+   "stage4_s": 5.999356473000034,
+   "warm_s": 4.421556480999925
+  },
+  "wall_s": 54.75297605900005
+ },
+ "selection_counts": {
+  "alias": 23628,
+  "computed": 75468,
+  "cross_family_behaviour": 0,
+  "skipped_degenerate": 456
+ },
+ "stage3_accounting": {
+  "computed_simulations": 75468,
+  "degenerate_not_simulated": 456,
+  "dominated_not_simulated": 0,
+  "exact_aliases_not_simulated": 23628
+ },
+ "stages": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "storage_bytes": {
+  "attempt_log": 438380,
+  "feature_cache": 127128960,
+  "packages": 26937,
+  "pass_A": 13071537,
+  "pass_B": 12889284,
+  "per_candidate_excluding_cache": 650.4886692381871,
+  "registry": 11562522,
+  "results": 24490116,
+  "total": 191886408
+ },
+ "synthetic": true,
+ "target": 100000,
+ "throughput": {
+  "end_to_end_including_registration_candidates_per_s": 1713.6384244635087,
+  "end_to_end_including_registration_s": 58.093935440999985,
+  "pass_A_candidates_per_s": 4684.9585226816935,
+  "pass_A_label": "stages 1+2 (screen + screening stats)",
+  "pass_B_candidates_per_s": 3346.717059942299,
+  "pass_B_computed": 75468,
+  "run_candidates_per_s": 1818.2025373876656
+ },
+ "use_restriction": "throughput measurement on synthetic data with same-close execution; no return figure here is realistic or evidence",
+ "vcpu_hours_reserved": {
+  "note": "wall time (registration included) x the machine's vCPUs: what an instance of this size bills, whatever the CPU utilisation",
+  "this_run": 0.06454881715666665,
+  "vcpus": 4
+ },
+ "workers": 4
+}

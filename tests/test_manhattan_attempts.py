@@ -1,8 +1,14 @@
-"""Synthetic lifecycle accounting, not end-to-end access authorization."""
+"""Synthetic lifecycle accounting, not end-to-end access authorization.
+
+Phase 4B correction: these 4A lifecycle mechanics are role-independent, so they run on the exploration role. A
+reserve or forward completion can no longer be written through the storage API without a completion proof
+(owner decision D-5; tests in test_manhattan_binding_access.py). Hash-valid forgeries use ``forge`` (a writer with
+file access), because ``Ledger.append`` refuses lifecycle record types."""
 import json
 import pytest
 from manhattan import ledger as L
 from manhattan.attempts import reconcile_lifecycle
+from manhattan_attempt_fixtures import forge
 from test_manhattan_registry import ev as legacy_ev
 
 
@@ -66,7 +72,7 @@ def test_unregistered_and_duplicate_terminal(tmp_path):
     b = L.Ledger(tmp_path / 'other', 'test', 'test')
     a = b.start_evaluation(ev())
     end = b.end_attempt(a['hash'], status='failed', reason='execution_error')
-    b.append(end['type'], end['payload'])
+    forge(b, end['type'], end['payload'])
     with pytest.raises(L.LedgerError, match='duplicate'):
         audit(b)
 
@@ -102,10 +108,10 @@ def test_semantic_forgery_with_valid_chain(tmp_path, forgery):
     a = b.start_evaluation(ev())
     rec = b.record_evaluation(**ev(), attempt_id=a['hash'])
     if forgery == 'retry':
-        b.append('evaluation_started', {**a['payload'], 'supersedes': a['hash']})
+        forge(b, 'evaluation_started', {**a['payload'], 'supersedes': a['hash']})
     else:
         x = b.start_evaluation(ev())
-        b.append('evaluation', {**rec['payload'], 'attempt_id': x['hash'], 'family': 'wrong'})
+        forge(b, 'evaluation', {**rec['payload'], 'attempt_id': x['hash'], 'family': 'wrong'})
     with pytest.raises(L.LedgerError):
         audit(b)
 
@@ -194,7 +200,7 @@ def test_incomplete_completion_is_not_counted(tmp_path, field, kind):
     a = b.start_evaluation(ev())
     payload = {**ev(), 'attempt_id': a['hash'], 'reconstructed': False, 'evidential_weight': 1}
     del payload[field]
-    b.append(kind, payload)  # hash-valid semantic corruption, not a broken chain
+    forge(b, kind, payload)  # hash-valid semantic corruption, not a broken chain
     with pytest.raises(L.LedgerError, match='completion schema'):
         audit(b)
 
@@ -202,7 +208,7 @@ def test_incomplete_completion_is_not_counted(tmp_path, field, kind):
 def test_start_payload_alone_is_not_a_completion(tmp_path):
     b = book(tmp_path)
     a = b.start_evaluation(ev())
-    b.append('evaluation', {**a['payload'], 'attempt_id': a['hash']})
+    forge(b, 'evaluation', {**a['payload'], 'attempt_id': a['hash']})
     with pytest.raises(L.LedgerError, match='completion schema'):
         audit(b)
 
@@ -218,7 +224,7 @@ def test_malformed_completion_is_not_counted(tmp_path, field, value):
     a = b.start_evaluation(ev())
     payload = {**ev(), 'attempt_id': a['hash'], 'reconstructed': False, 'evidential_weight': 1,
                field: value}
-    b.append('evaluation', payload)
+    forge(b, 'evaluation', payload)
     with pytest.raises(L.LedgerError, match='completion schema'):
         audit(b)
 
@@ -242,7 +248,7 @@ def test_unknown_code_cannot_create_or_certify_retry(tmp_path, version):
     with pytest.raises(L.LedgerError, match='code identity'):
         b.start_evaluation(ev(code_version=version), supersedes=a['hash'])
     assert b.head == before
-    b.append('evaluation_started', {**a['payload'], 'supersedes': a['hash']})
+    forge(b, 'evaluation_started', {**a['payload'], 'supersedes': a['hash']})
     with pytest.raises(L.LedgerError, match='code identity'):
         audit(b)
 
@@ -254,7 +260,7 @@ def test_missing_retry_code_is_rejected_in_writer_and_reconciliation(tmp_path):
     a = b.start_evaluation(payload)
     with pytest.raises(L.LedgerError, match='code identity'):
         b.start_evaluation(payload, supersedes=a['hash'])
-    b.append('evaluation_started', {**a['payload'], 'supersedes': a['hash']})
+    forge(b, 'evaluation_started', {**a['payload'], 'supersedes': a['hash']})
     with pytest.raises(L.LedgerError, match='code identity'):
         audit(b)
 
