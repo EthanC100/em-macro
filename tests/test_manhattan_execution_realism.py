@@ -593,8 +593,12 @@ def test_no_file_network_environment_subprocess_or_broker():
 
 def test_nothing_in_the_repository_imports_it():
     me = Path(__file__).resolve()
+    # the one allowed importer: the dormant HTE execution bridge (docs/manhattan/HTE_EXECUTION_BRIDGE.md), which is
+    # itself imported by nothing but its own tests
+    bridge = ROOT / "manhattan/hte_execution_bridge"
+    bridge_test = ROOT / "tests/test_manhattan_hte_execution_bridge.py"
     for f in ROOT.rglob("*.py"):
-        if PKG in f.parents or f.resolve() == me or ".git" in f.parts:
+        if PKG in f.parents or f.resolve() == me or ".git" in f.parts or bridge in f.parents or f == bridge_test:
             continue
         try:
             text = f.read_text(errors="ignore")
