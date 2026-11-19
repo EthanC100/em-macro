@@ -26,8 +26,17 @@ KEEP = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TZ", "TMPDIR", "
 KEEP_PREFIX = ("LC_",)
 CLOSED_PROXY = "http://127.0.0.1:9"            # discard port: nothing listens; a request fails at once
 NONEXISTENT_STORE = "/nonexistent/em-macro-data"
-NETWORK_FS = {"nfs", "nfs4", "cifs", "smbfs", "smb3", "fuse.sshfs", "9p", "afs", "ceph", "glusterfs", "fuse.s3fs",
-              "fuse.gcsfuse", "fuse.rclone", "virtiofs"}
+NETWORK_FS = {"nfs", "nfs3", "nfs4", "cifs", "smb", "smbfs", "smb3", "9p", "afs", "ceph", "glusterfs", "virtiofs",
+              "lustre", "gpfs", "beegfs", "davfs", "webdav", "afpfs", "autofs", "macfuse", "osxfuse", "fuse"}
+LOCAL_FUSE = {"fuseblk"}                      # a local block device through FUSE (NTFS, exFAT)
+
+
+def is_network_fs(typ: str | None) -> bool:
+    """True for a network, automounted or user-space (FUSE) file system, and for an unknown one (fail closed)."""
+    if typ is None:
+        return True
+    t = typ.lower()
+    return t not in LOCAL_FUSE and (t in NETWORK_FS or t.startswith(("fuse.", "macfuse", "osxfuse", "nfs", "smb")))
 
 
 class Refused(PermissionError):
@@ -60,9 +69,12 @@ def check_root(root: Path, repo: Path = REPO) -> Path:
     rp = Path(repo).resolve()
     if r == rp or rp in r.parents or r in rp.parents:
         raise Refused(f"the run root must be outside the repository checkout ({rp}) and must not contain it")
-    typ = procs.fs_type(r if r.exists() else r.parent)
-    if typ in NETWORK_FS:
-        raise Refused(f"the run root is on a network file system ({typ}); locks need a local disk")
+    probe = r
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    typ = procs.fs_type(probe)
+    if is_network_fs(typ):
+        raise Refused(f"the run root's file system is {typ or 'unknown'}: it must be a local disk, where locks hold")
     return r
 
 
@@ -81,7 +93,11 @@ def manhattan_switches(repo: Path = REPO) -> list[str]:
     reasons = [f"config/manhattan.yaml invalid: {x}" for x in errors]
     for keys, want in ALL_OFF:
         got = _get(cfg, keys)
-        if got != want or type(got) is not type(want):
+        if isinstance(want, bool) or isinstance(want, str):
+            same = got is want if isinstance(want, bool) else got == want
+        else:                                      # a number: 0 and 0.0 are the same position; True is not 0
+            same = isinstance(got, (int, float)) and not isinstance(got, bool) and got == want
+        if not same:
             reasons.append(f"{'.'.join(keys)} is {got!r}, not {want!r}")
     return reasons
 

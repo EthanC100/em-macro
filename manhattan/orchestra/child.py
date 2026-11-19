@@ -43,6 +43,11 @@ def group_rss_mb(pgid: int) -> float:
     return sum(rss for _, rss, _ in procs.group(pgid)) / 2**20
 
 
+def maxrss_mb(v: int, platform: str = sys.platform) -> float:
+    """``ru_maxrss`` is in bytes on macOS and in KiB on Linux."""
+    return v / 2**20 if platform == "darwin" else v / 1024.0
+
+
 class _Stop(KeyboardInterrupt):
     pass
 
@@ -64,7 +69,7 @@ def main(argv=None) -> int:
         atomic_write_json(exit_path, {
             "outcome": outcome, "exit_code": code, "started_epoch": t0, "ended_epoch": time.time(),
             "cpu_s": ru_s.ru_utime + ru_s.ru_stime + ru_c.ru_utime + ru_c.ru_stime,
-            "peak_rss_mb": max(ru_s.ru_maxrss, ru_c.ru_maxrss) / 1024.0, **extra})
+            "peak_rss_mb": maxrss_mb(max(ru_s.ru_maxrss, ru_c.ru_maxrss)), **extra})
         return code
 
     lock = FileLock(job_dir / ".run.lock")

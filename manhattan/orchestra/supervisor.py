@@ -250,10 +250,11 @@ class Supervisor:
                 limits_ok = True
                 try:
                     self.limits = L.load(self.root, self._base_limits)
-                except L.LimitsError as e:                     # keep supervising under the last good limits,
+                except Exception as e:                         # keep supervising under the last good limits,
                     limits_ok = False                          # start nothing until the file is fixed
-                    if st["limits_error"] != str(e):
-                        self.journal.append("limits_invalid", {"error": str(e)})
+                    msg = str(e) if isinstance(e, L.LimitsError) else f"limits.json: {type(e).__name__}"
+                    if st["limits_error"] != msg:
+                        self.journal.append("limits_invalid", {"error": msg})
                 if limits_ok and (st["limits_hash"] != self.limits.hash() or st["limits_error"]):
                     self.journal.append("limits_effective", {"hash": self.limits.hash(),
                                                              "limits": self.limits.as_dict()})
@@ -331,7 +332,8 @@ class Supervisor:
                     atomic_write_json(inv_dir / "cancel", {"epoch": now, "reason": job["cancel"]["reason"]})
                     self.journal.append("cancel_signalled", {"job_id": jid, "n": inv["n"], "signal": "TERM",
                                                              "epoch": now})
-                    _kill([pid], signal.SIGTERM)
+                    # only to the invocation process itself, verified by its command line (never a reused pid)
+                    _kill([p for p in _members(pgid, inv_dir) if p == pid], signal.SIGTERM)
                     summary["signalled"].append(jid)
                 elif sig["signal"] == "TERM" and now - sig["epoch"] > self.limits.cancel_grace_s:
                     self.journal.append("cancel_signalled", {"job_id": jid, "n": inv["n"], "signal": "KILL",
@@ -347,12 +349,14 @@ class Supervisor:
         # the lock is free and there is no exit.json: the process died, or has not taken the lock yet
         if pid_info is None and now - inv["intent_epoch"] <= self.limits.launch_grace_s:
             return                                             # still launching
-        if pid_info and pid_info.get("machine_id") not in (None, self.machine):
+        theirs = (pid_info or {}).get("machine_id")
+        if theirs is not None and self.machine is not None and theirs != self.machine:
             # the root moved to another machine (a restored copy): this machine cannot know whether it is alive
             self._end(job, inv, {"outcome": "foreign_host", "reason": f"invocation ran on {pid_info.get('host')}"},
                       now, summary)
             return
-        same_boot = (pid_info or {}).get("boot_id") in (None, procs.boot_id())
+        then, cur = (pid_info or {}).get("boot_id"), procs.boot_id()
+        same_boot = then is None or cur is None or then == cur      # unknown: the command-line match still guards
         pgid = (pid_info or inv["started"] or {}).get("pgid")
         if pgid and same_boot:
             _kill(_members(pgid, inv_dir), signal.SIGKILL)     # forks left behind by a dead invocation process
@@ -381,8 +385,6 @@ class Supervisor:
         jid = job["job_id"]
         outcome = info.get("outcome", "lost")
         rec = info.get("reconcile")
-        if job["cancel"] and outcome in RETRYABLE + ERROR_LIKE + ("cancelled",):
-            outcome = "cancelled"                              # never hides integrity, refusals or blocks
         if rec and rec.get("state") == "corrupted":
             outcome = "integrity"
         elif outcome == "done" and (not rec or rec.get("state") != "closed"):
@@ -394,8 +396,11 @@ class Supervisor:
                 anchor = k.anchor(job["params"], self.job_dir(jid) / "work")
             except Exception:
                 anchor = None
-        if outcome in ("unfinished", "timeout") and anchor is not None and anchor == job["anchor"]:
-            outcome = "no_progress"                            # nothing new in the kind's log: do not loop
+        if outcome in ("unfinished", "timeout") and anchor == job["anchor"]:
+            outcome = "no_progress"            # nothing new in the kind's log (or still no log at all): do not loop
+        if job["cancel"] and outcome in RETRYABLE + ERROR_LIKE + ("cancelled",):
+            outcome = "cancelled"              # last, after every reclassification; never hides integrity,
+                                               # refusals or blocks
         started = info.get("started_epoch") or (inv["started"] or {}).get("started_epoch") or inv["intent_epoch"]
         ended = info.get("ended_epoch") or self._last_seen(inv) or now
         wall = max(0.0, ended - started)
@@ -432,6 +437,9 @@ class Supervisor:
         queue = sorted((j for j in jobs.values() if j["status"] in ("queued", "retry_wait")),
                        key=lambda j: (-j["priority"], j["registered_seq"]))
         for j in queue:
+            if j["cancel"]:                                    # a cancel that arrived around an ending invocation
+                self.journal.append("job_cancelled", {"job_id": j["job_id"], "reason": j["cancel"]["reason"]})
+                continue
             if slots <= 0:
                 break
             if j["not_before"] > now:
@@ -471,7 +479,9 @@ class Supervisor:
         inv_dir = self.root / rel
         if inv_dir.exists():
             # left by a crash between mkdir and the intent record: keep it, under another name, and say so
-            k = len(list(inv_dir.parent.glob(f"inv-{n:04d}.orphan-*")))
+            k = 0
+            while inv_dir.with_name(f"inv-{n:04d}.orphan-{k}").exists():
+                k += 1
             dst = inv_dir.with_name(f"inv-{n:04d}.orphan-{k}")
             os.replace(inv_dir, dst)
             self.journal.append("orphan_invocation_dir", {"job_id": jid, "n": n, "renamed_to": dst.name})

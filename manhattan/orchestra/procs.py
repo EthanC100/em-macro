@@ -1,30 +1,45 @@
 """Portable process and host facts: Linux reads /proc; macOS (the iMac, the default host) uses ``ps``, ``mount``,
 ``sysctl`` and ``ioreg``. Every function fails safe: an unknown answer never kills a process or approves a root.
 
-    machine_id()            a stable machine identifier (not the hostname, which macOS changes with the network)
-    boot_id()               changes at every boot: a process recorded under another boot cannot be alive
+    machine_id()            a stable machine identifier (not the hostname, which macOS changes with the network);
+                            None when it cannot be read: liveness never depends on it, and None never mismatches
+    boot_id()               changes at every boot, and only then (macOS: kern.bootsessionuuid; the boot time's
+                            seconds as a fallback, never its local-time text); None when unknown
     group(pgid)             [(pid, rss_bytes, cmdline)] of the processes in a process group
     fs_type(path)           the file-system type of the mount holding ``path`` (None if unknown)
+
+The macOS tools live in /usr/sbin and /sbin, which cron's and launchd's default PATH (/usr/bin:/bin) leaves out, so
+they are called by absolute path (``TOOLS``) and only by bare name where none of those paths exists.
 """
 from __future__ import annotations
 
 import os
-import socket
+import re
 import subprocess
 from pathlib import Path
 
 PROC = Path("/proc")
+TOOLS = {"ioreg": ("/usr/sbin/ioreg",), "sysctl": ("/usr/sbin/sysctl", "/sbin/sysctl"),
+         "mount": ("/sbin/mount", "/bin/mount", "/usr/bin/mount"), "ps": ("/bin/ps", "/usr/bin/ps")}
+
+
+def tool(name: str) -> str:
+    for p in TOOLS.get(name, ()):
+        if os.access(p, os.X_OK):
+            return p
+    return name
 
 
 def _cmd(*args: str, timeout: float = 10.0) -> str | None:
     try:
-        p = subprocess.run(list(args), capture_output=True, timeout=timeout)
+        p = subprocess.run([tool(args[0]), *args[1:]], capture_output=True, timeout=timeout,
+                           env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C"})
     except (OSError, subprocess.TimeoutExpired):
         return None
     return p.stdout.decode("utf-8", "replace") if p.returncode == 0 else None
 
 
-def machine_id() -> str:
+def machine_id() -> str | None:
     for p in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
         try:
             v = Path(p).read_text().strip()
@@ -35,18 +50,26 @@ def machine_id() -> str:
     out = _cmd("ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
     if out:
         for line in out.splitlines():
-            if "IOPlatformUUID" in line:
-                return line.split("=", 1)[1].strip().strip('"')
-    return "host:" + socket.gethostname()
+            if "IOPlatformUUID" in line and "=" in line:
+                v = line.split("=", 1)[1].strip().strip('"')
+                if v:
+                    return v
+    return None
 
 
-def boot_id() -> str:
+def boot_id() -> str | None:
     try:
-        return (PROC / "sys/kernel/random/boot_id").read_text().strip()
+        v = (PROC / "sys/kernel/random/boot_id").read_text().strip()
+        if v:
+            return v
     except OSError:
         pass
-    out = _cmd("sysctl", "-n", "kern.boottime")
-    return ("boottime:" + out.strip()) if out else "unknown"
+    out = _cmd("sysctl", "-n", "kern.bootsessionuuid")
+    if out and out.strip():
+        return "bootsession:" + out.strip()
+    out = _cmd("sysctl", "-n", "kern.boottime")          # "{ sec = 1763500000, usec = 12345 } Thu Nov 19 ..."
+    m = re.search(r"sec\s*=\s*(\d+)", out or "")
+    return ("boottime:" + m.group(1)) if m else None
 
 
 def group(pgid: int, *, use_proc: bool | None = None) -> list[tuple[int, int, str]]:

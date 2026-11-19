@@ -435,3 +435,42 @@ def test_running_invocations_hold_their_whole_window_against_the_budget(tmp_path
     offset[0] = 0.0
     sup.cancel(a)
     run_until(sup, lambda st: st["jobs"][a]["status"] == "cancelled")
+
+
+
+def test_an_invalid_limits_file_stops_starts_but_never_supervision(tmp_path, mini):
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 8, "chunk": 4, "sleep_per_chunk_s": 1.0})["job_id"]
+    run_until(sup, lambda st: st["jobs"][jid]["status"] == "running")
+    other = sup.register("smoke", {"units": 3})["job_id"]
+    (sup.root / "limits.json").write_text('{"monthly_vcpu_hours": NaN}')
+    st = run_until(sup, lambda s: s["jobs"][jid]["status"] == "completed")     # its exit is still imported
+    assert st["jobs"][other]["status"] == "queued"
+    assert [r["type"] for r in sup.journal.records()].count("limits_invalid") == 1
+    (sup.root / "limits.json").unlink()
+    assert run_until(sup, settled)["jobs"][other]["status"] == "completed"
+
+
+def test_orphan_names_skip_any_that_exist(tmp_path, mini):
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    for name in ("inv-0001", "inv-0001.orphan-1"):                 # orphan-0 was deleted by a person earlier
+        (sup.job_dir(jid) / name).mkdir()
+        (sup.job_dir(jid) / name / "invocation.json").write_text("{}")
+    assert run_until(sup, settled)["jobs"][jid]["status"] == "completed"
+    assert (sup.job_dir(jid) / "inv-0001.orphan-0" / "invocation.json").exists()
+    assert (sup.job_dir(jid) / "inv-0001.orphan-1" / "invocation.json").exists()
+
+
+def test_serve_survives_a_failing_tick(tmp_path, mini, capsys):
+    sup = sup_for(tmp_path, mini)
+    real, calls = sup.tick, []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("disk hiccup")
+        return real()
+    sup.tick = flaky
+    sup.serve(interval=0.01, max_ticks=2)
+    assert len(calls) == 2 and "disk hiccup" in capsys.readouterr().err

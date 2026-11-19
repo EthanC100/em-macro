@@ -14,6 +14,7 @@ Docs: docs/manhattan/orchestra/OPERATIONS.md section 7.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 
@@ -80,15 +81,22 @@ class Limits:
                     errors.append(f"{k} must be true or false")
                 elif k in FLAGS_TIGHT_WHEN_TRUE and cur and not v:
                     errors.append(f"{k} cannot be relaxed")
-            elif not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
-                errors.append(f"{k} must be a non-negative number")
+                else:
+                    new[k] = v
+            elif not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0:
+                errors.append(f"{k} must be a finite, non-negative number")
+            elif isinstance(cur, int) and v != int(v):
+                errors.append(f"{k} must be a whole number (got {v})")
             elif k in POSITIVE and v <= 0:
                 errors.append(f"{k} must be positive (0 would disable the limit, not tighten it)")
             elif k in CAPS and v > cur:
                 errors.append(f"{k}={v} would raise the ceiling {cur}")
             elif k in FLOORS and v < cur:
                 errors.append(f"{k}={v} would lower the floor {cur}")
-            new[k] = type(cur)(v) if not isinstance(cur, bool) else v
+            else:
+                new[k] = type(cur)(v) if not isinstance(cur, bool) else v
+                continue
+            # an error was recorded for this key: nothing of it is applied
         if errors:
             raise LimitsError("; ".join(errors))
         out = replace(self, **new)
@@ -105,9 +113,10 @@ def load(root: Path, base: Limits = DEFAULT) -> Limits:
     if not p.exists():
         return base
     try:
-        override = json.loads(p.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        raise LimitsError(f"{p} is not JSON") from e
+        override = json.loads(p.read_text(encoding="utf-8"),
+                              parse_constant=lambda c: (_ for _ in ()).throw(LimitsError(f"{p}: {c} is not a limit")))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        raise LimitsError(f"{p} is not readable JSON: {type(e).__name__}") from e
     if not isinstance(override, dict):
         raise LimitsError(f"{p} must hold an object")
     return base.tighten(override)

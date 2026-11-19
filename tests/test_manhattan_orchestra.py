@@ -98,7 +98,10 @@ def test_limits_override_can_only_tighten(tmp_path):
     for bad in ({"max_running_jobs": d.max_running_jobs + 1}, {"monthly_budget_sgd": 501},
                 {"min_free_disk_mb": 1}, {"require_clean_tree": False}, {"cancel_grace_s": 1},
                 {"no_such_limit": 1}, {"max_workers_per_job": -1}, {"max_running_jobs": True},
-                {"max_memory_mb_per_job": 0}, {"max_wall_minutes_per_invocation": 0}, {"max_running_jobs": 0}):
+                {"max_memory_mb_per_job": 0}, {"max_wall_minutes_per_invocation": 0}, {"max_running_jobs": 0},
+                {"max_memory_mb_per_job": 0.5}, {"max_log_mb_per_invocation": 0.9},
+                {"monthly_vcpu_hours": float("nan")}, {"min_free_disk_mb": float("inf")},
+                {"monthly_vcpu_hours": float("inf")}, {"max_running_jobs": "1"}):
         with pytest.raises(L.LimitsError):
             d.tighten(bad)
     (tmp_path / "limits.json").write_text(json.dumps({"max_total_workers": 2}))
@@ -442,3 +445,232 @@ def test_budget_counts_the_whole_window_of_running_invocations():
     from manhattan.orchestra.supervisor import reserved_window
     inv = {"workers": 2, "intent_epoch": 1000.0, "deadline_epoch": 1000.0 + 3600}
     assert reserved_window(inv) == 2.0                  # time already used still counts until the invocation ends
+
+
+# -- re-review (S15, after the merge of PR #89 and PR #99) -------------------------------------------------------
+
+MAC_MOUNT = """/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)
+devfs on /dev (devfs, local, nobrowse)
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect)
+map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
+//ethan@nas._smb._tcp.local/research on /Volumes/research (smbfs, nodev, nosuid, mounted by ethan)
+afp_0TQBbz0x9ZmA0d4V0J3s1@nas.local/old on /Volumes/old (afpfs, nodev, nosuid, mounted by ethan)
+https://dav.example.org/files on /Volumes/files (webdav, nodev, noexec, nosuid, mounted by ethan)
+sshfs@macfuse0 on /Volumes/remote (macfuse, nodev, nosuid, synchronous, mounted by ethan)
+nas.local:/export/data on /Volumes/data (nfs, nodev, nosuid, mounted by ethan)
+/dev/disk5s1 on /Volumes/Fast SSD (apfs, local, nodev, nosuid, journaled, noowners)
+"""
+MAC_IOREG = """+-o J456AP  <class IOPlatformExpertDevice, id 0x100000243, registered, matched, active, busy 0 (14 ms)>
+    {
+      "IOPlatformSerialNumber" = "C02XXXXXXX"
+      "IOPlatformUUID" = "8A2B0C77-1F3E-4D2A-9C1B-3E5F6A7B8C9D"
+    }
+"""
+INV = "/Users/ethan/orchestra/jobs/OJ-1/inv-0003"
+MAC_PS = (f"  501   501  204800 /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
+          f"  502   501  102400 /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
+          f"  503   501    1024 /bin/sleep 100\n"
+          f"  601   601  999999 /usr/local/bin/python3 -m manhattan.orchestra.child {INV[:-1]}4\n")
+
+
+@pytest.fixture
+def macos(monkeypatch, tmp_path):
+    """No /proc, and the macOS tools answer with recorded output."""
+    from manhattan.orchestra import procs
+    monkeypatch.setattr(procs, "PROC", tmp_path / "no-proc")
+    real_read = Path.read_text
+
+    def read_text(self, *a, **kw):
+        if str(self) in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+            raise FileNotFoundError(str(self))
+        return real_read(self, *a, **kw)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    answers = {("mount",): MAC_MOUNT, ("ioreg", "-rd1", "-c", "IOPlatformExpertDevice"): MAC_IOREG,
+               ("ps", "-A", "-o", "pid=,pgid=,rss=,command="): MAC_PS,
+               ("sysctl", "-n", "kern.bootsessionuuid"): "6F1B2C3D-0000-4E5F-8A9B-112233445566\n"}
+    calls = []
+
+    def cmd(*args, timeout=10.0):
+        calls.append(args)
+        return answers.get(tuple(args))
+    monkeypatch.setattr(procs, "_cmd", cmd)
+    return {"answers": answers, "calls": calls}
+
+
+def test_macos_identity_from_ioreg_and_boot_session(macos):
+    from manhattan.orchestra import procs
+    assert procs.machine_id() == "8A2B0C77-1F3E-4D2A-9C1B-3E5F6A7B8C9D"
+    assert procs.boot_id() == "bootsession:6F1B2C3D-0000-4E5F-8A9B-112233445566"
+    del macos["answers"][("sysctl", "-n", "kern.bootsessionuuid")]
+    macos["answers"][("sysctl", "-n", "kern.boottime")] = "{ sec = 1763500000, usec = 4221 } Thu Nov 19 04:00:00 2026\n"
+    a = procs.boot_id()
+    macos["answers"][("sysctl", "-n", "kern.boottime")] = "{ sec = 1763500000, usec = 4221 } Thu Nov 19 12:00:00 2026\n"
+    assert a == procs.boot_id() == "boottime:1763500000"        # the local-time text (TZ) never changes it
+    del macos["answers"][("ioreg", "-rd1", "-c", "IOPlatformExpertDevice")]
+    del macos["answers"][("sysctl", "-n", "kern.boottime")]
+    assert procs.machine_id() is None and procs.boot_id() is None  # unknown, never the hostname
+
+
+def test_macos_group_memory_and_members_from_ps(macos):
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.child import group_rss_mb
+    from manhattan.orchestra.supervisor import _members
+    g = procs.group(501)
+    assert [(p, r) for p, r, _ in g] == [(501, 204800 * 1024), (502, 102400 * 1024), (503, 1024 * 1024)]
+    assert group_rss_mb(501) == pytest.approx((204800 + 102400 + 1024) / 1024)      # KiB from ps -> MiB
+    assert _members(501, Path(INV)) == [501, 502]                  # not the unrelated sleep in the same group
+    assert _members(601, Path(INV)) == []                          # another invocation, another group
+
+
+def test_macos_network_volumes_are_refused_and_local_ones_accepted(macos, monkeypatch, tmp_path):
+    from manhattan.orchestra import procs
+    want = {"/Users/ethan/orchestra": "apfs", "/private/tmp/orchestra": "apfs", "/Volumes/Fast SSD/o": "apfs",
+            "/Volumes/research/o": "smbfs", "/Volumes/old/o": "afpfs", "/Volumes/files/o": "webdav",
+            "/Volumes/remote/o": "macfuse", "/Volumes/data/o": "nfs", "/System/Volumes/Data/home/e/o": "autofs"}
+    for path, typ in want.items():
+        assert procs.fs_type(Path(path)) == typ, path
+        assert safety.is_network_fs(typ) is (typ != "apfs"), typ
+    for typ in ("osxfuse", "fuse.sshfs", "fuse", "nfs4", "smb3", "davfs", None):
+        assert safety.is_network_fs(typ), typ
+    for typ in ("apfs", "hfs", "ext4", "xfs", "btrfs", "zfs", "tmpfs", "fuseblk"):
+        assert not safety.is_network_fs(typ), typ
+    for typ in ("smbfs", "afpfs", "webdav", "macfuse", "autofs", None):
+        monkeypatch.setattr(procs, "fs_type", lambda p, t=typ: t)
+        with pytest.raises(safety.Refused, match="local disk"):
+            safety.check_root(tmp_path / "root")
+
+
+def test_macos_tools_are_called_by_absolute_path_with_a_fixed_path(monkeypatch, tmp_path):
+    import subprocess
+    from manhattan.orchestra import procs
+    exe = tmp_path / "sysctl"
+    exe.write_text("#!/bin/sh\necho x\n")
+    exe.chmod(0o755)
+    monkeypatch.setitem(procs.TOOLS, "sysctl", ("/nonexistent/sysctl", str(exe)))
+    assert procs.tool("sysctl") == str(exe)
+    assert procs.tool("no-such-tool") == "no-such-tool"
+    seen = {}
+
+    def run(args, **kw):
+        seen["args"], seen["env"] = args, kw.get("env")
+        return subprocess.CompletedProcess(args, 0, b"ok\n", b"")
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")                    # cron's PATH: no /usr/sbin, no /sbin
+    assert procs._cmd("sysctl", "-n", "kern.bootsessionuuid") == "ok\n"
+    assert seen["args"][0] == str(exe) and "/usr/sbin" in seen["env"]["PATH"]
+
+
+def test_peak_rss_units_per_platform():
+    from manhattan.orchestra.child import maxrss_mb
+    assert maxrss_mb(300 * 2**20, "darwin") == 300.0              # bytes on macOS
+    assert maxrss_mb(300 * 1024, "linux") == 300.0                 # KiB on Linux
+
+
+def test_numeric_switch_positions_compare_by_value(tmp_path):
+    cfg = (REPO / "config" / "manhattan.yaml").read_text()
+    (tmp_path / "config").mkdir()
+    for v, closed in (("0.0", False), ("0", False), ("500", True), ("true", True), ("false", True)):
+        (tmp_path / "config" / "manhattan.yaml").write_text(cfg.replace("loss_cap_usd: 0 ", f"loss_cap_usd: {v} "))
+        assert bool(safety.manhattan_switches(tmp_path)) is closed, v
+
+
+def test_a_non_finite_limits_file_is_refused_on_load(tmp_path):
+    for text in ('{"monthly_vcpu_hours": NaN}', '{"min_free_disk_mb": Infinity}', '{"max_running_jobs": 1e999}',
+                 '[1]', '{"max_running_jobs": 1', '\xff'):
+        (tmp_path / "limits.json").write_bytes(text.encode("latin-1"))
+        with pytest.raises(L.LimitsError):
+            L.load(tmp_path)
+
+
+def _sup(tmp_path, **kw):
+    from manhattan.orchestra.supervisor import Supervisor
+    return Supervisor(tmp_path / "root", limits=L.Limits(require_clean_tree=False, **kw), check_switches=False)
+
+
+def _open_invocation(sup, jid, now, *, workers=1):
+    (sup.job_dir(jid) / "inv-0001").mkdir(parents=True, exist_ok=True)
+    with sup.journal.locked():
+        sup.journal.append("invocation_intent", {"job_id": jid, "n": 1, "inv_dir": f"jobs/{jid}/inv-0001",
+                                                 "workers": workers, "intent_epoch": now,
+                                                 "deadline_epoch": now + 600})
+    return sup.state()["jobs"][jid]
+
+
+def test_cancel_is_applied_after_every_reclassification(tmp_path):
+    sup = _sup(tmp_path)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time()
+    _open_invocation(sup, jid, now)
+    with sup.journal.locked():
+        sup.journal.append("cancel_requested", {"job_id": jid, "reason": "r"})
+        j = sup.state()["jobs"][jid]
+        # exit 0 but the run is not closed: "unfinished" first, then the cancel
+        sup._end(j, j["open_invocation"], {"outcome": "done", "exit_code": 0, "reconcile": {"state": "incomplete"},
+                                           "anchor": {"records": 3, "head": "h"}}, now, {"ended": []})
+    j = sup.state()["jobs"][jid]
+    assert j["status"] == "cancelled" and j["invocations"][0]["ended"]["outcome"] == "cancelled"
+
+
+def test_a_cancel_left_on_a_waiting_job_is_honoured_instead_of_starting_it(tmp_path):
+    sup = _sup(tmp_path)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time()
+    _open_invocation(sup, jid, now)
+    with sup.journal.locked():                       # an older journal: cancel recorded, invocation ended to retry
+        sup.journal.append("cancel_requested", {"job_id": jid, "reason": "r"})
+        sup.journal.append("invocation_ended", {"job_id": jid, "n": 1, "outcome": "unfinished", "ended_epoch": now,
+                                                "consecutive_errors": 0, "next_status": "retry_wait",
+                                                "not_before_epoch": 0.0})
+    out = sup.tick()
+    assert out["started"] == [] and sup.state()["jobs"][jid]["status"] == "cancelled"
+
+
+def test_a_timeout_that_wrote_nothing_is_no_progress(tmp_path):
+    sup = _sup(tmp_path)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time()
+    j = _open_invocation(sup, jid, now)
+    with sup.journal.locked():
+        sup._end(j, j["open_invocation"], {"outcome": "timeout", "exit_code": 130, "anchor": None}, now,
+                 {"ended": []})
+    assert sup.state()["jobs"][jid]["invocations"][0]["ended"]["outcome"] == "no_progress"
+
+
+def test_startup_race_pid_written_after_the_lock_probe_is_not_killed(tmp_path, monkeypatch):
+    """The child takes the lock and writes pid.json just after the supervisor's lock probe. pid.json is read first,
+    so the supervisor sees "still launching", never "pid.json and a free lock" (which would mean dead)."""
+    from manhattan.orchestra import supervisor as SV
+    from manhattan.orchestra.journal import atomic_write_json
+    sup = _sup(tmp_path)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time()
+    j = _open_invocation(sup, jid, now)
+    pidf = sup.root / j["open_invocation"]["inv_dir"] / "pid.json"
+    real = SV.is_held_elsewhere
+    killed = []
+
+    def probe(path):
+        held = real(path)
+        if path.name == ".run.lock" and not pidf.exists():
+            atomic_write_json(pidf, {"pid": 999999, "pgid": 999999, "host": "h", "started_epoch": now})
+        return held
+    monkeypatch.setattr(SV, "is_held_elsewhere", probe)
+    monkeypatch.setattr(SV, "_kill", lambda pids, sig: killed.append((pids, sig)) or 0)
+    with sup.journal.locked():
+        sup._supervise(j, j["open_invocation"], {"ended": [], "signalled": []})
+    j = sup.state()["jobs"][jid]
+    assert j["status"] == "launching" and j["invocations"][0]["ended"] is None and killed == []
+
+
+def test_an_unknown_machine_id_never_marks_an_invocation_foreign(tmp_path, monkeypatch):
+    from manhattan.orchestra.journal import atomic_write_json
+    sup = _sup(tmp_path)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time() - 3600
+    j = _open_invocation(sup, jid, now)
+    atomic_write_json(sup.root / j["open_invocation"]["inv_dir"] / "pid.json",
+                      {"pid": 999999, "pgid": 999999, "host": "old-name.local", "machine_id": None, "boot_id": None,
+                       "started_epoch": now})
+    with sup.journal.locked():
+        sup._supervise(sup.state()["jobs"][jid], j["open_invocation"], {"ended": [], "signalled": []})
+    assert sup.state()["jobs"][jid]["invocations"][0]["ended"]["outcome"] == "lost"       # not foreign_host

@@ -135,10 +135,26 @@ into `KeyboardInterrupt` in its main thread:
 After `cancel_grace_s` the tick sends SIGKILL to the group. Every attempt the engine had started is recorded. A
 cancelled job can be `requeue`d, and the engine continues from its log.
 
-**Hosts.** Process facts come from `procs.py`: `/proc` on Linux, and `ps`, `mount`, `sysctl` and `ioreg` on macOS.
-This covers group memory, leftover-process cleanup, the network-file-system check, boot and machine identity.
-Liveness rests on the job lock (local `flock`), never on the hostname, which macOS changes with the network. The
-macOS path is exercised in the tests by forcing the `ps` route on Linux; it has not yet been run on a Mac.
+**Hosts.** Process facts come from `procs.py`:
+
+- **Linux:** `/proc`.
+- **macOS:** `/bin/ps`, `/sbin/mount`, `/usr/sbin/sysctl` and `/usr/sbin/ioreg`. They are called by absolute path
+  with a fixed `PATH` and `LC_ALL=C`, because cron's and launchd's default `PATH` (`/usr/bin:/bin`) leaves out
+  `/usr/sbin` and `/sbin`.
+
+These facts cover group memory, leftover-process cleanup, the network-file-system check, and boot and machine
+identity:
+
+- **Boot identity:** `kern.bootsessionuuid`, falling back to the seconds of `kern.boottime`, never its local-time text.
+- **Machine identity:** `IOPlatformUUID` or `/etc/machine-id`. When either identity is unknown it is `None`. A `None`
+  never makes an invocation `foreign_host` and never blocks cleanup, because the command-line match guards cleanup.
+
+Liveness rests on the job lock (local `flock`), never on the hostname, which macOS changes with the network.
+
+A run root whose file-system type is network, automounted or user-space, or cannot be read at all, is refused (fail
+closed). That covers `smbfs`, `afpfs`, `webdav`, `nfs`, `autofs`, `macfuse`/`osxfuse`, every `fuse.*`, and Linux's
+network types. The macOS parsing is tested with recorded `ps`, `mount`, `ioreg` and `sysctl` output (§13). It has not
+yet been run on a Mac (§13 lists what only a Mac can settle).
 
 **Pausing.** `pause` (journaled) or `touch <root>/PAUSE` (a kill switch that needs no lock) stops new starts.
 Running invocations continue; cancel them separately if needed.
@@ -225,9 +241,8 @@ Run on 2026-11-19 in the session container (Python 3.13.18, NumPy 2.5.3):
 
 | run | result |
 |---|---|
-| orchestra tests on this branch (from `main`) | **62 passed, 1 skipped**: the HTE test skips because `manhattan/hte` is not on main |
-| orchestra tests on a scratch combination with PR #89 (`232d0d6`) | **63 passed**: the HTE test included |
-| full repository suite on this branch | see the PR description |
+| orchestra tests on this branch after merging `main` (PR #89 and PR #99 included) | **78 passed**, the HTE test included (§13) |
+| full repository suite on this branch | see the PR description and its `tests / pytest` check |
 
 Failure injection covered:
 
@@ -344,17 +359,17 @@ fixed with a regression test, and the HTE calls it checked match PR #89's API.
 | 9 | `serve` never re-read `limits.json` | re-read every tick; an invalid file stops starts |
 | minor | a timeout that made no progress was retried up to 50 times; sim had no progress anchor; requeue at the cap ran one invocation past it | `no_progress` covers timeouts; sim anchor over its replication files; requeue at the cap needs `extra_invocations` |
 
-Neither this review nor my own tests replace a human review, and the fixes have not been re-reviewed independently.
+Neither this review nor my own tests replace a human review. The fixes were re-reviewed independently in §13.
 
 ## 12. Remaining requirements for unattended operation
 
 These are decisions or actions for Ethan; none was taken here.
 
-1. **Merge order.** HTE jobs need PR #89 merged (S11's integration). The `hte` kind depends only on HTE's public API.
-   If S11 changes `Runner`, `reconcile`, `Registry.freeze` or the log format, `kinds.Hte` needs the same change and
-   the HTE test (which skips on main) must be re-run on the merged tree.
+1. **HTE API.** PR #89 is merged, and the HTE test now runs on every CI run of this branch. The `hte` kind depends
+   only on HTE's public API (`Runner`, `reconcile`, `Registry.submit`/`freeze`, the log format). A change there must
+   change `kinds.Hte` in the same PR.
 2. **Choose the host and install a timer.** For the iMac, use a launchd `KeepAlive` job running `serve` under
-   `caffeinate -i`. Test it there once: the macOS process path has been exercised on Linux only.
+   `caffeinate -i`. Before relying on it, run the acceptance check of §13 there once.
 3. **Off-host anchors.** Copy `status.json` somewhere the host cannot rewrite (for example the private ledger
    repository or a personal machine) on a schedule. Without that copy, someone with write access to the host could
    delete a suffix of the journal and of the engine logs together, and nothing would detect it.
@@ -368,3 +383,66 @@ These are decisions or actions for Ethan; none was taken here.
 7. **Rented compute** (optional, Ethan's decision): set `price_sgd_per_vcpu_hour` so that the S$500 cap binds, pin
    the instance type, and keep the root on the instance's local disk.
 8. **Retention.** Decide when finished jobs' work directories may be archived. The orchestrator never deletes them.
+
+## 13. Independent re-review after merging main (PR #89, PR #99)
+
+After merging `main`, a second reviewer re-read the nine fixes, again given the code and not my verdicts. It also
+fed recorded macOS `mount`, `ioreg` and `sysctl` output through the non-`/proc` path. Its verdicts were:
+
+- items 2, 6, 7 and 8 were fixed;
+- items 1, 3, 4 and 9 were only partly fixed;
+- item 5 still had a residual bug from before the fix.
+
+The fix for item 9 had also introduced a new failure. Each was confirmed, then fixed with a regression test. **12 of
+the new tests fail on the previous code and pass now.** The startup-race test (item 8) fails if the read order is
+reverted.
+
+| # | what the re-review found | fix |
+|---|---|---|
+| 1 | the orphan name used a count, so a gap (an orphan deleted by hand) made the rename fail on every tick; `serve`'s survival of a failed tick was untested | the next unused name; tests for the gap and for `serve` surviving a failed tick |
+| 3 | cron's `PATH` lacks `/usr/sbin` and `/sbin`, so `ioreg`, `sysctl` and `mount` were not found: the machine id fell back to the hostname, boot was "unknown" and every root passed the file-system check. `afpfs`, `webdav`, `macfuse`, `osxfuse` and `autofs` were not refused. The boot id held local-time text. `ru_maxrss` was read as KiB on macOS, where it is bytes | absolute tool paths with a fixed `PATH`; unknown identity is `None` and never mismatches; macOS network types and every FUSE type refused; an unknown type refused; `kern.bootsessionuuid` (or boot seconds); `maxrss_mb` per platform. Tests use recorded macOS output |
+| 4 | `0.5` was truncated to 0; `NaN` was accepted and then broke hashing; infinity raised `OverflowError` | finite, non-negative, whole numbers where the limit is an integer; `NaN` and `Infinity` refused while parsing; nothing of a refused key is applied |
+| 5 | a cancel combined with exit 0 on an unclosed run became `unfinished` *after* the cancel check, and the job restarted | the cancel is applied after every reclassification; a queued job with a cancel on record is cancelled, never started |
+| 6 | `loss_cap_usd: 0.0` (a float) needlessly stopped starts | numbers compare by value; `true` is still refused |
+| 7 | the cancel SIGTERM went to the recorded pid without the command-line check | SIGTERM only to a verified member of this invocation |
+| 9 | **new:** a `NaN` or `1e999` in `limits.json` raised outside the handled error, *before* supervision, so no exit was imported and no cancel or deadline kill was delivered | any error reading the file stops starts only; supervision continues under the last good limits (tested with a running job) |
+| minor | a timeout before the first log record never counted as `no_progress` | an unchanged anchor, including "still none", is `no_progress` |
+
+**macOS limitations that remain** (code cannot settle them; they need a Mac or an operating-system facility):
+
+1. **Memory is measured, not enforced by the kernel.** The cap polls `ps` RSS once a second.
+   - On macOS, RSS leaves out compressed and swapped pages, so under memory pressure the cap reads low.
+   - On both platforms, copy-on-write pages shared by forked workers are counted once per process, so the sum reads
+     high.
+   - macOS has no cgroups. A hard ceiling needs a separate user with `launchctl` limits or a smaller `max_workers`.
+     The footprint figure (`proc_pid_rusage`) is not used.
+2. **Network-volume locks.** `flock` on smbfs, afpfs, webdav and macFUSE is unsupported or local-only. Those roots
+   are refused, but a volume whose `mount` line reports a local type while being remote (some FUSE or vendor drivers)
+   would pass.
+3. **Process cleanup relies on `ps` showing the full command line.** `ps` does so when its output is not a terminal.
+   A run-root path with unusual or non-ASCII bytes may be escaped by `ps`; it would then not match, and leftover
+   forks would survive (cleanup fails safe). Keep the root path ASCII.
+4. **Python launchers.** A framework or Homebrew `python` stub that re-executes the interpreter keeps the pid and
+   argv on current macOS. This was not verified on the iMac's own install.
+5. **Fork safety.** The child forks pool workers while its monitor thread runs. NumPy with Accelerate, or any
+   Objective-C library, is not guaranteed fork-safe on macOS. HTE and the simulation already fork on Linux; on a Mac
+   this is untested.
+6. **Sleep.** Deadlines and the budget use wall-clock time, so time a Mac spends asleep counts against both. Run
+   under `caffeinate -i`, as `scripts/manhattan_sim_run.sh` does.
+7. **`kern.bootsessionuuid`** exists on current macOS releases. On older ones the fallback is the boot time in
+   seconds, which a large clock step could move. Cleanup is then skipped, never misdirected.
+
+**Acceptance check on the iMac** (once, by hand, nothing scheduled):
+
+```
+python -m manhattan.orchestra --root ~/orch-test init
+python -m manhattan.orchestra --root ~/orch-test register smoke --params '{"units": 8, "faults": {"alloc_mb": 300, "hang_at_unit": 5}}'
+echo '{"max_memory_mb_per_job": 150}' > ~/orch-test/limits.json
+python -m manhattan.orchestra --root ~/orch-test serve --interval 2 --max-ticks 40
+python -m manhattan.orchestra --root ~/orch-test status
+```
+
+The expected outcomes are `memory_exceeded`, then `done`. Running `ps -A -o pid,pgid,command | grep orchestra`
+afterwards should show nothing left behind.
+
+To check the run-root guard, run `init` on a mounted SMB volume; it must be refused. Then delete `~/orch-test`.
