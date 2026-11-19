@@ -26,6 +26,10 @@ CAPS = ("max_running_jobs", "max_total_workers", "max_workers_per_job", "max_mem
 FLOORS = ("min_free_disk_mb", "backoff_base_s", "backoff_max_s", "price_sgd_per_vcpu_hour")
 FLAGS_TIGHT_WHEN_TRUE = ("require_clean_tree",)
 FIXED = ("launch_grace_s", "cancel_grace_s", "progress_interval_s")
+# caps where 0 would mean "off" somewhere downstream: an override must keep them positive
+POSITIVE = ("max_running_jobs", "max_total_workers", "max_workers_per_job", "max_memory_mb_per_job",
+            "max_wall_minutes_per_invocation", "max_invocations_per_job", "max_consecutive_errors",
+            "max_log_mb_per_invocation")
 
 
 class LimitsError(ValueError):
@@ -78,6 +82,8 @@ class Limits:
                     errors.append(f"{k} cannot be relaxed")
             elif not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
                 errors.append(f"{k} must be a non-negative number")
+            elif k in POSITIVE and v <= 0:
+                errors.append(f"{k} must be positive (0 would disable the limit, not tighten it)")
             elif k in CAPS and v > cur:
                 errors.append(f"{k}={v} would raise the ceiling {cur}")
             elif k in FLOORS and v < cur:

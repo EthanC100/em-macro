@@ -35,39 +35,12 @@ from pathlib import Path
 
 from . import kinds as K
 from . import manifest as M
+from . import procs
 from .journal import FileLock, atomic_write_json, read_json
 
-PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
-
-
-def boot_id() -> str:
-    try:
-        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-    except OSError:
-        return "unknown"
-
-
 def group_rss_mb(pgid: int) -> float:
-    """Aggregate resident memory of every process in a process group (Linux /proc; 0 elsewhere)."""
-    total = 0
-    try:
-        entries = os.listdir("/proc")
-    except OSError:
-        return 0.0
-    for e in entries:
-        if not e.isdigit():
-            continue
-        try:
-            s = Path(f"/proc/{e}/stat").read_text()
-        except OSError:
-            continue
-        rest = s[s.rfind(")") + 2:].split()
-        try:
-            if int(rest[2]) == pgid:              # field 5: pgrp
-                total += int(rest[21]) * PAGE     # field 24: rss in pages
-        except (IndexError, ValueError):
-            continue
-    return total / 2**20
+    """Aggregate resident memory of every process in a process group (/proc on Linux, ``ps`` on macOS)."""
+    return sum(rss for _, rss, _ in procs.group(pgid)) / 2**20
 
 
 class _Stop(KeyboardInterrupt):
@@ -99,7 +72,8 @@ def main(argv=None) -> int:
         return finish("duplicate_refused", K.EXIT_REFUSED, reason="another invocation of this job holds its lock")
     pgid = os.getpgid(0)
     atomic_write_json(inv_dir / "pid.json", {"pid": os.getpid(), "pgid": pgid, "host": socket.gethostname(),
-                                             "boot_id": boot_id(), "started_epoch": t0})
+                                             "machine_id": procs.machine_id(), "boot_id": procs.boot_id(),
+                                             "started_epoch": t0})
     stop = threading.Event()
     state = {"term": 0, "why": None}
 
@@ -129,7 +103,7 @@ def main(argv=None) -> int:
         while not stop.wait(1.0):
             now = time.time()
             rss = group_rss_mb(pgid)
-            if mem_cap and rss > mem_cap:
+            if rss > mem_cap:
                 kill_group("memory_exceeded", rss_mb=rss, cap_mb=mem_cap)
             try:
                 if (inv_dir / "output.log").stat().st_size > log_cap:

@@ -54,9 +54,9 @@ def snapshot(root: Path, limits: L.Limits | None = None, *, now: float | None = 
     st = fold(recs)
     month = month_of(now)
     used = st["usage"].get(month, 0.0)
-    committed = used + sum(max(1, x["open_invocation"]["workers"]) *
-                           max(0.0, x["open_invocation"]["deadline_epoch"] - now) / 3600
-                           for x in st["jobs"].values() if x["status"] in ACTIVE and x["open_invocation"])
+    from .supervisor import reserved_window
+    committed = used + sum(reserved_window(x["open_invocation"]) for x in st["jobs"].values()
+                           if x["status"] in ACTIVE and x["open_invocation"])
     counts = {c: 0 for c in CATEGORIES}
     jobs, attention, anchors = [], [], {}
     for jid in st["order"]:
@@ -105,7 +105,7 @@ def snapshot(root: Path, limits: L.Limits | None = None, *, now: float | None = 
                            "age_s": round(now - tick, 1) if tick else None,
                            "stale": tick is None or now - tick > STALE_AFTER_S},
             "paused": st["paused"] or (root / "PAUSE").exists(), "pause_reason": st["pause_reason"],
-            "switches_closed": st["switches"],
+            "switches_closed": st["switches"], "limits_error": st["limits_error"],
             "limits": dict(limits.as_dict(), hash=limits.hash()),
             "budget": {"month": month, "reserved_vcpu_h_used": round(used, 3),
                        "committed_vcpu_h": round(committed, 3), "cap_vcpu_h": limits.monthly_vcpu_hours,
@@ -128,9 +128,11 @@ def health(snap: dict) -> tuple[str, int]:
         line += "; PAUSED"
     if snap["switches_closed"]:
         line += "; SWITCHES CLOSED"
+    if snap.get("limits_error"):
+        line += "; LIMITS FILE INVALID (nothing starts)"
     if snap["supervisor"]["stale"] and (c["active"] or c["queued"]):
         return line + "; SUPERVISOR SILENT", 2
-    if snap["attention"]:
+    if snap["attention"] or snap.get("limits_error"):
         return line + f"; {len(snap['attention'])} need attention", 1
     return line, 0
 

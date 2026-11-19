@@ -97,7 +97,8 @@ def test_limits_override_can_only_tighten(tmp_path):
     assert (t.max_running_jobs, t.monthly_vcpu_hours, t.min_free_disk_mb) == (1, 100.0, 9000)
     for bad in ({"max_running_jobs": d.max_running_jobs + 1}, {"monthly_budget_sgd": 501},
                 {"min_free_disk_mb": 1}, {"require_clean_tree": False}, {"cancel_grace_s": 1},
-                {"no_such_limit": 1}, {"max_workers_per_job": -1}, {"max_running_jobs": True}):
+                {"no_such_limit": 1}, {"max_workers_per_job": -1}, {"max_running_jobs": True},
+                {"max_memory_mb_per_job": 0}, {"max_wall_minutes_per_invocation": 0}, {"max_running_jobs": 0}):
         with pytest.raises(L.LimitsError):
             d.tighten(bad)
     (tmp_path / "limits.json").write_text(json.dumps({"max_total_workers": 2}))
@@ -190,7 +191,10 @@ def test_switches_open_on_main_config_and_closed_when_anything_is_activated(tmp_
     assert safety.manhattan_switches(REPO) == []
     cfg = (REPO / "config" / "manhattan.yaml").read_text()
     for old, new in (("enabled: false               # no screening", "enabled: true               # no screening"),
-                     ("real_money: false", "real_money: true"),
+                     ("real_money: false", "real_money: true"), ("loss_cap_usd: 0", "loss_cap_usd: 500"),
+                     ("evaluate_adaptive: false", "evaluate_adaptive: true"),
+                     ("authority: ethan_only", "authority: delegated"),
+                     ("count_in_trials_csv: false", "count_in_trials_csv: true"),
                      ("  enabled: false               # stays false", "  enabled: true               # stays false")):
         assert old in cfg
         (tmp_path / "config").mkdir(exist_ok=True)
@@ -239,7 +243,9 @@ def test_orchestra_runs_no_git_write_no_dispatch_and_only_its_own_child():
                 assert isinstance(first, ast.Constant) and first.value in ("ls-files", "rev-parse", "status"), f.name
             if isinstance(node, ast.Attribute) and node.attr in ("Popen", "run", "call", "check_output") and \
                     getattr(node.value, "id", "") == "subprocess":
-                assert f.name in ("supervisor.py", "manifest.py"), f.name
+                assert f.name in ("supervisor.py", "manifest.py", "procs.py"), f.name
+            if f.name == "procs.py" and isinstance(node, ast.Call) and getattr(node.func, "id", "") == "_cmd":
+                assert node.args[0].value in ("ioreg", "sysctl", "ps", "mount"), node.args[0].value
 
 
 def test_status_server_refuses_a_non_loopback_address(tmp_path):
@@ -387,3 +393,52 @@ def test_cost_table_against_the_budget():
     assert C.vcpu_hours_for_budget("aws_c7a_2xlarge_on_demand") > 5000
     assert C.vcpu_hours_for_budget("hetzner_ax42_dedicated") is None    # flat rent below the budget
     assert C.monthly("owned_hardware", 100 * C.WORKLOADS["hte_1m_full"]["vcpu_h"])["sgd"] == 0
+
+
+# -- review findings (S15 independent read) --------------------------------------------------------------------
+
+def test_members_match_only_this_invocation_on_proc_and_on_ps(tmp_path):
+    import subprocess
+    import sys
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.supervisor import _members
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "manhattan.orchestra.child",
+                          str(tmp_path / "inv-0001")], start_new_session=True)
+    try:
+        time.sleep(0.3)
+        assert _members(p.pid, tmp_path / "inv-0001") == [p.pid]
+        assert _members(p.pid, tmp_path / "inv-0002") == []                 # another invocation: never killed
+        via_ps = procs.group(p.pid, use_proc=False)                         # the macOS path, run on Linux
+        assert [x[0] for x in via_ps] == [p.pid] and via_ps[0][1] > 0
+        assert via_ps[0][1] == pytest.approx(procs.group(p.pid, use_proc=True)[0][1], rel=0.5)
+    finally:
+        p.kill()
+        p.wait()
+
+
+def test_host_facts():
+    from manhattan.orchestra import procs
+    assert procs.machine_id() and procs.boot_id() != "unknown"
+    assert procs.fs_type(REPO) is not None
+
+
+def test_a_pending_cancel_never_hides_integrity_refusal_or_block(tmp_path):
+    from manhattan.orchestra.supervisor import Supervisor
+    sup = Supervisor(tmp_path / "root", limits=L.Limits(require_clean_tree=False), check_switches=False)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    now = time.time()
+    with sup.journal.locked():
+        sup.journal.append("invocation_intent", {"job_id": jid, "n": 1, "inv_dir": f"jobs/{jid}/inv-0001",
+                                                 "workers": 1, "intent_epoch": now, "deadline_epoch": now + 60})
+        sup.journal.append("cancel_requested", {"job_id": jid, "reason": "r"})
+        j = sup.state()["jobs"][jid]
+        sup._end(j, j["open_invocation"], {"outcome": "integrity", "exit_code": 65, "reason": "anchor"}, now,
+                 {"ended": []})
+    j = sup.state()["jobs"][jid]
+    assert j["status"] == "failed" and j["reason"].startswith("integrity")
+
+
+def test_budget_counts_the_whole_window_of_running_invocations():
+    from manhattan.orchestra.supervisor import reserved_window
+    inv = {"workers": 2, "intent_epoch": 1000.0, "deadline_epoch": 1000.0 + 3600}
+    assert reserved_window(inv) == 2.0                  # time already used still counts until the invocation ends

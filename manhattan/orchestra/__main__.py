@@ -131,7 +131,7 @@ def main(argv=None) -> int:
         elif a.cmd == "serve":
             sup.serve(a.interval, a.max_ticks)
         return 0
-    except (K.ParamError, safety.Refused, SupervisorError, LimitsError, JournalError, PermissionError) as e:
+    except (K.ParamError, safety.Refused, SupervisorError, LimitsError, JournalError, OSError) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
 

@@ -19,7 +19,7 @@ Record types (payloads always carry ``job_id`` where a job is concerned):
 
     job_registered, duplicate_registration, invocation_intent, invocation_started, cancel_requested,
     cancel_signalled, invocation_ended, job_cancelled, job_requeued, job_blocked, start_deferred, job_audited,
-    paused, unpaused, limits_effective, switches_closed, switches_open, root_initialized, journal_torn_tail
+    paused, unpaused, limits_effective, limits_invalid, orphan_invocation_dir, switches_closed, switches_open, root_initialized, journal_torn_tail
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def fold(records: list[dict]) -> dict:
     jobs: dict[str, dict] = {}
     order: list[str] = []
     out = {"jobs": jobs, "order": order, "paused": False, "pause_reason": None, "switches": [], "limits_hash": None,
-           "usage": {}, "root": None}
+           "usage": {}, "root": None, "limits_error": None}
     for r in records:
         t, p = r["type"], r["payload"]
         j = jobs.get(p.get("job_id")) if "job_id" in p else None
@@ -65,7 +65,9 @@ def fold(records: list[dict]) -> dict:
             elif t == "unpaused":
                 out["paused"], out["pause_reason"] = False, None
             elif t == "limits_effective":
-                out["limits_hash"] = p["hash"]
+                out["limits_hash"], out["limits_error"] = p["hash"], None
+            elif t == "limits_invalid":
+                out["limits_error"] = p["error"]
             elif t == "switches_closed":
                 out["switches"] = p["reasons"]
             elif t == "switches_open":

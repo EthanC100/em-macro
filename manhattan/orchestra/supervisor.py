@@ -44,11 +44,12 @@ from . import kinds as K
 from . import limits as L
 from . import manifest as M
 from . import safety
-from .child import boot_id
+from . import procs
 from .journal import FileLock, Journal, atomic_write_json, full_hash, is_held_elsewhere, read_json
 from .state import ACTIVE, TERMINAL, fold, month_of
 
-CHILD_MARK = b"manhattan.orchestra.child"
+CHILD_MARK = "manhattan.orchestra.child"
+RETRYABLE = ("unfinished", "timeout", "interrupted")
 ERROR_LIKE = ("error", "memory_exceeded", "log_limit_exceeded", "lost", "lost_before_start", "spawn_failed",
               "no_progress")
 
@@ -86,27 +87,12 @@ def decide(job: dict, outcome: str, limits: L.Limits, now: float, *, reason: str
     return dict(out, next_status="retry_wait", reason=reason or outcome)
 
 
-def _members(pgid: int) -> list[int]:
-    """Processes of a process group that are invocation processes or their forks (cmdline check, so a reused
-    process-group id never gets an unrelated process killed)."""
-    out = []
-    try:
-        entries = os.listdir("/proc")
-    except OSError:
-        return out
-    for e in entries:
-        if not e.isdigit():
-            continue
-        try:
-            s = Path(f"/proc/{e}/stat").read_text()
-            rest = s[s.rfind(")") + 2:].split()
-            if int(rest[2]) != pgid:
-                continue
-            if CHILD_MARK in Path(f"/proc/{e}/cmdline").read_bytes():
-                out.append(int(e))
-        except (OSError, IndexError, ValueError):
-            continue
-    return out
+def _members(pgid: int, inv_dir: Path) -> list[int]:
+    """Processes of a process group whose command line names *this* invocation's directory: the invocation process
+    and its forks. A reused process-group id, or another invocation, never matches, so nothing unrelated is
+    killed."""
+    mark = str(inv_dir)
+    return [pid for pid, _, cmd in procs.group(pgid) if CHILD_MARK in cmd and mark in cmd]
 
 
 def _kill(pids: list[int], sig: int) -> int:
@@ -128,16 +114,19 @@ class Supervisor:
         self.root = safety.check_root(Path(root), self.repo)
         self.root.mkdir(parents=True, exist_ok=True)
         self.journal = Journal(self.root / "journal.jsonl")
-        self.limits = limits if limits is not None else L.load(self.root)
+        self._base_limits = limits if limits is not None else L.DEFAULT
+        self.limits = L.load(self.root, self._base_limits)        # re-read at every tick (tighten-only)
         self.python = python
         self.clock = clock
         self.check_switches = check_switches
         self.base_env = base_env
         self.host = socket.gethostname()
+        self.machine = procs.machine_id()
         self._procs: dict[int, subprocess.Popen] = {}
         with self.journal.locked():
             if not any(r["type"] == "root_initialized" for r in self.journal.records()):
-                self.journal.append("root_initialized", {"schema": SCHEMA, "host": self.host, "boot_id": boot_id(),
+                self.journal.append("root_initialized", {"schema": SCHEMA, "host": self.host, "machine_id": self.machine,
+                                                         "boot_id": procs.boot_id(),
                                                          "created_epoch": self.clock()})
 
     # -- reading ----------------------------------------------------------------------------------------------
@@ -207,6 +196,9 @@ class Supervisor:
                   or (j["status"] == "blocked" and j["reason"] in ("foreign_host", "duplicate_invocation_detected")))
             if not ok:
                 raise SupervisorError(f"{job_id} is {j['status']} ({j['reason']}): not requeueable")
+            if j["n_invocations"] >= j["max_invocations"] + extra_invocations:
+                raise SupervisorError(f"{job_id} has used all {j['max_invocations']} invocations: pass "
+                                      "extra_invocations")
             self.journal.append("job_requeued", {"job_id": job_id, "reason": reason,
                                                  "extra_invocations": int(extra_invocations)})
         return {"job_id": job_id, "status": "queued"}
@@ -255,7 +247,14 @@ class Supervisor:
             summary = {"ended": [], "started": [], "signalled": [], "deferred": []}
             with self.journal.locked():
                 st = self.state()
-                if st["limits_hash"] != self.limits.hash():
+                limits_ok = True
+                try:
+                    self.limits = L.load(self.root, self._base_limits)
+                except L.LimitsError as e:                     # keep supervising under the last good limits,
+                    limits_ok = False                          # start nothing until the file is fixed
+                    if st["limits_error"] != str(e):
+                        self.journal.append("limits_invalid", {"error": str(e)})
+                if limits_ok and (st["limits_hash"] != self.limits.hash() or st["limits_error"]):
                     self.journal.append("limits_effective", {"hash": self.limits.hash(),
                                                              "limits": self.limits.as_dict()})
                 reasons = safety.manhattan_switches(self.repo) if self.check_switches else []
@@ -270,7 +269,7 @@ class Supervisor:
                         self._supervise(j, j["open_invocation"], summary)
                 st = self.state()
                 paused = st["paused"] or (self.root / "PAUSE").exists()
-                if not paused and not reasons:
+                if not paused and not reasons and limits_ok:
                     self._start_eligible(st, summary)
             from . import status as S
             now = self.clock()
@@ -280,6 +279,7 @@ class Supervisor:
             summary["counts"] = snap["counts"]
             summary["paused"] = paused
             summary["switches_closed"] = reasons
+            summary["limits_ok"] = limits_ok
             return summary
         finally:
             lk.release()
@@ -293,7 +293,11 @@ class Supervisor:
         signal.signal(signal.SIGINT, on_term)
         n = 0
         while not stop["flag"]:
-            self.tick()
+            try:
+                self.tick()
+            except Exception:                                  # a bad tick must not end supervision
+                import traceback
+                traceback.print_exc()
             n += 1
             if max_ticks is not None and n >= max_ticks:
                 break
@@ -307,28 +311,18 @@ class Supervisor:
         jid = job["job_id"]
         inv_dir = self.root / inv["inv_dir"]
         pidf, exitf = inv_dir / "pid.json", inv_dir / "exit.json"
-        held = is_held_elsewhere(self.job_dir(jid) / ".run.lock")
+        # pid.json first, then the lock: a child writes pid.json only while holding the lock, so "pid.json and a
+        # free lock" can then only mean that the process has ended
         pid_info = read_json(pidf) if pidf.exists() else None
-        if pid_info and pid_info.get("host") not in (None, self.host):
-            self._end(job, inv, {"outcome": "foreign_host", "reason": f"invocation ran on {pid_info['host']}"},
-                      now, summary)
-            return
+        held = is_held_elsewhere(self.job_dir(jid) / ".run.lock")
+        if inv["started"] is None and pid_info:
+            self._adopt(jid, inv, pid_info)
         if exitf.exists():
             # the invocation process wrote its outcome; it only releases its lock after that. A lock still held here
             # belongs to another process (the case ``duplicate_refused`` reports), never to this invocation's work
-            if inv["started"] is None and pid_info:
-                self.journal.append("invocation_started", {"job_id": jid, "n": inv["n"], "pid": pid_info["pid"],
-                                                           "pgid": pid_info["pgid"], "host": pid_info["host"],
-                                                           "boot_id": pid_info["boot_id"], "adopted": True,
-                                                           "started_epoch": pid_info["started_epoch"]})
             self._end(job, inv, read_json(exitf), now, summary)
             return
-        if inv["started"] is None and pid_info:
-            self.journal.append("invocation_started", {"job_id": jid, "n": inv["n"], "pid": pid_info["pid"],
-                                                       "pgid": pid_info["pgid"], "host": pid_info["host"],
-                                                       "boot_id": pid_info["boot_id"], "adopted": True,
-                                                       "started_epoch": pid_info["started_epoch"]})
-        if held:
+        if held:                                               # alive on this machine (flock is local)
             pid = (pid_info or inv["started"] or {}).get("pid")
             pgid = (pid_info or inv["started"] or {}).get("pgid") or pid
             if job["cancel"] and pid:
@@ -342,21 +336,27 @@ class Supervisor:
                 elif sig["signal"] == "TERM" and now - sig["epoch"] > self.limits.cancel_grace_s:
                     self.journal.append("cancel_signalled", {"job_id": jid, "n": inv["n"], "signal": "KILL",
                                                              "epoch": now})
-                    _kill(_members(pgid), signal.SIGKILL)
+                    _kill(_members(pgid, inv_dir), signal.SIGKILL)
             if pgid and now > inv["deadline_epoch"] + self.limits.cancel_grace_s + 60:
                 if not (inv["signalled"] and inv["signalled"]["signal"] == "KILL"):
                     self.journal.append("cancel_signalled", {"job_id": jid, "n": inv["n"], "signal": "KILL",
                                                              "epoch": now, "reason": "deadline"})
                     atomic_write_json(inv_dir / "deadline_killed", {"epoch": now, "by": "supervisor"})
-                    _kill(_members(pgid), signal.SIGKILL)
+                    _kill(_members(pgid, inv_dir), signal.SIGKILL)
             return
         # the lock is free and there is no exit.json: the process died, or has not taken the lock yet
         if pid_info is None and now - inv["intent_epoch"] <= self.limits.launch_grace_s:
             return                                             # still launching
+        if pid_info and pid_info.get("machine_id") not in (None, self.machine):
+            # the root moved to another machine (a restored copy): this machine cannot know whether it is alive
+            self._end(job, inv, {"outcome": "foreign_host", "reason": f"invocation ran on {pid_info.get('host')}"},
+                      now, summary)
+            return
+        same_boot = (pid_info or {}).get("boot_id") in (None, procs.boot_id())
+        pgid = (pid_info or inv["started"] or {}).get("pgid")
+        if pgid and same_boot:
+            _kill(_members(pgid, inv_dir), signal.SIGKILL)     # forks left behind by a dead invocation process
         if pid_info:
-            pgid = pid_info.get("pgid")
-            if pgid:
-                _kill(_members(pgid), signal.SIGKILL)          # forks left behind by a dead invocation process
             for marker, outcome in (("memory_exceeded", "memory_exceeded"), ("log_limit_exceeded",
                                                                               "log_limit_exceeded"),
                                     ("deadline_killed", "timeout"), ("deadline", "timeout")):
@@ -367,18 +367,22 @@ class Supervisor:
             self._end(job, inv, {"outcome": outcome, "reason": "the invocation process ended without exit.json"},
                       now, summary)
             return
-        pgid = (inv["started"] or {}).get("pgid")
-        if pgid:
-            _kill(_members(pgid), signal.SIGKILL)
         self._end(job, inv, {"outcome": "lost_before_start", "reason": "no process took the job lock within the "
                              "launch grace"}, now, summary)
+
+    def _adopt(self, jid: str, inv: dict, pid_info: dict) -> None:
+        self.journal.append("invocation_started", {"job_id": jid, "n": inv["n"], "pid": pid_info["pid"],
+                                                   "pgid": pid_info["pgid"], "host": pid_info.get("host"),
+                                                   "machine_id": pid_info.get("machine_id"),
+                                                   "boot_id": pid_info.get("boot_id"), "adopted": True,
+                                                   "started_epoch": pid_info["started_epoch"]})
 
     def _end(self, job: dict, inv: dict, info: dict, now: float, summary: dict) -> None:
         jid = job["job_id"]
         outcome = info.get("outcome", "lost")
         rec = info.get("reconcile")
-        if job["cancel"] and outcome != "done":
-            outcome = "cancelled"
+        if job["cancel"] and outcome in RETRYABLE + ERROR_LIKE + ("cancelled",):
+            outcome = "cancelled"                              # never hides integrity, refusals or blocks
         if rec and rec.get("state") == "corrupted":
             outcome = "integrity"
         elif outcome == "done" and (not rec or rec.get("state") != "closed"):
@@ -390,7 +394,7 @@ class Supervisor:
                 anchor = k.anchor(job["params"], self.job_dir(jid) / "work")
             except Exception:
                 anchor = None
-        if outcome == "unfinished" and anchor is not None and anchor == job["anchor"]:
+        if outcome in ("unfinished", "timeout") and anchor is not None and anchor == job["anchor"]:
             outcome = "no_progress"                            # nothing new in the kind's log: do not loop
         started = info.get("started_epoch") or (inv["started"] or {}).get("started_epoch") or inv["intent_epoch"]
         ended = info.get("ended_epoch") or self._last_seen(inv) or now
@@ -422,9 +426,8 @@ class Supervisor:
         cpu_cap = min(lim.max_total_workers, os.cpu_count() or 1)
         used_workers = sum(max(1, j["open_invocation"]["workers"]) for j in active if j["open_invocation"])
         month = month_of(now)
-        committed = st["usage"].get(month, 0.0) + sum(
-            max(1, j["open_invocation"]["workers"]) * max(0.0, j["open_invocation"]["deadline_epoch"] - now) / 3600
-            for j in active if j["open_invocation"])
+        committed = st["usage"].get(month, 0.0) + sum(reserved_window(j["open_invocation"]) for j in active
+                                                       if j["open_invocation"])
         free_mb = shutil.disk_usage(self.root).free / 2**20
         queue = sorted((j for j in jobs.values() if j["status"] in ("queued", "retry_wait")),
                        key=lambda j: (-j["priority"], j["registered_seq"]))
@@ -466,7 +469,13 @@ class Supervisor:
         n = len(job["invocations"]) + 1
         rel = f"jobs/{jid}/inv-{n:04d}"
         inv_dir = self.root / rel
-        inv_dir.mkdir(parents=True, exist_ok=False)
+        if inv_dir.exists():
+            # left by a crash between mkdir and the intent record: keep it, under another name, and say so
+            k = len(list(inv_dir.parent.glob(f"inv-{n:04d}.orphan-*")))
+            dst = inv_dir.with_name(f"inv-{n:04d}.orphan-{k}")
+            os.replace(inv_dir, dst)
+            self.journal.append("orphan_invocation_dir", {"job_id": jid, "n": n, "renamed_to": dst.name})
+        inv_dir.mkdir(parents=True)
         deadline = now + self.limits.max_wall_minutes_per_invocation * 60
         spec = {"job_id": jid, "kind": job["kind"], "params": job["params"], "n": n,
                 "job_dir": str(self.job_dir(jid)), "identity": job["identity"],
@@ -489,8 +498,15 @@ class Supervisor:
             return
         self._procs[p.pid] = p
         self.journal.append("invocation_started", {"job_id": jid, "n": n, "pid": p.pid, "pgid": p.pid,
-                                                   "host": self.host, "boot_id": boot_id(), "adopted": False,
+                                                   "host": self.host, "machine_id": self.machine,
+                                                   "boot_id": procs.boot_id(), "adopted": False,
                                                    "started_epoch": now, "env_dropped": dropped})
+
+
+def reserved_window(inv: dict) -> float:
+    """The vCPU-hours an open invocation holds against the budget: its whole window, from intent to deadline
+    (time already used included), until it ends and its actual use is booked."""
+    return max(1, inv["workers"]) * max(0.0, inv["deadline_epoch"] - inv["intent_epoch"]) / 3600.0
 
 
 def _bounded(rec: dict | None, max_violations: int = 50) -> dict | None:

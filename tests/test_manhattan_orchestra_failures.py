@@ -171,6 +171,8 @@ def test_invocation_cap_leaves_the_job_incomplete_and_requeue_continues_it(tmp_p
                        max_invocations=2)["job_id"]
     st = run_until(sup, settled)
     assert st["jobs"][jid]["status"] == "incomplete" and "invocation cap" in st["jobs"][jid]["reason"]
+    with pytest.raises(Exception, match="pass extra_invocations"):
+        sup.requeue(jid)                                                          # at its cap: say how many more
     sup.requeue(jid, extra_invocations=1)
     st = run_until(sup, settled)
     assert st["jobs"][jid]["status"] == "completed" and st["jobs"][jid]["n_invocations"] == 3
@@ -385,3 +387,51 @@ def test_hte_job_survives_an_engine_crash_and_closes_with_an_anchored_log(tmp_pa
     assert rec["access_reconciled"] is False and rec["independent_statistical_tests"] is None
     assert j["anchor"]["records"] > 0
     assert sup.audit(jid)["state"] == "closed"
+
+
+def test_a_directory_left_by_a_crash_before_the_intent_does_not_wedge_the_root(tmp_path, mini):
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    stale = sup.job_dir(jid) / "inv-0001"
+    stale.mkdir()
+    (stale / "invocation.json").write_text("{}")                      # mkdir and spec written, intent never
+    st = run_until(sup, settled)
+    assert st["jobs"][jid]["status"] == "completed"
+    assert (sup.job_dir(jid) / "inv-0001.orphan-0" / "invocation.json").exists()      # kept, renamed
+    assert [r["payload"]["renamed_to"] for r in sup.journal.records() if r["type"] == "orphan_invocation_dir"] == \
+        ["inv-0001.orphan-0"]
+
+
+def test_limits_file_is_reread_every_tick_and_a_bad_one_stops_starts(tmp_path, mini):
+    sup = sup_for(tmp_path, mini)
+    a = sup.register("smoke", {"units": 4})["job_id"]
+    (sup.root / "limits.json").write_text(json.dumps({"max_running_jobs": 0}))       # 0 is refused, not "off"
+    out = sup.tick()
+    assert out["started"] == [] and out["limits_ok"] is False
+    snap = read_json(sup.root / "status.json")
+    assert "must be positive" in snap["limits_error"]
+    from manhattan.orchestra import status as S
+    assert S.health(snap)[1] == 1
+    (sup.root / "limits.json").write_text(json.dumps({"max_running_jobs": 1, "monthly_vcpu_hours": 0.001}))
+    out = sup.tick()
+    assert out["limits_ok"] and out["started"] == [] and "budget" in out["deferred"][0]["reason"]
+    assert sup.limits.max_running_jobs == 1 and read_json(sup.root / "status.json")["limits_error"] is None
+    (sup.root / "limits.json").unlink()
+    assert run_until(sup, settled)["jobs"][a]["status"] == "completed"
+
+
+def test_running_invocations_hold_their_whole_window_against_the_budget(tmp_path, mini):
+    offset = [0.0]
+    sup = sup_for(tmp_path, mini, clock=lambda: time.time() + offset[0], monthly_vcpu_hours=1.0,
+                  max_wall_minutes_per_invocation=40)
+    a = sup.register("smoke", {"units": 4, "faults": {"hang_at_unit": 0}})["job_id"]
+    b = sup.register("smoke", {"units": 5})["job_id"]
+    out = sup.tick()
+    assert out["started"] == [a] and "budget" in out["deferred"][0]["reason"]
+    run_until(sup, lambda st: (sup.root / st["jobs"][a]["invocations"][0]["inv_dir"] / "pid.json").exists())
+    offset[0] = 35 * 60.0                                             # 35 minutes into A's 40-minute window
+    out = sup.tick()
+    assert out["started"] == [] and out["deferred"][0]["job_id"] == b
+    offset[0] = 0.0
+    sup.cancel(a)
+    run_until(sup, lambda st: st["jobs"][a]["status"] == "cancelled")

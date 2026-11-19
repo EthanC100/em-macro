@@ -415,6 +415,21 @@ class Sim(Kind):
                 "counts": {"wanted": len(want), "on_file": have, "run_log_starts": len(starts),
                            "run_log_abandoned": abandoned, "code": code[:16]}}
 
+    def anchor(self, params, work):
+        """A digest of this scenario's replication files: used to tell an invocation that added replications from
+        one that added none (``no_progress``). The simulation keeps no hash chain, so nothing is verified against
+        it before an invocation."""
+        import hashlib
+        files = sorted(self._out(work).rglob(f"{params['scenario']}_{params['size']}_*.jsonl"))
+        if not files:
+            return None
+        h, n = hashlib.sha256(), 0
+        for f in files:
+            b = f.read_bytes()
+            n += b.count(b"\n")
+            h.update(f.name.encode() + b"\0" + hashlib.sha256(b).digest())
+        return {"records": n, "head": h.hexdigest()}
+
     def progress(self, params, work):
         hb = self._out(work) / "heartbeat.json"
         try:
