@@ -1,0 +1,195 @@
+{
+ "schema": "manhattan.s16.mutations/1",
+ "tree": "scratch merge of the five PR heads onto main 9b24bd7 (local, never pushed)",
+ "all_caught": true,
+ "mutations": [
+  {
+   "id": "M01",
+   "mutation": "HTE does not check the results hash",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-01"
+   ],
+   "failing_ids": [
+    "ADV-COR-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M02",
+   "mutation": "HTE synthetic-panel check bypassed",
+   "file": "manhattan/hte/data.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-03",
+    "E2E-03"
+   ],
+   "failing_ids": [
+    "ADV-COR-03",
+    "E2E-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M03",
+   "mutation": "HTE PIT probe skipped at registration",
+   "file": "manhattan/hte/registry.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-LA-01"
+   ],
+   "failing_ids": [
+    "ADV-LA-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M04",
+   "mutation": "HTE registers duplicate specs",
+   "file": "manhattan/hte/registry.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-DUP-01"
+   ],
+   "failing_ids": [
+    "ADV-DUP-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M05",
+   "mutation": "HTE recomputes an identical closed run",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-DUP-02"
+   ],
+   "failing_ids": [
+    "ADV-DUP-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M06",
+   "mutation": "HTE run record claims confirmatory",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "E2E-08",
+    "ADV-PRO-04"
+   ],
+   "failing_ids": [
+    "ADV-PRO-04",
+    "E2E-08"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M07",
+   "mutation": "HTE stage 5 allowed",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-PRT-02"
+   ],
+   "failing_ids": [
+    "ADV-PRT-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M08",
+   "mutation": "evidence honours a forged weight",
+   "file": "manhattan/evidence.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-PRO-01"
+   ],
+   "failing_ids": [
+    "ADV-PRO-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M09",
+   "mutation": "execution fills at the decision's own close",
+   "file": "manhattan/execution/account.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "E2E-11",
+    "ADV-LA-03"
+   ],
+   "failing_ids": [
+    "ADV-LA-03",
+    "E2E-11"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M10",
+   "mutation": "execution fills at an already-seen price",
+   "file": "manhattan/execution/costs.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-LA-03"
+   ],
+   "failing_ids": [
+    "ADV-LA-03"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M11",
+   "mutation": "attempt reconciler ignores unfinished attempts",
+   "file": "manhattan/attempts.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-INT-02"
+   ],
+   "failing_ids": [
+    "ADV-INT-02"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M12",
+   "mutation": "HTE resume skips interrupted-attempt recovery",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-INT-01"
+   ],
+   "failing_ids": [
+    "ADV-INT-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  },
+  {
+   "id": "M13",
+   "mutation": "HTE does not check package hashes",
+   "file": "manhattan/hte/runner.py",
+   "outcome": "CAUGHT",
+   "expected_ids": [
+    "ADV-COR-01"
+   ],
+   "failing_ids": [
+    "ADV-COR-01"
+   ],
+   "runner_exit": 1,
+   "verdict": "NOT_READY"
+  }
+ ]
+}

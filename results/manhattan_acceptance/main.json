@@ -1,0 +1,967 @@
+{
+ "schema": "manhattan.s16.acceptance/1",
+ "generated_utc": "2026-11-19T04:23:29Z",
+ "command": "python tests/acceptance/run.py --label main 9b24bd7 + the S16 suite (this branch) --out results/manhattan_acceptance/main.json",
+ "label": "main 9b24bd7 + the S16 suite (this branch)",
+ "tree": {
+  "commit": "384a984b8304731b198f30f1f01a43436d7f4bdb",
+  "branch": "claude/cool-fermat-y0xe7a",
+  "dirty": false
+ },
+ "environment": {
+  "python": "3.13.18",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39"
+ },
+ "capabilities": {
+  "hte": {
+   "present": false,
+   "kind": "component",
+   "source": "PR #89",
+   "description": "manhattan.hte: registry, synthetic panels, runner, reconcile",
+   "detail": "ModuleNotFoundError: No module named 'manhattan.hte'"
+  },
+  "evidence": {
+   "present": false,
+   "kind": "component",
+   "source": "PR #84",
+   "description": "manhattan.evidence: fail-closed evidence classification",
+   "detail": "ModuleNotFoundError: No module named 'manhattan.evidence'"
+  },
+  "access": {
+   "present": false,
+   "kind": "component",
+   "source": "PR #86",
+   "description": "manhattan.access + attempts: binding attempt accounting",
+   "detail": "ModuleNotFoundError: No module named 'manhattan.access'"
+  },
+  "execution": {
+   "present": false,
+   "kind": "component",
+   "source": "PR #85",
+   "description": "manhattan.execution: synthetic futures execution",
+   "detail": "ModuleNotFoundError: No module named 'manhattan.execution'"
+  },
+  "equities": {
+   "present": false,
+   "kind": "component",
+   "source": "PR #87",
+   "description": "manhattan.equities: synthetic equities research data",
+   "detail": "ModuleNotFoundError: No module named 'manhattan.equities'"
+  },
+  "adapter:hte->access": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11 / PR #86 D-1, D-10, B4",
+   "description": "HTE attempts registered in the Manhattan Ledger (hte.adapters.Pr86AccessAdapter)",
+   "detail": "manhattan.hte absent (PR #89 not merged)"
+  },
+  "adapter:hte->execution": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11 / PR #85 E1-E4",
+   "description": "HTE stage 3 executed through manhattan.execution at lag >= 1",
+   "detail": "manhattan.hte absent (PR #89 not merged)"
+  },
+  "adapter:hte->evidence": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11",
+   "description": "a producer of evidence metadata and verifier results for HTE runs",
+   "detail": "manhattan.evidence absent (PR #84 not merged)"
+  },
+  "adapter:equities->hte": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11",
+   "description": "the synthetic equities world as an HTE domain",
+   "detail": "manhattan.hte absent (PR #89 not merged)"
+  },
+  "anchor:independent": {
+   "present": false,
+   "kind": "integration",
+   "source": "PR #86 G-2 / D-7",
+   "description": "independent custody of attempt-log anchors",
+   "detail": "manhattan.attempts.reconcile absent (PR #86 not merged)"
+  },
+  "authority:trusted": {
+   "present": false,
+   "kind": "integration",
+   "source": "PR #84 / owner decision",
+   "description": "a trusted verifier authority (evidence.TRUSTED_AUTHORITIES non-empty)",
+   "detail": "manhattan.evidence absent (PR #84 not merged)"
+  },
+  "decision:D-1": {
+   "present": false,
+   "kind": "integration",
+   "source": "owner decision D-1 (PR #86) / HTE B3",
+   "description": "the multiple-testing counting unit shared by HTE and PR #86",
+   "detail": "manhattan.hte absent (PR #89 not merged)"
+  }
+ },
+ "pytest_exit": 0,
+ "wall_s": 0.28,
+ "verdict": "NOT_READY",
+ "reasons": [
+  "BLOCKED: ADV-COR-01, ADV-COR-02, ADV-COR-03, ADV-COR-04, ADV-DUP-01, ADV-DUP-02, ADV-DUP-03, ADV-DUP-04, ADV-INT-01, ADV-INT-02, ADV-LA-01, ADV-LA-02, ADV-LA-03, ADV-LA-04, ADV-OBS-01, ADV-OBS-02, ADV-PRO-01, ADV-PRO-03, ADV-PRO-04, ADV-PRT-02, ADV-PRT-03, ADV-PRT-04, E2E-01, E2E-02, E2E-03, E2E-04, E2E-05, E2E-06, E2E-07, E2E-08, E2E-09, E2E-10, E2E-11, E2E-12, E2E-13, E2E-14, GAP-01, GAP-02, GAP-03, GAP-04, GAP-05, GAP-06, GAP-07"
+ ],
+ "summary": {
+  "PASS": 5,
+  "FAIL": 0,
+  "UNBOUND": 0,
+  "ERROR": 0,
+  "BLOCKED": 51,
+  "SKIPPED": 0
+ },
+ "by_id": {
+  "ADV-COR-01": "BLOCKED",
+  "ADV-COR-02": "BLOCKED",
+  "ADV-COR-03": "BLOCKED",
+  "ADV-COR-04": "BLOCKED",
+  "ADV-DUP-01": "BLOCKED",
+  "ADV-DUP-02": "BLOCKED",
+  "ADV-DUP-03": "BLOCKED",
+  "ADV-DUP-04": "BLOCKED",
+  "ADV-INT-01": "BLOCKED",
+  "ADV-INT-02": "BLOCKED",
+  "ADV-LA-01": "BLOCKED",
+  "ADV-LA-02": "BLOCKED",
+  "ADV-LA-03": "BLOCKED",
+  "ADV-LA-04": "BLOCKED",
+  "ADV-OBS-01": "BLOCKED",
+  "ADV-OBS-02": "BLOCKED",
+  "ADV-PRO-01": "BLOCKED",
+  "ADV-PRO-02": "PASS",
+  "ADV-PRO-03": "BLOCKED",
+  "ADV-PRO-04": "BLOCKED",
+  "ADV-PRT-01": "PASS",
+  "ADV-PRT-02": "BLOCKED",
+  "ADV-PRT-03": "BLOCKED",
+  "ADV-PRT-04": "BLOCKED",
+  "ADV-PRT-05": "PASS",
+  "E2E-01": "BLOCKED",
+  "E2E-02": "BLOCKED",
+  "E2E-03": "BLOCKED",
+  "E2E-04": "BLOCKED",
+  "E2E-05": "BLOCKED",
+  "E2E-06": "BLOCKED",
+  "E2E-07": "BLOCKED",
+  "E2E-08": "BLOCKED",
+  "E2E-09": "BLOCKED",
+  "E2E-10": "BLOCKED",
+  "E2E-11": "BLOCKED",
+  "E2E-12": "BLOCKED",
+  "E2E-13": "BLOCKED",
+  "E2E-14": "BLOCKED",
+  "GAP-01": "BLOCKED",
+  "GAP-02": "BLOCKED",
+  "GAP-03": "BLOCKED",
+  "GAP-04": "BLOCKED",
+  "GAP-05": "BLOCKED",
+  "GAP-06": "BLOCKED",
+  "GAP-07": "BLOCKED",
+  "HARNESS-01": "PASS",
+  "HARNESS-02": "PASS"
+ },
+ "exit": 0,
+ "scientifically_verified": false,
+ "evidence_class": "synthetic_acceptance_only",
+ "tests": [
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[attempt_file-attempt_file_corrupt]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[package-package_tampered]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[results-results_tampered]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[results_deleted-results_missing]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[alter]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[delete_line]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[reorder]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-03",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor03_a_swapped_synthetic_panel_is_refused",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[alter]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[delete]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[truncate]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-DUP-01",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup01_duplicate_registration_adds_nothing_and_is_logged",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-DUP-02",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup02_an_identical_evaluation_is_reused_not_recounted",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-DUP-03",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup03_a_finished_attempt_cannot_be_evaluated_or_superseded_again",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.003
+  },
+  {
+   "id": "ADV-DUP-04",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup04_the_same_evidence_cannot_be_counted_twice",
+   "requires": [
+    "evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[evidence]: evidence: ModuleNotFoundError: No module named 'manhattan.evidence'",
+   "blocked_by": [
+    "evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-INT-01",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int01_an_interrupted_run_is_never_reported_and_resumes_to_the_clean_result[exit_after_start:3-attempt_interrupted]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-INT-01",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int01_an_interrupted_run_is_never_reported_and_resumes_to_the_clean_result[torn_completion:4-torn_tail_quarantined]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-INT-02",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int02_a_crash_after_registration_is_visible_until_a_retry_completes",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-LA-01",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la01_a_template_that_reads_the_future_cannot_be_registered",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-LA-02",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la02_published_observables_carry_their_lag_and_the_fence_holds",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-LA-03",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la03_execution_refuses_prices_seen_before_the_decision",
+   "requires": [
+    "execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[execution]: execution: ModuleNotFoundError: No module named 'manhattan.execution'",
+   "blocked_by": [
+    "execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-LA-04",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la04_equities_reads_never_reach_past_as_of",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[equities]: equities: ModuleNotFoundError: No module named 'manhattan.equities'",
+   "blocked_by": [
+    "equities"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-OBS-01",
+   "area": "observability",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_obs01_a_failure_in_any_phase_is_recorded_and_leaves_no_result_of_record",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-OBS-02",
+   "area": "observability",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_obs02_rejected_and_refused_work_leaves_a_reason",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRO-01",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro01_forged_or_unauthenticated_evidence_gets_no_weight",
+   "requires": [
+    "evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[evidence]: evidence: ModuleNotFoundError: No module named 'manhattan.evidence'",
+   "blocked_by": [
+    "evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRO-02",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro02_promotion_and_claims_are_disabled_on_this_tree",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.012
+  },
+  {
+   "id": "ADV-PRO-03",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro03_equities_research_records_cannot_be_promoted",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[equities]: equities: ModuleNotFoundError: No module named 'manhattan.equities'",
+   "blocked_by": [
+    "equities"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRO-04",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro04_hte_cannot_produce_confirmatory_output",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRT-01",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt01_reserve_forward_claims_and_real_money_are_disabled",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.002
+  },
+  {
+   "id": "ADV-PRT-02",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt02_hte_stage5_and_its_adapters_refuse_whatever_the_caller_passes",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRT-03",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt03_reserve_and_forward_windows_need_a_registered_authorized_attempt",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRT-04",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt04_licensed_and_non_synthetic_equity_sources_are_refused",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[equities]: equities: ModuleNotFoundError: No module named 'manhattan.equities'",
+   "blocked_by": [
+    "equities"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-PRT-05",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt05_new_platform_code_has_no_network_or_private_store_path",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-01",
+   "area": "registration",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e01_frozen_hypotheses_bind_the_run",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-02",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e02_evaluation_identity_covers_every_input",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-03",
+   "area": "synthetic_data",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e03_only_verified_synthetic_panels_run",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-04",
+   "area": "authorization",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e04_computation_reads_only_the_unprotected_window",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e05_every_registered_candidate_is_accounted_for",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-06",
+   "area": "statistics",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e06_statistical_tests_state_denominators_and_find_a_planted_effect",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-07",
+   "area": "reconciliation",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e07_reconciler_rebuilds_the_result_from_persisted_records",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-08",
+   "area": "research_only",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e08_outputs_are_research_only",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte'",
+   "blocked_by": [
+    "hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-09",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e09_hte_identities_are_valid_pr86_identities",
+   "requires": [
+    "hte",
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,access]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "hte",
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-10",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e10_synthetic_exploration_attempt_registers_reads_and_reconciles",
+   "requires": [
+    "access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access]: access: ModuleNotFoundError: No module named 'manhattan.access'",
+   "blocked_by": [
+    "access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-11",
+   "area": "execution",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e11_decisions_fill_at_a_later_close_and_costs_reconcile",
+   "requires": [
+    "execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[execution]: execution: ModuleNotFoundError: No module named 'manhattan.execution'",
+   "blocked_by": [
+    "execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-12",
+   "area": "equities",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e12_synthetic_equities_world_reads_point_in_time",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[equities]: equities: ModuleNotFoundError: No module named 'manhattan.equities'",
+   "blocked_by": [
+    "equities"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-13",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e13_equities_recorded_interfaces_match_the_merged_code",
+   "requires": [
+    "equities",
+    "access",
+    "evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[equities,access,evidence]: equities: ModuleNotFoundError: No module named 'manhattan.equities' | access: ModuleNotFoundError: No module named 'manhattan.access' | evidence: ModuleNotFoundError: No module named 'manhattan.evidence'",
+   "blocked_by": [
+    "equities",
+    "access",
+    "evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-14",
+   "area": "research_only",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e14_hte_output_is_never_promotable_evidence",
+   "requires": [
+    "hte",
+    "evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,evidence]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | evidence: ModuleNotFoundError: No module named 'manhattan.evidence'",
+   "blocked_by": [
+    "hte",
+    "evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-01",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-01]",
+   "requires": [
+    "hte",
+    "access",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,access,adapter:hte->access]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | access: ModuleNotFoundError: No module named 'manhattan.access' | adapter:hte->access: manhattan.hte absent (PR #89 not merged)",
+   "blocked_by": [
+    "hte",
+    "access",
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-02",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-02]",
+   "requires": [
+    "hte",
+    "execution",
+    "adapter:hte->execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,execution,adapter:hte->execution]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | execution: ModuleNotFoundError: No module named 'manhattan.execution' | adapter:hte->execution: manhattan.hte absent (PR #89 not merged)",
+   "blocked_by": [
+    "hte",
+    "execution",
+    "adapter:hte->execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-03",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-03]",
+   "requires": [
+    "hte",
+    "evidence",
+    "adapter:hte->evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,evidence,adapter:hte->evidence]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | evidence: ModuleNotFoundError: No module named 'manhattan.evidence' | adapter:hte->evidence: manhattan.evidence absent (PR #84 not merged)",
+   "blocked_by": [
+    "hte",
+    "evidence",
+    "adapter:hte->evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-04",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-04]",
+   "requires": [
+    "hte",
+    "equities",
+    "adapter:equities->hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,equities,adapter:equities->hte]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | equities: ModuleNotFoundError: No module named 'manhattan.equities' | adapter:equities->hte: manhattan.hte absent (PR #89 not merged)",
+   "blocked_by": [
+    "hte",
+    "equities",
+    "adapter:equities->hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-05",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-05]",
+   "requires": [
+    "access",
+    "anchor:independent"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[access,anchor:independent]: access: ModuleNotFoundError: No module named 'manhattan.access' | anchor:independent: manhattan.attempts.reconcile absent (PR #86 not merged)",
+   "blocked_by": [
+    "access",
+    "anchor:independent"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-06",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-06]",
+   "requires": [
+    "evidence",
+    "authority:trusted"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[evidence,authority:trusted]: evidence: ModuleNotFoundError: No module named 'manhattan.evidence' | authority:trusted: manhattan.evidence absent (PR #84 not merged)",
+   "blocked_by": [
+    "evidence",
+    "authority:trusted"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-07",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-07]",
+   "requires": [
+    "hte",
+    "access",
+    "decision:D-1"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[hte,access,decision:D-1]: hte: ModuleNotFoundError: No module named 'manhattan.hte' | access: ModuleNotFoundError: No module named 'manhattan.access' | decision:D-1: manhattan.hte absent (PR #89 not merged)",
+   "blocked_by": [
+    "hte",
+    "access",
+    "decision:D-1"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "HARNESS-01",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_harness.py::test_harness01_verdict_is_fail_closed",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "HARNESS-02",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_harness.py::test_harness02_probes_never_raise_and_name_their_source",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  }
+ ]
+}
