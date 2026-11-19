@@ -25,6 +25,11 @@ from . import ids, kernels, store
 from . import templates as TP
 
 SCHEMA = "manhattan.hte.package/1"
+NULL_NOTE = ("not a calibrated rate and not a count of discoveries. On the null synthetic world gross returns have "
+             "no edge, but stage-3 returns are net of costs, so their true mean is negative and far fewer than 5% "
+             "of variants are expected at p_boot <= 0.05. Even at exactly zero mean the recentred stationary-"
+             "bootstrap p-value is only approximately uniform (finite B, fixed block length), and variants are "
+             "strongly correlated, so the share does not estimate a false-positive rate")
 USE_RESTRICTION = ("synthetic throughput and pipeline testing only: positions fill at the same close as the "
                    "decision (no execution delay, unlike PR #85's lag >= 1), on uncalibrated synthetic costs and "
                    "data; no statistic here estimates a realistic return")
@@ -205,8 +210,7 @@ def build(runner, table: dict, spa_parts) -> dict:
             pb = st3[ok3, s3c["p_boot"]]
             pkg["stage3"] = {"sharpe_ann": _q(st3[ok3, s3c["sharpe_ann"]]), "p_boot": _q(pb),
                              "share_p_boot_le_0.05": float((pb <= 0.05).mean()) if pb.size else None,
-                             "share_note": "about 0.05 is expected when no variant has an edge; a share is not "
-                                           "a count of discoveries and variants are correlated"}
+                             "share_note": NULL_NOTE}
             incomplete = int(((s3 == S3["skipped_dominated"]) | (s3 == S3["skipped_not_selected"]) |
                               (s3 == S3["skipped_failed_upstream"]) | (s3 == S3["failed"])).sum())
             if runner.policy.performance_gate:

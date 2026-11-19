@@ -982,3 +982,19 @@ def test_f9_an_interrupted_run_cannot_resume_under_another_environment(tmp_path,
     monkeypatch.undo()
     resumed = Runner(ws, panel, Policy(), chunk_size=40).run()          # back in its own environment it resumes
     assert resumed["run_id"] == old_run and resumed["result_root"] == baseline[1]["result_root"]
+
+
+# -- S10 review, F10: the null-calibration statement -----------------------------------------------------------------
+
+def test_f10_null_world_share_is_below_nominal_and_the_note_says_why(baseline):
+    """On the null synthetic world stage-3 returns are net of costs, so the share of p_boot <= 0.05 sits well
+    below 5%; the package note must not claim ~5% is expected."""
+    ws, out = baseline
+    shares = []
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        st = json.loads(p.read_text())["stage3"]
+        assert "not a calibrated rate" in st["share_note"] and "net of costs" in st["share_note"]
+        assert "about 0.05 is expected" not in st["share_note"]
+        if st["share_p_boot_le_0.05"] is not None:
+            shares.append(st["share_p_boot_le_0.05"])
+    assert shares and max(shares) < 0.05
