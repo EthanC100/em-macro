@@ -1,0 +1,27 @@
+{
+ "book": "janus",
+ "id": "J024",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-19T23:11:56+00:00",
+ "postmortem": {
+  "thesis_right": "yes",
+  "skill_or_luck": "luck",
+  "what_happened": "The short peso position filled at the 18 Nov FIX of 18.6723 and closed at the 19 Nov FIX of 19.027 when the 18 Nov review flipped the MXN forecast from 48 to 51, a net gain of about 0.06% of the account. The peso kept falling: it closed near 19.11 per dollar on 19 Nov, down about 1.45% on the day and its weakest since June 2025, as hawkish Fed talk, a 2% US equity sell-off and Banxico's surprise 5 Nov cut to 6.25% weighed.",
+  "assessment": "The thesis (narrower carry against a hiking Fed, risk-off hurting the peso) was right over the hold, but a one-day hold of a 20-day call is luck. The flip to long on the 18 Nov review assumed the Fed-driven drop would retrace; instead the sell-off extended the next day, so the flip cut a winning position on a mean-reversion guess without new information on Banxico or risk appetite.",
+  "do_differently": "1) Do not flip an EM FX call across 50 on 'one-day falls often retrace' when the driver (Fed hike pricing, risk-off) is still active. 2) When the honest view is within a point or two of even, keep the side already held to avoid paying a round trip. 3) Read risk sentiment (equities, VIX) before assuming a retrace in high-beta EM FX.",
+  "sources": [
+   {
+    "title": "Peso registra ca\u00edda de 1.45% y cierra en 19.11 unidades por d\u00f3lar",
+    "url": "https://eltiempomx.com/noticia/2026/peso-registra-caida-de-145-y-cierra-en-1911-unidades-por-dolar.html"
+   },
+   {
+    "title": "Banxico unexpectedly cut rates by 25 basis points to 6.25%",
+    "url": "https://www.fxstreet.com/news//banxico-unexpectedly-cut-rates-by-25-basis-points-to-625-202611051903"
+   },
+   {
+    "title": "Market Review: November 19, 2026 - Investrade",
+    "url": "https://investrade.com/market-review-november-19-2026/"
+   }
+  ]
+ }
+}

@@ -239,8 +239,10 @@ def test_corrections_never_edit(tmp_path):
 # ------------------------------------------------------------------ D-05 rerun detection and evidential weight
 
 def ev(**over):
+    # Phase 4B correction (owner decision D-5): reserve and forward completions need an attempt's completion proof,
+    # so these storage-level rerun/nondeterminism mechanics, which do not depend on the role, use exploration.
     base = dict(executable="AX-1", variant="AV-1", hypothesis="AH-1", family="AF-1", batch="AB-0001", channel="blind",
-                role="reserve", window={"id": "fx_daily:reserve", "start": "2020-01-01", "end": "2026-09-30", "frequency": "D"},
+                role="exploration", window={"id": "fx_daily:reserve", "start": "2020-01-01", "end": "2026-09-30", "frequency": "D"},
                 designated=True, spec_hash="aa" * 32, data_hash="dd" * 32, code_version={"commit": "abc", "tree": "t"},
                 result_hash="r1" * 32, n_obs=1700, summary={"mean": 0.01}, seed=7)
     base.update(over)
@@ -252,7 +254,9 @@ def test_new_look_rerun_nondeterminism_and_changed_data(tmp_path):
     started = lg.start_evaluation(ev())
     assert started["type"] == "evaluation_started" and lg.unfinished() == [started]
     first = lg.record_evaluation(**ev())
-    assert first["type"] == "evaluation" and first["payload"]["evidential_weight"] == 1 and lg.unfinished() == []
+    assert first["type"] == "evaluation" and first["payload"]["evidential_weight"] == 0 and lg.unfinished() == []
+    with pytest.raises(L.LedgerError, match="registered"):          # D-5: no protected result by the storage API
+        lg.record_evaluation(**ev(role="reserve", spec_hash="cc" * 32))
     again = lg.record_evaluation(**ev())
     assert again["type"] == "rerun" and again["payload"]["first_seq"] == first["seq"] and again["payload"]["evidential_weight"] == 0
     assert lg.looks() == 1                                             # the same look counts once

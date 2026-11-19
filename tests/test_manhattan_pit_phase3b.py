@@ -10,6 +10,7 @@ from manhattan.availability import AvailabilityError, sources_from_spec
 from manhattan.engine import pit, evaluate
 from manhattan.ops import compiler, data
 from test_manhattan_pit_integrity import Archive, csv
+import manhattan_attempt_fixtures as F
 
 
 def source(frequency="monthly", kind="release_dates", label="period_start"):
@@ -19,7 +20,9 @@ def source(frequency="monthly", kind="release_dates", label="period_start"):
 
 
 def window(store):
-    return pit.Window(store, date(2010, 1, 1), date(2011, 1, 1), "exploration", "test", "session")
+    # Phase 4B: windows are opened by a Reader (or a registered attempt), never constructed directly
+    return pit.Reader(store, caller="session", domain="test", fence=F.OPEN_FENCE).window(date(2010, 1, 1),
+                                                                                       date(2011, 1, 1))
 
 
 @pytest.mark.parametrize("unit", ["Y", "M", "W", "generic"])
@@ -139,12 +142,20 @@ def test_backfill_taint_survives_capture_conversion_and_later_append(tmp_path, m
     st = data.first_seen(archive, ("synthetic",)).pit_store()
     st.add("x", ["2010-01-05"], [11], lag_days=0)
     assert window(st).as_of("x", "2010-01-05")[1].tolist() == [9, 10, 11]
-    reserve = pit.Window(st, date(2010, 1, 4), date(2010, 1, 5), "reserve", "test", "runner")
+    # Phase 4B: a reserve window exists only for a registered attempt (synthetic reserve fence and token)
+    book = ledger.Ledger(tmp_path / "ledger.jsonl", writer="fixture", protocol="0" * 64)
+    wid = "test:reserve"
+    ctx = F.register(book, st, domain="test", start=date(2010, 1, 4), end=date(2010, 1, 5), role="reserve",
+                     window_id=wid, designated=True,
+                     fence=F.reserve_fence("test", date(2010, 1, 4), date(2010, 3, 31), date(2009, 12, 31)),
+                     token=F.reserve_token("test", wid))
+    reserve = ctx.window(st)
     def must_not_run(*args, **kwargs):
         pytest.fail("reconstructed reserve inputs reached the evaluator")
     monkeypatch.setattr(evaluate.backtest, "run", must_not_run)
     with pytest.raises(pit.PitError, match="reconstructed"):
-        evaluate.evaluate(reserve, None, ledger=None, executable={}, variant={}, hypothesis={}, family={}, designated=True)
+        evaluate.evaluate(reserve, None, ledger=book, **F.spec_kwargs(designated=True), attempt=ctx)
+    assert book.records()[-1]["type"] == "attempt_failed"                       # closed, never completed
 
 
 @pytest.mark.parametrize("role", ["reserve", "forward", "exploration"])
@@ -190,6 +201,12 @@ def test_compiler_checks_sources_on_compile_and_rebuild():
 def test_reconstructed_flag_is_recorded_and_forward_weight_is_zero(tmp_path, monkeypatch):
     from test_manhattan_registry import ev
     book = ledger.Ledger(tmp_path / "ledger.jsonl", writer="fixture", protocol="0" * 64)
-    rec = book.record_evaluation(**ev(reconstructed=True))
+    rec = book.record_evaluation(**ev(reconstructed=True))                     # exploration (storage-level)
     assert rec["payload"]["reconstructed"] is True
     assert rec["payload"]["evidential_weight"] == 0
+    # Phase 4B / D-5: a reconstructed reserve or forward record cannot be written by the storage API at all (the
+    # engine refuses reconstructed reserve and forward windows before computing), and its weight would be 0
+    for role in ("reserve", "forward"):
+        with pytest.raises(ledger.LedgerError):
+            book.record_evaluation(**ev(reconstructed=True, role=role, spec_hash="b" * 64))
+        assert ledger.evidential_weight("blind", role, designated=True, reconstructed=True) == 0
