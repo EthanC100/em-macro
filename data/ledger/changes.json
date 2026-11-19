@@ -1,27 +1,32 @@
 {
- "since": "2026-11-19T06:20:22+00:00",
- "at": "2026-11-19T14:56:44+00:00",
+ "since": "2026-11-19T14:56:44+00:00",
+ "at": "2026-11-19T18:29:21+00:00",
  "items": [
-  {
-   "book": "me",
-   "kind": "pnl",
-   "label": "me",
-   "change": 0.016,
-   "text": "me: +0.02 index points (to 98.92)"
-  },
   {
    "book": "algorithm",
    "kind": "pnl",
    "label": "algorithm v1.0",
-   "change": 0.0064,
-   "text": "algorithm v1.0: +0.01 index points (to 100.24)"
+   "change": 0.072,
+   "text": "algorithm v1.0: +0.07 index points (to 100.32)"
   },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.0148,
-   "text": "janus: -0.01 index points (to 99.96)"
+   "change": 0.0842,
+   "text": "janus: +0.08 index points (to 100.05)"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J005",
+   "text": "Janus J005 closed (C08 rebalance): net +0.03%"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J027",
+   "text": "Janus J027 filled: short DE10Y"
   }
  ]
 }
