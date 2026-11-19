@@ -720,18 +720,65 @@ def test_no_order_routing_or_broker_names_exist():
         assert not any(bad in n for n in names), bad
 
 
+_EXECUTION_REF = re.compile(r"manhattan\.execution|from manhattan import[^\n]*\bexecution\b")
+_OWN = ("manhattan/execution/", "tests/test_manhattan_execution.py", ".git/")
+# Authorized test-only references: the S16 system acceptance suite (PR #91) probes and exercises this model from the
+# test tree. Only this directory is allowed; every other file, including every other test, is still scanned, and
+# ``test_production_never_reaches_the_authorized_test_references`` keeps production code from importing it.
+AUTHORIZED_TEST_REFERENCES = ("tests/acceptance/",)
+_ACCEPTANCE_REF = re.compile(r"tests[./]acceptance|\bs16_(capabilities|drivers|fixtures|helpers)\b")
+
+
+def _execution_references(root: Path) -> tuple[list, list]:
+    """(prohibited, authorized): every file under ``root`` naming the execution model, outside the model's own
+    package and its own test file, split by ``AUTHORIZED_TEST_REFERENCES``."""
+    hits, authorized = [], []
+    for p in root.rglob("*.py"):
+        rel = p.relative_to(root).as_posix()
+        if rel.startswith(_OWN):
+            continue
+        if _EXECUTION_REF.search(p.read_text(encoding="utf-8", errors="replace")):
+            (authorized if rel.startswith(AUTHORIZED_TEST_REFERENCES) else hits).append(rel)
+    for p in (root / ".github/workflows").glob("*.yml"):
+        if "manhattan.execution" in p.read_text(encoding="utf-8") or "manhattan/execution" in p.read_text(encoding="utf-8"):
+            hits.append(p.name)
+    return hits, authorized
+
+
 def test_nothing_in_production_imports_the_execution_model():
-    pat = re.compile(r"manhattan\.execution|from manhattan import[^\n]*\bexecution\b")
+    hits, _ = _execution_references(ROOT)
+    assert hits == []
+
+
+def test_the_isolation_scan_still_catches_production_and_other_test_references(tmp_path):
+    """The authorized test-only exemption is narrow: production modules, other tests and workflows still fail."""
+    for rel, text in {"manhattan/hte/leak.py": "from manhattan.execution import run\n",
+                      "manhattan/ops/leak2.py": "from manhattan import config, execution\n",
+                      "scripts/leak3.py": "import manhattan.execution.account\n",
+                      "tests/test_other.py": "import manhattan.execution\n",
+                      "tests/acceptance_evil/x.py": "import manhattan.execution\n",
+                      "tests/acceptance/s16_probe.py": "import manhattan.execution\n",
+                      ".github/workflows/w.yml": "run: python -m manhattan.execution\n"}.items():
+        f = tmp_path / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    hits, authorized = _execution_references(tmp_path)
+    assert sorted(hits) == ["manhattan/hte/leak.py", "manhattan/ops/leak2.py", "scripts/leak3.py",
+                            "tests/acceptance_evil/x.py", "tests/test_other.py", "w.yml"]
+    assert authorized == ["tests/acceptance/s16_probe.py"]
+    assert all(a.startswith("tests/") for a in AUTHORIZED_TEST_REFERENCES)
+
+
+def test_production_never_reaches_the_authorized_test_references():
+    """No module outside tests/ may name the acceptance suite, so the exemption cannot carry the model into
+    production."""
     hits = []
     for p in ROOT.rglob("*.py"):
         rel = p.relative_to(ROOT).as_posix()
-        if rel.startswith(("manhattan/execution/", "tests/test_manhattan_execution.py", ".git/")):
+        if rel.startswith(("tests/", ".git/")):
             continue
-        if pat.search(p.read_text(encoding="utf-8", errors="replace")):
+        if _ACCEPTANCE_REF.search(p.read_text(encoding="utf-8", errors="replace")):
             hits.append(rel)
-    for p in (ROOT / ".github/workflows").glob("*.yml"):
-        if "manhattan.execution" in p.read_text(encoding="utf-8") or "manhattan/execution" in p.read_text(encoding="utf-8"):
-            hits.append(p.name)
     assert hits == []
 
 
