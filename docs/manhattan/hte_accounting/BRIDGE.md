@@ -114,7 +114,17 @@ whose rows hold the attempt IDs.
 ## 6. Benchmark
 
 `scripts/hte_accounting_bench.py` measures this (outside `manhattan/`, because it supplies the A-1 writer). The
-results are in `results/manhattan_hte_accounting/` and summarised in the PR description.
+results are in `results/manhattan_hte_accounting/` (README there). With 4 workers, synthetic panel:
+
+| candidates | HTE run | begin | complete | cross-check (PR #86 reconciler) | accounting / run | ledger |
+|---|---|---|---|---|---|---|
+| 10,344 | 8.1 s | 30.4 s | 15.1 s | 24.6 s (22.2 s) | 8.7× | 35 MiB, 20,688 records |
+| 99,552 | 44.0 s | 258.4 s | 1,083.7 s | 226.6 s (203.4 s) | 35.6× | 338 MiB, 199,104 records |
+
+Registration is linear, at about 2.6 ms per candidate, mostly PR #86's declaration check. Completion is quadratic
+because of PR #86's `record_evaluation` scan (A-2). The ledger costs 3.56 kB per candidate, and outcome batches plus
+the registration file add about 0.5 kB. Peak memory at 100k is 3.5 GiB. Both runs were consistent, with no PR #86
+reconciler violations.
 
 ## 7. Limitations
 
