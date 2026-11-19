@@ -661,30 +661,60 @@ def test_f2_killing_the_parent_leaves_no_workers_and_no_lock(tmp_path, baseline)
 
 LOCK_SCRIPT = """
 import os, sys, time
+if len(sys.argv) > 2 and sys.argv[2] == "no-fork-hook":       # control: simulate the defect (hook not installed)
+    os.register_at_fork = lambda **kw: None
 from manhattan.hte.log import locked
 with locked(sys.argv[1]):
     pid = os.fork()
     if pid == 0:
-        time.sleep(30)
+        fd = os.open(os.devnull, os.O_RDWR)                  # let go of the parent's pipes at once, so the caller
+        for k in (0, 1, 2):                                   # returns while this child is still alive
+            os.dup2(fd, k)
+        time.sleep(60)
         os._exit(0)
     print(pid, flush=True)
     os._exit(0)                       # the holder dies without unlocking; its forked child lives on
 """
 
 
-def test_f2_a_forked_child_never_holds_the_workspace_lock(tmp_path):
+def _alive(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().split(")")[-1].split()[0] != "Z"           # a zombie holds no descriptors
+    except OSError:
+        return False
+
+
+def _lock_after_holder_dies(tmp_path, *extra):
     import signal
-    from manhattan.hte.log import locked
+    from manhattan.hte.log import LogError, locked
     env = dict(os.environ, PYTHONPATH=str(ROOT))
-    p = subprocess.run([sys.executable, "-c", LOCK_SCRIPT, str(tmp_path / "attempts.jsonl")], env=env, cwd=ROOT,
-                       capture_output=True, text=True, timeout=60)
+    p = subprocess.run([sys.executable, "-c", LOCK_SCRIPT, str(tmp_path / "attempts.jsonl"), *extra], env=env,
+                       cwd=ROOT, capture_output=True, text=True, timeout=60)
     child = int(p.stdout.strip())
     try:
-        os.kill(child, 0)                                               # the child is still alive
-        with locked(tmp_path / "attempts.jsonl"):                       # ... and the lock is free
-            pass
+        assert _alive(child), "the forked child must still be alive for the check to mean anything"
+        try:
+            with locked(tmp_path / "attempts.jsonl"):
+                free = True
+        except LogError:
+            free = False
+        assert _alive(child), "the child died during the check"
+        return free
     finally:
-        os.kill(child, signal.SIGKILL)
+        try:
+            os.kill(child, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def test_f2_a_forked_child_never_holds_the_workspace_lock(tmp_path):
+    assert _lock_after_holder_dies(tmp_path) is True                    # the lock is free while the child lives
+
+
+def test_f2_the_lock_check_detects_the_defect_when_the_fix_is_off(tmp_path):
+    """Control: without the fork hook the orphaned child keeps the lock, so the check above is meaningful."""
+    assert _lock_after_holder_dies(tmp_path, "no-fork-hook") is False
 
 
 

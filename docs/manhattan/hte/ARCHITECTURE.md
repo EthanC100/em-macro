@@ -3,7 +3,7 @@
 Status: **research infrastructure, synthetic data only, not in force.** Branch `claude/manhattan-hypothesis-engine-jypgud`
 (session S9, 2026-11-18; S10 corrections 2026-11-19, §9). Validation on this branch at `4355fa1`:
 
-- HTE tests: 177 passed, 1 skipped. The skipped test runs PR #86's validator from a scratch checkout of `bab1a4d`; it
+- HTE tests: 178 passed, 1 skipped (after the CI-robustness fix of the F2 lock test). The skipped test runs PR #86's validator from a scratch checkout of `bab1a4d`; it
   passed locally.
 - Full repository suite: 2,147 passed, 133 skipped, and 1 error, the known local Q019 E2BIG, which also fails on clean
   main (1,970 passed, 132 skipped, the same error).
