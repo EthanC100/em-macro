@@ -38,7 +38,9 @@ def store(tmp_path, remote, name, run_id="1", attempt=1, clock=None, **kw):
 
 
 def obs(pred, day, net):
-    return ST.Intent("observation", ("observation", pred, day), {"net": net, "data_hash": "d" * 64},
+    # A neutral record type: these tests are about the journal, locks and idempotency. Evidence types
+    # (ST.PROTECTED_TYPES) are written only through manhattan.access (Phase 4B; test below).
+    return ST.Intent("sample_record", ("sample_record", pred, day), {"net": net, "data_hash": "d" * 64},
                      source="synthetic", retrieved_utc="2026-11-16T22:30:00Z")
 
 
@@ -53,7 +55,7 @@ def test_records_carry_provenance_and_a_nonce_and_the_chain_verifies(tmp_path):
     s = store(tmp_path, bare(tmp_path / "remote.git"), "a")
     res = s.write(BATCH_A, "obs")
     assert res["appended"] == 4
-    r = s.get(("observation", "AP-1", "2026-11-16"))
+    r = s.get(("sample_record", "AP-1", "2026-11-16"))
     assert set(r["provenance"]) == set(ST.PROVENANCE) and r["provenance"]["run_id"] == "1"
     assert r["provenance"]["source"] == "synthetic" and r["provenance"]["retrieved_utc"] == "2026-11-16T22:30:00Z"
     assert re.fullmatch(r"[0-9a-f]{32}", r["nonce"])
@@ -132,7 +134,7 @@ def test_non_fast_forward_is_retried_by_reappending(tmp_path):
     assert False in s.pushes                                          # a push was rejected...
     final = store(tmp_path, remote, "check")
     keys = {tuple(r["key"]) for r in final.records}
-    assert ("observation", "AP-9", "2026-11-16") in keys                # ...the other writer's record survived
+    assert ("sample_record", "AP-9", "2026-11-16") in keys                # ...the other writer's record survived
     assert {tuple(i.key) for i in BATCH_A} <= keys
     assert ST.verify_chain(final.records) == []
 
@@ -321,3 +323,15 @@ def test_torn_write_never_reaches_the_remote(tmp_path):
     assert not local.endswith("\n")                                     # the clone holds a torn line...
     remote_view = store(tmp_path, remote, "b")
     assert remote_view.records == [] and len(remote_view.unfinished()) == 1   # ...the remote only the pending entry
+
+
+@pytest.mark.parametrize("kind", ST.PROTECTED_TYPES)
+def test_evidence_and_attempt_records_need_access_sealing(tmp_path, kind):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+    s = store(tmp_path, str(remote), "w")
+    it = ST.Intent(kind, (kind, "AP-1", "2026-11-16"), {"net": 0.5})
+    for seal in (None, "f" * 64):
+        with pytest.raises(ST.StoreError, match="manhattan.access"):
+            s.write([obs("AP-1", "2026-11-16", 0.1), it], "unsealed", sealed=seal)
+    assert s.records == [] and s.journal() == []

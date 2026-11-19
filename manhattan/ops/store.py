@@ -58,6 +58,10 @@ PROVENANCE = ("source", "retrieved_utc", "run_id", "run_attempt", "commit")
 STAGES = ("after_lock", "after_journal_local", "after_journal_push", "mid_chain_write", "after_chain_commit_local",
           "after_chain_push", "after_verify", "mid_mirror", "before_unlock")
 BRANCH = "main"
+# Record types that carry evidence or attempt accounting (Phase 4B, S7 M5). ``write`` accepts them only in a batch
+# sealed by ``manhattan.access`` (registration, completion with linked results, terminals, recovery, the epoch).
+PROTECTED_TYPES = ("observation", "missed_observation", "screening", "attempt_started", "attempt_completed",
+                   "attempt_failed", "attempt_aborted", "accounting_epoch")
 
 
 class StoreError(RuntimeError):
@@ -334,16 +338,43 @@ class Store:
             f.write(json.dumps(_canon(entry), sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
 
     # ------------------------------------------------------------ the journalled write
-    def write(self, intents: list[Intent], label: str, files: dict | None = None) -> dict:
-        """Write ``intents`` (and content-addressed ``files``: relative path -> bytes) through the journal."""
+    @staticmethod
+    def entry_id(intents: list, label: str, files: dict | None = None) -> str:
+        """The journal entry a ``write`` of these intents makes (deterministic: label, intents and file names)."""
         intents = [it if isinstance(it, Intent) else Intent.from_dict(it) for it in intents]
+        return hashlib.sha256(S.canonical_bytes({"label": label, "intents": [it.as_dict() for it in intents],
+                                                 "files": sorted((files or {}).keys())})).hexdigest()
+
+    def holds_lock(self) -> bool:
+        """Whether this run's lock is in the loaded chain, not ended or broken, and not expired by this clock."""
+        me = ("lock", str(self.run_id), str(self.run_attempt))
+        for lk in self.active_locks():
+            if tuple(lk["key"]) == me:
+                expires = datetime.fromisoformat(lk["payload"]["expires_utc"].replace("Z", "+00:00"))
+                return expires > self.clock()
+        return False
+
+    def write(self, intents: list[Intent], label: str, files: dict | None = None, *, sealed: str | None = None,
+              require_lock: bool = False) -> dict:
+        """Write ``intents`` (and content-addressed ``files``: relative path -> bytes) through the journal.
+
+        A batch holding a ``PROTECTED_TYPES`` record is refused unless ``manhattan.access`` sealed it. With
+        ``require_lock`` the pending entry is pushed only while this run holds the lock: the check runs on the
+        state each push attempt is based on, so a lock broken by another run (and pushed first) makes the push
+        lose the race, reload, and refuse (``Locked``)."""
+        intents = [it if isinstance(it, Intent) else Intent.from_dict(it) for it in intents]
+        entry = self.entry_id(intents, label, files)
+        if any(it.type in PROTECTED_TYPES for it in intents):
+            from manhattan import access
+            if not access.store_seal_ok(sealed, intents, label):
+                raise StoreError("evidence and attempt records are written through manhattan.access only")
         body = [it.as_dict() for it in intents]
-        entry = hashlib.sha256(S.canonical_bytes({"label": label, "intents": body,
-                                                  "files": sorted((files or {}).keys())})).hexdigest()
         if any(j["entry"] == entry and j["state"] == "verified" for j in self.journal()):
             return {"entry": entry, "appended": 0, "duplicate": len(intents), "conflict": 0, "skipped": True}
 
         def pend():
+            if require_lock and not self.holds_lock():
+                raise Locked("this run no longer holds the ledger lock: nothing written")
             if not any(j["entry"] == entry for j in self.journal()):
                 self._journal_line({"entry": entry, "state": "pending", "label": label, "run_id": str(self.run_id),
                                     "run_attempt": self.run_attempt, "ts_utc": _iso(self.clock()), "intents": body,

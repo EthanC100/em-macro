@@ -325,10 +325,17 @@ def first_seen(ledger: ST.Store, source_ids) -> FirstSeen:
     return FirstSeen(values, avail, late, back, revisions, firstcap, n)
 
 
-def forward_window(pit: PitStore, domain: str, start: date, end: date) -> Window:
-    """ADAPTER (OPS_PROGRESS.md, request R-1). ``manhattan.roles.check_read`` allows one role per read and has no
-    role for history read as **signal input** before a forward window: with the default fence the dates between
-    the exploration cut-off and a freeze are embargoed, so a forward strategy could not compute a 60-day momentum.
-    The runner therefore opens the window itself, as the runner, labelled ``forward``. Returns dated on or before the
-    first observation are computed in memory as warm-up and never recorded (the runner records only later dates)."""
-    return Window(pit, start, end, "forward", domain, "runner")
+def forward_window(attempt, pit: PitStore, *legacy) -> Window:
+    """ADAPTER (OPS_PROGRESS.md, request R-1), authorized since Phase 4B. ``manhattan.roles.check_read`` allows one
+    role per read and has no role for history read as **signal input** before a forward window: with the default
+    fence the dates between the exploration cut-off and a freeze are embargoed, so a forward strategy could not
+    compute a 60-day momentum. The runner therefore opens the window as the runner, labelled ``forward``, but only
+    through a registered forward-observation attempt (``manhattan.access``) whose declared warm-up and evaluation
+    windows, data identity and fence it re-validates (warm-up never overlaps a configured reserve window). Returns
+    dated on or before the first observation are computed in memory as warm-up and never recorded (the runner
+    records only later dates)."""
+    from manhattan import access
+    if legacy or not isinstance(attempt, access.AttemptContext):
+        raise access.AccessError("the forward adapter opens a window only for a registered forward-observation "
+                                 "attempt")
+    return attempt.forward_window(pit)

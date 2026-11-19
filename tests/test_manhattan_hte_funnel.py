@@ -1,0 +1,1038 @@
+"""Manhattan HTE funnel: attempt accounting, determinism, crash recovery, failures, caching, repeated runs,
+selection audit, packaging, and the scientific safeguards (adversarial tests). Synthetic data only."""
+from __future__ import annotations
+
+import hashlib
+import inspect
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from manhattan.hte import CONFIRMATORY, adapters, data as D, fixtures as X, ids, kernels
+from manhattan.hte import protected, registry as R, store
+from manhattan.hte import runner as RN
+from manhattan.hte import templates as TP
+from manhattan.hte.log import AttemptLog
+from manhattan.hte.policy import Policy
+from manhattan.hte.runner import Runner, Workspace, reconcile, history
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+# -- a test-only template whose candidates fail on purpose ---------------------------------------------------
+
+def _poison(cache, dom, p):
+    if p["boom"] == 7:
+        raise ValueError("injected candidate failure")
+    s = np.nan_to_num(np.sign(cache.get(dom, "mom", L=p["lookback"])), nan=0.0)
+    if p["boom"] == 3:
+        s = s * np.inf                                   # non-finite statistics
+    return s
+
+
+TP.TEMPLATES.setdefault("poison_test", TP.Template(
+    "poison_test", 1, {"name": "test-poison", "mechanism": "TEST ONLY", "sign": "+", "density": "dense"},
+    {"lookback": ("int", 5, 60), "boom": ("int", 0, 10)}, lambda p: p["lookback"], _poison,
+    lambda p: [("mom", {"L": p["lookback"]})], test_only=True))
+
+
+@pytest.fixture(scope="module")
+def panel():
+    return D.generate(X.SMALL_PANEL)
+
+
+def _ws(path, bundles=None) -> Workspace:
+    ws = Workspace(path)
+    reg = ws.registry()
+    if len(reg) == 0:
+        b = bundles if bundles is not None else X.small_bundles()
+        test = any(TP.TEMPLATES[x.spec["template"]].test_only for x in b)
+        reg.submit(b, allow_test_templates=test)
+        reg.freeze()
+    return ws
+
+
+def _run(path, panel, policy=Policy(), bundles=None, **kw):
+    ws = _ws(path, bundles)
+    return ws, Runner(ws, panel, policy, **kw).run()
+
+
+@pytest.fixture(scope="module")
+def baseline(tmp_path_factory, panel):
+    ws, out = _run(tmp_path_factory.mktemp("base"), panel, chunk_size=32)
+    return ws, out
+
+
+def _types(ws):
+    return [r["type"] for r in AttemptLog(ws.log_path).records()]
+
+
+# -- end-to-end accounting -------------------------------------------------------------------------------------
+
+def test_every_registered_candidate_has_a_terminal_status(baseline):
+    ws, out = baseline
+    assert out["reused"] is False and out["confirmatory"] is False
+    rec = reconcile(ws, out["run_id"])
+    assert rec["violations"] == [] and rec["registered"]["candidates"] == 120
+    fs = rec["final_status"]
+    assert fs["s1"]["not_run"] == 0 and sum(fs["s1"].values()) == 120
+    assert fs["s3"]["not_run"] == 0 and sum(fs["s3"].values()) == 120
+    a = rec["attempts"]
+    assert a["started"] == a["completed"] and a["unfinished"] == a["failed"] == a["interrupted"] == 0
+    assert rec["access_reconciled"] is False and rec["independent_statistical_tests"] is None
+
+
+def test_aliases_are_counted_and_share_their_representatives_results(baseline):
+    ws, out = baseline
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    al = np.flatnonzero(t["alias_of"] >= 0)
+    assert al.size > 0                                     # rates xsmom quantiles 0.25/0.3 collapse on 8 assets
+    rep = t["alias_of"][al]
+    assert np.all(t["s3"][al] == RN.S3["alias"])
+    assert np.array_equal(t["stats3"][al], t["stats3"][rep], equal_nan=True)
+    assert np.array_equal(t["fingerprint"][al], t["fingerprint"][rep])
+    assert np.array_equal(t["stats2"][al], t["stats2"][rep], equal_nan=True)   # same positions: same stage 2
+
+
+def test_alias_results_equal_direct_computation(baseline, panel):
+    """Skipping an alias's stage 3 is exact: computing it directly gives the representative's series."""
+    ws, out = baseline
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+    for i in np.flatnonzero(t["alias_of"] >= 0)[:3]:
+        d = r.view.describe(int(i))
+        Pw, Rw = RN._positions_window(r.cache, d, r.policy, panel.fence)
+        c, k = kernels.cost_coefficients(d["domain"], TP.COST_MODELS[d["cost_model"]])
+        net = RN._series(r.policy, [(Pw, Rw, c, k)])["net"][0]
+        assert hashlib.sha256(net.tobytes()).digest() == bytes(t["series_sha256"][i])
+
+
+def test_candidate_history_lists_every_attempt(baseline):
+    ws, out = baseline
+    h = history(ws, out["run_id"], 5)
+    assert [x["pass"] for x in h] == ["A", "B"] and all(x["terminal"] == "attempt_completed" for x in h)
+
+
+# -- determinism ---------------------------------------------------------------------------------------------
+
+def test_results_independent_of_chunk_size_workers_and_input_order(tmp_path, panel, baseline):
+    root = baseline[1]["result_root"]
+    _, o1 = _run(tmp_path / "c5", panel, chunk_size=5)
+    _, o2 = _run(tmp_path / "c1000", panel, chunk_size=1000)
+    _, o3 = _run(tmp_path / "w3", panel, chunk_size=16, workers=3)
+    b = X.small_bundles()
+    perm = list(np.random.default_rng(1).permutation(len(b)))
+    _, o4 = _run(tmp_path / "perm", panel, bundles=[b[i] for i in perm], chunk_size=24)
+    assert o1["result_root"] == o2["result_root"] == o3["result_root"] == o4["result_root"] == root
+
+
+def test_feature_cache_on_or_off_gives_identical_results(tmp_path, panel, baseline):
+    ws = _ws(tmp_path)
+    out = Runner(ws, panel, Policy(), chunk_size=40, cache_enabled=False).run()
+    assert out["result_root"] == baseline[1]["result_root"]
+    assert out["cache"]["mem_hits"] == 0 and out["cache"]["misses"] > 0
+
+
+# -- crash, interruption, partial writes and resume (in a subprocess) ------------------------------------------
+
+SCRIPT = """
+import json, sys
+from manhattan.hte import data as D, fixtures as X
+from manhattan.hte.runner import Workspace, Runner
+from manhattan.hte.policy import Policy
+ws = Workspace(sys.argv[1])
+reg = ws.registry()
+if len(reg) == 0:
+    reg.submit(X.small_bundles()); reg.freeze()
+out = Runner(ws, D.generate(X.SMALL_PANEL), Policy(), chunk_size=int(sys.argv[2]), workers=int(sys.argv[3])).run()
+print(json.dumps({"root": out.get("result_root"), "closed": out.get("closed", True), "run_id": out["run_id"]}))
+"""
+
+
+def _sub(path, fault=None, chunk=16, workers=1):
+    env = dict(os.environ, PYTHONPATH=str(ROOT), OPENBLAS_NUM_THREADS="1")
+    env.pop("HTE_FAULT", None)
+    if fault:
+        env["HTE_FAULT"] = fault
+    p = subprocess.run([sys.executable, "-c", SCRIPT, str(path), str(chunk), str(workers)], env=env, cwd=ROOT,
+                       capture_output=True, text=True, timeout=600)
+    return p
+
+
+@pytest.mark.parametrize("fault,expect", [
+    ("exit_after_start:3", "attempt_interrupted"),          # crash in pass A after an intent record
+    ("exit_after_start:10", "attempt_interrupted"),         # crash in pass B (8 A chunks of 16, then B)
+    ("exit_after_file:2", "attempt_interrupted"),           # result file written, completion never logged
+    ("torn_completion:4", "torn_tail_quarantined"),         # a half-written completion line
+])
+def test_crash_and_resume_reproduce_the_clean_result(tmp_path, baseline, fault, expect):
+    p = _sub(tmp_path, fault)
+    assert p.returncode == 77, p.stderr[-2000:]
+    p2 = _sub(tmp_path, chunk=40, workers=2)                 # resume with a different chunking and workers
+    assert p2.returncode == 0, p2.stderr[-3000:]
+    res = json.loads(p2.stdout.strip().splitlines()[-1])
+    assert res["root"] == baseline[1]["result_root"]
+    ws = Workspace(tmp_path)
+    types = _types(ws)
+    assert expect in types
+    rec = reconcile(ws, res["run_id"])
+    assert rec["violations"] == []
+    assert rec["attempts"]["interrupted"] >= (1 if expect == "attempt_interrupted" else 0)
+    # the interrupted attempt is counted, never erased, and its successor names it
+    starts = [r for r in AttemptLog(ws.log_path).records() if r["type"] == "attempt_started"]
+    if expect == "attempt_interrupted":
+        assert any(r["payload"].get("supersedes") for r in starts)
+    if fault.startswith("exit_after_file"):
+        named = {r["payload"]["file"] for r in AttemptLog(ws.log_path).of_type("attempt_completed")}
+        on_disk = {f"A/{f.name}" for f in (ws.run_dir(res["run_id"]) / "A").iterdir()}
+        assert on_disk - named, "the orphan result file should remain on disk, unnamed"
+
+
+def test_worker_failure_is_logged_retried_and_counted(tmp_path, baseline):
+    p = _sub(tmp_path, "worker_raise:2")
+    assert p.returncode == 0, p.stderr[-2000:]
+    first = json.loads(p.stdout.strip().splitlines()[-1])
+    assert first["closed"] is False                          # fail closed: no stage 3 on an incomplete stage 2
+    ws = Workspace(tmp_path)
+    assert "attempt_failed" in _types(ws) and "run_incomplete" in _types(ws)
+    p2 = _sub(tmp_path)
+    res = json.loads(p2.stdout.strip().splitlines()[-1])
+    assert res["root"] == baseline[1]["result_root"]
+    rec = reconcile(ws, res["run_id"])
+    assert rec["attempts"]["failed"] == 1 and rec["violations"] == []
+    retry = [r for r in AttemptLog(ws.log_path).of_type("attempt_started") if r["payload"].get("supersedes")]
+    assert len(retry) == 1
+
+
+# -- failed computations stay in the denominator -------------------------------------------------------------
+
+def _poison_bundles():
+    fam = R.family("test-poison", "TEST ONLY", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    spec = R.strategy_spec(hyp, "poison_test", {"lookback": [10, 20], "boom": [0, 3, 7]})
+    return X.small_bundles(domains=("fx",), templates=("trend",)) + [R.Bundle(fam, hyp, spec)]
+
+
+def test_failed_candidates_are_recorded_and_block_an_incomplete_spa(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, bundles=_poison_bundles(), chunk_size=8)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    failed = np.flatnonzero(t["s1"] == RN.S1["failed"])
+    assert failed.size == 4                                  # boom 3 (non-finite) and 7 (exception) x 2 look-backs
+    assert set(t["reason1"][failed]) == {RN.REASONS["execution_error"], RN.REASONS["non_finite"]}
+    assert np.all(t["s3"][failed] == RN.S3["skipped_failed_upstream"])
+    pk = [json.loads(p.read_text()) for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")]
+    poison = [p for p in pk if p["family"]["name"] == "test-poison"][0]
+    assert poison["denominators"]["candidates"] == 6 and poison["denominators"]["stage1"]["failed"] == 4
+    assert poison["spa"]["computed"] is False
+    rec = reconcile(ws, out["run_id"])
+    assert rec["violations"] == []
+    errors = [r["payload"]["errors"] for r in AttemptLog(ws.log_path).of_type("attempt_completed")]
+    assert any(e.get("ValueError") for e in errors)
+
+
+# -- repeated runs, nondeterminism and tampering -------------------------------------------------------------
+
+def test_repeated_run_is_reused_and_verification_reproduces_bitwise(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=50)
+    again = Runner(ws, panel, Policy(), chunk_size=7).run()
+    assert again["reused"] is True and again["result_root"] == out["result_root"]
+    ver = Runner(ws, panel, Policy(), chunk_size=7, workers=2).run(verify_rerun=True)
+    assert ver["result_root"] == out["result_root"]
+    recs = AttemptLog(ws.log_path).of_type("attempt_completed")
+    assert any(r["payload"].get("verification") == "identical" for r in recs)
+    rec = reconcile(ws, out["run_id"])
+    assert rec["attempts"]["verification"] > 0 and rec["violations"] == []
+    assert rec["invocations"] == 3
+
+
+def test_nondeterminism_is_detected_and_never_replaces_the_result(tmp_path, panel, monkeypatch):
+    ws, out = _run(tmp_path, panel, chunk_size=60)
+    real = kernels.screen
+
+    def drifting(*a, **k):
+        r = real(*a, **k)
+        if "net_mean" in r:
+            r["net_mean"] += 1e-15
+        return r
+
+    monkeypatch.setattr(kernels, "screen", drifting)
+    with pytest.raises(RN.RunError, match="nondeterminism"):
+        Runner(ws, panel, Policy(), chunk_size=60).run(verify_rerun=True)
+    assert "nondeterminism" in _types(ws)
+    closed = AttemptLog(ws.log_path).of_type("run_closed")
+    assert len(closed) == 1 and closed[0]["payload"]["result_root"] == out["result_root"]
+
+
+def test_corrupted_result_file_is_refused(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=60)
+    f = sorted((ws.run_dir(out["run_id"]) / "A").iterdir())[0]
+    raw = bytearray(f.read_bytes())
+    raw[-3] ^= 0x10
+    f.write_bytes(bytes(raw))
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "corrupted"
+    assert {v["code"] for v in rec["violations"]} >= {"attempt_file_corrupt"}
+    with pytest.raises(store.CorruptFile):
+        Runner(ws, panel, Policy()).run(verify_rerun=True)
+
+
+def test_feature_cache_corruption_is_detected_logged_and_harmless(tmp_path, panel, baseline):
+    ws = _ws(tmp_path)
+    Runner(ws, panel, Policy(), chunk_size=40).run()
+    files = sorted((ws.root / "cache" / "features").glob("*.npy"))
+    assert files
+    for f in files[:3]:
+        raw = bytearray(f.read_bytes())
+        raw[-1] ^= 0xFF
+        f.write_bytes(bytes(raw))
+    # a new run identity (other policy) has to read the cache again
+    out = Runner(ws, panel, Policy(vol_halflife=21), chunk_size=40).run()
+    # only entries that are read are checked (a dependency of a cached feature is never re-read)
+    assert out["cache"]["corrupt"] >= 1
+    assert len(AttemptLog(ws.log_path).of_type("cache_corrupt")) == out["cache"]["corrupt"]
+    assert len(list((ws.root / "cache" / "features").glob("*.corrupt-*"))) == out["cache"]["corrupt"]
+    clean = _run(tmp_path / "clean", panel, policy=Policy(vol_halflife=21), chunk_size=40)[1]
+    assert out["result_root"] == clean["result_root"]
+
+
+# -- changed configuration, code or data identity -------------------------------------------------------------
+
+def test_changed_policy_code_or_data_is_a_new_counted_run(tmp_path, panel, monkeypatch):
+    ws, out = _run(tmp_path, panel, chunk_size=60)
+    o2 = Runner(ws, panel, Policy(vol_target_ann=0.12), chunk_size=60).run()
+    assert o2["run_id"] != out["run_id"]
+    real = RN.ids.code_identity
+    monkeypatch.setattr(RN.ids, "code_identity", lambda: dict(real(), engine_sha256="f" * 64))
+    o3 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    assert o3["run_id"] not in (out["run_id"], o2["run_id"]) and o3["result_root"] == out["result_root"]
+    monkeypatch.undo()
+    other = D.generate(D.PanelParams(seed=8, n_days=760, protected_days=100))
+    o4 = Runner(ws, other, Policy(), chunk_size=60).run()
+    assert o4["run_id"] not in (out["run_id"], o2["run_id"], o3["run_id"])
+    assert o4["result_root"] != out["result_root"]
+    pk = json.loads(next((ws.run_dir(o4["run_id"]) / "packages").glob("*.json")).read_text())
+    assert pk["looks"]["runs_on_this_registry"] == 4          # every look at the same candidates is counted
+
+
+def test_bootstrap_seed_cannot_be_chosen_by_a_caller():
+    for f in (Runner.__init__, Runner.run):
+        assert not any("seed" in p for p in inspect.signature(f).parameters)
+
+
+# -- selection and screening -----------------------------------------------------------------------------------
+
+def test_selection_is_reproducible_from_logged_inputs(baseline, panel):
+    ws, out = baseline
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+    sel = r._selection()
+    again = r.compute_selection()
+    assert all(np.array_equal(sel[k], again[k]) for k in sel)
+    rec = r._recs("selection")[-1]["payload"]
+    assert rec["performance_gate"] is False and rec["policy_hash"] == Policy().hash()
+
+
+def test_performance_gate_requires_benchmark_flag_and_is_disclosed(tmp_path, panel):
+    with pytest.raises(ValueError):
+        Policy(stage3_selection="top_k_per_spec", top_k=2)
+    pol = Policy(stage3_selection="top_k_per_spec", top_k=2, benchmark_only=True)
+    ws, out = _run(tmp_path, panel, policy=pol, chunk_size=64)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    assert (t["s3"] == RN.S3["skipped_not_selected"]).sum() > 0
+    assert sum(1 for _ in t["s3"]) == 120                    # the unselected stay in the denominator
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        pk = json.loads(p.read_text())
+        assert pk["run"]["performance_gate"] is True
+        assert "selection_warning" in pk["stage3"] and pk["spa"]["computed"] is False
+
+
+def test_dominated_candidates_skip_stage3_but_stay_counted(tmp_path, panel, monkeypatch):
+    monkeypatch.setitem(kernels.COSTS, "fx", (0.02, 0.0))   # absurd costs: most candidates are provably dominated
+    b = X.small_bundles(domains=("fx",))
+    ws, out = _run(tmp_path, panel, bundles=b, chunk_size=30)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    dom = t["s1"] == RN.S1["dominated"]
+    assert dom.sum() > 0
+    nm = t["stats2"][dom, kernels.S2_COLS.index("net_mean")]
+    assert np.all(nm <= 0.0)
+    assert np.all(t["s3"][dom] == RN.S3["skipped_dominated"])   # aliases of dominated reps inherit the skip
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        pk = json.loads(p.read_text())
+        if pk["denominators"]["stage1"]["dominated"]:
+            assert pk["spa"]["computed"] is False            # an SPA over an incomplete set is refused
+
+
+# -- packages: never confirmatory, never a discovery count ------------------------------------------------------
+
+def _keys(o):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            yield k
+            yield from _keys(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _keys(v)
+
+
+def test_packages_are_descriptive_and_state_every_denominator(baseline):
+    ws, out = baseline
+    pk = [json.loads(p.read_text()) for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")]
+    assert len(pk) == 5 and CONFIRMATORY is False
+    total = 0
+    for p in pk:
+        assert p["confirmatory"] is False and p["synthetic"] is True
+        assert p["evidence_class"] == "synthetic_screening_descriptive"
+        assert p["independent_statistical_tests"] is None
+        assert not [k for k in _keys(p) if "discover" in k.lower() or "significant" in k.lower()]
+        assert p["stage2"]["max_is_over_candidates"] == p["denominators"]["stage1"]["pass"] + \
+            p["denominators"]["stage1"]["dominated"]
+        d = p["denominators"]
+        assert d["candidates"] >= d["variants"] >= d["strategy_specs"] >= d["hypotheses"] >= 1
+        total += d["candidates"]
+        for v in p["m_eff"].values():
+            assert v["value"] is None or v["value"] <= v["series_used"]
+    assert total == 120
+
+
+def test_post_look_registrations_are_flagged(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=60)
+    reg = ws.registry()
+    fam = R.family(TP.TEMPLATES["trend"].family["name"], TP.TEMPLATES["trend"].family["mechanism"], "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    spec = R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"], "vol_halflife": [20],
+                                          "rebalance": [1]})
+    assert reg.submit([R.Bundle(fam, hyp, spec)])["registered_candidates"] == 1
+    reg.freeze()
+    o2 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    pk = [json.loads(p.read_text()) for p in (ws.run_dir(o2["run_id"]) / "packages").glob("*.json")]
+    trend = [p for p in pk if p["family"]["name"] == "synthetic-trend"][0]
+    assert trend["looks"]["post_look_specs"] == [ids.full_hash(spec)]
+    others = [p for p in pk if p["family"]["name"] != "synthetic-trend"]
+    assert all(p["looks"]["post_look_specs"] == [] for p in others)
+
+
+def test_planted_synthetic_effect_is_recoverable_and_labelled_synthetic(tmp_path):
+    """A pipeline check, not a discovery: the generator plants a trend effect; the trend family's SPA must see it."""
+    planted = D.generate(D.PanelParams(seed=7, n_days=760, protected_days=100, planted=0.6))
+    b = X.small_bundles(templates=("trend", "carry"))
+    ws, out = _run(tmp_path, planted, bundles=b, chunk_size=64)
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
+    assert pk["synthetic-trend"]["spa"]["p_c"] < 0.05
+    assert "SYNTHETIC DATA" in pk["synthetic-trend"]["warnings"][0]
+
+
+# -- stage 5 and the integration boundary ------------------------------------------------------------------------
+
+def test_stage5_is_disabled_whatever_the_caller_passes(tmp_path, panel):
+    cfg = (ROOT / "config" / "manhattan.yaml").read_bytes()
+    with pytest.raises(protected.ProtectedEvaluationDisabled):
+        protected.evaluate(enabled=True, force=True)
+    with pytest.raises(protected.ProtectedEvaluationDisabled):
+        Runner(_ws(tmp_path), panel, Policy(), stages=(1, 2, 3, 4, 5))
+    st = protected.status()
+    assert st["enabled"] is False and any("reserve.enabled is false" in b for b in st["blockers"])
+    assert protected.ENABLED is False
+    assert (ROOT / "config" / "manhattan.yaml").read_bytes() == cfg
+
+
+WINDOW = {"id": "synthetic", "start": "2001-03-01", "end": "2002-07-15", "frequency": "daily"}
+
+
+def _pr86_ident(r, policy, i, stages=(1, 2, 3, 4)):
+    return adapters.to_pr86_identity(r.view, i, run_id="HR-test", data_hash=r.data_hash, code=r.code,
+                                     window=WINDOW, policy=policy, fence=r.panel.fence, stages=stages)
+
+
+def test_pr86_adapter_is_disabled_and_identity_shape_matches_contract(baseline, panel):
+    ws, out = baseline
+    with pytest.raises(adapters.AdapterDisabled):
+        adapters.Pr86AccessAdapter()
+    r = Runner(ws, panel, Policy())
+    ident = _pr86_ident(r, Policy(), 3)
+    assert tuple(sorted(ident)) == tuple(sorted(adapters.PR86_IDENTITY_FIELDS))
+    assert ident["role"] == "exploration" and ident["designated"] is False and ident["channel"] == "blind"
+    spec = adapters.evaluation_spec(r.view, 3, policy=Policy(), fence=panel.fence)
+    # S11: spec_hash is the executable (binding + engine + numerical environment); the binding is this spec's hash
+    lin = adapters.lineage(r.view, 3, code=r.code, policy=Policy(), fence=panel.fence)
+    assert lin["binding"] == ids.full_hash(spec) and spec["candidate"] == r.view.candidate_hash(3)
+    assert ident["spec_hash"] == ident["executable"] == lin["executable"]
+    assert ident["spec_hash"] == ids.full_hash(adapters.executable_spec(lin["binding"], r.code))
+
+
+def test_hte_does_not_import_pr86_private_names():
+    src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
+    for name in ("_open_window", "_SEAL_KEY", "_CTX_KEY", "run_bound", "forward_window", "manhattan.access",
+                 "RunnerToken", "em-macro-data", "Norgate", "Databento"):
+        assert name not in src.replace("PR #86", ""), name
+
+
+# -- performance regression ---------------------------------------------------------------------------------
+
+def test_throughput_has_not_regressed_grossly(tmp_path, panel):
+    """A generous ceiling (about 20x the measured cost on the reference machine) that catches a regression of
+    an order of magnitude, not noise. Measured numbers are in docs/manhattan/hte/BENCHMARKS.md."""
+    ws, out = _run(tmp_path, panel, chunk_size=120, stages=(1, 2, 3))
+    per = (out["timings"]["pass_A_s"] + out["timings"]["pass_B_s"]) / 120
+    assert per < 0.05, per
+
+
+# -- regressions from the adversarial pass ------------------------------------------------------------------------
+
+def test_a_lost_worker_cannot_hang_the_run_and_is_retried(tmp_path, baseline):
+    p = _sub(tmp_path, "worker_exit:2", workers=2)
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert json.loads(p.stdout.strip().splitlines()[-1])["closed"] is False
+    ws = Workspace(tmp_path)
+    failed = AttemptLog(ws.log_path).of_type("attempt_failed")
+    assert failed and any(r["payload"]["reason"] == "worker_lost" for r in failed)
+    p2 = _sub(tmp_path, workers=2)
+    res = json.loads(p2.stdout.strip().splitlines()[-1])
+    assert res["root"] == baseline[1]["result_root"]
+    assert reconcile(ws, res["run_id"])["violations"] == []
+
+
+def test_one_runner_per_workspace(tmp_path, panel):
+    import fcntl
+    ws = _ws(tmp_path)
+    with open(ws.root / ".lock", "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(RN.RunError, match="another runner"):
+            Runner(ws, panel, Policy()).run()
+    assert Runner(ws, panel, Policy(), chunk_size=60).run()["reused"] is False
+
+
+def test_disk_preflight_refuses_and_logs(tmp_path, panel, monkeypatch):
+    ws = _ws(tmp_path)
+    monkeypatch.setattr(Runner, "BYTES_PER_CANDIDATE", 10 ** 15)
+    with pytest.raises(RN.RunError, match="preflight"):
+        Runner(ws, panel, Policy()).run()
+    assert "run_refused" in _types(ws)
+
+
+# -- regressions from the independent review -----------------------------------------------------------------------
+
+def test_stages_are_part_of_the_run_identity(tmp_path, panel):
+    ws = _ws(tmp_path)
+    o1 = Runner(ws, panel, Policy(), chunk_size=60, stages=(1, 2)).run()
+    o2 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    assert o1["run_id"] != o2["run_id"] and o2["reused"] is False
+    t = store.read_arrays(ws.run_dir(o2["run_id"]) / "results.bin", o2["results_sha256"])
+    assert "s3" in t and (t["s3"] == RN.S3["not_run"]).sum() == 0
+
+
+def test_an_interrupted_run_resumes_and_reconciles_on_its_own_frozen_version(tmp_path, baseline):
+    p = _sub(tmp_path, "exit_after_start:3")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    old_root = ws.registry().frozen().root
+    reg = ws.registry()
+    fam = R.family("later", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                    "vol_halflife": [20], "rebalance": [1]}))])
+    reg.freeze()
+    panel = D.generate(X.SMALL_PANEL)
+    out = Runner(ws, panel, Policy(), chunk_size=16, registry_root=old_root).run()
+    assert out["result_root"] == baseline[1]["result_root"]
+    rec = reconcile(ws, out["run_id"])
+    assert rec["violations"] == [] and rec["registered"]["candidates"] == 120
+    assert rec["attempts"]["interrupted"] == 2         # two intents were in flight (window of 2) at the crash
+
+
+def test_specs_registered_after_freeze_cannot_renumber_a_runs_families(tmp_path, panel):
+    ws = _ws(tmp_path)
+    r = Runner(ws, panel, Policy())
+    fam = R.family("aaaa-new", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    ws.registry().submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                           "vol_halflife": [20],
+                                                                           "rebalance": [1]}))])
+    r2 = Runner(ws, panel, Policy())                       # same frozen version: same run, same families
+    assert r2.run_id == r.run_id and r2.families == r.families
+    assert np.array_equal(r2.fam_of_spec[r2.view.spec_index], r.fam_of_spec[r.view.spec_index])
+
+
+def test_renamed_family_keeps_its_own_complete_spa_and_is_flagged(tmp_path, panel):
+    b = X.small_bundles(domains=("fx",), templates=("trend",))
+    fam2 = R.family("renamed-trend", "same rule, new words", "+", "dense")
+    hyp2 = R.hypothesis(fam2, "fx")
+    b2 = R.Bundle(fam2, hyp2, R.strategy_spec(hyp2, "trend", X.small_grids()["trend"], cost_models=("c1", "c2")))
+    ws, out = _run(tmp_path, panel, bundles=b + [b2], chunk_size=20)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    r = Runner(ws, panel, Policy())
+    fam = r.fam_of_spec[r.view.spec_index]
+    al = np.flatnonzero(t["alias_of"] >= 0)
+    assert np.all(fam[al] == fam[t["alias_of"][al]])       # no alias crosses a family
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
+    a, c = pk["synthetic-trend"], pk["renamed-trend"]
+    assert a["spa"]["computed"] and c["spa"]["computed"]
+    # same series, so the same SPA statistic; each family has its own bootstrap draws (seed bound to the family's
+    # identity, S10 F6), which is why a renamed copy must be flagged rather than trusted
+    assert a["spa"]["variants"] == c["spa"]["variants"] and a["spa"]["T"] == c["spa"]["T"]
+    for p in (a, c):
+        assert p["denominators"]["cross_family_semantic_duplicates"] == p["denominators"]["candidates"]
+        assert p["denominators"]["cross_family_behavioural_duplicates"] > 0
+        assert any("not independent" in w for w in p["warnings"])
+
+
+def test_re_registering_looked_at_economics_under_a_new_name_is_post_look(tmp_path, panel):
+    b = X.small_bundles(domains=("fx",), templates=("trend",))
+    ws, out = _run(tmp_path, panel, bundles=b, chunk_size=60)
+    fam2 = R.family("renamed-trend", "same rule, new words", "+", "dense")
+    hyp2 = R.hypothesis(fam2, "fx")
+    spec2 = R.strategy_spec(hyp2, "trend", {"lookback": [40], "shape": ["sign"], "vol_halflife": [20],
+                                            "rebalance": [1]})
+    reg = ws.registry()
+    reg.submit([R.Bundle(fam2, hyp2, spec2)])
+    reg.freeze()
+    o2 = Runner(ws, panel, Policy(), chunk_size=60).run()
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(o2["run_id"]) / "packages").glob("*.json")}
+    assert pk["renamed-trend"]["looks"]["post_look_specs"] == [ids.full_hash(spec2)]
+    assert pk["synthetic-trend"]["looks"]["runs_on_any_registry_version"] == 2
+
+
+def test_verification_covers_spa_and_never_rewrites_packages(tmp_path, panel, monkeypatch):
+    ws, out = _run(tmp_path, panel, chunk_size=64)
+    pdir = ws.run_dir(out["run_id"]) / "packages"
+    before = {p.name: p.read_bytes() for p in pdir.glob("*.json")}
+    v = Runner(ws, panel, Policy(), chunk_size=64).run(verify_rerun=True)
+    assert v["verified"] is True and "run_verified" in _types(ws)
+    assert {p.name: p.read_bytes() for p in pdir.glob("*.json")} == before
+    real = kernels.spa_partial
+
+    def drifting(*a, **k):
+        res = real(*a, **k)
+        return {g: (T + 1e-12,) + tuple(rest) for g, (T, *rest) in res.items()}
+
+    monkeypatch.setattr(kernels, "spa_partial", drifting)
+    with pytest.raises(RN.RunError, match="spa_T"):
+        Runner(ws, panel, Policy(), chunk_size=64).run(verify_rerun=True)
+    rec = reconcile(ws, out["run_id"])
+    assert any(v["code"] == "nondeterminism" for v in rec["violations"])
+    failed = AttemptLog(ws.log_path).of_type("attempt_failed")
+    assert any(r["payload"]["reason"] == "nondeterminism" for r in failed)
+
+
+# -- S10 review, F2: orphaned workers and the inherited workspace lock ---------------------------------------------
+
+def _procs_with(marker: str) -> list[int]:
+    out = []
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            try:
+                if marker.encode() in (d / "cmdline").read_bytes():
+                    out.append(int(d.name))
+            except OSError:
+                pass
+    return out
+
+
+def test_f2_killing_the_parent_leaves_no_workers_and_no_lock(tmp_path, baseline):
+    import signal
+    import time
+    _ws(tmp_path)
+    marker = f"hte-f2-{tmp_path.name}"
+    env = dict(os.environ, PYTHONPATH=str(ROOT), OPENBLAS_NUM_THREADS="1", HTE_FAULT="worker_hang:3")
+    p = subprocess.Popen([sys.executable, "-c", SCRIPT, str(tmp_path), "4", "2", marker], env=env, cwd=ROOT,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.time() + 60
+    while time.time() < deadline and len(_procs_with(marker)) < 3:      # parent + 2 workers
+        time.sleep(0.1)
+    assert len(_procs_with(marker)) >= 3
+    time.sleep(0.5)
+    os.kill(p.pid, signal.SIGKILL)                                      # abrupt parent termination
+    p.wait()
+    deadline = time.time() + 10
+    while time.time() < deadline and _procs_with(marker):
+        time.sleep(0.1)
+    left = _procs_with(marker)
+    for pid in left:
+        os.kill(pid, signal.SIGKILL)
+    assert left == [], "workers outlived their parent"
+    res = _sub(tmp_path, chunk=40, workers=2)                           # resume is not blocked by any lock
+    assert res.returncode == 0, res.stderr[-2000:]
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["root"] == baseline[1]["result_root"]
+    assert reconcile(Workspace(tmp_path), out["run_id"])["violations"] == []
+
+
+LOCK_SCRIPT = """
+import os, sys, time
+if len(sys.argv) > 2 and sys.argv[2] == "no-fork-hook":       # control: simulate the defect (hook not installed)
+    os.register_at_fork = lambda **kw: None
+from manhattan.hte.log import locked
+with locked(sys.argv[1]):
+    pid = os.fork()
+    if pid == 0:
+        fd = os.open(os.devnull, os.O_RDWR)                  # let go of the parent's pipes at once, so the caller
+        for k in (0, 1, 2):                                   # returns while this child is still alive
+            os.dup2(fd, k)
+        time.sleep(60)
+        os._exit(0)
+    print(pid, flush=True)
+    os._exit(0)                       # the holder dies without unlocking; its forked child lives on
+"""
+
+
+def _alive(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().split(")")[-1].split()[0] != "Z"           # a zombie holds no descriptors
+    except OSError:
+        return False
+
+
+def _lock_after_holder_dies(tmp_path, *extra):
+    import signal
+    from manhattan.hte.log import LogError, locked
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
+    p = subprocess.run([sys.executable, "-c", LOCK_SCRIPT, str(tmp_path / "attempts.jsonl"), *extra], env=env,
+                       cwd=ROOT, capture_output=True, text=True, timeout=60)
+    child = int(p.stdout.strip())
+    try:
+        assert _alive(child), "the forked child must still be alive for the check to mean anything"
+        try:
+            with locked(tmp_path / "attempts.jsonl"):
+                free = True
+        except LogError:
+            free = False
+        assert _alive(child), "the child died during the check"
+        return free
+    finally:
+        try:
+            os.kill(child, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def test_f2_a_forked_child_never_holds_the_workspace_lock(tmp_path):
+    assert _lock_after_holder_dies(tmp_path) is True                    # the lock is free while the child lives
+
+
+def test_f2_the_lock_check_detects_the_defect_when_the_fix_is_off(tmp_path):
+    """Control: without the fork hook the orphaned child keeps the lock, so the check above is meaningful."""
+    assert _lock_after_holder_dies(tmp_path, "no-fork-hook") is False
+
+
+
+# -- S10 review, F3: reconciliation against the close record -------------------------------------------------------
+
+def test_f3_rewritten_results_file_is_detected_even_with_an_anchor(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    anchor = AttemptLog(ws.log_path).head()
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "closed" and rec["violations"] == []
+    f = ws.run_dir(out["run_id"]) / "results.bin"
+    good = f.read_bytes()
+    t = store.bytes_to_arrays(good)
+    t["stats3"][:, 0] += 0.001                          # the S10 counterexample: a valid file, inflated means
+    f.write_bytes(store.arrays_to_bytes(t))
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "corrupted"
+    assert "results_tampered" in {v["code"] for v in rec["violations"]}
+    f.unlink()
+    rec = reconcile(ws, out["run_id"], anchor)
+    assert rec["state"] == "corrupted" and "results_missing" in {v["code"] for v in rec["violations"]}
+    f.write_bytes(good)
+    assert reconcile(ws, out["run_id"], anchor)["state"] == "closed"
+
+
+def test_f3_a_tampered_package_is_detected(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    p = next((ws.run_dir(out["run_id"]) / "packages").glob("*.json"))
+    p.write_text(p.read_text().replace('"confirmatory": false', '"confirmatory": true'))
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "corrupted" and "package_tampered" in {v["code"] for v in rec["violations"]}
+
+
+def test_f3_results_rebuild_from_attempt_files(tmp_path, panel):
+    """The close hash is checked against a rebuild from the hash-verified attempt files, so swapping both the
+    results file and the close record's view of it is caught by the rebuild (and the log anchor)."""
+    ws, out = _run(tmp_path, panel, chunk_size=40)
+    rec = reconcile(ws, out["run_id"])
+    assert rec["final_status"]["s3"]["not_run"] == 0 and rec["state"] == "closed"
+
+
+def test_f3_incomplete_runs_are_not_read_as_results(tmp_path, panel):
+    p = _sub(tmp_path, "exit_after_start:10")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    run_id = AttemptLog(ws.log_path).of_type("run_started")[-1]["payload"]["run_id"]
+    (ws.run_dir(run_id) / "results.bin").write_bytes(b"not of record")
+    rec = reconcile(ws, run_id)
+    assert rec["state"] == "incomplete" and rec["unrecorded_results_file"] is True and rec["final_status"] is None
+
+
+# -- S10 review, F4: concurrent registry changes and failure accounting ---------------------------------------------
+
+def test_f4_runner_built_before_another_writer_registers_completes(tmp_path, panel, baseline):
+    ws = _ws(tmp_path)
+    run = Runner(ws, panel, Policy(), chunk_size=32)                    # built first ...
+    fam = R.family("later", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    ws.registry().submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                           "vol_halflife": [20],
+                                                                           "rebalance": [1]}))])
+    out = run.run()                                                     # ... run after another writer registered
+    assert out["result_root"] == baseline[1]["result_root"]
+    rec = reconcile(ws, out["run_id"])
+    assert rec["state"] == "closed" and rec["violations"] == [] and rec["failed_invocations"] == []
+
+
+def test_f4_a_failure_in_any_phase_is_recorded(tmp_path, panel, monkeypatch):
+    from manhattan.hte import package as PK
+    ws = _ws(tmp_path)
+
+    def boom(*a, **k):
+        raise KeyError("injected stage-4 failure")
+
+    monkeypatch.setattr(PK, "build", boom)
+    with pytest.raises(KeyError):
+        Runner(ws, panel, Policy(), chunk_size=40).run()
+    failed = AttemptLog(ws.log_path).of_type("run_failed")
+    assert len(failed) == 1 and failed[0]["payload"]["phase"] == "stage4"
+    assert failed[0]["payload"]["error_class"] == "KeyError"
+    run_id = failed[0]["payload"]["run_id"]
+    rec = reconcile(ws, run_id)
+    assert rec["state"] == "incomplete" and rec["failed_invocations"][0]["phase"] == "stage4"
+    monkeypatch.undo()
+    out = Runner(ws, panel, Policy(), chunk_size=40).run()              # the next invocation closes the run
+    assert out["run_id"] == run_id and reconcile(ws, run_id)["state"] == "closed"
+
+
+# -- S10 review, F5: the family's predicted sign -------------------------------------------------------------------
+
+def _signed_pair():
+    g = X.small_grids()["trend"]
+    out = []
+    for name, sign in (("trend-up", "+"), ("trend-down", "-")):
+        f = R.family(name, "TEST: same rule, opposite predicted sign", sign, "dense")
+        h = R.hypothesis(f, "fx")
+        out.append(R.Bundle(f, h, R.strategy_spec(h, "trend", g, cost_models=("c1", "c2"))))
+    return out
+
+
+def test_f5_negative_sign_families_hold_the_opposite_position(tmp_path, panel):
+    ws, out = _run(tmp_path, panel, bundles=_signed_pair(), chunk_size=64)
+    t = store.read_arrays(ws.run_dir(out["run_id"]) / "results.bin", out["results_sha256"])
+    r = Runner(ws, panel, Policy())
+    sign = np.array([r.reg.records[r.view.describe(i)["family_hash"]]["sign"] for i in range(len(r.view))])
+    up, down = np.flatnonzero(sign == "+"), np.flatnonzero(sign == "-")
+    assert up.size == down.size == 24
+    # canonical order sorts by spec hash, so pair candidates by their (identical) grid index
+    up = up[np.argsort(r.view.grid_index[up])]
+    down = down[np.argsort(r.view.grid_index[down])]
+    c = {k: i for i, k in enumerate(kernels.S2_COLS)}
+    s2u, s2d = t["stats2"][up], t["stats2"][down]
+    assert np.array_equal(s2d[:, c["gross_mean"]], -s2u[:, c["gross_mean"]])     # exact mirror (odd)
+    for k in ("holder_bound", "lin_cost", "turnover", "exposure", "active_frac"):  # even in the positions
+        assert np.array_equal(s2d[:, c[k]], s2u[:, c[k]]), k
+    assert not np.array_equal(s2d[:, c["net_mean"]], s2u[:, c["net_mean"]])
+    assert not np.any(np.all(t["fingerprint"][up] == t["fingerprint"][down], axis=1))
+
+
+def test_f5_planted_effect_is_found_only_in_the_predicted_direction(tmp_path):
+    planted = D.generate(D.PanelParams(seed=7, n_days=760, protected_days=100, planted=0.6))
+    ws, out = _run(tmp_path, planted, bundles=_signed_pair(), chunk_size=64)
+    pk = {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+          for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json")}
+    assert pk["trend-up"]["family"]["sign"] == "+" and pk["trend-down"]["family"]["sign"] == "-"
+    assert pk["trend-up"]["spa"]["p_c"] < 0.05
+    assert pk["trend-down"]["spa"]["p_c"] > 0.5
+
+
+
+# -- S10 review, F6: bootstrap draws bound to the family --------------------------------------------------------------
+
+def test_f6_unrelated_registrations_do_not_change_a_familys_draws(tmp_path, panel):
+    """The S10 counterexample: registering an unrelated spec and re-freezing re-drew every family's bootstrap."""
+    ws, o1 = _run(tmp_path, panel, chunk_size=64)
+    fam = R.family("unrelated", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "commodity")
+    reg = ws.registry()
+    reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "trend", {"lookback": [33], "shape": ["sign"],
+                                                                  "vol_halflife": [20], "rebalance": [1]}))])
+    reg.freeze()
+    o2 = Runner(ws, panel, Policy(), chunk_size=200).run()
+    assert o2["run_id"] != o1["run_id"]
+
+    def by_family(o):
+        return {json.loads(p.read_text())["family"]["name"]: json.loads(p.read_text())
+                for p in (ws.run_dir(o["run_id"]) / "packages").glob("*.json")}
+
+    a, b = by_family(o1), by_family(o2)
+    for name in a:
+        assert a[name]["spa"] == b[name]["spa"], name                 # bit-identical SPA, every family
+    t1 = store.read_arrays(ws.run_dir(o1["run_id"]) / "results.bin", o1["results_sha256"])
+    t2 = store.read_arrays(ws.run_dir(o2["run_id"]) / "results.bin", o2["results_sha256"])
+    r1, r2 = Runner(ws, panel, Policy(), registry_root=reg.frozen(0).root), Runner(ws, panel, Policy())
+    k1 = {bytes(r1.view.cand[i]): i for i in range(len(r1.view))}
+    for j in range(len(r2.view)):
+        i = k1.get(bytes(r2.view.cand[j]))
+        if i is not None:                                               # every old candidate: identical stage 3
+            assert np.array_equal(t1["stats3"][i], t2["stats3"][j], equal_nan=True)
+    assert "unrelated" in b and "unrelated" not in a
+
+
+def test_f6_seed_is_a_function_of_family_and_evaluation_only():
+    from manhattan.hte.runner import boot_seed
+    pol = Policy()
+    s = boot_seed("a" * 64, "d" * 64, pol, 660)
+    assert s == boot_seed("a" * 64, "d" * 64, pol, 660)
+    assert s != boot_seed("b" * 64, "d" * 64, pol, 660)                 # another family: other draws
+    assert s != boot_seed("a" * 64, "e" * 64, pol, 660)                 # other data: other draws
+    assert s != boot_seed("a" * 64, "d" * 64, Policy(bootstrap_B=499), 660)
+
+
+
+# -- S10 review, F7: every evaluation-affecting parameter is in the identity ----------------------------------------
+
+def test_f7_policy_cost_stage_and_sign_changes_never_share_an_identity(baseline, panel, monkeypatch):
+    import dataclasses
+    ws, _ = baseline
+    r = Runner(ws, panel, Policy())
+    base = _pr86_ident(r, Policy(), 3)
+    seen = {base["spec_hash"]}
+    # every single policy field, changed alone
+    changes = {"name": "x", "version": 2, "warmup": 301, "skip_stage3_if_dominated": False,
+               "dedup_behavioural": False, "vol_target_ann": 0.2, "vol_halflife": 21, "vol_min_obs": 21,
+               "leverage_cap": 4.0, "bootstrap_B": 499, "bootstrap_L": 21, "meff_cap": 999, "benchmark_only": True}
+    assert set(changes) | {"stage3_selection", "top_k"} == {f.name for f in dataclasses.fields(Policy)}
+    for k, v in changes.items():
+        h = _pr86_ident(r, dataclasses.replace(Policy(), **{k: v}), 3)["spec_hash"]
+        assert h not in seen, k
+        seen.add(h)
+    gated = Policy(stage3_selection="top_k_per_spec", top_k=2, benchmark_only=True)
+    assert _pr86_ident(r, gated, 3)["spec_hash"] not in seen
+    assert _pr86_ident(r, Policy(), 3, stages=(1, 2))["spec_hash"] not in seen
+    dom = r.view.describe(3)["domain"]
+    monkeypatch.setitem(kernels.COSTS, dom, (kernels.COSTS[dom][0] * 2, kernels.COSTS[dom][1]))
+    assert _pr86_ident(r, Policy(), 3)["spec_hash"] not in seen
+    monkeypatch.undo()
+    assert _pr86_ident(r, Policy(), 3) == base                       # and it is deterministic
+    # different candidates (including the c1/c2 cost binding) never collide
+    hs = {_pr86_ident(r, Policy(), i)["spec_hash"] for i in range(len(r.view))}
+    assert len(hs) == len(r.view)
+
+
+PR86_CHECK = """
+import json, sys
+from manhattan import ledger as L
+ids = json.load(sys.stdin)
+for x in ids:
+    L.validate_attempt_identity(x)
+same = [[L.same_identity(a, b) for b in ids] for a in ids]
+print(json.dumps(same))
+"""
+
+
+@pytest.mark.skipif(not os.environ.get("HTE_PR86_CHECKOUT"),
+                    reason="needs a checkout of PR #86 (bab1a4d) in HTE_PR86_CHECKOUT; run locally")
+def test_f7_identities_validate_against_pr86_and_never_collide(baseline, panel):
+    import dataclasses
+    ws, _ = baseline
+    r = Runner(ws, panel, Policy())
+    idents = [_pr86_ident(r, Policy(), 3), _pr86_ident(r, Policy(vol_target_ann=0.2), 3),
+              _pr86_ident(r, Policy(bootstrap_B=499), 3), _pr86_ident(r, Policy(), 3, stages=(1, 2)),
+              _pr86_ident(r, dataclasses.replace(Policy(), leverage_cap=1.0), 3), _pr86_ident(r, Policy(), 4)]
+    p = subprocess.run([sys.executable, "-c", PR86_CHECK], input=json.dumps(idents), capture_output=True,
+                       text=True, cwd=os.environ["HTE_PR86_CHECKOUT"],
+                       env=dict(os.environ, PYTHONPATH=os.environ["HTE_PR86_CHECKOUT"]), timeout=120)
+    assert p.returncode == 0, p.stderr[-2000:]
+    same = json.loads(p.stdout)
+    n = len(idents)
+    assert all(same[i][i] for i in range(n))
+    assert not any(same[i][j] for i in range(n) for j in range(n) if i != j)   # PR #86 sees distinct identities
+
+
+# -- S10 review, F8: same-close execution is restricted to throughput testing ---------------------------------------
+
+def test_f8_execution_timing_is_in_the_identity_and_every_package(baseline):
+    ws, out = baseline
+    started = AttemptLog(ws.log_path).of_type("run_started")[0]["payload"]["identity"]
+    assert started["execution"] == kernels.EXECUTION_TIMING
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        pk = json.loads(p.read_text())
+        assert pk["execution_timing"] == kernels.EXECUTION_TIMING
+        assert pk["realistic_return_claims"] is False
+        assert "throughput" in pk["use_restriction"] and "PR #85" in pk["use_restriction"]
+        assert any("SAME-CLOSE" in w for w in pk["warnings"])
+
+
+def test_f8_changing_the_timing_convention_is_a_new_run(tmp_path, panel, monkeypatch):
+    ws = _ws(tmp_path)
+    a = Runner(ws, panel, Policy()).run_id
+    monkeypatch.setattr(kernels, "EXECUTION_TIMING", "delayed/v1")
+    assert Runner(ws, panel, Policy()).run_id != a
+
+
+def test_f8_pr85_boundary_is_disabled():
+    with pytest.raises(adapters.AdapterDisabled, match="lag"):
+        adapters.Pr85ExecutionAdapter()
+    with pytest.raises(adapters.AdapterDisabled):
+        adapters.to_pr85_decisions()
+    src = "".join(p.read_text() for p in (ROOT / "manhattan" / "hte").glob("*.py"))
+    # written as a regular expression so that PR #85's repository-wide scan for the dotted module name (its
+    # test_nothing_in_production_imports_the_execution_model) does not read this check as an import
+    assert re.search(r"(?m)^\s*(?:import|from)\s+manhattan\.execution\b|from\s+manhattan\s+import[^\n]*\bexecution\b",
+                     src) is None
+
+
+# -- S10 review, F9: numerical environment identity ------------------------------------------------------------------
+
+def test_f9_environment_is_recorded_in_every_run_identity(baseline):
+    ws, out = baseline
+    rec = AttemptLog(ws.log_path).of_type("run_started")[0]["payload"]
+    env = rec["code"]["numeric_environment"]
+    assert env["numpy"] == np.__version__ and env["blas"]["name"] and "runtime_core" in env["blas"]
+    assert rec["identity"]["numeric_environment_sha256"] == ids.full_hash(env)
+
+
+def test_f9_an_interrupted_run_cannot_resume_under_another_environment(tmp_path, panel, baseline, monkeypatch):
+    p = _sub(tmp_path, "exit_after_start:3")
+    assert p.returncode == 77
+    ws = Workspace(tmp_path)
+    old_run = AttemptLog(ws.log_path).of_type("run_started")[-1]["payload"]["run_id"]
+    real = ids.numeric_environment
+
+    def other_blas():
+        env = real()
+        env["blas"] = dict(env["blas"], runtime_core="SomeOtherCore", version="0.0.0")
+        return env
+
+    monkeypatch.setattr(ids, "numeric_environment", other_blas)
+    r = Runner(ws, panel, Policy(), chunk_size=16)
+    assert r.run_id != old_run                                          # another environment, another identity
+    with pytest.raises(RN.RunError, match="another numerical environment"):
+        r.run()
+    assert "environment_mismatch_refused" in _types(ws)
+    out = Runner(ws, panel, Policy(), chunk_size=16, allow_new_environment=True).run()
+    assert out["run_id"] != old_run and "environment_changed" in _types(ws)
+    assert reconcile(ws, old_run)["state"] == "incomplete"              # the old run is never mixed or "completed"
+    monkeypatch.undo()
+    resumed = Runner(ws, panel, Policy(), chunk_size=40).run()          # back in its own environment it resumes
+    assert resumed["run_id"] == old_run and resumed["result_root"] == baseline[1]["result_root"]
+
+
+# -- S10 review, F10: the null-calibration statement -----------------------------------------------------------------
+
+def test_f10_null_world_share_is_below_nominal_and_the_note_says_why(baseline):
+    """On the null synthetic world stage-3 returns are net of costs, so the share of p_boot <= 0.05 sits well
+    below 5%; the package note must not claim ~5% is expected."""
+    ws, out = baseline
+    shares = []
+    for p in (ws.run_dir(out["run_id"]) / "packages").glob("*.json"):
+        st = json.loads(p.read_text())["stage3"]
+        assert "not a calibrated rate" in st["share_note"] and "net of costs" in st["share_note"]
+        assert "about 0.05 is expected" not in st["share_note"]
+        if st["share_p_boot_le_0.05"] is not None:
+            shares.append(st["share_p_boot_le_0.05"])
+    assert shares and max(shares) < 0.05

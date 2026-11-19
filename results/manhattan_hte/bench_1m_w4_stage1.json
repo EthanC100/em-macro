@@ -1,0 +1,149 @@
+{
+ "cache": {
+  "compute_s": 9.073728425003992,
+  "corrupt": 0,
+  "disk_hits": 9,
+  "mem_hits": 2970237,
+  "misses": 1494
+ },
+ "chunk": 512,
+ "cpu_hours": {
+  "note": "process CPU time (user+system, parent and workers); not billed time",
+  "per_100k": 0.016832938744135672,
+  "per_1k": 0.00016832938744135671,
+  "per_1m_linear_extrapolation": 0.16832938744135673
+ },
+ "execution_timing": "same_close_fill_next_day_return/v1",
+ "feature_cache": true,
+ "hardware": {
+  "blas": "scipy-openblas 0.3.34.106.0",
+  "blas_threads_env": "1",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags": "avx2,avx512f,fma",
+  "logical_cpus": 4,
+  "mem_gib": 15.7,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "log": {
+  "attempt_records": 4002,
+  "attempts_started": 2001,
+  "records_this_run": 4004,
+  "records_total": 4011
+ },
+ "memory": {
+  "peak_rss_largest_child_mib": 673.12109375,
+  "peak_rss_parent_mib": 1265.9140625
+ },
+ "panel": {
+  "assets": {
+   "commodity": 12,
+   "fx": 10,
+   "rates": 8
+  },
+  "data_hash": "435bbc92b04d5c4beaad96ec199467480c0c84e2502d28aab86e4a70579f615e",
+  "evaluated_days": 2220
+ },
+ "reconciliation": {
+  "attempts": {
+   "completed": 2001,
+   "failed": 0,
+   "interrupted": 0,
+   "started": 2001,
+   "unfinished": 0,
+   "verification": 0
+  },
+  "final_status": {
+   "s1": {
+    "degenerate": 3328,
+    "dominated": 0,
+    "failed": 0,
+    "not_run": 0,
+    "pass": 1020944
+   }
+  },
+  "registered": {
+   "candidates": 1024272,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 256068
+  },
+  "violations": []
+ },
+ "registration": {
+  "candidates_per_s": 42130.90375997976,
+  "counts": {
+   "candidates": 1024272,
+   "families": 5,
+   "hypotheses": 15,
+   "semantic_duplicates": 0,
+   "strategy_specs": 30,
+   "variants": 256068
+  },
+  "cpu_s": 24.046253,
+  "report": {
+   "duplicate_submissions": 0,
+   "registered_candidates": 1024272,
+   "registered_specs": 30,
+   "rejected": 0,
+   "submitted": 30
+  },
+  "scale": 245.8244068920197,
+  "seconds": 24.311655070000143
+ },
+ "run": {
+  "closed": true,
+  "cpu_s": 620.694282,
+  "cpu_utilisation": 0.9042105234887917,
+  "result_root": "6c9c6bc390eea8098675b38343e55f1576bcca1ef4f56ac8da37bf864f90894a",
+  "run_id": "HR-f16de8b8f40387d5",
+  "timings": {
+   "pass_A_s": 154.96264623699994,
+   "stage4_s": 0.9576559459999316,
+   "warm_s": 13.31784064999988
+  },
+  "wall_s": 171.61221471
+ },
+ "selection_counts": null,
+ "stage3_accounting": {
+  "computed_simulations": 0,
+  "degenerate_not_simulated": 0,
+  "dominated_not_simulated": 0,
+  "exact_aliases_not_simulated": 0
+ },
+ "stages": [
+  1
+ ],
+ "storage_bytes": {
+  "attempt_log": 2417108,
+  "feature_cache": 301477248,
+  "packages": 0,
+  "pass_A": 134489787,
+  "pass_B": 0,
+  "per_candidate_excluding_cache": 372.6808503991127,
+  "registry": 118834053,
+  "results": 125985612,
+  "total": 683203808
+ },
+ "synthetic": true,
+ "target": 1000000,
+ "throughput": {
+  "end_to_end_including_registration_candidates_per_s": 5227.908172445445,
+  "end_to_end_including_registration_s": 195.92386978000013,
+  "pass_A_candidates_per_s": 6609.799360508325,
+  "pass_A_label": "stage 1 only (cheap screen)",
+  "pass_B_candidates_per_s": null,
+  "pass_B_computed": 0,
+  "run_candidates_per_s": 5968.526201534504
+ },
+ "use_restriction": "throughput measurement on synthetic data with same-close execution; no return figure here is realistic or evidence",
+ "vcpu_hours_reserved": {
+  "note": "wall time (registration included) x the machine's vCPUs: what an instance of this size bills, whatever the CPU utilisation",
+  "this_run": 0.2176931886444446,
+  "vcpus": 4
+ },
+ "workers": 4
+}
