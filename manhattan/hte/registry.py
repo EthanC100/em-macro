@@ -242,34 +242,55 @@ class Registry:
         return self.records[self.spec_hashes[i]]
 
     # -- submission --------------------------------------------------------------------------------------
-    def submit(self, bundles: list[Bundle], *, probe_panel=None) -> dict:
-        """Validate and register under the workspace lock. Returns counts; every outcome is logged."""
+    def submit(self, bundles: list[Bundle], *, probe_panel=None, allow_test_templates: bool = False) -> dict:
+        """Validate and register under the workspace lock. Returns counts; every outcome is logged.
+
+        ``probe_panel`` adds a second PIT probe on that panel; it never replaces the canonical probe.
+        ``allow_test_templates`` must be passed explicitly to register a template marked ``test_only``; the
+        allowance is recorded in the segment, and every package of such a family says so."""
         with locked(self.log.path):
             self._reload()
-            return self._submit(bundles, probe_panel)
+            return self._submit(bundles, probe_panel, allow_test_templates)
 
-    def _submit(self, bundles: list[Bundle], probe_panel) -> dict:
+    def _probe_ok(self, template: str, version: int, code: str, panel, probed: dict) -> bool:
+        ph = panel.data_hash if panel is not None else pit.canonical_panel_hash()
+        key = (template, version, code, ph)
+        if key not in probed:
+            res = pit.probe(template, panel=panel)
+            self.log.append("pit_probe", {"template": template, "version": version, "code": code, **res})
+            probed[key] = res["passed"]
+        return probed[key]
+
+    def _submit(self, bundles: list[Bundle], probe_panel, allow_test_templates: bool = False) -> dict:
         report = {"submitted": len(bundles), "registered_specs": 0, "registered_candidates": 0,
                   "duplicate_submissions": 0, "rejected": 0}
         known_specs = set(self.spec_hashes)
         new_records, new_specs, seg_parts = [], [], []
         batch_specs: set[str] = set()
         code = pit.code_hash()
-        # a probe result is reused only for the same template version *and* the same template and feature code
-        probed = {(r["payload"]["template"], r["payload"]["version"], r["payload"].get("code")): r["payload"]["passed"]
-                  for r in self.log.of_type("pit_probe")}
+        # a probe result is reused only for the same template version, template and feature code, and probe panel;
+        # a result without full coverage or without a recorded panel never counts as a pass
+        probed = {}
+        for r in self.log.of_type("pit_probe"):
+            q = r["payload"]
+            key = (q["template"], q["version"], q.get("code"), q.get("probe_panel"))
+            probed[key] = bool(q["passed"] and q.get("probe_panel") and q.get("checks", 0) > 0
+                               and q.get("checks") == q.get("expected_checks"))
+        test_used = False
         for b in bundles:
             probs = validate_bundle(b)
             sh = None
             if not probs:
                 sh = ids.full_hash(b.spec)
-                key = (b.spec["template"], b.spec["template_version"], code)
-                if key not in probed:
-                    res = pit.probe(b.spec["template"], panel=probe_panel)
-                    self.log.append("pit_probe", {"template": key[0], "version": key[1], "code": code, **res})
-                    probed[key] = res["passed"]
-                if not probed[key]:
-                    probs.append("template failed the PIT probe (positions depend on future data)")
+                tmpl, ver = b.spec["template"], b.spec["template_version"]
+                if TP.TEMPLATES[tmpl].test_only and not allow_test_templates:
+                    probs.append(f"template {tmpl!r} is test-only (pass allow_test_templates=True in tests)")
+                elif not (self._probe_ok(tmpl, ver, code, None, probed) and
+                          (probe_panel is None or self._probe_ok(tmpl, ver, code, probe_panel, probed))):
+                    probs.append("template failed the PIT probe (positions depend on future data, or the probe "
+                                 "did not reach full coverage)")
+                elif TP.TEMPLATES[tmpl].test_only:
+                    test_used = True
             if not probs:
                 bad = self._validate_points(b.spec)
                 probs.extend(bad)
@@ -298,7 +319,7 @@ class Registry:
         if new_specs:
             arrays = {k: np.concatenate([p[k] for p in seg_parts]) for k in seg_parts[0]}
             report["registered_candidates"] = int(arrays["spec_index"].size)
-            self._commit_segment(new_records, new_specs, arrays)
+            self._commit_segment(new_records, new_specs, arrays, test_templates=test_used)
         return report
 
     def _validate_points(self, spec: dict) -> list[str]:
@@ -340,7 +361,7 @@ class Registry:
         return {"spec_index": np.full(n, spec_index, np.int32), "grid_index": np.arange(n, dtype=np.int64),
                 "cand": cand, "variant": var, "semantic": sem}
 
-    def _commit_segment(self, new_records, new_specs, arrays) -> None:
+    def _commit_segment(self, new_records, new_specs, arrays, test_templates: bool = False) -> None:
         # a full-hash collision check against everything registered (16-hex short IDs may collide; full hashes
         # are compared)
         existing = self._arrays()["cand"]
@@ -357,6 +378,7 @@ class Registry:
         allsem = np.concatenate([self._arrays()["semantic"], arrays["semantic"]])
         sem_dups = int(allsem.shape[0] - np.unique(allsem, axis=0).shape[0]) if allsem.size else 0
         payload = {"segment": k, "file": fname, "sha256": sha, "records_file": rname, "records_sha256": rsha,
+                   "test_templates": bool(test_templates),
                    "n_candidates": int(arrays["spec_index"].size),
                    "semantic_duplicates_total": sem_dups,
                    "merkle_root": ids.merkle_root_array(arrays["cand"]),

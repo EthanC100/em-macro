@@ -249,7 +249,7 @@ def test_leaky_template_fails_probe_and_cannot_register(tmp_path):
     fam = R.family("leak", "TEST", "+", "dense")
     hyp = R.hypothesis(fam, "fx")
     spec = R.strategy_spec(hyp, "leaky_test", {"lookback": [5, 6]})
-    rep = reg.submit([R.Bundle(fam, hyp, spec)])
+    rep = reg.submit([R.Bundle(fam, hyp, spec)], allow_test_templates=True)
     assert rep["rejected"] == 1 and len(reg) == 0
     assert lg.of_type("pit_probe")[-1]["payload"]["passed"] is False
     assert "PIT probe" in lg.of_type("submission_rejected")[-1]["payload"]["reasons"][0]
@@ -584,3 +584,63 @@ def test_a_moved_fence_is_refused(panel):
     import dataclasses
     with pytest.raises(D.NotSynthetic, match="fence"):
         D.verify_synthetic(dataclasses.replace(panel, fence=panel.params.n_days))
+
+
+
+# -- S10 review, F1: PIT probe coverage, panel binding and test-only templates ------------------------------------
+
+def test_f1_short_probe_panel_cannot_pass_with_zero_checks():
+    short = D.generate(D.PanelParams(seed=1, n_days=320, protected_days=10))
+    res = pit.probe("trend", panel=short)
+    assert res["passed"] is False and res["checks"] == 0
+    assert res["failures"][0]["reason"] == "insufficient_coverage"
+    full = pit.probe("trend")
+    assert full["passed"] and full["checks"] == full["expected_checks"] > 0
+
+
+def test_f1_short_probe_panel_cannot_register_a_look_ahead_template(tmp_path):
+    """The S10 counterexample: a leaky template probed only on a too-short panel registered with zero checks,
+    and the stored pass was reused by later submissions."""
+    short = D.generate(D.PanelParams(seed=1, n_days=320, protected_days=10))
+    reg, lg = _reg(tmp_path)
+    fam = R.family("leak", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    for lb in (5, 6):
+        rep = reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "leaky_test", {"lookback": [lb]}))],
+                         probe_panel=short, allow_test_templates=True)
+        assert rep["rejected"] == 1 and len(reg) == 0
+    rep = reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "leaky_test", {"lookback": [7]}))],
+                     allow_test_templates=True)
+    assert rep["rejected"] == 1 and len(reg) == 0
+    probes = [r["payload"] for r in lg.of_type("pit_probe")]
+    assert all("probe_panel" in p and "expected_checks" in p for p in probes)
+    assert {p["probe_panel"] for p in probes} == {pit.canonical_panel_hash()}   # canonical probe ran and failed
+
+
+def test_f1_a_passing_custom_panel_never_replaces_the_canonical_probe(tmp_path):
+    reg, lg = _reg(tmp_path)
+    other = D.generate(D.PanelParams(seed=99, n_days=760, protected_days=100))
+    reg.submit(X.small_bundles(domains=("fx",), templates=("trend",)), probe_panel=other)
+    panels = {r["payload"]["probe_panel"] for r in lg.of_type("pit_probe")}
+    assert panels == {pit.canonical_panel_hash(), other.data_hash}
+
+
+def test_f1_a_stored_zero_check_pass_is_never_reused(tmp_path):
+    reg, lg = _reg(tmp_path)
+    lg.append("pit_probe", {"template": "leaky_test", "version": 1, "code": pit.code_hash(), "passed": True,
+                            "checks": 0, "failures": [], "probe_panel": pit.canonical_panel_hash(),
+                            "expected_checks": 0})
+    fam = R.family("leak", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    rep = reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "leaky_test", {"lookback": [5]}))],
+                     allow_test_templates=True)
+    assert rep["rejected"] == 1
+
+
+def test_f1_test_only_templates_need_an_explicit_recorded_allowance(tmp_path):
+    reg, lg = _reg(tmp_path)
+    fam = R.family("leak", "TEST", "+", "dense")
+    hyp = R.hypothesis(fam, "fx")
+    rep = reg.submit([R.Bundle(fam, hyp, R.strategy_spec(hyp, "leaky_test", {"lookback": [5]}))])
+    assert rep["rejected"] == 1
+    assert "test-only" in lg.of_type("submission_rejected")[-1]["payload"]["reasons"][0]

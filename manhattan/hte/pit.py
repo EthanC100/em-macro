@@ -10,6 +10,13 @@ several ``tau``, every domain and the corner points of the template's schema. A 
 fails. The probe is structural (it does not depend on any performance number) and is logged once per template
 version by the registry; a failing template cannot register candidates.
 
+**Coverage.** A probe passes only with full coverage: every ``tau`` in ``TAUS`` fits inside the panel, and every
+(tau, domain, corner point, sizing) combination was checked. A panel too short for the taus, or a template that
+cannot run its own corner points, *fails*; zero checks can never pass. The result records the probe panel's data
+hash and the number of checks expected and made; the registry keys stored results by template, version, template
+and feature code, and probe panel, and always requires the canonical panel (``PROBE_PARAMS``). A caller-supplied
+panel can add a second probe, never replace the canonical one.
+
 The probe cannot prove the absence of look-ahead for parameter values it does not try, nor for features that are
 look-ahead-free on this generator by accident. It is a strong, cheap test, not a proof.
 """
@@ -91,6 +98,12 @@ def _probe(template: str, panel: D.FencedPanel | None = None) -> dict:
     base = panel if panel is not None else D.generate(PROBE_PARAMS)
     pts = _corner_points(template)
     taus = [t for t in TAUS if t < base.fence - 2]
+    expected = len(TAUS) * len(base.domains()) * len(pts) * len(TP.SIZINGS)
+    ident = {"probe_panel": base.data_hash, "expected_checks": expected}
+    if len(taus) < len(TAUS) or not pts:
+        return {"passed": False, "checks": 0, "failures": [{"reason": "insufficient_coverage",
+                                                             "taus_in_panel": len(taus), "points": len(pts)}],
+                **ident}
     failures = []
     checks = 0
     base_cache = F.FeatureCache(base)
@@ -106,12 +119,26 @@ def _probe(template: str, panel: D.FencedPanel | None = None) -> dict:
                     except Exception as e:          # a template that cannot run its own corner points fails
                         failures.append({"tau": tau, "domain": dom, "params": p, "sizing": sizing,
                                          "error_class": type(e).__name__})
-                        return {"passed": False, "checks": checks, "failures": failures}
+                        return {"passed": False, "checks": checks, "failures": failures, **ident}
                     checks += 1
                     if not np.array_equal(a[: tau + 1], b[: tau + 1], equal_nan=True):
                         bad = int(np.argmax(np.any(a[: tau + 1] != b[: tau + 1], axis=1)))
                         failures.append({"tau": tau, "domain": dom, "params": p, "sizing": sizing,
                                          "first_row": bad})
                         if len(failures) >= 5:
-                            return {"passed": False, "checks": checks, "failures": failures}
-    return {"passed": not failures, "checks": checks, "failures": failures}
+                            return {"passed": False, "checks": checks, "failures": failures, **ident}
+    return {"passed": not failures and checks == expected and checks > 0, "checks": checks, "failures": failures,
+            **ident}
+
+
+def canonical_panel_hash() -> str:
+    return _canonical_hash()
+
+
+_CANON: dict = {}
+
+
+def _canonical_hash() -> str:
+    if "h" not in _CANON:
+        _CANON["h"] = D.generate(PROBE_PARAMS).data_hash
+    return _CANON["h"]

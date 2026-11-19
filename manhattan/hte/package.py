@@ -254,7 +254,9 @@ def _run_meff(runner, table, jobs) -> list:
             import multiprocessing as mp
             from concurrent.futures import ProcessPoolExecutor
             # an executor, not multiprocessing.Pool: a lost worker raises instead of hanging
-            with ProcessPoolExecutor(min(runner.workers, len(jobs)), mp_context=mp.get_context("fork")) as ex:
+            from .runner import die_with_parent
+            with ProcessPoolExecutor(min(runner.workers, len(jobs)), mp_context=mp.get_context("fork"),
+                                     initializer=die_with_parent) as ex:
                 return list(ex.map(_meff_job, range(len(jobs))))
         return [_meff_job(i) for i in range(len(jobs))]
     finally:

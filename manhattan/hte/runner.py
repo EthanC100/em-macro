@@ -121,6 +121,8 @@ def _task_A(task: dict) -> dict:
         raise RuntimeError("injected worker failure")
     if task.get("die"):
         os._exit(78)                                 # injected: the worker process disappears
+    if task.get("hang"):
+        time.sleep(3600)                             # injected: a slow chunk (tests kill the parent meanwhile)
     view, policy, cache = ctx["view"], ctx["policy"], ctx["cache"]
     fence = cache.panel.fence
     idx = np.arange(task["lo"], task["hi"], dtype=np.int64)
@@ -280,9 +282,39 @@ def _series(policy, inputs: list) -> dict:
     return {"net": o["net"], "stats": st}
 
 
+def die_with_parent() -> None:
+    """Make a forked worker exit when its parent dies (S10 F2): Linux ``PR_SET_PDEATHSIG`` where available, and a
+    watchdog thread that exits as soon as the parent process id changes (re-parenting) as a portable fallback."""
+    ppid = os.getppid()
+    try:
+        import ctypes
+        import signal
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        libc.prctl(1, signal.SIGKILL)                  # PR_SET_PDEATHSIG = 1
+    except Exception:
+        pass
+    if os.getppid() != ppid:
+        os._exit(1)
+
+    def watch():
+        while True:
+            time.sleep(0.5)
+            if os.getppid() != ppid:
+                os._exit(1)
+
+    import threading
+    threading.Thread(target=watch, daemon=True, name="hte-parent-watchdog").start()
+
+
 def _init_worker(ctx):
     _CTX.clear()
     _CTX.update(ctx)
+
+
+def _init_pool_worker(ctx):
+    """Initializer of forked pool workers only (never the in-process path, which must not watch its parent)."""
+    die_with_parent()
+    _init_worker(ctx)
 
 
 # -- parent side ----------------------------------------------------------------------------------------------
@@ -553,13 +585,14 @@ class Runner:
         if self.workers > 1:
             # ProcessPoolExecutor, not multiprocessing.Pool: when a worker dies (killed, out of memory) Pool loses
             # the task and waits for ever, while the executor raises BrokenProcessPool, which is logged below
-            pool = ProcessPoolExecutor(self.workers, mp_context=mp.get_context("fork"), initializer=_init_worker,
-                                       initargs=(ctx,))
+            pool = ProcessPoolExecutor(self.workers, mp_context=mp.get_context("fork"),
+                                       initializer=_init_pool_worker, initargs=(ctx,))
         else:
             _init_worker(ctx)
         broken = False
         raise_at = _fault("worker_raise")
         die_at = _fault("worker_exit")
+        hang_at = _fault("worker_hang")
         fn = _task_A if pas == "A" else _task_B
 
         def dispatch(lo, hi):
@@ -582,6 +615,8 @@ class Runner:
                 t["raise"] = True
             if die_at is not None and self._tasks_dispatched == die_at:
                 t["die"] = True
+            if hang_at is not None and self._tasks_dispatched >= hang_at:
+                t["hang"] = True
             fut = None
             if pool is not None:
                 try:

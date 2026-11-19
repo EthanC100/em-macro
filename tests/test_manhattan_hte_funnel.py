@@ -50,7 +50,9 @@ def _ws(path, bundles=None) -> Workspace:
     ws = Workspace(path)
     reg = ws.registry()
     if len(reg) == 0:
-        reg.submit(bundles if bundles is not None else X.small_bundles())
+        b = bundles if bundles is not None else X.small_bundles()
+        test = any(TP.TEMPLATES[x.spec["template"]].test_only for x in b)
+        reg.submit(b, allow_test_templates=test)
         reg.freeze()
     return ws
 
@@ -602,3 +604,74 @@ def test_verification_covers_spa_and_never_rewrites_packages(tmp_path, panel, mo
     assert any(v["code"] == "nondeterminism" for v in rec["violations"])
     failed = AttemptLog(ws.log_path).of_type("attempt_failed")
     assert any(r["payload"]["reason"] == "nondeterminism" for r in failed)
+
+
+# -- S10 review, F2: orphaned workers and the inherited workspace lock ---------------------------------------------
+
+def _procs_with(marker: str) -> list[int]:
+    out = []
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            try:
+                if marker.encode() in (d / "cmdline").read_bytes():
+                    out.append(int(d.name))
+            except OSError:
+                pass
+    return out
+
+
+def test_f2_killing_the_parent_leaves_no_workers_and_no_lock(tmp_path, baseline):
+    import signal
+    import time
+    _ws(tmp_path)
+    marker = f"hte-f2-{tmp_path.name}"
+    env = dict(os.environ, PYTHONPATH=str(ROOT), OPENBLAS_NUM_THREADS="1", HTE_FAULT="worker_hang:3")
+    p = subprocess.Popen([sys.executable, "-c", SCRIPT, str(tmp_path), "4", "2", marker], env=env, cwd=ROOT,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.time() + 60
+    while time.time() < deadline and len(_procs_with(marker)) < 3:      # parent + 2 workers
+        time.sleep(0.1)
+    assert len(_procs_with(marker)) >= 3
+    time.sleep(0.5)
+    os.kill(p.pid, signal.SIGKILL)                                      # abrupt parent termination
+    p.wait()
+    deadline = time.time() + 10
+    while time.time() < deadline and _procs_with(marker):
+        time.sleep(0.1)
+    left = _procs_with(marker)
+    for pid in left:
+        os.kill(pid, signal.SIGKILL)
+    assert left == [], "workers outlived their parent"
+    res = _sub(tmp_path, chunk=40, workers=2)                           # resume is not blocked by any lock
+    assert res.returncode == 0, res.stderr[-2000:]
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["root"] == baseline[1]["result_root"]
+    assert reconcile(Workspace(tmp_path), out["run_id"])["violations"] == []
+
+
+LOCK_SCRIPT = """
+import os, sys, time
+from manhattan.hte.log import locked
+with locked(sys.argv[1]):
+    pid = os.fork()
+    if pid == 0:
+        time.sleep(30)
+        os._exit(0)
+    print(pid, flush=True)
+    os._exit(0)                       # the holder dies without unlocking; its forked child lives on
+"""
+
+
+def test_f2_a_forked_child_never_holds_the_workspace_lock(tmp_path):
+    import signal
+    from manhattan.hte.log import locked
+    env = dict(os.environ, PYTHONPATH=str(ROOT))
+    p = subprocess.run([sys.executable, "-c", LOCK_SCRIPT, str(tmp_path / "attempts.jsonl")], env=env, cwd=ROOT,
+                       capture_output=True, text=True, timeout=60)
+    child = int(p.stdout.strip())
+    try:
+        os.kill(child, 0)                                               # the child is still alive
+        with locked(tmp_path / "attempts.jsonl"):                       # ... and the lock is free
+            pass
+    finally:
+        os.kill(child, signal.SIGKILL)

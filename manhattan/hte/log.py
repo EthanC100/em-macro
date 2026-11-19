@@ -40,22 +40,45 @@ class LogError(RuntimeError):
     """The log is damaged, or an append was refused."""
 
 
+_HELD_LOCK_FDS: set[int] = set()
+
+
+def _close_inherited_locks() -> None:
+    """In every forked child: close the descriptors of workspace locks held by the parent. An ``flock`` belongs to
+    the open file description, which a fork shares, so a child that kept the descriptor would keep the workspace
+    locked after the parent died (S10 F2). Closing (never ``LOCK_UN``) drops only the child's reference."""
+    for fd in list(_HELD_LOCK_FDS):
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    _HELD_LOCK_FDS.clear()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_close_inherited_locks)
+
+
 @contextmanager
 def locked(log_path: Path):
     """Exclusive, non-blocking ``flock`` on ``<log directory>/.lock`` for one writer (released by the operating
-    system if the process dies). Raises ``LogError`` when another writer holds it."""
+    system if the process dies; never inherited by forked workers). Raises ``LogError`` when another writer holds
+    it."""
     p = Path(log_path).parent / ".lock"
     p.parent.mkdir(parents=True, exist_ok=True)
     f = open(p, "a+")
+    fd = f.fileno()
     try:
         try:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise LogError("another writer holds this workspace") from None
+        _HELD_LOCK_FDS.add(fd)
         yield
     finally:
+        _HELD_LOCK_FDS.discard(fd)
         try:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             f.close()
 
