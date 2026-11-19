@@ -147,9 +147,9 @@ def test_accounting_separates_executions_from_scientific_units(runner):
     for n, code in enumerate(codes):
         ident, lin = _ident(runner, code), _lin(runner, code)
         lins[lin["executable"]] = lin
-        recs.append(_completion(ident, "evaluation", "r" * 64))
+        recs.append(_completion(ident, "evaluation", "a" * 64))
         if n == 0:
-            recs.append(_completion(ident, "rerun", "r" * 64))
+            recs.append(_completion(ident, "rerun", "a" * 64))
     out = adapters.executable_accounting(recs, lins)
     assert (out["completions"], out["looks"], out["executables"]) == (4, 3, 3)
     assert out["scientific"] == {k: 1 for k in SCIENTIFIC}                # engine/environment never add a test unit
@@ -157,7 +157,7 @@ def test_accounting_separates_executions_from_scientific_units(runner):
     [g] = out["cross_executable"]
     assert (g["executables"], g["engines"], g["environments"], g["divergent"]) == (3, 2, 2, False)
     assert out["hold_families"] == []
-    recs[-1]["payload"]["result_hash"] = "s" * 64                         # the environment changed the answer
+    recs[-1]["payload"]["result_hash"] = "b" * 64                         # the environment changed the answer
     out = adapters.executable_accounting(recs, lins)
     assert out["cross_executable"][0]["divergent"] is True
     assert out["hold_families"] == [lins[recs[0]["payload"]["executable"]]["family"]]
@@ -197,9 +197,9 @@ def test_pr86_records_a_new_engine_or_environment_as_a_new_look(runner, tmp_path
     book = _ledger(tmp_path)
     a = _ident(runner, _code(runner))
     b = _ident(runner, _code(runner, engine="e" * 64) if change == "engine" else _code(runner, env="SomeOtherCore"))
-    assert _complete(book, a, _start(book, a), "r" * 64)["type"] == "evaluation"
-    assert _complete(book, b, _start(book, b), "r" * 64)["type"] == "evaluation"      # not a rerun
-    assert _complete(book, b, _start(book, b), "s" * 64)["type"] == "nondeterminism"  # same executable: real
+    assert _complete(book, a, _start(book, a), "a" * 64)["type"] == "evaluation"
+    assert _complete(book, b, _start(book, b), "a" * 64)["type"] == "evaluation"      # not a rerun
+    assert _complete(book, b, _start(book, b), "b" * 64)["type"] == "nondeterminism"  # same executable: real
     assert book.looks() == 2 and len(book.records("evaluation_started")) == 3
     assert book.suspended_families() == {a["family"]}
 
@@ -208,8 +208,8 @@ def test_pr86_records_a_new_engine_or_environment_as_a_new_look(runner, tmp_path
 def test_pr86_other_bits_from_another_engine_do_not_suspend_the_family(runner, tmp_path):
     book = _ledger(tmp_path)
     a, b = _ident(runner, _code(runner)), _ident(runner, _code(runner, engine="e" * 64))
-    _complete(book, a, _start(book, a), "r" * 64)
-    rec = _complete(book, b, _start(book, b), "s" * 64)
+    _complete(book, a, _start(book, a), "a" * 64)
+    rec = _complete(book, b, _start(book, b), "b" * 64)
     assert rec["type"] == "evaluation" and "data_changed" not in rec["payload"]
     assert book.suspended_families() == set()
     lins = {x["executable"]: _lin(runner, c) for x, c in ((a, _code(runner)), (b, _code(runner, engine="e" * 64)))}
@@ -227,9 +227,9 @@ def test_the_pre_fix_mapping_collapsed_engines_in_pr86(runner, tmp_path):
         x = _ident(runner, code)
         x["spec_hash"] = _lin(runner, code)["binding"]
         old.append(x)
-    assert _complete(book, old[0], _start(book, old[0]), "r" * 64)["type"] == "evaluation"
-    assert _complete(book, old[1], _start(book, old[1]), "r" * 64)["type"] == "rerun"
-    assert _complete(book, old[2], _start(book, old[2]), "s" * 64)["type"] == "nondeterminism"
+    assert _complete(book, old[0], _start(book, old[0]), "a" * 64)["type"] == "evaluation"
+    assert _complete(book, old[1], _start(book, old[1]), "a" * 64)["type"] == "rerun"
+    assert _complete(book, old[2], _start(book, old[2]), "b" * 64)["type"] == "nondeterminism"
     assert book.looks() == 1 and book.suspended_families() == {old[0]["family"]}
 
 
@@ -237,7 +237,7 @@ def test_the_pre_fix_mapping_collapsed_engines_in_pr86(runner, tmp_path):
 def test_pr86_duplicate_evaluations_are_reruns_and_every_attempt_is_kept(runner, tmp_path):
     book = _ledger(tmp_path)
     a = _ident(runner, _code(runner))
-    types = [_complete(book, a, _start(book, a), "r" * 64)["type"] for _ in range(3)]
+    types = [_complete(book, a, _start(book, a), "a" * 64)["type"] for _ in range(3)]
     assert types == ["evaluation", "rerun", "rerun"]
     assert book.looks() == 1 and len(book.records("evaluation_started")) == 3
     assert [r["payload"]["evidential_weight"] for r in book.records() if r["type"] in L.COMPLETIONS] == [0, 0, 0]
@@ -252,14 +252,46 @@ def test_pr86_interrupted_attempt_resumes_only_under_its_own_engine_and_environm
         with pytest.raises(L.LedgerError, match="retry identity differs"):
             _start(book, other, supersedes=first)
     retry = _start(book, a, supersedes=first)
-    assert _complete(book, a, retry, "r" * 64)["type"] == "evaluation"
+    assert _complete(book, a, retry, "a" * 64)["type"] == "evaluation"
     assert book.is_superseded(first) and len(book.records("evaluation_started")) == 2
     # a new engine after an interruption: the old attempt is closed as interrupted, the new one is a new look
     b = _ident(runner, _code(runner, engine="e" * 64))
     stale = _start(book, a)
     book.end_attempt(stale, status="aborted", reason="interrupted", data_read=False)
-    assert _complete(book, b, _start(book, b), "r" * 64)["type"] == "evaluation"
+    assert _complete(book, b, _start(book, b), "a" * 64)["type"] == "evaluation"
     assert len(book.records("evaluation_started")) == 4 and len(book.records("attempt_aborted")) == 1
     # PR #86 keeps the superseded original visible as unfinished (ATTEMPT_ACCOUNTING.md): nothing is hidden
     assert [r["hash"] for r in book.unfinished()] == [first] and book.looks() == 2
     assert L.verify(book.path) == []
+
+
+@needs_pr86
+def test_pr86_reconciler_accepts_hte_executables_and_counts_every_level(runner, tmp_path):
+    """PR #86's strict audit (``attempts.reconcile``) over HTE identities: the extended ``code_version`` is accepted,
+    no violation is reported, and its counts match the adapter's at the execution level."""
+    from datetime import date
+    from manhattan import access, attempts as A, roles
+    book = _ledger(tmp_path)
+    fence = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=False)
+
+    def register(x):                                  # the real registration path, exploration role only
+        w = access.DeclaredWindow(WINDOW["id"], "hte-synthetic", date.fromisoformat(WINDOW["start"]),
+                                  date.fromisoformat(WINDOW["end"]), "exploration", "evaluation", x["data_hash"])
+        return access.register_evaluation(book, identity=x, windows=[w], caller=roles.RUNNER, fence=fence).attempt_id
+
+    codes = [_code(runner), _code(runner, engine="e" * 64), _code(runner, env="SomeOtherCore")]
+    lins = {}
+    for code in codes:
+        x = _ident(runner, code)
+        lins[x["executable"]] = _lin(runner, code)
+        _complete(book, x, register(x), "a" * 64)
+    a = _ident(runner, codes[0])
+    _complete(book, a, register(a), "a" * 64)                             # a rerun of the first executable
+    rep = A.reconcile(ledger_path=book.path, ledger_anchor={"records": len(book), "head": book.head})
+    assert rep["violations"] == [] and rep["unfinished"] == 0
+    assert rep["registered_executions"] == 4 and rep["completed"] == 4
+    assert rep["distinct_specifications"] == 3 and rep["completed_evaluation_keys"] == 3
+    assert rep["independent_statistical_tests"] is None
+    out = adapters.executable_accounting([r for r in book.records() if r["type"] in L.COMPLETIONS], lins)
+    assert (out["completions"], out["looks"], out["executables"]) == (4, 3, 3)
+    assert out["scientific"]["binding"] == 1 and out["scientific"]["family"] == 1
