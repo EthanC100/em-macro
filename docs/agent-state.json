@@ -407,6 +407,16 @@
    "commits": [],
    "note": "refused: (a) 2 tests failed, (e) site build needs yaml; PR #73 updated",
    "session": "https://claude.ai/code/session_01Ayx8qahZrK756xjSVWum7N"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-19T22:36:18+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (cab2edc, no auto_resolved); triage 3 findings: filed Q032 (data, Opposition no block p=50%, auto-approved), dropped 2 (Q024 premise now stale - energy marks current to 17 Nov, needs Ethan to re-scope; ES10Y/ES-DE lag duplicates Q030, still reproduces); triage could not reach Actions API (403) and did not audit code; night-worker fire exit 6 (no API trigger), hourly schedule picks it up",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
