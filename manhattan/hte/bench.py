@@ -119,8 +119,15 @@ def run_bench(target: int, workers: int, chunk: int, stages: tuple, root: Path, 
         "pass_A_candidates_per_s": n / a if a else None,
         "pass_A_label": "stage 1 only (cheap screen)" if stages == (1,) else "stages 1+2 (screen + screening stats)",
         "pass_B_candidates_per_s": n_b / b if b else None, "pass_B_computed": n_b,
-        "end_to_end_candidates_per_s": n / wall,
+        "run_candidates_per_s": n / wall,
+        "end_to_end_including_registration_s": wall + t_reg,
+        "end_to_end_including_registration_candidates_per_s": n / (wall + t_reg),
     }
+    planned = sel[-1]["counts"] if sel else {}
+    out["stage3_accounting"] = {"computed_simulations": int(planned.get("computed", 0)),
+                                "exact_aliases_not_simulated": int(planned.get("alias", 0)),
+                                "degenerate_not_simulated": int(planned.get("skipped_degenerate", 0)),
+                                "dominated_not_simulated": int(planned.get("skipped_dominated", 0))}
     out["memory"] = {"peak_rss_parent_mib": u2["maxrss_self_mib"], "peak_rss_largest_child_mib":
                      u2["maxrss_child_mib"]}
     out["cache"] = res.get("cache", dict(r.cache.stats))
@@ -134,8 +141,21 @@ def run_bench(target: int, workers: int, chunk: int, stages: tuple, root: Path, 
                                                             out["storage_bytes"]["feature_cache"]) / n
     rec = reconcile(ws, r.run_id)
     out["reconciliation"] = {k: rec[k] for k in ("registered", "attempts", "violations", "final_status")}
-    out["cpu_hours"] = {"per_1k": out["run"]["cpu_s"] / n * 1e3 / 3600, "per_100k": out["run"]["cpu_s"] / n * 1e5
+    recs = r.log.refresh().records()
+    out["log"] = {"records_total": len(recs),
+                  "records_this_run": sum(1 for x in recs if x["payload"].get("run_id") == r.run_id),
+                  "attempts_started": rec["attempts"]["started"],
+                  "attempt_records": sum(1 for x in recs if x["payload"].get("run_id") == r.run_id and x["type"] in
+                                         ("attempt_started", "attempt_completed", "attempt_failed",
+                                          "attempt_interrupted"))}
+    out["cpu_hours"] = {"note": "process CPU time (user+system, parent and workers); not billed time",
+                        "per_1k": out["run"]["cpu_s"] / n * 1e3 / 3600, "per_100k": out["run"]["cpu_s"] / n * 1e5
                         / 3600, "per_1m_linear_extrapolation": out["run"]["cpu_s"] / n * 1e6 / 3600}
+    vcpus = os.cpu_count() or 1
+    out["vcpu_hours_reserved"] = {
+        "note": "wall time (registration included) x the machine's vCPUs: what an instance of this size bills, "
+                "whatever the CPU utilisation",
+        "vcpus": vcpus, "this_run": (wall + t_reg) * vcpus / 3600}
     if not keep:
         shutil.rmtree(ws_root, ignore_errors=True)
     return out
