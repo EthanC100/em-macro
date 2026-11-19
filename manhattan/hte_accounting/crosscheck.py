@@ -26,6 +26,8 @@ hypotheses, families). ``independent_statistical_tests`` is ``None``: which unit
 """
 from __future__ import annotations
 
+import time
+
 import numpy as np
 
 from manhattan.hte import adapters, ids, store
@@ -37,6 +39,7 @@ from .bridge import _digests, _hexes, _pr86, batch_of, identities, run_records
 
 
 def crosscheck(runner: Runner, ledger) -> dict:
+    t0 = time.perf_counter()
     _, L, _ = _pr86()
     from manhattan import attempts as A
     v: list[dict] = []
@@ -161,13 +164,16 @@ def crosscheck(runner: Runner, ledger) -> dict:
                     v.append({"code": "terminal_mismatch", "candidate": i, "attempt": a[:16]})
     superseded = {s["payload"]["supersedes"] for s in starts.values()
                   if isinstance(s["payload"].get("supersedes"), str)}
-    open_ = [a for a in starts if a not in term and a not in superseded]
+    open_ = {a for a in starts if a not in term and a not in superseded}
     for seq in completed_regs:
         for a in reg_attempts.get(seq, []):
             if a in open_:
                 v.append({"code": "open_after_completion", "attempt": a[:16]})
     # 4. PR #86's own strict audit of the whole ledger
+    t_bridge = time.perf_counter() - t0
+    t1 = time.perf_counter()
     pr86 = A.reconcile(ledger_path=ledger.path, ledger_anchor={"records": len(lrecs), "head": ledger.head})
+    t_pr86 = time.perf_counter() - t1
     if pr86["violations"]:
         v.append({"code": "pr86_reconciler", "n": len(pr86["violations"]), "first": pr86["violations"][:3]})
     # 5. counts at every level
@@ -176,11 +182,12 @@ def crosscheck(runner: Runner, ledger) -> dict:
     acct = adapters.executable_accounting(comps, lin_of)
     by_type = {t: sum(1 for a in starts for r in term.get(a, []) if r["type"] == t)
                for t in L.COMPLETIONS + ("attempt_failed", "attempt_aborted")}
-    reg_lins = [x for x in lins if x["executable"] in {s["payload"]["executable"] for s in starts.values()}]
+    started_exe = {s["payload"]["executable"] for s in starts.values()}
+    reg_lins = [x for x in lins if x["executable"] in started_exe]
     units = {"registered_executions": len(starts),
              "completed_evaluation_keys": len({(r["payload"]["spec_hash"], r["payload"]["data_hash"],
                                                 r["payload"]["window"]["id"]) for r in comps}),
-             "executables": len({s["payload"]["executable"] for s in starts.values()}),
+             "executables": len(started_exe),
              **{unit: len({x[level] for x in reg_lins}) for unit, level in (
                  ("bindings", "binding"), ("candidates", "candidate"), ("variants", "variant"),
                  ("hypotheses", "hypothesis"), ("families", "family"))}}
@@ -192,4 +199,5 @@ def crosscheck(runner: Runner, ledger) -> dict:
                      "reconciler_violations": len(pr86["violations"]),
                      "access_reconciled": pr86["access_reconciled"]},
             "units": units, "accounting": acct, "independent_statistical_tests": None,
+            "timing_s": {"bridge_checks": round(t_bridge, 3), "pr86_reconciler": round(t_pr86, 3)},
             "evidence": "synthetic infrastructure validation only (PR #84: E_INFRA); never evidence"}

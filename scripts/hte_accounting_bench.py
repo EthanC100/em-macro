@@ -101,6 +101,7 @@ def main(argv=None) -> int:
                       "hte_results_bin": _bytes(r.dir / run["results_file"])},
             "consistent": rep["consistent"], "violations": rep["violations"][:5], "units": rep["units"],
             "pr86_reconciler_violations": rep["pr86"]["reconciler_violations"],
+            "crosscheck_parts_s": rep["timing_s"],
             "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)})
         acct = sum(out[k]["wall_s"] for k in ("bridge_begin", "bridge_complete", "crosscheck"))
         out["overhead"] = {"accounting_wall_s": round(acct, 3), "hte_run_wall_s": out["hte_run"]["wall_s"],

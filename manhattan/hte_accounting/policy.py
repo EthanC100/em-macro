@@ -22,8 +22,8 @@ B4 (PR #89): the cardinality of HTE work to PR #86 attempts.
 
     "per_candidate_attempts"     one PR #86 attempt per candidate evaluation (PR #86's contract: an attempt is one
                                  executable), with candidate outcomes stored in batches of at most 512 per file and
-                                 referenced from each completion. Implemented. About 2 ledger records and 2.9 kB per
-                                 candidate (measured, BENCHMARKS in docs/manhattan/hte_accounting/BRIDGE.md).
+                                 referenced from each completion. Implemented. 2 ledger records and about 3.56 kB of
+                                 ledger per candidate (measured, section 6 of docs/manhattan/hte_accounting/BRIDGE.md).
     "per_chunk_attempt"          one PR #86 attempt per HTE chunk of up to 512 candidates. Not implementable without a
                                  new PR #86 attempt kind (its identity is one executable): a change to PR #86's
                                  accounting, which this bridge does not make. Refused.
