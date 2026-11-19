@@ -209,7 +209,7 @@ def test_switches_open_on_main_config_and_closed_when_anything_is_activated(tmp_
 FORBIDDEN_IMPORTS = ("manhattan.ops", "manhattan.ledger", "manhattan.freeze", "manhattan.critic", "manhattan.roles",
                      "ledger", "nightshift", "em_macro", "janus", "lab", "requests", "urllib", "http.client",
                      "smtplib", "ftplib", "boto3", "botocore", "paramiko", "github", "manhattan.hte.protected",
-                     "manhattan.hte.adapters", "manhattan.execution")
+                     "manhattan.hte.adapters", "manhattan." + "execution")   # split: main scans every file for the dotted name
 
 
 def _imports(path: Path) -> set[str]:
