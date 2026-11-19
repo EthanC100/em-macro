@@ -2,9 +2,10 @@
 
     python tests/acceptance/mutation_check.py --tree <scratch worktree> --out mutations.json
 
-Plants one defect at a time in the platform code of ``--tree`` (a disposable git worktree, never your working
+Plants one defect at a time in the platform code (or, for MO*, in the test-only oracle drivers) of ``--tree`` (a disposable git worktree, never your working
 checkout), runs the acceptance suite there, and records which acceptance ids failed. Every mutation must be caught
-by at least one of its expected ids. Each file is restored after its mutation; if the process is killed, restore
+by at least one of its expected ids (FAIL, ERROR or, for an adapter switched on without a
+binding, UNBOUND). Each file is restored after its mutation; if the process is killed, restore
 with ``git -C <tree> checkout -- manhattan``. Refuses a tree whose ``manhattan/`` has uncommitted changes and any
 tree that is not a linked worktree.
 
@@ -60,6 +61,53 @@ MUTATIONS = [
      "def _recover(self) -> None:\n", "def _recover(self) -> None:\n        return\n", ["ADV-INT-01"]),
     ("M13", "HTE does not check package hashes", "manhattan/hte/runner.py",
      'if ids.sha256_bytes((rdir / "packages" / name).read_bytes()) != h:', "if False:", ["ADV-COR-01"]),
+    # -- phase 2: the HTE -> PR #86 and HTE -> PR #93 integration boundaries (PR #90, PR #93) -----------------------
+    ("MX01", "executable identity ignores the numerical environment", "manhattan/hte/adapters.py",
+     '            "numeric_environment_sha256": env_sha}', '            "numeric_environment_sha256": "1" * 64}',
+     ["ORC-ACC86-03", "ORC-DEX93-02"]),
+    ("MX02", "binding identity ignores cost assumptions", "manhattan/hte/adapters.py",
+     '"costs": {"linear": c, "impact": k, "impact_power": 1.5},', '"costs": {},', ["ORC-ACC86-03"]),
+    ("MX03", "executable accounting never flags divergent executables", "manhattan/hte/adapters.py",
+     'divergent = len(g["results"]) > 1', "divergent = False", ["ORC-ACC86-05"]),
+    ("MX04", "delayed alignment ignores the lag", "manhattan/execution_realism/screening.py",
+     "return P[warmup - 1 - lag: fence - 1 - lag], R[warmup:fence]", "return P[warmup - 1: fence - 1], R[warmup:fence]",
+     ["CON93-03", "ORC-DEX93-01"]),
+    ("MX05", "volatility scale does not move with the lag (reads the future)", "manhattan/execution_realism/screening.py",
+     "s[lag:] = s0[: n - lag]", "s[:] = s0", ["CON93-04"]),
+    ("MX06", "result identity omits the execution policy", "manhattan/execution_realism/adapter.py",
+     'doc = {"panel": self.panel_digest, "policy": self.policy,', 'doc = {"panel": self.panel_digest, "policy": None,',
+     ["CON93-02"]),
+    ("MX07", "lag 0 (same close) accepted silently", "manhattan/execution_realism/timing.py",
+     "if self.lag == 0 and not self.allow_same_close:", "if False:", ["CON93-01", "ORC-DEX93-03"]),
+    ("MX08", "cost model id ignores the cost terms", "manhattan/execution_realism/costs.py",
+     "b = json.dumps(self.as_dict(), sort_keys=True", "b = json.dumps(self.name, sort_keys=True", ["CON93-02"]),
+    # defects planted in the test-only oracle drivers: what a defective adapter would do (the tests must catch it)
+    ("MO1", "accounting adapter ignores the engine and environment it ran under", "tests/acceptance/s16_drivers.py",
+     "return adapters.to_pr86_identity(runner.view, i, run_id=runner.run_id, data_hash=runner.data_hash,\n"
+     "                                         code=code or code_of(runner),",
+     "return adapters.to_pr86_identity(runner.view, i, run_id=runner.run_id, data_hash=runner.data_hash,\n"
+     "                                         code=code_of(runner),", ["ORC-ACC86-03", "ORC-ACC86-04"]),
+    ("MO2", "accounting adapter ignores the evaluation policy", "tests/acceptance/s16_drivers.py",
+     "                                         policy=policy or runner.policy, fence=runner.panel.fence)\n\n    def lineage",
+     "                                         policy=runner.policy, fence=runner.panel.fence)\n\n    def lineage",
+     ["ORC-ACC86-03", "ORC-ACC86-04"]),
+    ("MO3", "delayed adapter leaves the lag out of the executable identity", "tests/acceptance/s16_drivers.py",
+     'spec["execution"] = {**ExecutionTiming(lag, allow_same_close=allow_same_close).as_dict(), "model": self.MODEL}',
+     'spec["execution"] = {"model": self.MODEL}', ["ORC-DEX93-02"]),
+    ("MO4", "delayed adapter executes at the same close whatever the lag", "tests/acceptance/s16_drivers.py",
+     "fence=runner.panel.fence, lag=lag, c=c, k=k,", "fence=runner.panel.fence, lag=0, c=c, k=k,", ["ORC-DEX93-01"]),
+    ("MO5", "delayed adapter reads the next day's return", "tests/acceptance/s16_drivers.py",
+     'R = (panel or runner.panel).returns(d["domain"])',
+     'R = __import__("numpy").roll((panel or runner.panel).returns(d["domain"]), -1, axis=0)',
+     ["ORC-DEX93-03", "ORC-DEX93-01"]),
+    # an adapter switched on without an acceptance binding must never pass: its tests turn UNBOUND
+    ("MU1", "PR #86 accounting adapter enabled but not bound", "manhattan/hte/adapters.py",
+     "class Pr86AccessAdapter:\n    enabled = False", "class Pr86AccessAdapter:\n    enabled = True",
+     ["ACC86-01", "GAP-01"]),
+    ("MU2", "an HTE <-> PR #93 binding appears but is not bound", "manhattan/hte/workload.py",
+     "from __future__ import annotations\n",
+     "from __future__ import annotations\nimport manhattan.execution_realism as _s16_probe  # noqa: F401\n",
+     ["DEX93-01"]),
 ]
 
 
@@ -98,7 +146,7 @@ def main(argv=None) -> int:
                 rep = json.loads(rep_path.read_text())
             finally:
                 p.write_text(src)
-            failing = sorted(i for i, v in rep["by_id"].items() if v in ("FAIL", "ERROR"))
+            failing = sorted(i for i, v in rep["by_id"].items() if v in ("FAIL", "ERROR", "UNBOUND"))
             caught = [i for i in expect if i in failing]
             outcome = "CAUGHT" if caught and r.returncode == 1 and rep["verdict"] == "NOT_READY" else "MISSED"
             ok &= outcome == "CAUGHT"

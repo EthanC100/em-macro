@@ -1,6 +1,7 @@
 # S16: system acceptance gate for the integrated synthetic research platform
 
-Status: **the acceptance gate is NOT_READY.** This suite is independent of the five approved Manhattan PRs: #84
+Status: **the acceptance gate is NOT_READY.** Phase 2 (the HTE integration adapters: candidate-level PR #86
+accounting and delayed PR #93 execution) is in `S16_PHASE2_ADAPTERS.md`. This suite is independent of the five approved Manhattan PRs: #84
 (evidence classification), #85 (futures execution), #86 (binding attempt accounting), #87 (technology equities) and
 #89 (HTE). It changes no code in them and adds no adapter. It enables nothing, and it reads no real, licensed,
 reserve or forward data.
