@@ -491,7 +491,42 @@ the dead invocation, which reproduces the finding.
 | `flock` exclusion and release on death | run | **R** on APFS; **D** for network volumes (refused anyway) |
 | HTE (forks with a monitor thread running; NumPy's BLAS on macOS) | run | **R** if the HTE test passes on the Mac job; it is the one place the fork-safety question is exercised |
 | RSS excludes compressed and swapped memory, so the cap reads low under memory pressure | n/a | **D** |
-| iMac-specific: its Python install (Homebrew or framework), sleep, launchd `PATH` | n/a | **D**: covered by the acceptance check (§13), not by CI |
+| loopback status server listens at once (no reverse-DNS lookup) | run, and with a 5-second `getfqdn` stub | **R** failed on `e25bbc5` (the defect above); fix pending its macOS run |
+| iMac-specific: its own Python install (the runner used the framework build), sleep, launchd `PATH` | n/a | **D**: covered by the acceptance check (§13), not by CI |
+
+**First run on a real Mac** (the `orchestra-macos` job on commit `e25bbc5`, GitHub-hosted macOS 15.8.2, arm64, with
+the framework Python 3.12 that `setup-python` installs):
+
+- **91 passed, 1 skipped** (the `/proc/<pid>/environ` test, which is Linux-only).
+- **1 failed**: the loopback status server (below).
+
+Recorded host facts:
+
+- the tools resolve to `/bin/ps`, `/sbin/mount`, `/usr/sbin/sysctl` and `/usr/sbin/ioreg`;
+- the machine ID is read from `ioreg`, and the boot ID from `kern.bootsessionuuid`;
+- the home folder, `$RUNNER_TEMP` and `/private/tmp` are all `apfs`;
+- `ru_maxrss` read 18,825,216, which is bytes (about 18 MB).
+
+So these passed **on macOS itself**:
+
+- the real-`ps` memory and full-command-line test;
+- the memory cap killing a group;
+- spawn-mode cleanup, with spawn as the platform default;
+- the deadline, cancellation, adoption, orphan, budget, bad-limits and own-group tests;
+- the HTE crash-and-resume test, which forks with the monitor thread running.
+
+**The real Mac found a defect that no Linux run showed.** `HTTPServer` performs a reverse-DNS lookup (`getfqdn`)
+between bind and listen. On the Mac it stalled long enough that the client's connection timed out. The test's server
+thread was not a daemon, so the stalled test also kept pytest from exiting until the job's 30-minute limit.
+
+The fix:
+
+- the status server no longer resolves its own name, so it listens as soon as it is bound;
+- the test uses a daemon thread, no fixed sleep and no proxy;
+- the workflow's test step has a 15-minute limit.
+
+Rows marked **R** in the table above that depended on that run now stand. The status-server row is pending the
+next macOS run.
 
 **A GitHub-hosted Mac is not the iMac.** It is a clean, Apple-silicon macOS 15 virtual machine with `setup-python`'s
 Python. What it verifies is how macOS itself behaves. It does not verify the iMac's Python install, its macOS version

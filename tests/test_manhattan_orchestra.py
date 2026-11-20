@@ -371,23 +371,23 @@ def test_status_snapshot_health_and_http(tmp_path):
     blob = json.dumps(snap)
     assert "GH_TOKEN" not in blob and "PATH" not in blob
 
-    import socket
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    th = threading.Thread(target=S.serve_http, args=(sup.root,), kwargs={"port": port, "max_requests": 2})
+    srv = S.make_server(sup.root, port=0)                  # bound and listening on return: no race, no sleep
+    port = srv.server_address[1]
+    th = threading.Thread(target=srv.serve_forever, daemon=True)     # a failure can never hang the test run
     th.start()
-    time.sleep(0.3)
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # never a system proxy (macOS)
     try:
-        got = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/status.json", timeout=5).read())
+        got = json.loads(direct.open(f"http://127.0.0.1:{port}/status.json", timeout=10).read())
         assert got["counts"]["queued"] == 1
+        assert direct.open(f"http://127.0.0.1:{port}/health", timeout=10).status == 200
         req = urllib.request.Request(f"http://127.0.0.1:{port}/status.json", data=b"x", method="POST")
         with pytest.raises(urllib.error.HTTPError) as e:
-            urllib.request.urlopen(req, timeout=5)
+            direct.open(req, timeout=10)
         assert e.value.code == 405
     finally:
-        th.join(timeout=5)
+        srv.shutdown()
+        srv.server_close()
+        th.join(timeout=10)
 
 
 def test_cost_table_against_the_budget():

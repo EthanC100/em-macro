@@ -28,6 +28,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import socket
+import socketserver
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -161,7 +162,19 @@ def render(snap: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def serve_http(root: Path, host: str = "127.0.0.1", port: int = 8765, *, max_requests: int | None = None) -> None:
+class _LoopbackServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def server_bind(self):
+        # HTTPServer.server_bind calls socket.getfqdn(), a reverse-DNS lookup that can stall for many seconds on
+        # macOS (seen on a GitHub-hosted Mac: connections timed out) between bind and listen. A loopback server
+        # needs no name: bind, and name it by its address.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[0], self.server_address[1]
+
+
+def make_server(root: Path, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
+    """The read-only status server, bound and listening when this returns (``port=0``: any free port)."""
     if not ipaddress.ip_address(host).is_loopback:
         raise PermissionError("the status server binds a loopback address only; use an SSH tunnel to reach it")
     root = Path(root)
@@ -194,7 +207,11 @@ def serve_http(root: Path, host: str = "127.0.0.1", port: int = 8765, *, max_req
         def log_message(self, *a):
             pass
 
-    srv = ThreadingHTTPServer((host, port), H)
+    return _LoopbackServer((host, port), H)
+
+
+def serve_http(root: Path, host: str = "127.0.0.1", port: int = 8765, *, max_requests: int | None = None) -> None:
+    srv = make_server(root, host, port)
     try:
         if max_requests is None:
             srv.serve_forever()
