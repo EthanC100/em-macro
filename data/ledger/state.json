@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-20",
- "at": "2026-11-20T18:08:08+00:00",
+ "at": "2026-11-20T22:25:46+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 100.406,
+  "algorithm v1.0": 100.3978,
   "algorithm v1.1": 100.0,
-  "janus": 100.1063,
+  "janus": 100.1389,
   "me": 98.8972
  },
  "janus": {
@@ -303,9 +303,9 @@
   "J032": {
    "direction": "short",
    "instrument": "AUD",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0338,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J033": {
    "direction": "long",
@@ -333,7 +333,7 @@
    "instrument": "AUD",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J037": {
    "direction": "short",
