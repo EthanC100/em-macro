@@ -241,7 +241,8 @@ Run on 2026-11-19 in the session container (Python 3.13.18, NumPy 2.5.3):
 
 | run | result |
 |---|---|
-| orchestra tests on this branch after merging `main` (PR #89 and PR #99 included) | **78 passed**, the HTE test included (§13) |
+| orchestra tests on Linux after the second re-review (§14) | **90 passed, 3 skipped**: the 3 skips are the real-macOS tests, which run only on a Mac |
+| orchestra tests on macOS (CI job `orchestra-macos`, GitHub-hosted Mac) | see §14 and the PR's checks |
 | full repository suite on this branch | see the PR description and its `tests / pytest` check |
 
 Failure injection covered:
@@ -446,3 +447,62 @@ The expected outcomes are `memory_exceeded`, then `done`. Running `ps -A -o pid,
 afterwards should show nothing left behind.
 
 To check the run-root guard, run `init` on a mounted SMB volume; it must be refused. Then delete `~/orch-test`.
+
+## 14. Second re-review (2026-11-20) and what is verified where
+
+A third reviewer re-read the code after the merge of PRs #91 and #96 (and the earlier #89 and #99). As before, it
+was given the code, not my verdicts, and it labelled every macOS claim by its evidence.
+
+- **Fixed as claimed:** items 1, 2, 4, 5 and 8.
+- **Still partial:** items 3, 6, 7 and 9.
+
+Each finding below was confirmed and fixed with a regression test. **16 new tests fail on the previous code and pass
+now.** The spawn-worker test was also run against the previous cleanup code alone: there the helper process survived
+the dead invocation, which reproduces the finding.
+
+| # | finding | fix |
+|---|---|---|
+| 3, 7 | the supervisor's kills matched processes by their command line only; **workers started by *spawn* (the default on macOS: the simulation's pool, resource trackers) never name the invocation** and survived a dead invocation's cleanup, still using CPU and memory while the next invocation started | each process is identified by pid *and* start time (`procs.Proc`). The invocation records every member of its group in `members.json` as it appears, and cleanup kills exactly the recorded members plus processes whose *last argument* is this invocation's directory (an exact match, no longer a substring). A new invocation of a job waits, killing again, while any member of its previous invocation is alive |
+| 3 | if `ps` failed, memory read as 0 MB and the cap silently stopped working | an unreadable process table raises `ProcsUnavailable`; after 30 s the invocation stops with `memory_unmeasurable` (an error outcome) |
+| 3 | the cancel and deadline KILLs were sent once; a failed `ps` at that moment left the job `cancelling` | a KILL is repeated at every tick while the invocation's lock is held |
+| 6 | six switches did not stop starts: `exploration.data_end`, `reserve.store`, `reserve.windows`, `reserve.mode`, `programme.end`, `claims.screening_method` | every key of `config/manhattan.yaml` except `levels` must hold its conservative value (`safety.ALL_OFF`) |
+| 7 | **new:** a child started by hand from a shell would `killpg` its caller's process group | the child leads its own process group before anything else |
+| 9 | `Supervisor.__init__` and `status.snapshot` loaded `limits.json` unguarded, so with a bad file every CLI command, `tick` and `health` included, refused. Under cron that stopped supervision and cancels altogether | a bad file is reported (journal, `status.json`, `health` exit 1) and blocks starts and new registrations only; ticks, cancels and status keep working |
+| 4 | an integer too large for a float raised `OverflowError` | refused as a limit |
+
+**Evidence levels.** Nothing has been run on Ethan's iMac. The column "macOS evidence" uses these levels:
+
+- **R:** run on a real Mac, the GitHub-hosted `macos-15` runner of the `orchestra-macos` job. This takes effect once
+  that job is green on this PR.
+- **F:** fabricated macOS output fed to the parser on Linux.
+- **D:** reasoned from documentation only.
+
+| behaviour | Linux | macOS evidence |
+|---|---|---|
+| process table, group RSS and start time via `ps -o pid,pgid,rss,lstart,command` | run (also with `/proc` hidden) | **R**: `test_real_macos_ps_reports_full_command_lines_and_resident_memory` (200 MiB touched reads at least 180) |
+| `ps` command column not truncated when piped (needed to match an invocation) | run | **R**: same test, with a 200-character path |
+| spawn-mode workers recorded and killed after a dead invocation | run (spawn forced) | **R**: `test_spawn_workers_of_a_dead_invocation…` runs on the Mac job, where spawn is the default |
+| memory cap kills the group (`memory_exceeded`) | run | **R**: `test_memory_cap_kills_the_process_group` |
+| deadline, cancel, adoption, orphan directory, budget window, bad limits, leader-of-own-group | run | **R**: the end-to-end tests run on the Mac job (only the `/proc/<pid>/environ` secrets test is Linux-only) |
+| `ru_maxrss` in bytes | n/a (KiB) | **R**: `test_real_macos_peak_rss_units` |
+| tools by absolute path; `kern.bootsessionuuid`; `IOPlatformUUID` | n/a | **R**: `test_real_macos_tools_identity_and_file_system`; **F** for the fallbacks |
+| `mount` type of the home folder and of temporary folders is `apfs` (firmlinks) | n/a | **R**: same test |
+| SMB, AFP, WebDAV, NFS, autofs and macFUSE roots refused | n/a | **F** only: no network volume can be mounted on the runner |
+| `flock` exclusion and release on death | run | **R** on APFS; **D** for network volumes (refused anyway) |
+| HTE (forks with a monitor thread running; NumPy's BLAS on macOS) | run | **R** if the HTE test passes on the Mac job; it is the one place the fork-safety question is exercised |
+| RSS excludes compressed and swapped memory, so the cap reads low under memory pressure | n/a | **D** |
+| iMac-specific: its Python install (Homebrew or framework), sleep, launchd `PATH` | n/a | **D**: covered by the acceptance check (§13), not by CI |
+
+**A GitHub-hosted Mac is not the iMac.** It is a clean, Apple-silicon macOS 15 virtual machine with `setup-python`'s
+Python. What it verifies is how macOS itself behaves. It does not verify the iMac's Python install, its macOS version
+or its network volumes. The iMac acceptance check in §13 is still needed once before unattended use.
+
+**The `orchestra-macos` workflow** (`.github/workflows/orchestra-macos.yml`):
+
+- It runs only on pull requests to `main` that touch the orchestra; there is no schedule and no dispatch.
+- Its token is read-only, it uses no secret, and the private store points at a path that does not exist.
+- It writes nothing.
+- A GitHub-hosted Mac is free for a public repository.
+
+It is a new workflow file in this PR, and Ethan can drop it before merging if he prefers. It is not one of the writer
+workflows of hard rules 3 and 16.

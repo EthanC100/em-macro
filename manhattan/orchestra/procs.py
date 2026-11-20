@@ -5,7 +5,8 @@
                             None when it cannot be read: liveness never depends on it, and None never mismatches
     boot_id()               changes at every boot, and only then (macOS: kern.bootsessionuuid; the boot time's
                             seconds as a fallback, never its local-time text); None when unknown
-    group(pgid)             [(pid, rss_bytes, cmdline)] of the processes in a process group
+    group(pgid)             [Proc(pid, rss_bytes, cmdline, start)] of a process group; raises ProcsUnavailable
+                            when the process table cannot be read (never an empty "all clear")
     fs_type(path)           the file-system type of the mount holding ``path`` (None if unknown)
 
 The macOS tools live in /usr/sbin and /sbin, which cron's and launchd's default PATH (/usr/bin:/bin) leaves out, so
@@ -17,6 +18,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 PROC = Path("/proc")
 TOOLS = {"ioreg": ("/usr/sbin/ioreg",), "sysctl": ("/usr/sbin/sysctl", "/sbin/sysctl"),
@@ -72,15 +74,27 @@ def boot_id() -> str | None:
     return ("boottime:" + m.group(1)) if m else None
 
 
-def group(pgid: int, *, use_proc: bool | None = None) -> list[tuple[int, int, str]]:
+class Proc(NamedTuple):
+    pid: int
+    rss: int            # bytes
+    cmd: str
+    start: str          # process start time: with the pid, it names one process across pid reuse
+
+
+class ProcsUnavailable(RuntimeError):
+    """The process table could not be read (neither /proc nor ps): callers must fail closed, not read "empty"."""
+
+
+def group(pgid: int, *, use_proc: bool | None = None) -> list[Proc]:
+    """Every process whose process group is ``pgid``. Raises ``ProcsUnavailable`` if the table cannot be read."""
     use_proc = PROC.is_dir() and (PROC / "self" / "stat").exists() if use_proc is None else use_proc
     out = []
     if use_proc:
         page = os.sysconf("SC_PAGE_SIZE")
         try:
             entries = os.listdir(PROC)
-        except OSError:
-            return out
+        except OSError as e:
+            raise ProcsUnavailable(f"/proc: {type(e).__name__}") from None
         for e in entries:
             if not e.isdigit():
                 continue
@@ -90,23 +104,25 @@ def group(pgid: int, *, use_proc: bool | None = None) -> list[tuple[int, int, st
                 if int(rest[2]) != pgid:                       # field 5: pgrp
                     continue
                 cmd = (PROC / e / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
-                out.append((int(e), int(rest[21]) * page, cmd))  # field 24: rss in pages
+                # field 24: rss in pages; field 22: start time in clock ticks since boot
+                out.append(Proc(int(e), int(rest[21]) * page, cmd.rstrip(), "jiffies:" + rest[19]))
             except (OSError, IndexError, ValueError):
                 continue
         return out
-    txt = _cmd("ps", "-A", "-o", "pid=,pgid=,rss=,command=")
+    # macOS: rss in KiB; lstart is five tokens under LC_ALL=C ("Thu Nov 20 01:02:03 2026")
+    txt = _cmd("ps", "-A", "-o", "pid=,pgid=,rss=,lstart=,command=")
     if txt is None:
-        return out
+        raise ProcsUnavailable("ps failed")
     for line in txt.splitlines():
-        parts = line.split(None, 3)
-        if len(parts) < 4:
+        parts = line.split(None, 8)
+        if len(parts) < 9:
             continue
         try:
             pid, pg, rss_kb = int(parts[0]), int(parts[1]), int(parts[2])
         except ValueError:
             continue
         if pg == pgid:
-            out.append((pid, rss_kb * 1024, parts[3]))
+            out.append(Proc(pid, rss_kb * 1024, parts[8].rstrip(), "lstart:" + " ".join(parts[3:8])))
     return out
 
 

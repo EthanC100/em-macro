@@ -37,6 +37,13 @@ class LimitsError(ValueError):
     pass
 
 
+def _finite(v) -> bool:
+    try:
+        return math.isfinite(v) and abs(v) < 1e15        # an integer too large for a float is not a limit either
+    except OverflowError:
+        return False
+
+
 @dataclass(frozen=True)
 class Limits:
     max_running_jobs: int = 2
@@ -83,7 +90,7 @@ class Limits:
                     errors.append(f"{k} cannot be relaxed")
                 else:
                     new[k] = v
-            elif not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0:
+            elif not isinstance(v, (int, float)) or isinstance(v, bool) or not _finite(v) or v < 0:
                 errors.append(f"{k} must be a finite, non-negative number")
             elif isinstance(cur, int) and v != int(v):
                 errors.append(f"{k} must be a whole number (got {v})")

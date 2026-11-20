@@ -50,7 +50,7 @@ from .state import ACTIVE, TERMINAL, fold, month_of
 
 CHILD_MARK = "manhattan.orchestra.child"
 RETRYABLE = ("unfinished", "timeout", "interrupted")
-ERROR_LIKE = ("error", "memory_exceeded", "log_limit_exceeded", "lost", "lost_before_start", "spawn_failed",
+ERROR_LIKE = ("error", "memory_exceeded", "memory_unmeasurable", "log_limit_exceeded", "lost", "lost_before_start", "spawn_failed",
               "no_progress")
 
 
@@ -88,11 +88,25 @@ def decide(job: dict, outcome: str, limits: L.Limits, now: float, *, reason: str
 
 
 def _members(pgid: int, inv_dir: Path) -> list[int]:
-    """Processes of a process group whose command line names *this* invocation's directory: the invocation process
-    and its forks. A reused process-group id, or another invocation, never matches, so nothing unrelated is
-    killed."""
-    mark = str(inv_dir)
-    return [pid for pid, _, cmd in procs.group(pgid) if CHILD_MARK in cmd and mark in cmd]
+    """The processes of this invocation that are still in its process group:
+
+    * the invocation process and its forks, whose command line ends with this invocation's directory as its last
+      argument (``python -m manhattan.orchestra.child <inv_dir>``), matched exactly, not as a substring;
+    * any other member the invocation recorded in ``members.json`` (pid *and* start time): workers started by spawn
+      (the default on macOS), resource trackers and other helpers, whose command lines do not name the invocation.
+
+    A reused process-group id or pid, or another invocation, never matches, so nothing unrelated is killed. If the
+    process table cannot be read, nothing matches this time; kills are retried at every tick."""
+    try:
+        group = procs.group(pgid)
+    except procs.ProcsUnavailable:
+        return []
+    tail = " " + str(inv_dir)
+    try:
+        recorded = {(int(a), str(b)) for a, b in read_json(inv_dir / "members.json")}
+    except (OSError, ValueError, TypeError):
+        recorded = set()
+    return [p.pid for p in group if (CHILD_MARK in p.cmd and p.cmd.endswith(tail)) or (p.pid, p.start) in recorded]
 
 
 def _kill(pids: list[int], sig: int) -> int:
@@ -115,7 +129,11 @@ class Supervisor:
         self.root.mkdir(parents=True, exist_ok=True)
         self.journal = Journal(self.root / "journal.jsonl")
         self._base_limits = limits if limits is not None else L.DEFAULT
-        self.limits = L.load(self.root, self._base_limits)        # re-read at every tick (tighten-only)
+        try:                                                   # re-read at every tick (tighten-only)
+            self.limits, self.limits_error = L.load(self.root, self._base_limits), None
+        except Exception as e:                                 # supervision still works; starts and new
+            self.limits = self._base_limits                    # registrations wait until the file is fixed
+            self.limits_error = str(e) if isinstance(e, L.LimitsError) else f"limits.json: {type(e).__name__}"
         self.python = python
         self.clock = clock
         self.check_switches = check_switches
@@ -139,6 +157,8 @@ class Supervisor:
     # -- commands ---------------------------------------------------------------------------------------------
     def register(self, kind: str, params: dict, *, priority: int = 0, look: int = 0,
                  max_invocations: int | None = None) -> dict:
+        if self.limits_error:
+            raise L.LimitsError(f"registration waits until limits.json is fixed: {self.limits_error}")
         k = K.get(kind)
         p = k.normalise(params)
         workers = k.workers(p)
@@ -249,10 +269,11 @@ class Supervisor:
                 st = self.state()
                 limits_ok = True
                 try:
-                    self.limits = L.load(self.root, self._base_limits)
+                    self.limits, self.limits_error = L.load(self.root, self._base_limits), None
                 except Exception as e:                         # keep supervising under the last good limits,
                     limits_ok = False                          # start nothing until the file is fixed
                     msg = str(e) if isinstance(e, L.LimitsError) else f"limits.json: {type(e).__name__}"
+                    self.limits_error = msg
                     if st["limits_error"] != msg:
                         self.journal.append("limits_invalid", {"error": msg})
                 if limits_ok and (st["limits_hash"] != self.limits.hash() or st["limits_error"]):
@@ -345,6 +366,8 @@ class Supervisor:
                                                              "epoch": now, "reason": "deadline"})
                     atomic_write_json(inv_dir / "deadline_killed", {"epoch": now, "by": "supervisor"})
                     _kill(_members(pgid, inv_dir), signal.SIGKILL)
+            if pgid and inv["signalled"] and inv["signalled"]["signal"] == "KILL":
+                _kill(_members(pgid, inv_dir), signal.SIGKILL)  # a KILL is repeated at every tick, never one-shot
             return
         # the lock is free and there is no exit.json: the process died, or has not taken the lock yet
         if pid_info is None and now - inv["intent_epoch"] <= self.limits.launch_grace_s:
@@ -363,6 +386,7 @@ class Supervisor:
         if pid_info:
             for marker, outcome in (("memory_exceeded", "memory_exceeded"), ("log_limit_exceeded",
                                                                               "log_limit_exceeded"),
+                                    ("memory_unmeasurable", "memory_unmeasurable"),
                                     ("deadline_killed", "timeout"), ("deadline", "timeout")):
                 if (inv_dir / marker).exists():
                     break
@@ -447,7 +471,11 @@ class Supervisor:
             w = max(1, j["workers"])
             worst = w * lim.max_wall_minutes_per_invocation / 60.0
             why = None
-            if is_held_elsewhere(self.job_dir(j["job_id"]) / ".run.lock"):
+            left = self._leftovers(j)
+            if left:
+                _kill(left, signal.SIGKILL)                    # again, and wait: never two generations at once
+                why = f"{len(left)} process(es) of the previous invocation still alive"
+            elif is_held_elsewhere(self.job_dir(j["job_id"]) / ".run.lock"):
                 why = "the job lock is held by another process"
             elif free_mb < lim.min_free_disk_mb:
                 why = f"free disk {free_mb:.0f} MB below the {lim.min_free_disk_mb} MB floor"
@@ -471,6 +499,18 @@ class Supervisor:
             slots -= 1
             used_workers += w
             committed += worst
+
+    def _leftovers(self, job: dict) -> list[int]:
+        """Processes of the job's last invocation still alive in its process group (same boot only)."""
+        if not job["invocations"]:
+            return []
+        last = job["invocations"][-1]
+        pgid = (last["started"] or {}).get("pgid")
+        then = (last["started"] or {}).get("boot_id")
+        cur = procs.boot_id()
+        if not pgid or (then and cur and then != cur):
+            return []
+        return _members(pgid, self.root / last["inv_dir"])
 
     def _start(self, job: dict, now: float) -> None:
         jid = job["job_id"]

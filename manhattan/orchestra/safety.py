@@ -8,8 +8,8 @@
   data or a protected path, rules 2 and 3), and on a local file system (``flock`` is unreliable on network ones).
 * **Manhattan switches** (``manhattan_switches``): ``config/manhattan.yaml`` is read, never written, and must validate.
   No new invocation starts while it does not, and none starts while any switch is out of its conservative
-  position (``ALL_OFF``: a reserve, adaptive reserve evaluation, a forward tier or loss cap, real money, claims,
-  delegated freezes, trials.csv counting): orchestration is for synthetic research only, and an activation is
+  position (``ALL_OFF``: every key of the file except ``levels``: freezes, the reserve and its mode, store and windows,
+  exploration's data end, the forward tier, real money, the programme end, claims and their method, trials.csv): orchestration is for synthetic research only, and an activation is
   Ethan's to run by hand, never a queued job's.
 * **Kinds**: only the allowlisted kinds in ``kinds.KINDS`` run; each validates its parameters strictly.
 """
@@ -93,8 +93,10 @@ def manhattan_switches(repo: Path = REPO) -> list[str]:
     reasons = [f"config/manhattan.yaml invalid: {x}" for x in errors]
     for keys, want in ALL_OFF:
         got = _get(cfg, keys)
-        if isinstance(want, bool) or isinstance(want, str):
-            same = got is want if isinstance(want, bool) else got == want
+        if want is None or isinstance(want, bool):
+            same = got is want
+        elif isinstance(want, (str, dict)):
+            same = type(got) is type(want) and got == want
         else:                                      # a number: 0 and 0.0 are the same position; True is not 0
             same = isinstance(got, (int, float)) and not isinstance(got, bool) and got == want
         if not same:
@@ -105,10 +107,15 @@ def manhattan_switches(repo: Path = REPO) -> list[str]:
 # The state this layer was reviewed for: every Manhattan switch in its conservative position. Anything else (a
 # reserve, adaptive reserve evaluation, a forward tier, real money, claims, delegated freezes, trials.csv counting)
 # stops new starts until the orchestrator is reviewed again for that state.
-ALL_OFF = ((("freeze", "authority"), "ethan_only"), (("reserve", "enabled"), False),
-           (("reserve", "evaluate_adaptive"), False), (("forward", "real_money"), False),
-           (("forward", "loss_cap_usd"), 0), (("claims", "enabled"), False),
+ALL_OFF = ((("freeze", "authority"), "ethan_only"),
+           (("reserve", "enabled"), False), (("reserve", "mode"), "shared_window"),
+           (("reserve", "evaluate_adaptive"), False), (("reserve", "store"), "imac_only"), (("reserve", "windows"), {}),
+           (("exploration", "data_end"), "2019-12-31"),
+           (("forward", "real_money"), False), (("forward", "loss_cap_usd"), 0),
+           (("programme", "end"), None),
+           (("claims", "enabled"), False), (("claims", "screening_method"), None),
            (("trial_ledger", "count_in_trials_csv"), False))
+# Not listed: ``levels`` (a lower FDR is stricter, and it decides nothing about what runs here). False))
 
 
 def _get(d, ks):

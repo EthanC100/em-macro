@@ -97,7 +97,7 @@ class Kind:
 
 # -- smoke ----------------------------------------------------------------------------------------------------
 
-FAULT_KEYS = {"crash_at_unit", "raise_at_unit", "hang_at_unit", "alloc_mb", "exit_code"}
+FAULT_KEYS = {"crash_at_unit", "raise_at_unit", "hang_at_unit", "alloc_mb", "exit_code", "spawn_helper"}
 
 
 class Smoke(Kind):

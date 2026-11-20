@@ -39,8 +39,12 @@ from . import procs
 from .journal import FileLock, atomic_write_json, read_json
 
 def group_rss_mb(pgid: int) -> float:
-    """Aggregate resident memory of every process in a process group (/proc on Linux, ``ps`` on macOS)."""
-    return sum(rss for _, rss, _ in procs.group(pgid)) / 2**20
+    """Aggregate resident memory of every process in a process group (/proc on Linux, ``ps`` on macOS). Raises
+    ``procs.ProcsUnavailable`` when it cannot be measured."""
+    return sum(p.rss for p in procs.group(pgid)) / 2**20
+
+
+UNMEASURABLE_AFTER_S = 30        # memory unreadable this long: the cap cannot be enforced, so the invocation stops
 
 
 def maxrss_mb(v: int, platform: str = sys.platform) -> float:
@@ -75,6 +79,14 @@ def main(argv=None) -> int:
     lock = FileLock(job_dir / ".run.lock")
     if not lock.acquire(timeout=10.0):
         return finish("duplicate_refused", K.EXIT_REFUSED, reason="another invocation of this job holds its lock")
+    if os.getpgid(0) != os.getpid():
+        # every kill below is aimed at this process group: lead a group of our own first, so that a child started by
+        # hand from a shell can never kill its caller's group
+        try:
+            os.setpgid(0, 0)
+        except OSError:
+            lock.release()
+            return finish("refused", K.EXIT_REFUSED, reason="could not lead its own process group")
     pgid = os.getpgid(0)
     atomic_write_json(inv_dir / "pid.json", {"pid": os.getpid(), "pgid": pgid, "host": socket.gethostname(),
                                              "machine_id": procs.machine_id(), "boot_id": procs.boot_id(),
@@ -102,12 +114,30 @@ def main(argv=None) -> int:
         atomic_write_json(inv_dir / marker, dict(info, epoch=time.time()))
         os.killpg(pgid, signal.SIGKILL)
 
+    members_seen: set = set()
+
     def monitor():
         last_progress = 0.0
         termed_at = None
+        unmeasured_since = None
+        rss = 0.0
         while not stop.wait(1.0):
             now = time.time()
-            rss = group_rss_mb(pgid)
+            try:
+                group = procs.group(pgid)
+                unmeasured_since = None
+                rss = sum(p.rss for p in group) / 2**20
+                # record every member (pid + start time) as it appears: a worker started by spawn (the default on
+                # macOS) does not carry this invocation's directory in its command line, so the supervisor can only
+                # recognise it from this file when it has to clean up after a dead invocation
+                new = {(p.pid, p.start) for p in group} - members_seen
+                if new:
+                    members_seen.update(new)
+                    atomic_write_json(inv_dir / "members.json", sorted([pid, st] for pid, st in members_seen))
+            except procs.ProcsUnavailable:
+                unmeasured_since = unmeasured_since or now
+                if now - unmeasured_since > UNMEASURABLE_AFTER_S:
+                    kill_group("memory_unmeasurable", seconds=now - unmeasured_since)
             if rss > mem_cap:
                 kill_group("memory_exceeded", rss_mb=rss, cap_mb=mem_cap)
             try:

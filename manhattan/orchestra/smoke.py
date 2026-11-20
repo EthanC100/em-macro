@@ -19,6 +19,8 @@ clean one). Each fault fires only on the invocations listed in ``fault_invocatio
     raise_at_unit   an exception inside the attempt covering that unit (the attempt is logged ``attempt_failed``)
     hang_at_unit    sleep forever inside that attempt (for timeouts and cancellation)
     alloc_mb        allocate and touch this many MiB at the start (for the memory cap)
+    spawn_helper    start a helper process the *spawn* way (macOS's default), which sleeps; its command line does not
+                    name the invocation, as for the simulation's pool workers on a Mac (for leftover cleanup)
     exit_code       exit with this code after the work (for unexpected exit codes)
 """
 from __future__ import annotations
@@ -69,6 +71,11 @@ def run(params: dict, work: Path, ctx: dict) -> int:
     work = Path(work)
     units, chunk, seed, w = params["units"], params["chunk"], params["seed"], params["work"]
     faults = Faults(params, ctx.get("invocation", 1))
+    if faults.f.get("spawn_helper"):
+        import multiprocessing as mp
+        helper = mp.get_context("spawn").Process(target=time.sleep, args=(600,), daemon=True)
+        helper.start()
+        atomic_write(work / f"helper-{ctx.get('invocation', 1)}.pid", str(helper.pid).encode())
     if faults.f.get("alloc_mb"):
         block = bytearray(int(faults.f["alloc_mb"]) * 1024 * 1024)
         for i in range(0, len(block), 4096):

@@ -8,6 +8,7 @@ import ast
 import json
 import os
 import shutil
+import sys
 import threading
 import time
 import urllib.request
@@ -101,7 +102,8 @@ def test_limits_override_can_only_tighten(tmp_path):
                 {"max_memory_mb_per_job": 0}, {"max_wall_minutes_per_invocation": 0}, {"max_running_jobs": 0},
                 {"max_memory_mb_per_job": 0.5}, {"max_log_mb_per_invocation": 0.9},
                 {"monthly_vcpu_hours": float("nan")}, {"min_free_disk_mb": float("inf")},
-                {"monthly_vcpu_hours": float("inf")}, {"max_running_jobs": "1"}):
+                {"monthly_vcpu_hours": float("inf")}, {"max_running_jobs": "1"}, {"min_free_disk_mb": 10**400},
+                {"monthly_vcpu_hours": 10**400}):
         with pytest.raises(L.LimitsError):
             d.tighten(bad)
     (tmp_path / "limits.json").write_text(json.dumps({"max_total_workers": 2}))
@@ -412,8 +414,9 @@ def test_members_match_only_this_invocation_on_proc_and_on_ps(tmp_path):
         assert _members(p.pid, tmp_path / "inv-0001") == [p.pid]
         assert _members(p.pid, tmp_path / "inv-0002") == []                 # another invocation: never killed
         via_ps = procs.group(p.pid, use_proc=False)                         # the macOS path, run on Linux
-        assert [x[0] for x in via_ps] == [p.pid] and via_ps[0][1] > 0
-        assert via_ps[0][1] == pytest.approx(procs.group(p.pid, use_proc=True)[0][1], rel=0.5)
+        assert [x.pid for x in via_ps] == [p.pid] and via_ps[0].rss > 0 and via_ps[0].start.startswith("lstart:")
+        if Path("/proc/self/stat").exists():
+            assert via_ps[0].rss == pytest.approx(procs.group(p.pid, use_proc=True)[0].rss, rel=0.5)
     finally:
         p.kill()
         p.wait()
@@ -421,7 +424,7 @@ def test_members_match_only_this_invocation_on_proc_and_on_ps(tmp_path):
 
 def test_host_facts():
     from manhattan.orchestra import procs
-    assert procs.machine_id() and procs.boot_id() != "unknown"
+    assert procs.machine_id() and procs.boot_id()
     assert procs.fs_type(REPO) is not None
 
 
@@ -467,10 +470,14 @@ MAC_IOREG = """+-o J456AP  <class IOPlatformExpertDevice, id 0x100000243, regist
     }
 """
 INV = "/Users/ethan/orchestra/jobs/OJ-1/inv-0003"
-MAC_PS = (f"  501   501  204800 /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
-          f"  502   501  102400 /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
-          f"  503   501    1024 /bin/sleep 100\n"
-          f"  601   601  999999 /usr/local/bin/python3 -m manhattan.orchestra.child {INV[:-1]}4\n")
+T = "Fri Nov 20 01:02:03 2026"
+MAC_PS = (f"  501   501  204800 {T} /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
+          f"  502   501  102400 {T} /usr/local/bin/python3 -m manhattan.orchestra.child {INV}\n"
+          f"  503   501    1024 {T} /bin/sleep 100\n"
+          f"  504   501   51200 {T} /usr/local/bin/python3 -c from multiprocessing.spawn import spawn_main; "
+          f"spawn_main(tracker_fd=5, pipe_handle=7) --multiprocessing-fork\n"
+          f"  505   501    2048 {T} /usr/local/bin/python3 -m manhattan.orchestra.child /x{INV}\n"
+          f"  601   601  999999 {T} /usr/local/bin/python3 -m manhattan.orchestra.child {INV[:-1]}4\n")
 
 
 @pytest.fixture
@@ -486,7 +493,7 @@ def macos(monkeypatch, tmp_path):
         return real_read(self, *a, **kw)
     monkeypatch.setattr(Path, "read_text", read_text)
     answers = {("mount",): MAC_MOUNT, ("ioreg", "-rd1", "-c", "IOPlatformExpertDevice"): MAC_IOREG,
-               ("ps", "-A", "-o", "pid=,pgid=,rss=,command="): MAC_PS,
+               ("ps", "-A", "-o", "pid=,pgid=,rss=,lstart=,command="): MAC_PS,
                ("sysctl", "-n", "kern.bootsessionuuid"): "6F1B2C3D-0000-4E5F-8A9B-112233445566\n"}
     calls = []
 
@@ -516,10 +523,38 @@ def test_macos_group_memory_and_members_from_ps(macos):
     from manhattan.orchestra.child import group_rss_mb
     from manhattan.orchestra.supervisor import _members
     g = procs.group(501)
-    assert [(p, r) for p, r, _ in g] == [(501, 204800 * 1024), (502, 102400 * 1024), (503, 1024 * 1024)]
-    assert group_rss_mb(501) == pytest.approx((204800 + 102400 + 1024) / 1024)      # KiB from ps -> MiB
-    assert _members(501, Path(INV)) == [501, 502]                  # not the unrelated sleep in the same group
+    assert [(p.pid, p.rss) for p in g] == [(501, 204800 * 1024), (502, 102400 * 1024), (503, 1024 * 1024),
+                                           (504, 51200 * 1024), (505, 2048 * 1024)]
+    assert all(p.start == "lstart:" + T for p in g)
+    assert group_rss_mb(501) == pytest.approx((204800 + 102400 + 1024 + 51200 + 2048) / 1024)   # KiB -> MiB
+    assert _members(501, Path(INV)) == [501, 502]       # not the sleep, not the root /x... (exact last argument)
     assert _members(601, Path(INV)) == []                          # another invocation, another group
+
+
+def test_macos_spawn_workers_are_matched_only_by_their_recorded_start(macos, tmp_path):
+    """Spawn-mode workers (macOS's default) do not name the invocation: they match only through members.json, by
+    pid *and* start time, so a reused pid does not."""
+    from manhattan.orchestra.journal import atomic_write_json
+    from manhattan.orchestra.supervisor import _members
+    inv = tmp_path / "inv-0001"
+    old = INV
+    macos["answers"][("ps", "-A", "-o", "pid=,pgid=,rss=,lstart=,command=")] = MAC_PS.replace(old, str(inv))
+    atomic_write_json(inv / "members.json", [[504, "lstart:" + T]])
+    assert _members(501, inv) == [501, 502, 504]
+    atomic_write_json(inv / "members.json", [[504, "lstart:Thu Nov 19 09:00:00 2026"]])     # same pid, reused
+    assert _members(501, inv) == [501, 502]
+
+
+def test_an_unreadable_process_table_is_never_an_empty_group(macos):
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.child import group_rss_mb
+    from manhattan.orchestra.supervisor import _members
+    del macos["answers"][("ps", "-A", "-o", "pid=,pgid=,rss=,lstart=,command=")]
+    with pytest.raises(procs.ProcsUnavailable):
+        procs.group(501)
+    with pytest.raises(procs.ProcsUnavailable):
+        group_rss_mb(501)                                   # the monitor counts this, then stops the invocation
+    assert _members(501, Path(INV)) == []                   # nothing verified, nothing killed; retried next tick
 
 
 def test_macos_network_volumes_are_refused_and_local_ones_accepted(macos, monkeypatch, tmp_path):
@@ -574,8 +609,22 @@ def test_numeric_switch_positions_compare_by_value(tmp_path):
         assert bool(safety.manhattan_switches(tmp_path)) is closed, v
 
 
+@pytest.mark.parametrize("old,new", [
+    ('data_end: "2019-12-31"', 'data_end: "2026-11-20"'), ("store: imac_only", "store: private_repo"),
+    ("windows: {}", "windows: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}"),
+    ("mode: shared_window", "mode: disjoint_slices"), ("end: null ", "end: 2027-12-31 "),
+    ("screening_method: null", "screening_method: ebh_elond")])
+def test_every_conservative_switch_position_stops_starts(tmp_path, old, new):
+    cfg = (REPO / "config" / "manhattan.yaml").read_text()
+    assert old in cfg
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "manhattan.yaml").write_text(cfg.replace(old, new, 1))
+    assert safety.manhattan_switches(tmp_path)
+
+
 def test_a_non_finite_limits_file_is_refused_on_load(tmp_path):
     for text in ('{"monthly_vcpu_hours": NaN}', '{"min_free_disk_mb": Infinity}', '{"max_running_jobs": 1e999}',
+                 '{"min_free_disk_mb": 1' + "0" * 400 + '}',
                  '[1]', '{"max_running_jobs": 1', '\xff'):
         (tmp_path / "limits.json").write_bytes(text.encode("latin-1"))
         with pytest.raises(L.LimitsError):
@@ -674,3 +723,54 @@ def test_an_unknown_machine_id_never_marks_an_invocation_foreign(tmp_path, monke
     with sup.journal.locked():
         sup._supervise(sup.state()["jobs"][jid], j["open_invocation"], {"ended": [], "signalled": []})
     assert sup.state()["jobs"][jid]["invocations"][0]["ended"]["outcome"] == "lost"       # not foreign_host
+
+
+# -- real macOS (runs only on a Mac: CI job orchestra-macos on a GitHub-hosted runner) ----------------------------
+
+darwin = pytest.mark.skipif(sys.platform != "darwin", reason="real macOS only")
+
+
+@darwin
+def test_real_macos_tools_identity_and_file_system(tmp_path):
+    import re
+    from manhattan.orchestra import procs
+    assert procs.tool("ps") == "/bin/ps" and procs.tool("mount") == "/sbin/mount"
+    assert procs.tool("sysctl") == "/usr/sbin/sysctl" and procs.tool("ioreg") == "/usr/sbin/ioreg"
+    assert not Path("/proc/self/stat").exists()
+    assert re.fullmatch(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}", procs.machine_id() or "")
+    b = procs.boot_id()
+    assert b and b.startswith(("bootsession:", "boottime:")) and b == procs.boot_id()
+    assert procs.fs_type(tmp_path) == "apfs" and procs.fs_type(Path.home()) == "apfs"
+    assert not safety.is_network_fs(procs.fs_type(tmp_path))
+    assert safety.check_root(tmp_path / "root") == (tmp_path / "root").resolve()
+
+
+@darwin
+def test_real_macos_ps_reports_full_command_lines_and_resident_memory(tmp_path):
+    import subprocess
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.child import group_rss_mb
+    from manhattan.orchestra.supervisor import _members
+    inv = (tmp_path / ("x" * 200) / "jobs" / "OJ-0" / "inv-0001").resolve()     # a long path: no truncation
+    code = "import time; b = bytearray(200 * 2**20); b[::4096] = b'1' * len(b[::4096]); time.sleep(30)"
+    p = subprocess.Popen([sys.executable, "-c", code, "manhattan.orchestra.child", str(inv)], start_new_session=True)
+    try:
+        deadline = time.time() + 20
+        while time.time() < deadline and group_rss_mb(p.pid) < 180:
+            time.sleep(0.2)
+        assert group_rss_mb(p.pid) >= 180                  # ps rss is KiB on macOS: 200 MiB touched reads ~200
+        assert _members(p.pid, inv) == [p.pid]             # the whole directory survives in ps's command column
+        assert _members(p.pid, inv.with_name("inv-0002")) == []
+    finally:
+        p.kill()
+        p.wait()
+
+
+@darwin
+def test_real_macos_peak_rss_units():
+    import resource
+    from manhattan.orchestra.child import maxrss_mb
+    block = bytearray(64 * 2**20)
+    block[::4096] = b"1" * len(block[::4096])
+    mb = maxrss_mb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    assert 64 <= mb < 8192                                  # bytes on macOS; as KiB it would read ~1000x larger

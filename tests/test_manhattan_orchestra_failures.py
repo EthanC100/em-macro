@@ -23,7 +23,9 @@ from manhattan.orchestra.journal import FileLock, canonical, read_json, sha256_b
 from manhattan.orchestra.supervisor import Supervisor
 
 REPO = Path(__file__).resolve().parents[1]
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process groups and /proc: Linux")
+# Linux (CI: tests / pytest) and macOS (CI: orchestra-macos, a GitHub-hosted Mac): the same tests, so that every
+# behaviour they check is verified on both systems, not only reasoned about for macOS
+pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="POSIX process groups: Linux, macOS")
 
 
 def make_repo(dst: Path) -> Path:
@@ -351,6 +353,7 @@ def test_budget_disk_pause_and_switches_hold_every_start(tmp_path):
     assert "switches_closed" in types and "switches_open" in types
 
 
+@pytest.mark.skipif(not Path("/proc/self/environ").exists(), reason="reads /proc/<pid>/environ (Linux)")
 def test_secrets_never_reach_an_invocation(tmp_path, mini, monkeypatch):
     monkeypatch.setenv("GH_TOKEN", "ghp_should_never_be_seen")
     monkeypatch.setenv("DATA_REPO_READ_TOKEN", "should_never_be_seen")
@@ -474,3 +477,85 @@ def test_serve_survives_a_failing_tick(tmp_path, mini, capsys):
     sup.tick = flaky
     sup.serve(interval=0.01, max_ticks=2)
     assert len(calls) == 2 and "disk hiccup" in capsys.readouterr().err
+
+
+# -- second re-review ----------------------------------------------------------------------------------------------
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    st = Path(f"/proc/{pid}/stat")
+    if st.exists():                                                   # a zombie is not alive
+        return st.read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    return True
+
+
+def test_spawn_workers_of_a_dead_invocation_are_killed_before_the_next_starts(tmp_path, mini):
+    """macOS starts pool workers by spawn: their command lines do not name the invocation. The invocation records
+    them (members.json, pid and start time); after it dies, the supervisor kills them, and a new invocation never
+    starts while one is alive."""
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 12, "chunk": 4, "sleep_per_chunk_s": 1.5,
+                                 "faults": {"spawn_helper": 1, "crash_at_unit": 9}})["job_id"]
+    st = run_until(sup, settled)
+    j = st["jobs"][jid]
+    assert [i["ended"]["outcome"] for i in j["invocations"]] == ["lost", "done"] and j["status"] == "completed"
+    helper = int((sup.job_dir(jid) / "work" / "helper-1.pid").read_text())
+    members = read_json(sup.root / j["invocations"][0]["inv_dir"] / "members.json")
+    assert helper in [m[0] for m in members]                          # recorded while the invocation lived
+    end = time.time() + 10
+    while _alive(helper) and time.time() < end:
+        time.sleep(0.2)
+    assert not _alive(helper)                                         # killed although it never named the invocation
+
+
+def test_a_bad_limits_file_present_at_start_never_stops_supervision(tmp_path, mini):
+    from manhattan.orchestra.limits import LimitsError
+    root = tmp_path / "root"
+    root.mkdir()
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 8, "chunk": 4, "faults": {"hang_at_unit": 4}})["job_id"]
+    run_until(sup, lambda s: s["jobs"][jid]["status"] == "running"
+              and (sup.root / s["jobs"][jid]["invocations"][0]["inv_dir"] / "pid.json").exists())
+    (root / "limits.json").write_text('{"max_memory_mb_per_job": 0}')
+    fresh = sup_for(tmp_path, mini)                                   # a cron tick builds a new supervisor
+    assert fresh.limits_error and "positive" in fresh.limits_error
+    with pytest.raises(LimitsError, match="registration waits"):
+        fresh.register("smoke", {"units": 3})
+    fresh.cancel(jid, "operator")                                     # cancels are still recorded and delivered
+    st = run_until(fresh, lambda s: s["jobs"][jid]["status"] == "cancelled")
+    assert read_json(fresh.root / "status.json")["limits_error"]
+    from manhattan.orchestra import __main__ as CLI
+    assert CLI.main(["--root", str(root), "health"]) == 1               # attention, not "supervisor silent"
+
+
+def test_a_child_started_by_hand_leads_its_own_process_group(tmp_path, mini, monkeypatch):
+    import subprocess
+    sup = sup_for(tmp_path, mini)
+    jid = sup.register("smoke", {"units": 4})["job_id"]
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("not now")))
+    with sup.journal.locked():
+        sup._start(sup.state()["jobs"][jid], time.time())             # writes invocation.json; the spawn "fails"
+    monkeypatch.undo()
+    inv = sup.root / sup.state()["jobs"][jid]["invocations"][0]["inv_dir"]
+    env, _ = __import__("manhattan.orchestra.safety", fromlist=["x"]).child_env()
+    r = subprocess.run([sys.executable, "-m", "manhattan.orchestra.child", str(inv)], cwd=mini, env=env)
+    assert r.returncode == 0                                          # same process group as this test, at first
+    pid = read_json(inv / "pid.json")
+    assert pid["pgid"] == pid["pid"] != os.getpgid(0)                 # it moved to a group of its own
+
+
+def test_an_unreadable_process_table_stops_the_invocation(tmp_path):
+    repo = make_repo(tmp_path / "own-repo")
+    p = repo / "manhattan" / "orchestra" / "procs.py"
+    p.write_text(p.read_text().replace('''    use_proc = PROC.is_dir()''', '''    raise ProcsUnavailable("test")
+    use_proc = PROC.is_dir()''', 1))
+    c = repo / "manhattan" / "orchestra" / "child.py"
+    c.write_text(c.read_text().replace("UNMEASURABLE_AFTER_S = 30", "UNMEASURABLE_AFTER_S = 2", 1))
+    sup = sup_for(tmp_path, repo, max_consecutive_errors=1)
+    jid = sup.register("smoke", {"units": 4, "chunk": 4, "faults": {"hang_at_unit": 0}})["job_id"]
+    st = run_until(sup, settled)
+    j = st["jobs"][jid]
+    assert j["invocations"][0]["ended"]["outcome"] == "memory_unmeasurable" and j["status"] == "failed"

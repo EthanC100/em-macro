@@ -48,7 +48,13 @@ def _utc(epoch: float) -> str:
 def snapshot(root: Path, limits: L.Limits | None = None, *, now: float | None = None) -> dict:
     root = Path(root)
     now = time.time() if now is None else now
-    limits = limits or L.load(root)
+    load_error = None
+    if limits is None:
+        try:
+            limits = L.load(root)
+        except Exception as e:                       # reported, never fatal: status must work when limits.json is bad
+            limits = L.DEFAULT
+            load_error = str(e) if isinstance(e, L.LimitsError) else f"limits.json: {type(e).__name__}"
     j = Journal(root / "journal.jsonl")
     recs = j.records()
     st = fold(recs)
@@ -105,7 +111,7 @@ def snapshot(root: Path, limits: L.Limits | None = None, *, now: float | None = 
                            "age_s": round(now - tick, 1) if tick else None,
                            "stale": tick is None or now - tick > STALE_AFTER_S},
             "paused": st["paused"] or (root / "PAUSE").exists(), "pause_reason": st["pause_reason"],
-            "switches_closed": st["switches"], "limits_error": st["limits_error"],
+            "switches_closed": st["switches"], "limits_error": load_error or st["limits_error"],
             "limits": dict(limits.as_dict(), hash=limits.hash()),
             "budget": {"month": month, "reserved_vcpu_h_used": round(used, 3),
                        "committed_vcpu_h": round(committed, 3), "cap_vcpu_h": limits.monthly_vcpu_hours,
