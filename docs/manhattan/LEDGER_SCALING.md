@@ -69,20 +69,43 @@ end. Irregular snapshots take the original path. The report is identical to main
 ### 3.3 `manhattan/access.py`: remembered fence decisions
 
 `roles.check_read` is a pure function of its arguments. `access._allowed_role` remembers its *allowed*, token-free
-decisions in a bounded table. The key holds:
-- the value of every argument: the fence by content, the dates with their types;
-- the identity of `check_read`, `role_of` and `_busdays_between`.
+decisions in a bounded table. The decision is never changed; only its repetition is saved.
 
-The decision is unchanged; only its repetition is saved. It is never remembered for:
-- a refusal;
-- a reserve read (a token);
-- anything that cannot be keyed.
+**What is remembered.** Only an allowed read without a token, with inputs of exact built-in types:
+- `str` caller, domain and window ID;
+- `date` dates, never a subclass;
+- a `bool` enabled flag and an `int` holding;
+- the domain's reserve window either absent or a 2-tuple of `date`.
+
+Everything else is decided by `check_read` itself, every time: a refusal, a reserve read (a token), a fence that is
+not a `roles.Fence`, other types, and anything whose key cannot be built.
+
+**What the key holds.** Exactly what `check_read` reads:
+- the caller, the window, the freeze and the holding;
+- from the fence, only `exploration_end`, `enabled` and *this domain's* reserve window (`role_of` reads
+  `fence.reserve.get(domain)` and nothing else of the reserve);
+- the identity of `check_read`, `role_of`, `_busdays_between` and `_day`;
+- the values of the `roles` settings they read.
+
+**Where the decision is made.** On a snapshot fence built from the key's own values, so a reserve mapping changed
+mid-call cannot store one content's answer under another content's key.
+
+**Independent review (PR #100, 20 November 2026).** The first version keyed the fence by its JSON text. A security
+review found that this let a fence whose reserve is keyed by the integer `1` (which `yaml.safe_load` can produce)
+store an allowed decision. The reconciler then accepted a recorded reserve window on the domain `"1"`. The review also
+found four hardening gaps:
+- extra window elements;
+- lying `date` subclasses;
+- tightened `roles` settings;
+- a mid-call mutation race.
+
+The rules above close all five. Each finding has a regression test that fails on the first version.
 
 `roles.py` is not changed.
 
 ## 4. What is preserved, and how it is tested
 
-`tests/test_manhattan_ledger_scaling.py` (44 tests) runs the current modules beside **reference copies of main's
+`tests/test_manhattan_ledger_scaling.py` (57 tests) runs the current modules beside **reference copies of main's
 `ledger.py` and `attempts.py`** (`tests/manhattan_*_reference.py`, unchanged except for their imports).
 
 - **Same files, records, answers and reports.** Random lifecycles across 12 seeds × 160 steps cover:
@@ -160,8 +183,20 @@ See `results/manhattan_ledger_scaling/README.md` for the full tables. Summary (s
 2. **A pre-existing PR #86 defect: some characters make a ledger unopenable.** `verify_snapshot` splits the file
    with `str.splitlines()`, which also breaks at U+2028, U+2029, U+0085 and other separators. `json.dumps(...,
    ensure_ascii=False)` writes those characters unescaped, so a payload string containing one makes the ledger fail
-   verification on reopening. The fix (split on `\n` only) changes `verify` and needs PR #86's owner. The test above
-   pins the current behaviour.
+   verification on reopening. Everything that can append a free-text string can trigger it: `Ledger.append`,
+   correction reasons, completion summaries. After that, neither the ledger nor the strict reconciler can read the file.
+
+   This change leaves the defect exactly as on main. For each of the three characters,
+   `test_the_known_line_separator_defect_is_unchanged_not_worse` checks that both implementations:
+   - write the same bytes;
+   - refuse to reopen with the same message;
+   - give the same reconciler error and the same `verify` result.
+
+   **Recommendation: fix it separately, as a change to PR #86's file format.** The smallest fix is on the writer side:
+   escape these three characters in the written line. The record hash is computed over the parsed record, so escaped
+   and raw lines hash the same, existing valid ledgers stay valid, and `verify` is untouched. Ledgers already written
+   with a raw separator would still need a reader that splits on `\n` only. That is the riskier half, because it
+   changes what `verify` accepts, so it is an owner decision.
 3. **`fsync` per record is now the largest write cost** (~0.23 ms here, about half of registration). It is PR #86's
    durability rule: a registration that returned survives a crash. Group commit would need a batch registration API
    that returns no context before its batch is `fsync`ed. That is an owner decision.
@@ -169,7 +204,10 @@ See `results/manhattan_ledger_scaling/README.md` for the full tables. Summary (s
    record hash is defined over. It is unchanged.
 5. **Memory is still held in memory**, at ~2.2 kB per record. Beyond about ten million records, an index of file
    offsets with a per-record digest (re-read and checked on access) would bound it. That change is not made here.
-6. **The fence memo is in `access.py`**, the authorization module. It does not change a decision, but it is a change
-   to the access path, so it should have its owner's review.
+6. **The fence memo is in `access.py`**, the authorization module. An independent security review found one
+   cache disagreement, now fixed (§3.3), and four hardening gaps, now closed. It still needs its owner's review.
+   Related but older than this change: `roles.Fence.from_config` silently ignores a reserve keyed by a non-string
+   (`1:` in YAML), with or without the cache. It should reject such keys; that is a change to `roles.py` and
+   needs its owner.
 7. **PR #98**, the bridge, still needs D-10, D-1, B4 and A-1–A-3. Its `_batch_state` and `crosscheck` read
    `ledger.records()` whole. That is fine at 100k; at 1M they should use `iter_records`.

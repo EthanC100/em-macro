@@ -131,26 +131,46 @@ def _allowed_role(caller: str, dw: DeclaredWindow, *, fence: roles.Fence, freeze
     """``roles.check_read`` for one declared window, remembering allowed token-free reads (Manhattan phase 3).
 
     ``check_read`` is a pure function of its arguments: it walks every day of the window (about 2 ms for an 8.8-year
-    window), which dominated registering and reconciling large batches of attempts on one window. Only an *allowed*
-    read without a token is remembered, keyed by the value of every argument (the fence by its content, the dates
-    with their types) and by the identity of ``check_read``, ``role_of`` and ``_busdays_between``, so a replaced
-    function is never bypassed. A refusal, a reserve read (token) or anything that cannot be keyed is decided anew
-    every time. The decision is unchanged; only its repetition is saved."""
-    def decide() -> str:
-        return roles.check_read(caller, dw.domain, dw.start, dw.end, fence, freeze=freeze, holding=holding,
+    window), which dominated registering and reconciling large batches of attempts on one window. The decision is
+    never changed; only its repetition is saved, under these rules (independent security review, PR #100):
+
+    * Only an *allowed* read without a token is remembered. A refusal, a reserve read (token), a fence that is not a
+      ``roles.Fence``, or anything whose key cannot be built is decided by ``check_read`` itself, every time.
+    * Only exact built-in types are remembered (``str`` caller, domain and window ID; ``date`` dates, never a
+      subclass; ``bool`` enabled flag; ``int`` holding; the domain's reserve window a 2-tuple of ``date`` or absent).
+      Anything else, including a subclass that could lie about its value, is decided without the memo.
+    * The key holds exactly what ``check_read`` reads: the caller, the window, the freeze and holding, and from the
+      fence only ``exploration_end``, ``enabled`` and the reserve window *of this domain* (``role_of`` reads
+      ``fence.reserve.get(domain)`` and nothing else of the reserve). It also holds the identity of ``check_read``,
+      ``role_of``, ``_busdays_between`` and ``_day`` and the values of the ``roles`` settings they read, so a replaced
+      function or a tightened setting is never bypassed.
+    * The decision is made on a snapshot fence built from the same values as the key, so a reserve mapping changed
+      by another thread mid-call cannot store one content's decision under another content's key."""
+    def decide(f) -> str:
+        return roles.check_read(caller, dw.domain, dw.start, dw.end, f, freeze=freeze, holding=holding,
                                 token=token, window_id=dw.id)
     if token is not None or type(fence) is not roles.Fence:
-        return decide()
+        return decide(fence)
     try:
-        key = (roles.check_read, roles.role_of, roles._busdays_between, caller, dw.domain, type(dw.start), dw.start,
-               type(dw.end), dw.end, _fence_key(fence), type(fence.exploration_end), type(freeze), freeze,
-               type(holding), holding, dw.id)
+        enabled, exploration_end = fence.enabled, fence.exploration_end
+        w = fence.reserve.get(dw.domain) if type(fence.reserve) is dict and type(dw.domain) is str else ...
+        exact = (w is not ... and type(caller) is str and type(dw.id) is str and type(enabled) is bool
+                 and type(exploration_end) is date and type(dw.start) is date and type(dw.end) is date
+                 and (freeze is None or type(freeze) is date) and type(holding) is int
+                 and (w is None or (type(w) is tuple and len(w) == 2 and all(type(x) is date for x in w))))
+        if not exact:
+            return decide(fence)
+        key = (roles.check_read, roles.role_of, roles._busdays_between, roles._day, roles.MAX_READ_DAYS,
+               roles.CALLERS, roles.NO_DATA, roles.RUNNER, roles.EXPLORATION, roles.RESERVE, roles.FORWARD,
+               roles.EMBARGO, caller, dw.domain, dw.id, dw.start, dw.end, freeze, holding, exploration_end, enabled, w)
         hash(key)
-    except (TypeError, ValueError, AttributeError):
-        return decide()
+    except Exception:                                    # noqa: BLE001 - whatever cannot be keyed is decided anew
+        return decide(fence)
     role = _ALLOWED_READS.get(key)
     if role is None:
-        role = decide()
+        snapshot = roles.Fence(exploration_end=exploration_end, reserve={} if w is None else {dw.domain: w},
+                               enabled=enabled)
+        role = decide(snapshot)
         if len(_ALLOWED_READS) >= _ALLOWED_READS_MAX:
             _ALLOWED_READS.clear()
         _ALLOWED_READS[key] = role

@@ -533,3 +533,113 @@ def test_reserve_reads_and_refusals_are_never_remembered(monkeypatch):
         with pytest.raises(roles.RoleError):
             A._allowed_role("session", dw, fence=fence, freeze=None, holding=0, token=None)
     assert len(calls) == 6 and not A._ALLOWED_READS
+
+
+# ------------------------------------------- the memo after the independent security review (PR #100, 2026-11-20)
+
+def _uncached(caller, dw, fence, freeze=None, holding=0):
+    return _call(lambda: roles.check_read(caller, dw.domain, dw.start, dw.end, fence, freeze=freeze, holding=holding,
+                                          token=None, window_id=dw.id))
+
+
+def _cached(caller, dw, fence, freeze=None, holding=0):
+    return _call(lambda: A._allowed_role(caller, dw, fence=fence, freeze=freeze, holding=holding, token=None))
+
+
+@pytest.mark.parametrize("key", [1, True, None, 1.5])
+def test_a_non_string_reserve_key_cannot_poison_the_reconciler(key):
+    """Review finding 1: the fence used to be keyed by its JSON text, where the domain key 1 and "1" are equal. A
+    registration under a fence whose reserve is keyed by the integer (``yaml.safe_load`` gives such keys) stored an
+    allowed decision that then let the reconciler accept a recorded reserve window on the domain "1"."""
+    A._ALLOWED_READS.clear()
+    domain = json.dumps(key)                               # "1", "true", "null", "1.5"
+    window = (date(2015, 1, 1), date(2016, 12, 31))
+    dw = A.DeclaredWindow("w", domain, date(2015, 3, 2), date(2015, 6, 1), "exploration", "evaluation", "e" * 64)
+    ident = {"window": {"id": "w", "start": "2015-03-02", "end": "2015-06-01"}, "role": "exploration",
+             "data_hash": "e" * 64, "designated": False}
+    auth = {"caller": "session", "windows": [dw.as_dict()], "freeze": None, "holding": 0, "token": None,
+            "config": None, "fence": {"exploration_end": "2019-12-31", "reserve_enabled": True,
+                                      "reserve_window": ["2015-01-01", "2016-12-31"]}}
+    before = _call(lambda: A.check_recorded("screening", ident, auth))
+    assert before[0] == "raise"
+    poison = roles.Fence(exploration_end=date(2019, 12, 31), reserve={key: window}, enabled=True)
+    A.check_declaration("screening", ident, (dw,), caller="session", fence=poison, freeze=None, holding=0, token=None)
+    assert _call(lambda: A.check_recorded("screening", ident, auth)) == before
+
+
+def test_only_exact_types_are_remembered():
+    """Review findings 2 and 3: a window with extra elements, a list window, a date subclass that lies about its
+    value, an int enabled flag or numpy holding are decided by check_read itself, never from the memo."""
+    import numpy as np
+
+    class Lying(date):
+        def isoformat(self):
+            return "2030-01-01"
+
+    honest = (date(2015, 1, 1), date(2016, 12, 31))
+    dw = A.DeclaredWindow("w", "d1", date(2015, 3, 2), date(2015, 6, 1), "exploration", "evaluation", "e" * 64)
+    variants = [
+        roles.Fence(date(2019, 12, 31), {"d1": honest + ("x",)}, True),
+        roles.Fence(date(2019, 12, 31), {"d1": list(honest)}, True),
+        roles.Fence(date(2019, 12, 31), {"d1": (Lying(2030, 1, 1), Lying(2030, 12, 31))}, True),
+        roles.Fence(date(2019, 12, 31), {"d1": honest}, 1),
+        roles.Fence(Lying(2019, 12, 31), {}, False),
+    ]
+    for fence in variants:
+        A._ALLOWED_READS.clear()
+        assert _cached("session", dw, fence) == _uncached("session", dw, fence)
+        assert not A._ALLOWED_READS                        # never remembered
+        assert _cached("session", dw, roles.Fence(date(2019, 12, 31), {"d1": honest}, True)) == \
+            _uncached("session", dw, roles.Fence(date(2019, 12, 31), {"d1": honest}, True))
+    A._ALLOWED_READS.clear()
+    plain = roles.Fence(date(2019, 12, 31), {}, False)
+    assert _cached("session", dw, plain, holding=np.int64(0)) == _uncached("session", dw, plain, holding=np.int64(0))
+    assert not A._ALLOWED_READS
+
+
+@pytest.mark.parametrize("setting", ["MAX_READ_DAYS", "NO_DATA", "CALLERS"])
+def test_a_tightened_roles_setting_is_never_bypassed(monkeypatch, setting):
+    """Review finding 4: AttemptContext re-checks its windows through the memo; a setting tightened after a cached
+    decision must refuse as check_read does."""
+    A._ALLOWED_READS.clear()
+    dw = A.DeclaredWindow("w", "d1", date(2010, 1, 4), date(2012, 1, 4), "exploration", "evaluation", "e" * 64)
+    fence = roles.Fence(date(2019, 12, 31), {}, False)
+    assert _cached("explorer", dw, fence) == ("ok", roles.EXPLORATION)
+    new = {"MAX_READ_DAYS": 10, "NO_DATA": roles.NO_DATA + ("explorer",),
+           "CALLERS": tuple(c for c in roles.CALLERS if c != "explorer")}[setting]
+    monkeypatch.setattr(roles, setting, new)
+    assert _cached("explorer", dw, fence)[0] == "raise"
+    assert _cached("explorer", dw, fence) == _uncached("explorer", dw, fence)
+
+
+def test_the_decision_is_made_on_the_keyed_snapshot(monkeypatch):
+    """Review finding 5: the reserve mapping is read once; the decision is made on a fence built from the same
+    values as the key, so a mapping changed while check_read runs cannot store one content's answer under
+    another's key."""
+    A._ALLOWED_READS.clear()
+    dw = A.DeclaredWindow("w", "d1", date(2015, 3, 2), date(2015, 6, 1), "exploration", "evaluation", "e" * 64)
+    reserve: dict = {}
+    fence = roles.Fence(date(2019, 12, 31), reserve, True)
+    seen = []
+    real = roles.check_read
+
+    def mutating(caller, domain, start, end, f, **kw):
+        reserve["d1"] = (date(2015, 1, 1), date(2016, 12, 31))    # another thread, mid-call
+        seen.append(f is fence)
+        return real(caller, domain, start, end, f, **kw)
+    monkeypatch.setattr(roles, "check_read", mutating)
+    assert _cached("session", dw, fence) == ("ok", roles.EXPLORATION)   # decided on the snapshot: no reserve
+    assert seen == [False]
+    monkeypatch.setattr(roles, "check_read", real)
+    fresh = roles.Fence(date(2019, 12, 31), {"d1": (date(2015, 1, 1), date(2016, 12, 31))}, True)
+    assert _cached("session", dw, fresh) == _uncached("session", dw, fresh)
+    assert _cached("session", dw, fresh)[0] == "raise"
+
+
+def test_a_key_that_cannot_be_built_is_decided_not_refused():
+    """Review finding 6: an error while building the key (a malformed window on another domain) falls back to
+    check_read, which allows what it allows; the memo never adds a refusal of its own."""
+    A._ALLOWED_READS.clear()
+    dw = A.DeclaredWindow("w", "d1", date(2010, 1, 4), date(2012, 1, 4), "exploration", "evaluation", "e" * 64)
+    fence = roles.Fence(date(2019, 12, 31), {"other": (date(2015, 1, 1),)}, True)
+    assert _cached("session", dw, fence) == _uncached("session", dw, fence) == ("ok", roles.EXPLORATION)
