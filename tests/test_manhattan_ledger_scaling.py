@@ -383,6 +383,27 @@ def test_irregular_files_take_the_reference_path(tmp_path, irregular):
         _call(lambda: RA.reconcile(ledger_path=book.path, ledger_anchor=anchor))
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
+def test_the_known_line_separator_defect_is_unchanged_not_worse(tmp_path, separator):
+    """Pre-existing PR #86 defect (LEDGER_SCALING.md section 6): ``json.dumps(ensure_ascii=False)`` writes these
+    characters raw and ``verify_snapshot`` splits lines with ``str.splitlines()``, so a payload string holding one
+    makes the ledger fail verification on reopening. This change must leave it exactly as on main: the same bytes
+    written, the same refusal on reopening, the same reconciler error, the same ``verify`` result. (A fix belongs in
+    its own change to PR #86's file format.)"""
+    out = {}
+    for name, M, R in (("new", L, AT), ("ref", RL, RA)):
+        path = tmp_path / f"{name}.jsonl"
+        book = M.Ledger(path, writer="w", protocol=PROTOCOL)
+        book.append("screening_decision", {"note": f"a{separator}b"})
+        book.append("screening_decision", {"note": "after"})
+        anchor = {"records": len(book), "head": book.head}
+        out[name] = (path.read_bytes(), _call(lambda: M.Ledger(path, writer="w", protocol=PROTOCOL).records()),
+                     _call(lambda: R.reconcile(ledger_path=path, ledger_anchor=anchor)), M.verify(path))
+    assert out["new"] == out["ref"]
+    assert separator.encode() in out["new"][0]                       # written raw, as on main
+    assert out["new"][1][0] == "raise" and out["new"][2][0] == "raise" and out["new"][3]
+
+
 def test_a_stale_ledger_object_cannot_fork_the_chain_unnoticed(tmp_path):
     first, second = _book(tmp_path), _book(tmp_path)
     second.append("screening_decision", {"by": "second"})
