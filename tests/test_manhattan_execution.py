@@ -722,7 +722,10 @@ def test_no_order_routing_or_broker_names_exist():
 
 # Test files explicitly authorised to reference the execution model. Each runs PR #85's model only as a reference in
 # a cross-check that is skipped unless its gate variable is set. Production code has no exemption.
-AUTHORISED_TEST_REFERENCES: dict = {}
+AUTHORISED_TEST_REFERENCES: dict = {
+    # PR #93: the dormant HTE execution bridge's PR #85 cross-check (skipped unless the gate variable is set)
+    "tests/test_manhattan_hte_execution_bridge.py": "EXEC_REALISM_PR85_CHECKOUT",
+}
 # Test directories explicitly authorised (S16, PR #91): the system acceptance suite probes and exercises this model
 # from the test tree. Only this directory is exempt; every other file, including every other test, is still scanned,
 # and ``test_production_never_reaches_the_authorised_test_directories`` keeps production code from importing it.
