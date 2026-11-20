@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 5.577,
+    "janus": 5.38,
     "me": 0.526
    },
    "positions": [
@@ -286,7 +286,7 @@
      "book": "janus",
      "id": "J036",
      "instrument": "AUD",
-     "pnl_pct": 1.927,
+     "pnl_pct": 1.729,
      "move": "1.16782 -> 1.52114 (2008-08-29 to 2008-10-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
@@ -348,7 +348,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.915,
+    "janus": 0.869,
     "me": 0.29
    },
    "positions": [
@@ -644,7 +644,7 @@
      "book": "janus",
      "id": "J036",
      "instrument": "AUD",
-     "pnl_pct": 0.455,
+     "pnl_pct": 0.408,
      "move": "1.53965 -> 1.62893 (2020-02-28 to 2020-03-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
@@ -694,7 +694,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -0.285,
+    "janus": -0.386,
     "me": 0.317
    },
    "positions": [
@@ -990,7 +990,7 @@
      "book": "janus",
      "id": "J036",
      "instrument": "AUD",
-     "pnl_pct": 0.989,
+     "pnl_pct": 0.888,
      "move": "1.37741 -> 1.56397 (2021-12-30 to 2022-10-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
