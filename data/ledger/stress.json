@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 5.653,
+    "janus": 5.577,
     "me": 0.526
    },
    "positions": [
@@ -203,15 +203,6 @@
     },
     {
      "book": "janus",
-     "id": "J006",
-     "instrument": "JP10Y",
-     "pnl_pct": 0.075,
-     "move": "1.421 -> 1.473 (2008-08-29 to 2008-10-31)",
-     "source": "Japan MoF jgbcme_all.csv 10Y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J025",
      "instrument": "US10Y",
      "pnl_pct": -0.055,
@@ -286,7 +277,7 @@
      "book": "janus",
      "id": "J035",
      "instrument": "GB10Y",
-     "pnl_pct": -0.026,
+     "pnl_pct": -0.027,
      "move": "4.5611 -> 4.6467 (2008-08-29 to 2008-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -357,7 +348,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 1.148,
+    "janus": 0.915,
     "me": 0.29
    },
    "positions": [
@@ -570,15 +561,6 @@
     },
     {
      "book": "janus",
-     "id": "J006",
-     "instrument": "JP10Y",
-     "pnl_pct": 0.234,
-     "move": "-0.153 -> 0.031 (2020-02-28 to 2020-03-31)",
-     "source": "Japan MoF jgbcme_all.csv 10Y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J025",
      "instrument": "US10Y",
      "pnl_pct": 0.15,
@@ -712,7 +694,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -0.001,
+    "janus": -0.285,
     "me": 0.317
    },
    "positions": [
@@ -925,15 +907,6 @@
     },
     {
      "book": "janus",
-     "id": "J006",
-     "instrument": "JP10Y",
-     "pnl_pct": 0.254,
-     "move": "0.089 -> 0.253 (2021-12-30 to 2022-10-31)",
-     "source": "Japan MoF jgbcme_all.csv 10Y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J025",
      "instrument": "US10Y",
      "pnl_pct": -0.881,
@@ -1008,7 +981,7 @@
      "book": "janus",
      "id": "J035",
      "instrument": "GB10Y",
-     "pnl_pct": -0.974,
+     "pnl_pct": -1.004,
      "move": "1.013 -> 3.6952 (2021-12-31 to 2022-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
