@@ -2,7 +2,7 @@
 
 A back-adjusted continuous series changes its whole history at every roll, so a series computed once over the full
 sample and then read "as of" an earlier date leaks every later roll gap into the past. Here a continuous series is
-always computed for one decision day ``t``, from a ``manhattan.engine.pit.Window`` (so the fence has already
+always computed for one decision day ``t``, from an authorized point-in-time reader window (so the fence has already
 decided what may be read) and from values known at ``t`` only:
 
 * **Roll schedule** from contract reference data alone (last trade and first notice dates are scheduled in
@@ -21,8 +21,6 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import numpy as np
-
-from manhattan.engine.pit import Window
 
 from .errors import MarketDataError
 from .schema import AdjustmentEvent, Contract, session_dates
@@ -47,7 +45,7 @@ def roll_schedule(contracts, start: date, end: date, roll_sessions: int = 5) -> 
     return [(d, front_contract(contracts, d, roll_sessions).contract_id) for d in session_dates(start, end)]
 
 
-def build(window: Window, source_id: str, instrument_id: str, contracts, t: date, *, method: str = "difference",
+def build(window, source_id: str, instrument_id: str, contracts, t: date, *, method: str = "difference",
           field: str = "settle", roll_sessions: int = 5, adjustments=(), decision_time: datetime | None = None):
     """(sessions, values, held contract ids) of the continuous series as known at day ``t``."""
     if method not in METHODS:

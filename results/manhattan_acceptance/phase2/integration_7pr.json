@@ -1,0 +1,1605 @@
+{
+ "schema": "manhattan.s16.acceptance/1",
+ "generated_utc": "2026-11-19T05:08:56Z",
+ "command": "python tests/acceptance/run.py --label '<label>' --out <report>",
+ "label": "scratch local merge (never pushed): main 37e3eb4 + #84 e1882be + #85 3f6b213 + #86 bab1a4d + #87 8c210a0 + #90 e64397d (includes #89 232d0d6) + #93 50caa18",
+ "tree": {
+  "commit": "b9f3c6ba043ab3843cfef712f3be03b5ae41fb9d",
+  "branch": "HEAD",
+  "dirty": true
+ },
+ "environment": {
+  "python": "3.13.18",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39"
+ },
+ "capabilities": {
+  "hte": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #89",
+   "description": "manhattan.hte: registry, synthetic panels, runner, reconcile",
+   "detail": "manhattan.hte importable"
+  },
+  "evidence": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #84",
+   "description": "manhattan.evidence: fail-closed evidence classification",
+   "detail": "manhattan.evidence importable"
+  },
+  "access": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #86",
+   "description": "manhattan.access + attempts: binding attempt accounting",
+   "detail": "manhattan.access importable"
+  },
+  "execution": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #85",
+   "description": "manhattan.execution: synthetic futures execution",
+   "detail": "manhattan.execution importable"
+  },
+  "equities": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #87",
+   "description": "manhattan.equities: synthetic equities research data",
+   "detail": "manhattan.equities importable"
+  },
+  "hte_identity_levels": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #90 (S11, stacked on #89)",
+   "description": "HTE binding and executable identity levels, executable_accounting",
+   "detail": "hte.adapters has evaluation_binding_hash, executable_spec, lineage, executable_accounting"
+  },
+  "execution_realism": {
+   "present": true,
+   "kind": "component",
+   "source": "PR #93 (S14)",
+   "description": "manhattan.execution_realism: lagged, costed, provenance-labelled execution",
+   "detail": "manhattan.execution_realism importable"
+  },
+  "adapter:hte->delayed-execution": {
+   "present": false,
+   "kind": "integration",
+   "source": "S14 / HTE owner (X5)",
+   "description": "HTE candidates evaluated with an execution lag through PR #93",
+   "detail": "no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)"
+  },
+  "adapter:hte->access": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11 / PR #86 D-1, D-10, B4",
+   "description": "HTE attempts registered in the Manhattan Ledger (hte.adapters.Pr86AccessAdapter)",
+   "detail": "hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine"
+  },
+  "adapter:hte->execution": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11 / PR #85 E1-E4",
+   "description": "HTE stage 3 executed through manhattan.execution at lag >= 1",
+   "detail": "hte.adapters.Pr85ExecutionAdapter is disabled (E1-E4)"
+  },
+  "adapter:hte->evidence": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11",
+   "description": "a producer of evidence metadata and verifier results for HTE runs",
+   "detail": "no production module produces evidence metadata (nothing imports manhattan.evidence)"
+  },
+  "adapter:equities->hte": {
+   "present": false,
+   "kind": "integration",
+   "source": "S11",
+   "description": "the synthetic equities world as an HTE domain",
+   "detail": "HTE accepts only its own generator (hte.data.verify_synthetic); no equities domain adapter"
+  },
+  "anchor:independent": {
+   "present": false,
+   "kind": "integration",
+   "source": "PR #86 G-2 / D-7",
+   "description": "independent custody of attempt-log anchors",
+   "detail": "attempts.reconcile reports independently_anchored=False as a constant (D-7, G-2)"
+  },
+  "authority:trusted": {
+   "present": false,
+   "kind": "integration",
+   "source": "PR #84 / owner decision",
+   "description": "a trusted verifier authority (evidence.TRUSTED_AUTHORITIES non-empty)",
+   "detail": "evidence.TRUSTED_AUTHORITIES is empty: every classification is unverified"
+  },
+  "decision:D-1": {
+   "present": false,
+   "kind": "integration",
+   "source": "owner decision D-1 (PR #86) / HTE B3",
+   "description": "the multiple-testing counting unit shared by HTE and PR #86",
+   "detail": "open: B3 counting unit open (D-1)"
+  }
+ },
+ "pytest_exit": 0,
+ "wall_s": 22.62,
+ "verdict": "NOT_READY",
+ "reasons": [
+  "BLOCKED: ACC86-01, ACC86-02, ACC86-03, ACC86-04, ACC86-05, ACC86-06, DEX93-01, DEX93-02, DEX93-03, DEX93-04, DEX93-05, DEX93-06, GAP-01, GAP-02, GAP-03, GAP-04, GAP-05, GAP-06, GAP-07"
+ ],
+ "summary": {
+  "PASS": 78,
+  "FAIL": 0,
+  "UNBOUND": 0,
+  "ERROR": 0,
+  "BLOCKED": 25,
+  "SKIPPED": 0
+ },
+ "by_id": {
+  "ACC86-01": "BLOCKED",
+  "ACC86-02": "BLOCKED",
+  "ACC86-03": "BLOCKED",
+  "ACC86-04": "BLOCKED",
+  "ACC86-05": "BLOCKED",
+  "ACC86-06": "BLOCKED",
+  "ADV-COR-01": "PASS",
+  "ADV-COR-02": "PASS",
+  "ADV-COR-03": "PASS",
+  "ADV-COR-04": "PASS",
+  "ADV-DUP-01": "PASS",
+  "ADV-DUP-02": "PASS",
+  "ADV-DUP-03": "PASS",
+  "ADV-DUP-04": "PASS",
+  "ADV-INT-01": "PASS",
+  "ADV-INT-02": "PASS",
+  "ADV-LA-01": "PASS",
+  "ADV-LA-02": "PASS",
+  "ADV-LA-03": "PASS",
+  "ADV-LA-04": "PASS",
+  "ADV-OBS-01": "PASS",
+  "ADV-OBS-02": "PASS",
+  "ADV-PRO-01": "PASS",
+  "ADV-PRO-02": "PASS",
+  "ADV-PRO-03": "PASS",
+  "ADV-PRO-04": "PASS",
+  "ADV-PRT-01": "PASS",
+  "ADV-PRT-02": "PASS",
+  "ADV-PRT-03": "PASS",
+  "ADV-PRT-04": "PASS",
+  "ADV-PRT-05": "PASS",
+  "CON93-01": "PASS",
+  "CON93-02": "PASS",
+  "CON93-03": "PASS",
+  "CON93-04": "PASS",
+  "CON93-05": "PASS",
+  "CON93-06": "PASS",
+  "DEX93-01": "BLOCKED",
+  "DEX93-02": "BLOCKED",
+  "DEX93-03": "BLOCKED",
+  "DEX93-04": "BLOCKED",
+  "DEX93-05": "BLOCKED",
+  "DEX93-06": "BLOCKED",
+  "E2E-01": "PASS",
+  "E2E-02": "PASS",
+  "E2E-03": "PASS",
+  "E2E-04": "PASS",
+  "E2E-05": "PASS",
+  "E2E-06": "PASS",
+  "E2E-07": "PASS",
+  "E2E-08": "PASS",
+  "E2E-09": "PASS",
+  "E2E-10": "PASS",
+  "E2E-11": "PASS",
+  "E2E-12": "PASS",
+  "E2E-13": "PASS",
+  "E2E-14": "PASS",
+  "GAP-01": "BLOCKED",
+  "GAP-02": "BLOCKED",
+  "GAP-03": "BLOCKED",
+  "GAP-04": "BLOCKED",
+  "GAP-05": "BLOCKED",
+  "GAP-06": "BLOCKED",
+  "GAP-07": "BLOCKED",
+  "HARNESS-01": "PASS",
+  "HARNESS-02": "PASS",
+  "HARNESS-03": "PASS",
+  "ORC-ACC86-01": "PASS",
+  "ORC-ACC86-02": "PASS",
+  "ORC-ACC86-03": "PASS",
+  "ORC-ACC86-04": "PASS",
+  "ORC-ACC86-05": "PASS",
+  "ORC-ACC86-06": "PASS",
+  "ORC-DEX93-01": "PASS",
+  "ORC-DEX93-02": "PASS",
+  "ORC-DEX93-03": "PASS",
+  "ORC-DEX93-04": "PASS",
+  "ORC-DEX93-05": "PASS",
+  "ORC-DEX93-06": "PASS"
+ },
+ "exit": 0,
+ "scientifically_verified": false,
+ "evidence_class": "synthetic_acceptance_only",
+ "tests": [
+  {
+   "id": "ACC86-01",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_01_every_candidate_is_accounted_exactly_once[adapter]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.025
+  },
+  {
+   "id": "ACC86-02",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_02_scientific_binding_identity_matches_the_frozen_registry[adapter]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-03",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_03_executable_identity_is_deterministic_and_complete[adapter]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-04",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_04_retry_resumes_only_the_identical_evaluation[adapter]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-conflicting_result]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-divergent_engine]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-edited_record]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-foreign_completion]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-relabelled_family]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-skip_candidate]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[adapter-swap_results]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ACC86-06",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_06_hte_accounting_never_reaches_a_protected_role[adapter]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[attempt_file-attempt_file_corrupt]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.207
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[package-package_tampered]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.203
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[results-results_tampered]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.22
+  },
+  {
+   "id": "ADV-COR-01",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor01_damaged_artifacts_mark_the_run_corrupted[results_deleted-results_missing]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.243
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[alter]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.196
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[delete_line]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.226
+  },
+  {
+   "id": "ADV-COR-02",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor02_a_rewritten_attempt_log_is_refused[reorder]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.231
+  },
+  {
+   "id": "ADV-COR-03",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor03_a_swapped_synthetic_panel_is_refused",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.012
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[alter]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.352
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[delete]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.403
+  },
+  {
+   "id": "ADV-COR-04",
+   "area": "corruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_cor04_a_rewritten_manhattan_ledger_never_reconciles[truncate]",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.372
+  },
+  {
+   "id": "ADV-DUP-01",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup01_duplicate_registration_adds_nothing_and_is_logged",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.015
+  },
+  {
+   "id": "ADV-DUP-02",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup02_an_identical_evaluation_is_reused_not_recounted",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.254
+  },
+  {
+   "id": "ADV-DUP-03",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup03_a_finished_attempt_cannot_be_evaluated_or_superseded_again",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.548
+  },
+  {
+   "id": "ADV-DUP-04",
+   "area": "duplicates",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_dup04_the_same_evidence_cannot_be_counted_twice",
+   "requires": [
+    "evidence"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.009
+  },
+  {
+   "id": "ADV-INT-01",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int01_an_interrupted_run_is_never_reported_and_resumes_to_the_clean_result[exit_after_start:3-attempt_interrupted]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 1.762
+  },
+  {
+   "id": "ADV-INT-01",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int01_an_interrupted_run_is_never_reported_and_resumes_to_the_clean_result[torn_completion:4-torn_tail_quarantined]",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 1.522
+  },
+  {
+   "id": "ADV-INT-02",
+   "area": "interruption",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_int02_a_crash_after_registration_is_visible_until_a_retry_completes",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.353
+  },
+  {
+   "id": "ADV-LA-01",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la01_a_template_that_reads_the_future_cannot_be_registered",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.023
+  },
+  {
+   "id": "ADV-LA-02",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la02_published_observables_carry_their_lag_and_the_fence_holds",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.014
+  },
+  {
+   "id": "ADV-LA-03",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la03_execution_refuses_prices_seen_before_the_decision",
+   "requires": [
+    "execution"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.013
+  },
+  {
+   "id": "ADV-LA-04",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_la04_equities_reads_never_reach_past_as_of",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.087
+  },
+  {
+   "id": "ADV-OBS-01",
+   "area": "observability",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_obs01_a_failure_in_any_phase_is_recorded_and_leaves_no_result_of_record",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.181
+  },
+  {
+   "id": "ADV-OBS-02",
+   "area": "observability",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_obs02_rejected_and_refused_work_leaves_a_reason",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.04
+  },
+  {
+   "id": "ADV-PRO-01",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro01_forged_or_unauthenticated_evidence_gets_no_weight",
+   "requires": [
+    "evidence"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.004
+  },
+  {
+   "id": "ADV-PRO-02",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro02_promotion_and_claims_are_disabled_on_this_tree",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "ADV-PRO-03",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro03_equities_research_records_cannot_be_promoted",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.003
+  },
+  {
+   "id": "ADV-PRO-04",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_pro04_hte_cannot_produce_confirmatory_output",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.003
+  },
+  {
+   "id": "ADV-PRT-01",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt01_reserve_forward_claims_and_real_money_are_disabled",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "ADV-PRT-02",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt02_hte_stage5_and_its_adapters_refuse_whatever_the_caller_passes",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "ADV-PRT-03",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt03_reserve_and_forward_windows_need_a_registered_authorized_attempt",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.011
+  },
+  {
+   "id": "ADV-PRT-04",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt04_licensed_and_non_synthetic_equity_sources_are_refused",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.078
+  },
+  {
+   "id": "ADV-PRT-05",
+   "area": "protected_data",
+   "nodeid": "tests/acceptance/test_s16_adversarial.py::test_prt05_new_platform_code_has_no_network_or_private_store_path",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.212
+  },
+  {
+   "id": "CON93-01",
+   "area": "execution",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_01_delay_is_the_default_and_same_close_is_opt_in_and_labelled",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.059
+  },
+  {
+   "id": "CON93-02",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_02_cost_and_lag_assumptions_are_in_the_result_identity",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.106
+  },
+  {
+   "id": "CON93-03",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_03_lagged_series_is_causal",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.006
+  },
+  {
+   "id": "CON93-04",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_04_the_volatility_scale_moves_with_the_decision",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "CON93-05",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_05_same_close_leakage_is_measured_and_never_presented",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.113
+  },
+  {
+   "id": "CON93-06",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_06_no_cost_can_claim_calibration[actual]",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "CON93-06",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_06_no_cost_can_claim_calibration[calibrated]",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "CON93-06",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_06_no_cost_can_claim_calibration[live]",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "CON93-06",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_06_no_cost_can_claim_calibration[measured]",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "CON93-06",
+   "area": "promotion",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_con93_06_no_cost_can_claim_calibration[realistic]",
+   "requires": [
+    "execution_realism"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "DEX93-01",
+   "area": "execution",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_01_lag_zero_reproduces_hte_and_lag_one_does_not[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.087
+  },
+  {
+   "id": "DEX93-02",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_02_lag_and_costs_are_in_the_executable_identity[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "DEX93-03",
+   "area": "lookahead",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_03_delayed_results_never_see_the_future[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "DEX93-04",
+   "area": "statistics",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_04_planted_effect_survives_delay_in_its_predicted_direction[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "DEX93-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_05_delayed_evaluations_are_separate_looks_and_retry_only_identically[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "access",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "DEX93-06",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_06_delayed_results_are_deterministic[adapter]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "adapter:hte->delayed-execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->delayed-execution]: adapter:hte->delayed-execution: no HTE <-> PR #93 binding: HTE has no lag (kernels.EXECUTION_TIMING is same-close) and nothing joins manhattan.hte and manhattan.execution_realism (PR #93 X5)",
+   "blocked_by": [
+    "adapter:hte->delayed-execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-01",
+   "area": "registration",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e01_frozen_hypotheses_bind_the_run",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.027
+  },
+  {
+   "id": "E2E-02",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e02_evaluation_identity_covers_every_input",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.042
+  },
+  {
+   "id": "E2E-03",
+   "area": "synthetic_data",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e03_only_verified_synthetic_panels_run",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-04",
+   "area": "authorization",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e04_computation_reads_only_the_unprotected_window",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.002
+  },
+  {
+   "id": "E2E-05",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e05_every_registered_candidate_is_accounted_for",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.006
+  },
+  {
+   "id": "E2E-06",
+   "area": "statistics",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e06_statistical_tests_state_denominators_and_find_a_planted_effect",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "E2E-07",
+   "area": "reconciliation",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e07_reconciler_rebuilds_the_result_from_persisted_records",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.116
+  },
+  {
+   "id": "E2E-08",
+   "area": "research_only",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e08_outputs_are_research_only",
+   "requires": [
+    "hte"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.002
+  },
+  {
+   "id": "E2E-09",
+   "area": "identity",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e09_hte_identities_are_valid_pr86_identities",
+   "requires": [
+    "hte",
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.007
+  },
+  {
+   "id": "E2E-10",
+   "area": "accounting",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e10_synthetic_exploration_attempt_registers_reads_and_reconciles",
+   "requires": [
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.361
+  },
+  {
+   "id": "E2E-11",
+   "area": "execution",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e11_decisions_fill_at_a_later_close_and_costs_reconcile",
+   "requires": [
+    "execution"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.002
+  },
+  {
+   "id": "E2E-12",
+   "area": "equities",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e12_synthetic_equities_world_reads_point_in_time",
+   "requires": [
+    "equities"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.06
+  },
+  {
+   "id": "E2E-13",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e13_equities_recorded_interfaces_match_the_merged_code",
+   "requires": [
+    "equities",
+    "access",
+    "evidence"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "E2E-14",
+   "area": "research_only",
+   "nodeid": "tests/acceptance/test_s16_e2e.py::test_e2e14_hte_output_is_never_promotable_evidence",
+   "requires": [
+    "hte",
+    "evidence"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.01
+  },
+  {
+   "id": "GAP-01",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-01]",
+   "requires": [
+    "hte",
+    "access",
+    "adapter:hte->access"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->access]: adapter:hte->access: hte.adapters.Pr86AccessAdapter is disabled: B1 PR #86 not merged; B2 exploration attempts unregistered (D-10); B3 counting unit open (D-1); B4 chunk-to-attempt cardinality undecided; B5 synthetic-only engine",
+   "blocked_by": [
+    "adapter:hte->access"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-02",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-02]",
+   "requires": [
+    "hte",
+    "execution",
+    "adapter:hte->execution"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->execution]: adapter:hte->execution: hte.adapters.Pr85ExecutionAdapter is disabled (E1-E4)",
+   "blocked_by": [
+    "adapter:hte->execution"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-03",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-03]",
+   "requires": [
+    "hte",
+    "evidence",
+    "adapter:hte->evidence"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:hte->evidence]: adapter:hte->evidence: no production module produces evidence metadata (nothing imports manhattan.evidence)",
+   "blocked_by": [
+    "adapter:hte->evidence"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-04",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-04]",
+   "requires": [
+    "hte",
+    "equities",
+    "adapter:equities->hte"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[adapter:equities->hte]: adapter:equities->hte: HTE accepts only its own generator (hte.data.verify_synthetic); no equities domain adapter",
+   "blocked_by": [
+    "adapter:equities->hte"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-05",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-05]",
+   "requires": [
+    "access",
+    "anchor:independent"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[anchor:independent]: anchor:independent: attempts.reconcile reports independently_anchored=False as a constant (D-7, G-2)",
+   "blocked_by": [
+    "anchor:independent"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-06",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-06]",
+   "requires": [
+    "evidence",
+    "authority:trusted"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[authority:trusted]: authority:trusted: evidence.TRUSTED_AUTHORITIES is empty: every classification is unverified",
+   "blocked_by": [
+    "authority:trusted"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "GAP-07",
+   "area": "integration",
+   "nodeid": "tests/acceptance/test_s16_integration_gaps.py::test_integration_gap[GAP-07]",
+   "requires": [
+    "hte",
+    "access",
+    "decision:D-1"
+   ],
+   "outcome": "BLOCKED",
+   "detail": "BLOCKED[decision:D-1]: decision:D-1: open: B3 counting unit open (D-1)",
+   "blocked_by": [
+    "decision:D-1"
+   ],
+   "duration_s": 0.0
+  },
+  {
+   "id": "HARNESS-01",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_harness.py::test_harness01_verdict_is_fail_closed",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.001
+  },
+  {
+   "id": "HARNESS-02",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_harness.py::test_harness02_probes_never_raise_and_name_their_source",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.394
+  },
+  {
+   "id": "HARNESS-03",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_harness.py::test_harness03_an_unimplemented_or_unbound_adapter_never_passes",
+   "requires": [],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.0
+  },
+  {
+   "id": "ORC-ACC86-01",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_01_every_candidate_is_accounted_exactly_once[oracle]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 1.473
+  },
+  {
+   "id": "ORC-ACC86-02",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_02_scientific_binding_identity_matches_the_frozen_registry[oracle]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.216
+  },
+  {
+   "id": "ORC-ACC86-03",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_03_executable_identity_is_deterministic_and_complete[oracle]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.489
+  },
+  {
+   "id": "ORC-ACC86-04",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_04_retry_resumes_only_the_identical_evaluation[oracle]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.008
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-conflicting_result]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.225
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-divergent_engine]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.232
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-edited_record]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.184
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-foreign_completion]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.324
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-relabelled_family]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.222
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-skip_candidate]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.221
+  },
+  {
+   "id": "ORC-ACC86-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_05_accounting_mismatches_are_detected[oracle-swap_results]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.228
+  },
+  {
+   "id": "ORC-ACC86-06",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_acc86.py::test_acc86_06_hte_accounting_never_reaches_a_protected_role[oracle]",
+   "requires": [
+    "hte",
+    "access",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.01
+  },
+  {
+   "id": "ORC-DEX93-01",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_01_lag_zero_reproduces_hte_and_lag_one_does_not[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.897
+  },
+  {
+   "id": "ORC-DEX93-02",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_02_lag_and_costs_are_in_the_executable_identity[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.016
+  },
+  {
+   "id": "ORC-DEX93-03",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_03_delayed_results_never_see_the_future[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.107
+  },
+  {
+   "id": "ORC-DEX93-04",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_04_planted_effect_survives_delay_in_its_predicted_direction[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.235
+  },
+  {
+   "id": "ORC-DEX93-05",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_05_delayed_evaluations_are_separate_looks_and_retry_only_identically[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels",
+    "access"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.034
+  },
+  {
+   "id": "ORC-DEX93-06",
+   "area": "harness",
+   "nodeid": "tests/acceptance/test_s16_dex93.py::test_dex93_06_delayed_results_are_deterministic[oracle]",
+   "requires": [
+    "hte",
+    "execution_realism",
+    "hte_identity_levels"
+   ],
+   "outcome": "PASS",
+   "detail": "",
+   "blocked_by": [],
+   "duration_s": 0.038
+  }
+ ]
+}
