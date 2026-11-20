@@ -1,13 +1,14 @@
 {
  "schema": 1,
- "lock": null,
- "night": "2026-11-19",
- "runs_used": 1,
- "last_kind": "worker",
- "chain_stopped": {
-  "reason": "approved queue empty after Q032; PR #101 awaits review and merge",
-  "at": "2026-11-20T00:10:15+08:00"
+ "lock": {
+  "routine": "promote",
+  "acquired_at": "2026-11-21T05:40:04+08:00",
+  "session": "https://claude.ai/code/session_01Ayx8qeDF87UPs8wj189N5V"
  },
+ "night": "2026-11-20",
+ "runs_used": 0,
+ "last_kind": null,
+ "chain_stopped": null,
  "log": [
   {
    "routine": "night-start",
