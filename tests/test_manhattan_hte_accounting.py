@@ -587,3 +587,96 @@ def test_a_damaged_ledger_file_is_reported_not_raised(on, tmp_path, panel, damag
     assert "pr86_reconciler" in codes
     if damage == "edited":
         assert "ledger_does_not_verify" in codes
+
+
+# ------------------------------------------------------------- independent review (2026-11-21): guards and anchors
+
+@needs_pr86
+@pytest.mark.parametrize("change", ["switch", "policy", "fence_enabled", "fence_reserve", "caller", "root"])
+def test_guards_are_re_checked_on_every_operation(on, tmp_path, panel, monkeypatch, change):
+    """Changing the switch, the policy, the fence, the caller or ROOT on an existing bridge is refused by begin,
+    complete and abandon, and nothing is written."""
+    from manhattan import roles
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+    br.begin(r)
+    r.run()
+    n = len(book)
+    if change == "switch":
+        monkeypatch.setattr(B, "ENABLED", False)
+    elif change == "policy":
+        br.policy = BridgePolicy(None, None, None, None)
+    elif change == "fence_enabled":
+        br.fence = roles.Fence(exploration_end=date(2019, 12, 31), reserve={}, enabled=True)
+    elif change == "fence_reserve":
+        br.fence = roles.Fence(exploration_end=date(2019, 12, 31),
+                               reserve={"x": (date(2015, 1, 1), date(2016, 1, 1))}, enabled=False)
+    elif change == "caller":
+        br.caller = "runner"
+    else:
+        monkeypatch.setattr(B, "ROOT", tmp_path)
+    for op in (lambda: br.begin(r, verify_rerun=True), lambda: br.complete(r, completion_writer=WRITE),
+               lambda: br.abandon(r, "test")):
+        with pytest.raises((PermissionError, B.BridgeRefused)):
+            op()
+    assert len(book) == n
+
+
+@needs_pr86
+def test_the_runner_caller_is_refused(on, tmp_path):
+    with pytest.raises(B.BridgeRefused, match="runner"):
+        B.Bridge(_book(tmp_path), DECIDED, fence=_fence(), caller="runner")
+
+
+@needs_pr86
+def test_a_finished_but_uncompleted_run_is_never_superseded_as_interrupted(on, tmp_path, panel, monkeypatch):
+    """Review finding 1b: begin, run, then begin(verify_rerun) without complete used to supersede every attempt of
+    the finished computation as an interrupted one. It is refused now, and the cross-check flags such a history."""
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+    br.begin(r)
+    r.run()
+    n = len(book)
+    with pytest.raises(B.BridgeRefused, match="never completed or abandoned"):
+        br.begin(r, verify_rerun=True)
+    assert len(book) == n
+    # the history the old code produced is flagged
+    monkeypatch.setattr(B, "_unclosed_finished_registration", lambda recs: None)
+    br.begin(r, verify_rerun=True)
+    assert "finished_invocation_superseded" in {x["code"] for x in crosscheck(r, book)["violations"]}
+
+
+@needs_pr86
+def test_a_registration_whose_invocation_computed_nothing_is_flagged(on, tmp_path, panel):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r, _, _, _ = _cycle(br, ws, panel)
+    br.begin(r, verify_rerun=True)
+    r.run()                                                # a plain invocation: reuses, computes nothing
+    codes = {x["code"] for x in crosscheck(r, book)["violations"]}
+    assert "registration_without_computation" in codes
+
+
+@needs_pr86
+def test_the_cross_check_reads_the_file_not_a_stale_ledger_object(on, tmp_path, panel):
+    """Review finding 4: a hash-valid rewrite of the file is caught as an anchor mismatch even when the caller's
+    ledger object still holds the old records."""
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r, _, _, _ = _cycle(br, ws, panel)
+    recs = [json.loads(x) for x in book.path.read_bytes().splitlines()]
+    recs[0]["payload"]["executable"] = "e" * 64                # rewritten and re-hashed: every hash valid
+    prev = L.GENESIS
+    for rec in recs:
+        rec["prev_hash"] = prev
+        rec["hash"] = L.record_hash(rec)
+        prev = rec["hash"]
+    book.path.write_bytes(b"".join((json.dumps(x, sort_keys=True, separators=(",", ":")) + "\n").encode()
+                                   for x in recs))
+    codes = {x["code"] for x in crosscheck(r, book)["violations"]}
+    assert {"ledger_anchor_mismatch", "ledger_object_differs_from_file"} <= codes

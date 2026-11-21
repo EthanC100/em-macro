@@ -75,6 +75,22 @@ def _pr86():
     return access, ledger, roles
 
 
+def _unclosed_finished_registration(recs: list[dict]) -> int | None:
+    """The HTE seq of the latest registration whose invocation finished (``run_closed`` / ``run_verified``) with no
+    bridge terminal record (``pr86_completed`` / ``pr86_failed`` / ``pr86_abandoned``) after it, else None."""
+    last_reg = None
+    for r in recs:
+        if r["type"] == "pr86_registered":
+            last_reg = {"seq": r["seq"], "finished": False, "closed": False}
+        elif last_reg is not None and r["type"] in ("run_closed", "run_verified"):
+            last_reg["finished"] = True
+        elif last_reg is not None and r["type"] in ("pr86_completed", "pr86_failed", "pr86_abandoned"):
+            last_reg["closed"] = True
+    if last_reg is not None and last_reg["finished"] and not last_reg["closed"]:
+        return last_reg["seq"]
+    return None
+
+
 def batch_of(run_id: str) -> str:
     return f"hte-{run_id}"
 
@@ -114,23 +130,30 @@ def _hexes(arr: np.ndarray) -> list[str]:
 
 class Bridge:
     def __init__(self, ledger, policy: BridgePolicy, *, fence, caller: str = "session"):
+        self.ledger, self.policy, self.fence, self.caller = ledger, policy, fence, caller
+        self._guard()
+
+    def _guard(self) -> None:
+        """Every construction check, re-run at the start of ``begin``, ``complete`` and ``abandon``, so that changing
+        the switch, the policy, the ledger, the fence, the caller or ``ROOT`` on an existing bridge is refused too
+        (independent review, 2026-11-21)."""
         if ENABLED is not True:
             raise BridgeDisabled("the HTE -> PR #86 attempt bridge is disabled (manhattan.hte_accounting.bridge."
                                  "ENABLED is False)")
-        if not isinstance(policy, BridgePolicy):
+        if not isinstance(self.policy, BridgePolicy):
             raise BridgeRefused("a BridgePolicy is required")
-        policy.require_registration()
+        self.policy.require_registration()
         access, L, roles = _pr86()
-        if not isinstance(ledger, L.Ledger) or isinstance(ledger, L.PublicIndex):
+        if not isinstance(self.ledger, L.Ledger) or isinstance(self.ledger, L.PublicIndex):
             raise BridgeRefused("attempts are registered in a full PR #86 Ledger")
-        lp = Path(ledger.path).resolve()
+        lp = Path(self.ledger.path).resolve()
         if lp == ROOT or ROOT in lp.parents:
             raise BridgeRefused("the bridge never writes a ledger inside the repository (production ledgers)")
-        if type(fence) is not roles.Fence or fence.enabled or fence.reserve:
+        if type(self.fence) is not roles.Fence or self.fence.enabled is not False or self.fence.reserve:
             raise BridgeRefused("the bridge needs a plain roles.Fence with reserve disabled and no reserve window")
-        if caller not in roles.CALLERS or caller in roles.NO_DATA:
-            raise BridgeRefused(f"caller {caller!r} cannot hold an attempt")
-        self.ledger, self.policy, self.fence, self.caller = ledger, policy, fence, caller
+        if self.caller not in roles.CALLERS or self.caller in roles.NO_DATA or self.caller == roles.RUNNER:
+            raise BridgeRefused(f"caller {self.caller!r} cannot hold a bridge attempt (the runner's role is the "
+                                "protected ones; generators and the critic read no data)")
 
     # -- guards -------------------------------------------------------------------------------------------------
     def _check_runner(self, runner: Runner) -> None:
@@ -192,6 +215,7 @@ class Bridge:
     def begin(self, runner: Runner, *, verify_rerun: bool = False) -> dict:
         """Register one attempt per candidate before ``runner.run(verify_rerun=...)``. Idempotent until the run
         starts: a second call with no ``run_started`` since the last registration returns that registration."""
+        self._guard()
         self._check_runner(runner)
         access, _, _ = _pr86()
         recs = run_records(AttemptLog(runner.ws.log_path), runner.run_id)
@@ -203,6 +227,11 @@ class Bridge:
             if last["payload"]["verify_rerun"] != verify_rerun:
                 raise BridgeRefused("a registration for another invocation kind is pending")
             return dict(last["payload"], reused=True)
+        pending = _unclosed_finished_registration(recs)
+        if pending is not None:
+            raise BridgeRefused(f"the invocation registered at HTE seq {pending} finished but its attempts were never "
+                                "completed or abandoned: complete (or abandon) it first, so that a finished "
+                                "computation is never recorded as an interrupted one")
         idents, lins = identities(runner)
         batch = batch_of(runner.run_id)
         state = self._batch_state(batch)
@@ -264,6 +293,7 @@ class Bridge:
         docs/manhattan/hte_accounting/BRIDGE.md). Without a writer the bridge refuses
         before writing anything; only the tests supply one, as PR #86's own tests call ``record_evaluation``. A run
         that is corrupted or failed verification is still closed (``end_attempt`` is not restricted)."""
+        self._guard()
         from manhattan.hte.runner import reconcile
         self._check_runner(runner)
         _, L, _ = _pr86()
@@ -344,6 +374,11 @@ class Bridge:
     def abandon(self, runner: Runner, why: str) -> dict:
         """Close every open attempt of the run's latest registration as ``aborted: interrupted`` (reads unknown,
         so ``data_read`` is true). For a run that will not be resumed (another engine or environment is a new run)."""
+        self._guard()
+        if not isinstance(runner, Runner):
+            raise BridgeRefused("an HTE Runner is required")
+        # The run itself is not re-checked: abandoning only closes this bridge's own open attempts (aborted,
+        # data_read true), which is the fail-closed direction.
         if not (isinstance(why, str) and why.strip()):
             raise BridgeRefused("abandoning needs a reason")
         p, _ = self._registration(runner)

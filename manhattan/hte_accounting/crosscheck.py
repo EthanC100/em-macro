@@ -67,6 +67,17 @@ def crosscheck(runner: Runner, ledger) -> dict:
     errs = _verify_file(L, ledger.path)
     if errs:
         v.append({"code": "ledger_does_not_verify", "errors": errs[:5]})
+    # Every ledger check reads one snapshot of the file, not the caller's object, which may be stale (another writer)
+    # or differ from the file (independent review, 2026-11-21). A file that does not open is already reported; the
+    # caller's object is then read so that the remaining checks still run.
+    try:
+        disk = L.Ledger(ledger.path, writer=ledger.writer, protocol=ledger.protocol)
+    except L.LedgerError:
+        disk = None
+    if disk is not None and (len(disk) != len(ledger) or disk.head != ledger.head):
+        v.append({"code": "ledger_object_differs_from_file", "object_records": len(ledger),
+                  "file_records": len(disk)})
+    src = disk if disk is not None else ledger
     batch = batch_of(run_id)
     idents, lins = identities(runner)
     # one streamed pass over the ledger (Ledger.iter_records, PR #100): this batch's starts and their terminals, kept
@@ -78,7 +89,7 @@ def crosscheck(runner: Runner, ledger) -> dict:
     term: dict[str, list] = {}
     at: dict[int, str] = {}
     n_records = 0
-    for r in ledger.iter_records():
+    for r in src.iter_records():
         n_records += 1
         if r["seq"] in wanted:
             at[r["seq"]] = r["hash"]
@@ -120,6 +131,25 @@ def crosscheck(runner: Runner, ledger) -> dict:
             if not armed:
                 v.append({"code": "unregistered_computation", "seq": r["seq"]})
             armed = False
+    # 1b. a finished invocation whose attempts were superseded by a later registration before being completed or
+    # abandoned (its computation would be recorded as an interrupted one), and a registration whose invocation
+    # computed nothing (run_reused), which leaves its attempts to be retried
+    segment = None
+    for r in recs:
+        if r["type"] == "pr86_registered":
+            if segment and segment["finished"] and not segment["closed"]:
+                v.append({"code": "finished_invocation_superseded", "seq": segment["seq"]})
+            segment = {"seq": r["seq"], "finished": False, "closed": False, "started": None}
+        elif segment is None:
+            continue
+        elif r["type"] == "run_started" and segment["started"] is None:
+            segment["started"] = r["seq"]
+            if r["seq"] in reused:
+                v.append({"code": "registration_without_computation", "seq": segment["seq"]})
+        elif r["type"] in ("run_closed", "run_verified"):
+            segment["finished"] = True
+        elif r["type"] in ("pr86_completed", "pr86_failed", "pr86_abandoned"):
+            segment["closed"] = True
     # 2. registrations: files, anchors, identities
     registered: set[str] = set()
     reg_attempts: dict[int, list[str]] = {}
@@ -205,7 +235,7 @@ def crosscheck(runner: Runner, ledger) -> dict:
     t_bridge = time.perf_counter() - t0
     t1 = time.perf_counter()
     try:
-        pr86 = A.reconcile(ledger_path=ledger.path, ledger_anchor={"records": n_records, "head": ledger.head})
+        pr86 = A.reconcile(ledger_path=ledger.path, ledger_anchor={"records": n_records, "head": src.head})
     except A.ReconciliationError as exc:                 # reported, never raised past the cross-check
         pr86 = {"violations": [{"code": "reconciliation_refused", "error": str(exc)[:200]}], "access_reconciled": False}
     t_pr86 = time.perf_counter() - t1
