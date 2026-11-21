@@ -22,6 +22,10 @@ the public GitHub Actions API (read only, no token, as nightshift.guard), and th
 due every 30 minutes, and the latest daily review) from the same records the Janus section reads. A failing or late
 one is marked FAILING / STALE / LATE and also goes to Needs Ethan; an unreadable source is said, never skipped.
 
+Usage (Q012) shows the run cap and safe mode of main's config/night.yaml, read through config.load_main (the guard's
+loader) when the report is written and labelled "main's config at report time"; if it cannot be read the cap is
+"unknown", never taken from the dev checkout.
+
 An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
 unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
 passed), when the report is rewritten. --stdout prints and never writes.
@@ -369,8 +373,21 @@ def exploration_rows() -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def usage_line(used: int) -> str:
+    """The run count against main's cap and safe mode, read through C.load_main (the guard's loader) when the report
+    is written (Q012). It is main's config at report time, not a cap recorded at each acquire. If main's config
+    cannot be read the cap is unknown: never a fallback to the dev checkout's copy."""
+    try:
+        cfg = C.load_main()
+        cap = C.run_cap(cfg)
+        sm = bool((cfg.get("safe_mode") or {}).get("enabled"))
+    except Exception:  # noqa: BLE001 - an unreadable main config is reported, never a crash or a dev fallback
+        return f"{used} runs (cap unknown: main's config unreadable)"
+    return f"{used} of {cap} runs (" + ("SAFE MODE, " if sm else "") + "main's config at report time)"
+
+
 def build(day: date, dev: str, needs: list[str]) -> str:
-    cfg, st = C.load(), S.load()
+    st = S.load()
     night = (day - timedelta(days=1)).isoformat()
     since = datetime.fromisoformat(f"{night}T22:00:00").replace(tzinfo=C.SGT)
     runs = night_runs(st, night)
@@ -380,7 +397,6 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     drafts = sorted(p.name for p in (ROOT / "docs/prereg_drafts").glob("*.md") if p.name != "README.md")
     items = Q.parse((ROOT / "docs/queue.md").read_text(encoding="utf-8"))
     used = sum(1 for e in runs if e.get("routine") in S.COUNTED)
-    sm = (cfg.get("safe_mode") or {}).get("enabled")
     try:
         jr = janus_records()
     except Exception:  # noqa: BLE001 - an unreadable record file is reported, never a crash
@@ -402,7 +418,7 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     L += ["", f"**Explorer findings:** {len(tonight)} variant(s) logged, {len(nom)} nominated"
           + (": " + ", ".join(sorted({r['hypothesis_id'] for r in nom})) if nom else "")]
     L += ["", "**Pre-registrations awaiting me:** " + (", ".join(drafts) if drafts else "none")]
-    L += ["", f"**Usage:** {used} of {C.run_cap(cfg)} runs" + (" (SAFE MODE)" if sm else "")
+    L += ["", f"**Usage:** {usage_line(used)}"
           + f"; queue: {len(Q.approved(items))} approved, {sum(1 for i in items if i['status'] == 'blocked')} blocked"]
     v1_needs = [f"{f} => act on it at the next rebalance (docs/ledger/v1_rules.md); the monitor changes nothing"
                 for f in ((v1 or {}).get("flags") or [])]
