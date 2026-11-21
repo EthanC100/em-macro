@@ -349,6 +349,119 @@ def test_a_resume_without_re_registration_is_refused_and_flagged(on, tmp_path, p
 
 
 @needs_pr86
+@pytest.mark.parametrize(("history", "violation"), [
+    ("run_after_abandon", "unregistered_computation"),
+    ("abandon_after_run", "finished_invocation_abandoned"),
+    ("ledger_only_aborts", "finished_invocation_without_completion"),
+])
+def test_aborted_attempts_do_not_certify_a_finished_run(on, tmp_path, panel, history, violation):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+
+    book = _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(_ws(tmp_path / "ws"), panel, Policy(), chunk_size=32)
+    br.begin(r)
+    if history == "run_after_abandon":
+        br.abandon(r, "cancel before compute")
+    r.run()
+    if history == "abandon_after_run":
+        br.abandon(r, "synthetic run abandoned without outcomes")
+    elif history == "ledger_only_aborts":
+        for start in book.iter_records("evaluation_started"):
+            book.end_attempt(start["hash"], status="aborted", reason="interrupted", data_read=True)
+
+    report = crosscheck(r, book)
+    assert not report["consistent"]
+    assert violation in {v["code"] for v in report["violations"]}
+    assert report["pr86"]["attempt_aborted"] == len(r.view)
+    assert report["units"]["completed_evaluation_keys"] == 0
+
+
+@needs_pr86
+def test_cancellation_without_computation_counts_aborts_without_inflating_them(on, tmp_path, panel):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    from tests.manhattan_attempt_fixtures import forge
+
+    book = _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(_ws(tmp_path / "ws"), panel, Policy(), chunk_size=32)
+    br.begin(r)
+    br.abandon(r, "cancel before compute")
+    report = crosscheck(r, book)
+    assert report["consistent"], report["violations"]
+    assert report["hte"]["computing_invocations"] == 0
+    assert report["pr86"]["attempt_aborted"] == len(r.view)
+    assert report["units"]["completed_evaluation_keys"] == 0
+
+    forge(book, "attempt_aborted", book.records("attempt_aborted")[0]["payload"])
+    report = crosscheck(r, book)
+    assert not report["consistent"]
+    assert "abandoned_attempt_mismatch" in {v["code"] for v in report["violations"]}
+    assert report["pr86"]["attempt_aborted"] == len(r.view)
+
+
+@needs_pr86
+@pytest.mark.parametrize(("damage", "violation"), [
+    ("unrecorded_cancellation", "registration_without_terminal"),
+    ("bad_abort_count", "abandoned_attempt_count_invalid"),
+    ("missing_executable_column", "registration_file_corrupt"),
+])
+def test_cancellation_requires_a_valid_accounting_record(on, tmp_path, panel, monkeypatch, damage, violation):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+
+    book = _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(_ws(tmp_path / "ws"), panel, Policy(), chunk_size=32)
+    append_log = br._log_record
+
+    def record_event(runner, kind, payload):
+        if kind == "pr86_registered" and damage == "missing_executable_column":
+            path = runner.dir / "pr86" / payload["registration_file"]
+            rows = store.read_arrays(path, payload["registration_sha256"])
+            payload = dict(payload, registration_sha256=store.write_arrays(path, {"attempt": rows["attempt"]}))
+        if kind == "pr86_abandoned":
+            if damage == "unrecorded_cancellation":
+                return
+            if damage == "bad_abort_count":
+                payload = dict(payload, aborted="invalid")
+        return append_log(runner, kind, payload)
+
+    monkeypatch.setattr(br, "_log_record", record_event)
+    br.begin(r)
+    br.abandon(r, "cancel before compute")
+
+    report = crosscheck(r, book)
+    assert not report["consistent"]
+    assert violation in {v["code"] for v in report["violations"]}
+    assert report["pr86"]["attempt_aborted"] == len(r.view)
+    assert report["units"]["completed_evaluation_keys"] == 0
+
+
+@needs_pr86
+def test_a_new_registration_cannot_hide_unrecorded_abandonment(on, tmp_path, panel, monkeypatch):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    interrupted = _crash(ws, book, "exit_after_start:2")
+    assert interrupted.returncode == 77, interrupted.stderr
+    book = _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(br, "_log_record", lambda *_: None)
+        br.abandon(r, "abandonment marker was lost")
+    assert br.begin(r)["retries"] == 0
+    br.abandon(r, "cancel the new invocation")
+
+    report = crosscheck(r, book)
+    assert not report["consistent"]
+    assert "registration_replacement_mismatch" in {v["code"] for v in report["violations"]}
+    assert report["pr86"]["attempt_aborted"] == 2 * len(r.view)
+    assert report["units"]["completed_evaluation_keys"] == 0
+
+
+@needs_pr86
 def test_a_crash_during_completion_is_finished_by_calling_complete_again(on, tmp_path, panel, monkeypatch):
     from manhattan.hte_accounting.crosscheck import crosscheck
     ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
@@ -428,6 +541,71 @@ def test_tampered_outcomes_and_forged_attempts_are_detected(on, tmp_path, panel)
     forge(book, "evaluation_started", dict(s, executable="f" * 64, spec_hash="f" * 64))
     codes = {x["code"] for x in crosscheck(r, book)["violations"]}
     assert "foreign_attempt" in codes
+
+
+@needs_pr86
+@pytest.mark.parametrize(("damage", "violation"), [
+    ("none", None),
+    ("missing_file", "outcome_batch_corrupt"),
+    ("omitted_manifest", "outcome_manifest_invalid"),
+    ("empty_manifest", "outcome_manifest_invalid"),
+    ("duplicated_batch", "outcome_manifest_invalid"),
+    ("incomplete_manifest", "outcome_manifest_invalid"),
+    ("malformed_range", "outcome_manifest_invalid"),
+    ("short_batch", "outcome_batch_corrupt"),
+    ("duplicate_completion", "unexpected_bridge_terminal"),
+    ("wrong_registration", "unexpected_bridge_terminal"),
+])
+def test_crosscheck_requires_the_complete_outcome_record(on, tmp_path, panel, monkeypatch, damage, violation):
+    from manhattan.hte_accounting.crosscheck import crosscheck
+
+    book = _book(tmp_path)
+    br = _bridge(book)
+    write_batches, append_log = O.write_batches, br._log_record
+
+    def write_small_batches(directory, **kwargs):
+        return write_batches(directory, **kwargs, batch_size=50)
+
+    def record_completion(runner, kind, payload):
+        if kind != "pr86_completed":
+            return append_log(runner, kind, payload)
+        payload = dict(payload)
+        batches = payload["batches"]
+        first = batches[0]
+        if damage in ("missing_file", "omitted_manifest", "empty_manifest"):
+            (runner.dir / "pr86" / first["file"]).unlink()
+        if damage == "omitted_manifest":
+            del payload["batches"]
+        elif damage == "empty_manifest":
+            payload["batches"] = []
+        elif damage == "duplicated_batch":
+            payload["batches"] = [first, *batches]
+        elif damage == "incomplete_manifest":
+            payload["batches"] = batches[:-1]
+        elif damage == "malformed_range":
+            payload["batches"] = [dict(first, lo=False), *batches[1:]]
+        elif damage == "short_batch":
+            directory = runner.dir / "pr86"
+            rows = O.read_batch(directory, first)
+            sha = store.write_arrays(directory / first["file"], {k: v[:-1] for k, v in rows.items()})
+            payload["batches"] = [dict(first, sha256=sha), *batches[1:]]
+        elif damage == "duplicate_completion":
+            append_log(runner, kind, payload)
+        elif damage == "wrong_registration":
+            payload["registration_seq"] += 1
+        return append_log(runner, kind, payload)
+
+    monkeypatch.setattr(O, "write_batches", write_small_batches)
+    monkeypatch.setattr(br, "_log_record", record_completion)
+    r, _, _, completion = _cycle(br, _ws(tmp_path / "ws"), panel)
+
+    assert len(completion["batches"]) > 1
+    report = crosscheck(r, book)
+    if violation is None:
+        assert report["consistent"], report["violations"]
+    else:
+        assert not report["consistent"]
+        assert violation in {v["code"] for v in report["violations"]}
 
 
 @needs_pr86
