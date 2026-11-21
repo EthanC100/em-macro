@@ -1,0 +1,50 @@
+{
+ "complete": {
+  "cpu_s": 18.612,
+  "us_per_candidate": 351.3,
+  "wall_s": 35.126
+ },
+ "evidence": "none: synthetic infrastructure measurement",
+ "impl": "b10790d (indexed ledger)",
+ "layout": "single",
+ "ledger_bytes": 291855208,
+ "ledgers": 1,
+ "looks": {
+  "distinct_evaluation_keys": 98969,
+  "summed_over_ledgers": 98969
+ },
+ "memory": {
+  "bytes_per_candidate": 4535.5,
+  "bytes_per_record": 2226.2,
+  "ledger_resident_mib": 432.5
+ },
+ "n": 100000,
+ "peak_rss_mib": 712.6,
+ "peak_rss_mib_write": 466.0,
+ "reconcile": {
+  "cpu_s": 11.499,
+  "us_per_candidate": 115.8,
+  "wall_s": 11.578
+ },
+ "reconcile_report": {
+  "completed": 100836,
+  "completed_evaluation_keys": 98969,
+  "failed": 1031,
+  "registered_executions": 101867,
+  "unfinished": 0
+ },
+ "reconcile_violations": 0,
+ "records": 203734,
+ "register": {
+  "cpu_s": 22.165,
+  "us_per_candidate": 434.3,
+  "wall_s": 43.435
+ },
+ "reopen": {
+  "cpu_s": 6.537,
+  "us_per_candidate": 65.9,
+  "wall_s": 6.59
+ },
+ "reruns": 1867,
+ "synthetic": true
+}
