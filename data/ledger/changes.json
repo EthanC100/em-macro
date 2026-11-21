@@ -1,62 +1,20 @@
 {
- "since": "2026-11-20T22:25:46+00:00",
- "at": "2026-11-21T06:17:01+00:00",
+ "since": "2026-11-21T06:17:01+00:00",
+ "at": "2026-11-21T13:59:46+00:00",
  "items": [
   {
-   "book": "algorithm",
+   "book": "me",
    "kind": "pnl",
-   "label": "algorithm v1.0",
-   "change": 0.4537,
-   "text": "algorithm v1.0: +0.45 index points (to 100.85)"
+   "label": "me",
+   "change": 0.048,
+   "text": "me: +0.05 index points (to 98.95)"
   },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.0066,
-   "text": "janus: -0.01 index points (to 100.13)"
-  },
-  {
-   "book": "janus",
-   "kind": "close",
-   "link": "#/position/janus/J034",
-   "text": "Janus J034 closed (C08 side flip): net -0.01%"
-  },
-  {
-   "book": "janus",
-   "kind": "close",
-   "link": "#/position/janus/J035",
-   "text": "Janus J035 cancelled"
-  },
-  {
-   "book": "janus",
-   "kind": "close",
-   "link": "#/position/janus/J037",
-   "text": "Janus J037 cancelled"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J038",
-   "text": "Janus J038 filled: short MXN"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J039",
-   "text": "Janus opened J039: long GB10Y"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J040",
-   "text": "Janus opened J040: short JP10Y"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J041",
-   "text": "Janus opened J041: short BRL"
+   "change": -0.0204,
+   "text": "janus: -0.02 index points (to 100.11)"
   }
  ]
 }
