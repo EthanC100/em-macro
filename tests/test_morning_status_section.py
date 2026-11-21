@@ -64,7 +64,7 @@ def test_unreadable_late_and_stale_are_said_never_skipped():
                                "time unreadable")
     assert lines[1] == "ledger-daily: status unknown (GitHub Actions API unreadable)"
     assert lines[2].startswith("[main not refreshed (fetch failed)] Janus checks: last quick check 13 Nov 15:33Z "
-                               "(3.3 days ago, LATE: due every 30 min); last daily review 2026-11-12 (MISSING)"), lines[2]
+                               "(3.3 days ago, LATE: due hourly); last daily review 2026-11-12 (MISSING)"), lines[2]
     assert len(needs) == 3
     # a success that is too old is stale; no success at all among the runs read is said as such
     old = api([run(1, "failure", "2026-11-16T20:00:00Z")], [run(2, "success", "2026-11-14T22:07:00Z")])

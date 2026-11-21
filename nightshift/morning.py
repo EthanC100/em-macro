@@ -19,7 +19,7 @@ origin/main copy the working tree's records are read and every line is marked "[
 Site and writers on main (2026-11-17, after ledger-pages failed for six days with nobody told): the latest run on main
 of ledger-pages (with the published site's own build time, read from its data/meta.json) and of ledger-daily, from
 the public GitHub Actions API (read only, no token, as nightshift.guard), and the Janus checks (latest quick check,
-due every 30 minutes, and the latest daily review) from the same records the Janus section reads. A failing or late
+due hourly, and the latest daily review) from the same records the Janus section reads. A failing or late
 one is marked FAILING / STALE / LATE and also goes to Needs Ethan; an unreadable source is said, never skipped.
 
 An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
@@ -240,7 +240,7 @@ ACTIONS_API = f"https://api.github.com/repos/{G.REPO}/actions/workflows"
 SITE_META = "https://ethanc100.github.io/em-macro/data/meta.json"
 WATCHED_WORKFLOWS = (("ledger-pages", "ledger-pages.yml"), ("ledger-daily", "ledger-daily.yml"))
 STALE_HOURS = 30            # both workflows succeed several times a day; a day and a bit with none is stale
-QUICK_CHECK_LATE_HOURS = 2  # quick checks are due every 30 minutes (:15 and :45)
+QUICK_CHECK_LATE_HOURS = 2  # quick checks are due hourly (at :15)
 CONCLUSIVE = ("success", "failure", "timed_out", "startup_failure", "action_required")
 
 
@@ -306,7 +306,7 @@ def janus_checks_line(records: list[dict], label: str, today: date, now: datetim
     late = not last or (now - last).total_seconds() > QUICK_CHECK_LATE_HOURS * 3600
     rs = J.review_status(records, today)
     line = (f"Janus checks: last quick check {_when(last)} ({_ago(last, now)}"
-            + (", LATE: due every 30 min" if late else "") + f"); last daily review {rs['last_date'] or 'none'} "
+            + (", LATE: due hourly" if late else "") + f"); last daily review {rs['last_date'] or 'none'} "
             f"({rs['status'].upper() if rs['status'] != 'ok' else 'ok'})")
     return (f"[{label}] {line}" if label else line), late or rs["status"] != "ok"
 
