@@ -131,9 +131,9 @@ def _hexes(arr: np.ndarray) -> list[str]:
 class Bridge:
     def __init__(self, ledger, policy: BridgePolicy, *, fence, caller: str = "session"):
         self.ledger, self.policy, self.fence, self.caller = ledger, policy, fence, caller
-        self._guard()
+        self._recheck_guards()
 
-    def _guard(self) -> None:
+    def _recheck_guards(self) -> None:
         """Every construction check, re-run at the start of ``begin``, ``complete`` and ``abandon``, so that changing
         the switch, the policy, the ledger, the fence, the caller or ``ROOT`` on an existing bridge is refused too
         (independent review, 2026-11-21)."""
@@ -215,7 +215,7 @@ class Bridge:
     def begin(self, runner: Runner, *, verify_rerun: bool = False) -> dict:
         """Register one attempt per candidate before ``runner.run(verify_rerun=...)``. Idempotent until the run
         starts: a second call with no ``run_started`` since the last registration returns that registration."""
-        self._guard()
+        self._recheck_guards()
         self._check_runner(runner)
         access, _, _ = _pr86()
         recs = run_records(AttemptLog(runner.ws.log_path), runner.run_id)
@@ -293,7 +293,7 @@ class Bridge:
         docs/manhattan/hte_accounting/BRIDGE.md). Without a writer the bridge refuses
         before writing anything; only the tests supply one, as PR #86's own tests call ``record_evaluation``. A run
         that is corrupted or failed verification is still closed (``end_attempt`` is not restricted)."""
-        self._guard()
+        self._recheck_guards()
         from manhattan.hte.runner import reconcile
         self._check_runner(runner)
         _, L, _ = _pr86()
@@ -374,7 +374,7 @@ class Bridge:
     def abandon(self, runner: Runner, why: str) -> dict:
         """Close every open attempt of the run's latest registration as ``aborted: interrupted`` (reads unknown,
         so ``data_read`` is true). For a run that will not be resumed (another engine or environment is a new run)."""
-        self._guard()
+        self._recheck_guards()
         if not isinstance(runner, Runner):
             raise BridgeRefused("an HTE Runner is required")
         # The run itself is not re-checked: abandoning only closes this bridge's own open attempts (aborted,
