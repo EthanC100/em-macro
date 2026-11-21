@@ -1,0 +1,50 @@
+{
+ "complete": {
+  "cpu_s": 967.631,
+  "us_per_candidate": 10072.5,
+  "wall_s": 1007.252
+ },
+ "evidence": "none: synthetic infrastructure measurement",
+ "impl": "main 5e4765e (before)",
+ "layout": "single",
+ "ledger_bytes": 291855208,
+ "ledgers": 1,
+ "looks": {
+  "distinct_evaluation_keys": 98969,
+  "summed_over_ledgers": 98969
+ },
+ "memory": {
+  "bytes_per_candidate": 15715.0,
+  "bytes_per_record": 7713.5,
+  "ledger_resident_mib": 1498.7
+ },
+ "n": 100000,
+ "peak_rss_mib": 1781.9,
+ "peak_rss_mib_write": 1117.5,
+ "reconcile": {
+  "cpu_s": 215.118,
+  "us_per_candidate": 2164.9,
+  "wall_s": 216.491
+ },
+ "reconcile_report": {
+  "completed": 100836,
+  "completed_evaluation_keys": 98969,
+  "failed": 1031,
+  "registered_executions": 101867,
+  "unfinished": 0
+ },
+ "reconcile_violations": 0,
+ "records": 203734,
+ "register": {
+  "cpu_s": 230.994,
+  "us_per_candidate": 2581.4,
+  "wall_s": 258.136
+ },
+ "reopen": {
+  "cpu_s": 11.865,
+  "us_per_candidate": 118.8,
+  "wall_s": 11.88
+ },
+ "reruns": 1867,
+ "synthetic": true
+}

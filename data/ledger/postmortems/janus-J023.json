@@ -1,0 +1,27 @@
+{
+ "book": "janus",
+ "id": "J023",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-19T23:11:49+00:00",
+ "postmortem": {
+  "thesis_right": "yes",
+  "skill_or_luck": "luck",
+  "what_happened": "The short real position filled at the 18 Nov PTAX of 5.8102 and closed the next day at 5.8889 when the 18 Nov review flipped the BRL forecast from 48 to 51, a net gain of about 0.04% of the account. The real kept weakening on fiscal doubts and uncertainty over the next government's economic team: spot closed at R$5.934 on 19 Nov, a sixth straight rise and the highest close since April 2025, even after the Senate passed the 2027 fiscal adjustment.",
+  "assessment": "The direction was right over the one-day hold, but one day of a 20-trading-day question says nothing about skill, so the gain is luck. The decision that ended it was the weak part: a three-point move from 48 to 51, driven by the Opposition's carry and intervention arguments and a 'sharp overshoot' reading, flipped a position into the trend the day before the trend extended. Near 50, a flip turns a small conviction change into a full round trip of costs and a reversal of exposure.",
+  "do_differently": "1) Do not cross 50 on an 'overshoot' argument alone when the fiscal driver is still worsening; require a concrete catalyst (intervention, a credible fiscal step) before flipping. 2) Treat moves of 1-3 points across 50 as costly: if the honest view is 'even', pick the side already held. 3) Check whether a local holiday (Brazil, 20 Nov) delays the base mark before reasoning about the overshoot being 'in the base mark'.",
+  "sources": [
+   {
+    "title": "Ibovespa recua 0,69% e d\u00f3lar renova m\u00e1xima em 19 meses a R$ 5,93 - BPMoney",
+    "url": "https://bpmoney.com.br/mercado/ibovespa-cai-dolar-renova-maxima-19-meses-r-593/"
+   },
+   {
+    "title": "Ibovespa B3 cai 0,69% com cautela fiscal; d\u00f3lar sobe a R$ 5,93",
+    "url": "https://borainvestir.b3.com.br/noticias/mercado/ibovespa-b3-cai-069-com-cautela-fiscal-dolar-sobe-a-r-593/"
+   },
+   {
+    "title": "D\u00f3lar sobe 1,45% com indefini\u00e7\u00e3o do PLP no Senado - SpaceMoney",
+    "url": "https://www.spacemoney.com.br/economia/dolar-hoje/dolar-alta-indefinicao-fiscal-senado"
+   }
+  ]
+ }
+}

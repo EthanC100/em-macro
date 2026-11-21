@@ -28,10 +28,26 @@ class LockedRunnerProbe(unittest.TestCase):
                      for d in importlib.metadata.distributions()}
         installed.pop("pip", None)  # bootstrap tooling supplied by venv, never upgraded
         self.assertEqual(installed, expected)
-        for name in ("pytest", "scipy", "yaml", "pandas"):
+        for name in ("pytest", "scipy", "pandas"):
             self.assertIsNone(importlib.util.find_spec(name), name)
+        self.assertIsNotNone(importlib.util.find_spec("yaml"))       # hash-pinned in the lock (owner decision D-12)
 
+        from manhattan import access as A
         from manhattan.ops import runner as R, data as D, store as ST
+
+        # The authoritative configuration under the lock: safe_load, verified against the checked-out commit and an
+        # explicit pin; a mismatched pin fails closed.
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                              check=True, timeout=30).stdout.strip()
+        probe = R.RunConfig(ledger_dir=ROOT, remote="", batches_dir=ROOT, asof=date(2005, 1, 7), commit=head)
+        verified = R.run_fence(probe)
+        self.assertTrue(isinstance(verified, A.VerifiedFence) and verified.valid())
+        self.assertEqual(len(verified.config_sha256), 64)
+        probe.config_sha256 = verified.config_sha256
+        self.assertEqual(R.run_fence(probe).record(), verified.record())
+        probe.config_sha256 = "f" * 64
+        with self.assertRaises(A.AccessError):
+            R.run_fence(probe)
 
         instant = datetime(2005, 1, 7, 23, 0, tzinfo=timezone.utc)
 

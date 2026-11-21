@@ -7,6 +7,7 @@ half-way through writing the chain and then recovered. The whole flow runs twice
 the two private ledgers are compared. Then every public channel is searched for the performance values the private
 ledger holds. Synthetic data only; no network; nothing is written to the repository.
 """
+import manhattan_attempt_fixtures as F  # the checked-out commit pins the configuration (D-12)
 import contextlib
 import json
 import os
@@ -131,7 +132,7 @@ def flow(root: Path, crash: bool) -> dict:
     def cfg(asof, run, attempt=1, crash_at=None):
         return R.RunConfig(ledger_dir=root / f"rt{run}.{attempt}/private/ledger", remote=str(remote),
                            batches_dir=batches, asof=asof, sources=("synthetic",), mirror=str(mirror), run_id=str(run),
-                           run_attempt=attempt, commit="c" * 40, private_dir=root / f"rt{run}.{attempt}/private",
+                           run_attempt=attempt, commit=F.HEAD, private_dir=root / f"rt{run}.{attempt}/private",
                            run_calendar="synthetic", crash_at=crash_at)
 
     fetch = lambda a: {"synthetic": (lambda: D.synthetic_csv(a))}
@@ -171,8 +172,14 @@ def flow(root: Path, crash: bool) -> dict:
         s = ST.Store(workdir=root / "rt-overwrite/private/ledger", remote=str(remote), run_id="900", run_attempt=2,
                      commit="c" * 40, clock=clock).open()
         first = s.of_type("observation")[0]
-        out["overwrite"] = s.write([ST.Intent("observation", tuple(first["key"]), {**first["payload"], "net": "0.5"})],
-                                   "overwrite attempt")
+        before_overwrite = len(s.records)
+        try:                                     # Phase 4B: evidence is written through manhattan.access only
+            s.write([ST.Intent("observation", tuple(first["key"]), {**first["payload"], "net": "0.5"})],
+                    "overwrite attempt")
+            out["overwrite"] = "written"
+        except ST.StoreError:
+            out["overwrite"] = "refused"
+        out["overwrite_records"] = (before_overwrite, len(s.records))
         # a run that fails inside evaluation, with a performance value in the exception message
         clock.at("2026-11-18T23:30:00Z")
         value = float(first["payload"]["net"]) if float(first["payload"]["net"]) else 0.012345678901
@@ -209,13 +216,18 @@ def runs(tmp_path_factory):
     return {"crash": flow(base / "crash", True), "reference": flow(base / "reference", False)}
 
 
+ACCOUNTING = ("attempt_started", "attempt_completed", "attempt_failed", "attempt_aborted")
+
+
 def content(records):
-    """Type, key and payload of every record but the locks. A conflict's ``existing_hash`` is the hash of the record
-    it protects, which covers that record's random nonce and time, so it differs between two runs by design."""
+    """Type, key and payload of every record but the locks and the attempt accounting. A conflict's
+    ``existing_hash`` is the hash of the record it protects, which covers that record's random nonce and time, so it
+    differs between two runs by design. Attempt records (Phase 4B) differ by design too: attempt IDs carry a random
+    nonce, and a crashed run has executions an uninterrupted one does not (checked in test_recovery_is_exact)."""
     def payload(r):
         return {k: v for k, v in r["payload"].items() if not (r["type"] == "conflict" and k == "existing_hash")}
     return sorted(json.dumps([r["type"], r["key"], payload(r)], sort_keys=True) for r in records
-                  if r["type"] not in ("lock", "unlock", "lock_broken"))
+                  if r["type"] not in ("lock", "unlock", "lock_broken", *ACCOUNTING))
 
 
 # ---- O-34
@@ -227,7 +239,8 @@ def test_ten_synthetic_families_through_every_stage(runs):
     assert len(fam_specs) == 10 and all("SYNTHETIC" in f["mechanism"] for f in fam_specs)
     f = r["final"]
     types = {x["type"] for x in f.records}
-    assert {"screening", "capture", "registration", "observation", "missed_run", "heartbeat", "conflict"} <= types
+    assert {"screening", "capture", "registration", "observation", "missed_run", "heartbeat"} <= types
+    assert "conflict" not in types        # Phase 4B: the overwrite attempt is refused before it reaches the chain
     scr = f.of_type("screening")
     assert len(scr) == r["prep"]["executables"]
     assert all(x["payload"]["role"] == "exploration" and x["payload"]["evidential_weight"] == 0 for x in scr)
@@ -280,7 +293,7 @@ def test_records_are_immutable(runs):
     for r in runs.values():
         after = [json.dumps(x, sort_keys=True) for x in r["final"].records]
         assert after[: len(r["after_cycle1"])] == r["after_cycle1"]
-        assert r["overwrite"]["conflict"] == 1 and r["overwrite"]["appended"] == 0
+        assert r["overwrite"] == "refused" and r["overwrite_records"][0] == r["overwrite_records"][1]
     c = runs["crash"]
     assert [json.dumps(x, sort_keys=True) for x in c["final"].records][: len(c["after_crash"])] == c["after_crash"]
 
@@ -294,6 +307,14 @@ def test_recovery_is_exact(runs):
     assert len(runs["crash"]["after_crash"]) < len(c.records)          # the crash really cut the cycle short
     keys = [tuple(x["key"]) for x in c.records]
     assert len(keys) == len(set(keys))
+    # Phase 4B: the crashed cycle's executions are accounted for, and both histories reconcile
+    from manhattan import attempts
+    for run in (c, ref):
+        r = attempts.reconcile(store_chain=run.workdir / ST.CHAIN,
+                               store_anchor={"records": len(run.records), "head": run.head})
+        assert r["access_reconciled"], r["violations"]
+        assert r["repeated_observations"] == len(run.of_type("observation"))
+    assert len(c.of_type("attempt_started")) > len(ref.of_type("attempt_started"))
 
 
 # ---- O-05 and O-35: nothing leaks to the public stand-in or to the generator

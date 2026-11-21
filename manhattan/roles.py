@@ -84,6 +84,7 @@ class RunnerToken:
     manifest_hash: str
     verified: bool
     designated: frozenset = field(default_factory=frozenset)     # (domain, window id) pairs still unused
+    specs: frozenset = field(default_factory=frozenset)          # spec hashes the manifest names (Phase 4B binding)
 
 
 def check_read(caller: str, domain: str, start: date, end: date, fence: Fence, *, freeze: date | None = None,

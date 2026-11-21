@@ -53,6 +53,7 @@ HEALTH_SCHEMA = {
     "observations_expected": "int", "missed_observations": "int", "missed_runs": "dates", "missed_runs_new": "int",
     "captures_new": "int", "captures_total": "int", "sources_ok": "words", "sources_failed": "words",
     "conflicts": "int", "checkpoints": "words", "promotion": "word",
+    "attempts_registered": "int", "attempts_recovered": "int",
 }
 STATUSES = ("ok", "failed", "locked", "partial", "dry_run", "nothing_to_do")
 
