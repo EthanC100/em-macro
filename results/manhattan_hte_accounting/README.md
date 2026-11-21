@@ -28,3 +28,23 @@ Reading:
 - **Memory.** Peak RSS at 100k is 3.5 GiB, mostly PR #86 ledger records held in memory, and it grows with the ledger.
 - **A first 100k run is superseded.** Its cross-check took 4,197 s because two sets were rebuilt inside loops in the
   bridge's own cross-check (fixed in commit 9ddb701). Its other steps and its consistency matched this run.
+
+## On the indexed ledger (PR #100), 21 November 2026
+
+After PR #100 merged, this branch was merged with main (e194cb0). `_batch_state` and the cross-check now stream the
+ledger with `Ledger.iter_records`. Everything below was measured in one container, one run at a time (4 logical
+CPUs, slower than the machine used above). The first row is that machine's baseline: pre-#100 main with this
+branch as first published.
+
+| file | candidates | HTE run s | begin s | complete s | cross-check s | of which bridge s | of which PR #86 reconciler s | accounting / HTE run | ms per candidate | ledger MiB | ledger B per candidate | ledger records | outcome batches | peak RSS MiB | consistent |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `bench_10k_w4_before_pr100_same_machine.json` | 10,344 | 10.5 | 37.3 | 23.3 | 28.8 | 2.885 | 25.677 | 8.53× | 8.6 | 35.1 | 3,556 | 20,688 | 21 | 439 | yes |
+| `bench_10k_w4_indexed.json` | 10,344 | 11.8 | 8.3 | 8.0 | 4.6 | 2.849 | 1.458 | 1.77× | 2.0 | 35.1 | 3,556 | 20,688 | 21 | 278 | yes |
+| `bench_100k_w4_indexed.json` | 99,552 | 71.6 | 83.9 | 78.4 | 45.0 | 27.587 | 15.115 | 2.9× | 2.1 | 337.8 | 3,558 | 199,104 | 195 | 2,005 | yes |
+
+- **At 10k on the same machine:** accounting falls from 8.5× to 1.8× the HTE run (89.3 s to 20.9 s), and peak RSS from
+  439 to 278 MiB.
+- **At 100k:** accounting is 2.9× the HTE run (207 s), linear at about 2.1 ms per candidate, against 35.6× in the first
+  published run above. Peak RSS falls from 3.5 to 2.0 GiB.
+- Every run was consistent, with one PR #86 attempt per candidate, no reconciler violations and at most 512 rows per
+  outcome batch.

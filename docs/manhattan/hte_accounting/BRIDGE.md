@@ -86,7 +86,7 @@ outcome can be fetched and verified alone.
 | **D-1** | which unit enters a multiple-testing denominator? | `registered_executions`, `completed_evaluation_keys`, `executables`, `bindings`, `candidates`, `variants`, `hypotheses`, `families` | never needed by the bridge; `denominator()` refuses without it and an approval reference |
 | **B4** | HTE work → PR #86 attempts cardinality | `per_candidate_attempts` (implemented: PR #86's attempt is one executable); `per_chunk_attempt` (needs a new PR #86 attempt kind) | `None` → required; `per_chunk_attempt` → unsupported |
 | **A-1** (new) | may HTE completions be written to the Manhattan ledger, and by which module? PR #86 lets only `ledger.py` and `engine/evaluate.py` call `Ledger.record_evaluation` (`tests/test_manhattan_binding_access.py` `ALLOWED`; "adding a module here is a reviewable decision") | (a) add `manhattan/hte_accounting/bridge.py` to that allowlist; (b) run HTE computations through `engine.evaluate` under an `AttemptContext` (a redesign of HTE's vectorised stages); (c) keep HTE completions out of the ledger (consistent with D-10 = `unregistered`) | the bridge never calls `record_evaluation`. `complete` refuses (`OwnerDecisionRequired: A-1`) unless the caller supplies a completion writer, and nothing is written. Only the tests and the benchmark script, outside `manhattan/`, supply one. |
-| **A-2** (new) | ledger scaling. PR #86's `record_evaluation` scans every earlier evaluation for each new one (its `data_changed` rule), so completions grow quadratically in one ledger; registration and the strict reconciler re-check every declaration over the whole window (about 2 ms per attempt for HTE's 8.8-year windows) | (a) accept one ledger per HTE run (measured, section 6); (b) shard ledgers by `spec_hash` prefix (every PR #86 key rule stays inside one shard; needs an anchor per shard); (c) index the `data_changed` lookup in PR #86 (a PR #86 change) | single ledger only; costs are reported |
+| **A-2** | ledger scaling, and which ledger HTE writes to | scaling: **resolved by PR #100** (the indexed ledger, merged), so completion is linear (section 6). Still open: which ledger, from (i) one dedicated, persistent HTE exploration ledger, (ii) the main Manhattan ledger, or (iii) one ledger per run, which loses cross-run rerun detection | any ledger the caller passes; the bridge refuses ledgers inside the repository |
 | **A-3** (new) | data identity. A registered HTE attempt binds the synthetic panel's `data_hash` (verified by `verify_synthetic`) and declares exploration windows, but HTE reads its own panel, not a PR #86 `PitStore(synthetic=True)` window, so PR #86 records no window read | (a) accept identity binding for synthetic panels; (b) load the panel into a synthetic `PitStore` and compute inside the attempt's windows (a redesign) | (a), stated here and in every report |
 
 Each policy also names `approval_ref`, where the owner recorded the decisions. A policy without one is refused. The
@@ -114,22 +114,26 @@ whose rows hold the attempt IDs.
 ## 6. Benchmark
 
 `scripts/hte_accounting_bench.py` measures this (outside `manhattan/`, because it supplies the A-1 writer). The
-results are in `results/manhattan_hte_accounting/` (README there). With 4 workers, synthetic panel:
+results are in `results/manhattan_hte_accounting/` (README there). With 4 workers, on the synthetic panel:
 
-| candidates | HTE run | begin | complete | cross-check (PR #86 reconciler) | accounting / run | ledger |
-|---|---|---|---|---|---|---|
-| 10,344 | 8.1 s | 30.4 s | 15.1 s | 24.6 s (22.2 s) | 8.7× | 35 MiB, 20,688 records |
-| 99,552 | 44.0 s | 258.4 s | 1,083.7 s | 226.6 s (203.4 s) | 35.6× | 338 MiB, 199,104 records |
+| ledger | candidates | HTE run | begin | complete | cross-check (PR #86 reconciler) | accounting / run | peak RSS |
+|---|---|---|---|---|---|---|---|
+| before PR #100 | 10,344 | 10.5 s | 37.3 s | 23.3 s | 28.8 s | 8.5× | 439 MiB |
+| **indexed (PR #100)** | 10,344 | 11.8 s | 8.3 s | 8.0 s | 4.6 s (1.5 s) | **1.8×** | 278 MiB |
+| **indexed (PR #100)** | 99,552 | 71.6 s | 83.9 s | 78.4 s | 45.0 s (15.1 s) | **2.9×** | 2.0 GiB |
+| before PR #100, as first published (another machine) | 99,552 | 44.0 s | 258.4 s | 1,083.7 s | 226.6 s (203.4 s) | 35.6× | 3.5 GiB |
 
-Registration is linear, at about 2.6 ms per candidate, mostly PR #86's declaration check. Completion is quadratic
-because of PR #86's `record_evaluation` scan (A-2). The ledger costs 3.56 kB per candidate, and outcome batches plus
-the registration file add about 0.5 kB. Peak memory at 100k is 3.5 GiB. Both runs were consistent, with no PR #86
-reconciler violations.
+The first three rows ran on the same machine, one at a time. On the indexed ledger:
+- registration, completion and the cross-check are linear, at about 2.1 ms of accounting per candidate in total;
+- the ledger costs 3.56 kB per candidate, and outcome batches plus the registration file add about 0.5 kB;
+- `_batch_state` and the cross-check stream the ledger with `Ledger.iter_records`, so it is never held as objects.
+
+Every run was consistent, with one attempt per candidate and no PR #86 reconciler violations.
 
 ## 7. Limitations
 
 - Dormant: nothing calls the bridge, and no production ledger, workflow or configuration is touched.
 - The PR #86 completion path (A-1) is exercised only with a test-supplied writer.
-- One PR #86 ledger per run (A-2); costs grow as measured.
+- Which ledger HTE writes to is still open (A-2); the bridge accepts any ledger outside the repository.
 - HTE computations are not executed inside PR #86 attempt windows (A-3).
 - Same-close execution (#89 F8) still restricts every HTE number to throughput testing.
