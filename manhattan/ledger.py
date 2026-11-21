@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -142,6 +143,43 @@ def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[di
     return recs, errs
 
 
+class IrregularSnapshot(Exception):
+    """The fast path met something ``verify_snapshot`` might treat differently or report: use ``verify_snapshot``."""
+
+
+def iter_verified(lines):
+    """Yield ``(record, line)`` for each record of an iterable of byte lines (a file opened ``"rb"``, or
+    ``io.BytesIO(snapshot)``), checking the chain exactly as ``verify_snapshot`` does, one line at a time, so that
+    nothing but the current record is held in memory.
+
+    It covers the regular case only: every line valid UTF-8, one record per ``\\n``-terminated line, every record
+    valid. At the first thing ``verify_snapshot`` would report or might split differently (invalid UTF-8, another
+    line boundary inside a line, JSON that does not parse, a sequence, chain, hash or type problem, an exception),
+    it raises ``IrregularSnapshot`` and the caller answers from ``verify_snapshot`` on the same bytes. The fast path
+    therefore never accepts what ``verify_snapshot`` refuses, and never reports a different problem."""
+    prev, n = GENESIS, 0
+    for raw in lines:
+        try:
+            pieces = raw.decode("utf-8").splitlines()
+        except UnicodeDecodeError:
+            raise IrregularSnapshot from None
+        if len(pieces) > 1:
+            raise IrregularSnapshot
+        if not pieces or not pieces[0].strip():
+            continue
+        try:
+            rec = json.loads(pieces[0])
+            n += 1
+            ok = (isinstance(rec, dict) and rec.get("seq") == n and rec.get("prev_hash") == prev
+                  and all(k in rec for k in FIELDS) and rec.get("hash") == record_hash(rec) and rec["type"] in TYPES)
+        except Exception:                                 # noqa: BLE001 - verify_snapshot decides what it was
+            raise IrregularSnapshot from None
+        if not ok:
+            raise IrregularSnapshot
+        prev = rec["hash"]
+        yield rec, pieces[0]
+
+
 def require_code_identity(version) -> None:
     """A known Git commit and an engine or Git-tree content digest.
 
@@ -226,67 +264,182 @@ def _safe_key(p) -> tuple | None:
         return None
 
 
+_BAD = object()                                   # an indexed field the record does not have (or not as a value)
+
+
+def _field(p, *path, hashable: bool = False):
+    """``p[a][b]...``, or ``_BAD`` where that lookup would raise (or, with ``hashable``, where the value cannot be
+    a set member)."""
+    try:
+        for k in path:
+            p = p[k]
+        if hashable:
+            hash(p)
+        return p
+    except (KeyError, TypeError, IndexError):
+        return _BAD
+
+
+def _i(v):
+    """One shared object for equal identifier strings (hashes, window IDs) across the indexes: equality, and so
+    every rule, is unchanged; only the copies are saved."""
+    return sys.intern(v) if type(v) is str else v
+
+
+def _hashable(v) -> bool:
+    try:
+        hash(v)
+        return True
+    except TypeError:
+        return False
+
+
 class Ledger:
     """One ledger file. ``append`` is the only way a record is written.
 
     Lifecycle queries are served from indexes kept in step with ``append`` (Phase 4B), so registering and completing
-    attempts does not rescan the ledger. Their answers are those of the 4A-1a scans they replace."""
+    attempts does not rescan the ledger. Their answers are those of the 4A-1a scans they replace.
+
+    Scaling (Manhattan phase 3, docs/manhattan/LEDGER_SCALING.md). Records are held as their verified JSON lines,
+    not as parsed objects, and are decoded when read; the indexes hold only what the rules look up (keys, sequence
+    numbers, result hashes, the attempt links). Every query that used to scan the whole ledger is answered from an
+    index (the ``data_changed`` rule's earlier evaluations of a spec on a window, the result of record, suspended
+    families, records of a type). The rules, the records written and every answer are those of the scans; a record
+    an index cannot place (a malformed record that only a forged write can produce) makes the query that would have
+    met it refuse, as the scan raised there. ``records()`` returns new objects on each call."""
 
     public = False
 
     def __init__(self, path: Path, writer: str, protocol: str):
         self.path, self.writer, self.protocol = Path(path), writer, protocol
-        errs = verify(self.path)
-        if errs:
-            raise LedgerError("the ledger does not verify: " + "; ".join(errs))
-        self._recs = []
-        self._starts: dict[str, dict] = {}            # attempt ID -> start record
-        self._starts_by_key: dict[tuple, list] = {}
-        self._terminated: set[str] = set()            # attempt IDs with a linked completion or terminal
-        self._superseded: set[str] = set()
-        self._evals_by_key: dict[tuple, list] = {}
-        self._evals: list[dict] = []
-        self._legacy_last: dict[tuple, int] = {}      # key -> seq of the latest unlinked completion
-        self._designated: dict[tuple, list] = {}      # (batch, domain) -> every schema-2 reserve start
-        for rec in read(self.path):
-            self._index(rec)
+        self._reset()
+        try:
+            with self.path.open("rb") as f:
+                for rec, line in iter_verified(f):
+                    self._index(rec, line)
+        except FileNotFoundError:
+            pass
+        except IrregularSnapshot:
+            # the exact 4A-1a answer: verify, then index every record of the verified snapshot
+            self._reset()
+            try:
+                snapshot = self.path.read_bytes()
+            except FileNotFoundError:
+                snapshot = b""
+            recs, errs = verify_snapshot(snapshot)
+            if errs:
+                raise LedgerError("the ledger does not verify: " + "; ".join(errs)) from None
+            for rec in recs:
+                self._index(rec)
 
-    def _index(self, rec: dict) -> None:
-        self._recs.append(rec)
+    def _reset(self) -> None:
+        self._lines: list[bytes] = []                 # record seq n is self._lines[n - 1], as written in the file
+        self._head = GENESIS
+        self._by_type: dict[str, list[int]] = {}       # type -> positions, in order
+        self._starts: dict[str, tuple] = {}            # attempt ID -> (position, seq, key)
+        self._starts_by_key: dict[tuple, list] = {}    # key -> attempt IDs, in order
+        self._terminated: set[str] = set()             # attempt IDs with a linked completion or terminal
+        self._superseded: set[str] = set()
+        self._evals_by_key: dict[tuple, list] = {}     # key -> (seq, result_hash), in order
+        self._evals: list[int] = []                    # positions of completions
+        self._legacy_last: dict[tuple, int] = {}       # key -> seq of the latest unlinked completion
+        self._designated: dict[tuple, list] = {}       # (batch, domain) -> every schema-2 reserve start
+        # the data_changed rule and the result of record: (spec_hash, window id) -> (seq, position, designated) of
+        # every record of type "evaluation", in order; and what the scan would have raised on
+        self._evaluated: dict[tuple, list] = {}
+        self._eval_unplaceable = False                 # an "evaluation" (object payload) without a spec_hash
+        self._eval_nonobject = False                   # an "evaluation" whose payload is not an object
+        self._eval_bad_window: set = set()             # spec hashes of an "evaluation" without a window id
+        self._families: set = set()                    # families of nondeterminism records
+        self._family_unplaceable = False
+
+    def _index(self, rec: dict, line: str | bytes | None = None) -> None:
+        if line is None:
+            line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        pos = len(self._lines)
+        self._lines.append(line.encode("utf-8") if isinstance(line, str) else bytes(line))
+        self._head = rec["hash"]
         t, p = rec["type"], rec["payload"]
+        self._by_type.setdefault(t, []).append(pos)
+        if t == "evaluation" and not isinstance(p, dict):
+            self._eval_nonobject = True
+        if t == "nondeterminism":
+            fam = _field(p, "family", hashable=True)
+            if fam is _BAD:
+                self._family_unplaceable = True
+            else:
+                self._families.add(fam)
         if not isinstance(p, dict):
             return                                    # malformed: the reconciler reports it
         k = _safe_key(p)
+        if k is not None:
+            k = tuple(map(_i, k))
         if t == "evaluation_started":
-            self._starts[rec["hash"]] = rec
+            aid = _i(rec["hash"])
+            self._starts[aid] = (pos, rec["seq"], k)
             if k is not None:
-                self._starts_by_key.setdefault(k, []).append(rec)
+                self._starts_by_key.setdefault(k, []).append(aid)
             if isinstance(p.get("supersedes"), str):
-                self._superseded.add(p["supersedes"])
+                self._superseded.add(_i(p["supersedes"]))
             dom = _reserve_domain(p)
             if dom is not None:
                 self._designated.setdefault((p.get("batch"), dom), []).append(rec["hash"])
         elif t in COMPLETIONS:
-            self._evals.append(rec)
+            self._evals.append(pos)
             if k is not None:
-                self._evals_by_key.setdefault(k, []).append(rec)
+                self._evals_by_key.setdefault(k, []).append((rec["seq"], _field(p, "result_hash")))
             if isinstance(p.get("attempt_id"), str):
-                self._terminated.add(p["attempt_id"])
+                self._terminated.add(_i(p["attempt_id"]))
             elif "attempt_id" not in p and k is not None:
                 self._legacy_last[k] = rec["seq"]
+            if t == "evaluation":
+                sh = _field(p, "spec_hash")
+                wid = _field(p, "window", "id")
+                if sh is _BAD:
+                    self._eval_unplaceable = True
+                elif not _hashable(sh):
+                    pass                              # equal to no spec hash a caller passes: never matched
+                elif wid is _BAD:
+                    self._eval_bad_window.add(sh)
+                elif _hashable(wid):
+                    self._evaluated.setdefault((_i(sh), _i(wid)), []).append(
+                        (rec["seq"], pos, _field(p, "designated")))
         elif t in ("attempt_failed", "attempt_aborted") and isinstance(p.get("attempt_id"), str):
-            self._terminated.add(p["attempt_id"])
+            self._terminated.add(_i(p["attempt_id"]))
+
+    def _record(self, pos: int) -> dict:
+        return json.loads(self._lines[pos])
+
+    def _start(self, attempt_id) -> dict | None:
+        meta = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
+        return None if meta is None else self._record(meta[0])
+
+    def _earlier(self, spec_hash, window_id, *, objects_only: bool = True) -> list:
+        """The ``evaluation`` records of a spec on a window, as (seq, position, designated); refuses where the scan
+        of every evaluation would have raised (a malformed record only a forged write produces). The completion
+        rule scanned only records with an object payload; ``result_of_record`` scanned every one."""
+        if (self._eval_unplaceable or (not objects_only and self._eval_nonobject)
+                or (_hashable(spec_hash) and spec_hash in self._eval_bad_window)):
+            raise LedgerError("the ledger holds an evaluation record without a spec and window: the reconciler "
+                              "reports it; no rule is applied past it")
+        return self._evaluated.get((spec_hash, window_id), []) if _hashable((spec_hash, window_id)) else []
 
     # ---- reading
     def records(self, type_: str | None = None) -> list[dict]:
-        return [r for r in self._recs if type_ is None or r["type"] == type_]
+        return list(self.iter_records(type_))
+
+    def iter_records(self, type_: str | None = None):
+        """``records(type_)`` one record at a time (for callers that need not hold every record at once)."""
+        if type_ is None:
+            return (json.loads(x) for x in self._lines)
+        return (self._record(i) for i in (self._by_type.get(type_, []) if _hashable(type_) else []))
 
     @property
     def head(self) -> str:
-        return self._recs[-1]["hash"] if self._recs else GENESIS
+        return self._head
 
     def __len__(self) -> int:
-        return len(self._recs)
+        return len(self._lines)
 
     # ---- writing
     def append(self, type_: str, payload: dict, ts_utc: str | None = None) -> dict:
@@ -301,30 +454,30 @@ class Ledger:
         returned survives a crash of the process (Phase 4B)."""
         if type_ not in TYPES:
             raise LedgerError(f"unknown record type {type_}")
-        rec = {"seq": len(self._recs) + 1,
+        rec = {"seq": len(self._lines) + 1,
                "ts_utc": ts_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                "type": type_, "writer": self.writer, "protocol": self.protocol,
                "payload": json.loads(S.canonical_bytes(payload)), "prev_hash": self.head}
         rec["hash"] = record_hash(rec)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
+        line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(line)
+            f.write(line + "\n")
             f.flush()
             os.fsync(f.fileno())
-        self._index(rec)
+        self._index(rec, line)
         return rec
 
     def correction(self, target_seq: int, fields: dict, reason: str) -> dict:
         """Record that fields of an earlier record were wrong. ``fields`` maps each to {"old": ..., "new": ...};
         the earlier record stays as it is."""
-        if not 1 <= target_seq <= len(self._recs):
+        if not 1 <= target_seq <= len(self._lines):
             raise LedgerError("a correction must name an existing record")
         if not reason or not reason.strip():
             raise LedgerError("a correction needs a reason")
         if not fields or any(set(v) != {"old", "new"} for v in fields.values()):
             raise LedgerError("a correction lists each field with its old and new value")
-        target = self._recs[target_seq - 1]
+        target = self._record(target_seq - 1)
         return self.append("correction", {"target_seq": target_seq, "target_hash": target["hash"],
                                           "fields": fields, "reason": reason})
 
@@ -334,7 +487,7 @@ class Ledger:
         return payload["spec_hash"], payload["data_hash"], payload["window"]["id"]
 
     def _evaluations(self) -> list[dict]:
-        return list(self._evals)
+        return [self._record(i) for i in self._evals]
 
     def start_evaluation(self, payload: dict, *, supersedes: str | None = None) -> dict:
         """Register an execution; the returned start record's hash is its attempt ID.
@@ -369,15 +522,24 @@ class Ledger:
         return self._append("evaluation_started", p)
 
     def active_attempt(self, attempt_id: str) -> dict:
-        start = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
-        if start is None or not self._unfinished_one(start):
+        meta = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
+        if meta is None or not self._unfinished_id(attempt_id):
             raise LedgerError("attempt is not registered and unfinished")
         if attempt_id in self._superseded:
             raise LedgerError("attempt has been superseded")
-        return start
+        return self._record(meta[0])
+
+    def _unfinished_id(self, attempt_id: str) -> bool:
+        """The 4A-1a ``unfinished`` predicate for one start."""
+        if attempt_id in self._terminated:
+            return False
+        if attempt_id in self._superseded:
+            return True
+        _, seq, k = self._starts[attempt_id]
+        return k is None or self._legacy_last.get(k, 0) < seq
 
     def _unfinished_one(self, r: dict) -> bool:
-        """The 4A-1a ``unfinished`` predicate for one start."""
+        """The 4A-1a ``unfinished`` predicate for one start record."""
         if r["hash"] in self._terminated:
             return False
         if r["hash"] in self._superseded:
@@ -417,7 +579,7 @@ class Ledger:
             raise LedgerError("role must be exploration, reserve or forward; channel blind or adaptive")
         if role in PROTECTED_ROLES:
             from manhattan import access
-            start = self._starts.get(attempt_id) if isinstance(attempt_id, str) else None
+            start = self._start(attempt_id)
             if start is None or start["payload"].get("attempt_schema") != ATTEMPT_SCHEMA:
                 raise LedgerError("a reserve or forward completion needs a registered (schema 2) attempt")
             access.verify_completion(proof, attempt_id=attempt_id, result_hash=result_hash, ledger=self)
@@ -428,14 +590,14 @@ class Ledger:
                    "reconstructed": bool(reconstructed),
                    "evidential_weight": evidential_weight(channel, role, designated, reconstructed)}
         if attempt_id is None:
-            candidates = [r for r in self._starts_by_key.get(self.key(payload), [])
-                          if self._unfinished_one(r) and r["hash"] not in self._superseded]
+            candidates = [a for a in self._starts_by_key.get(self.key(payload), [])
+                          if self._unfinished_id(a) and a not in self._superseded]
             if len(candidates) > 1:
                 raise LedgerError("ambiguous attempt: supply attempt_id")
             if candidates:
-                if candidates[0]["payload"].get("attempt_schema") == ATTEMPT_SCHEMA:
+                if self._start(candidates[0])["payload"].get("attempt_schema") == ATTEMPT_SCHEMA:
                     raise LedgerError("a registered attempt completes only through its own attempt_id")
-                attempt_id = candidates[0]["hash"]
+                attempt_id = candidates[0]
         if attempt_id is not None:
             start = self.active_attempt(attempt_id)
             if not same_identity(start["payload"], payload):
@@ -443,17 +605,25 @@ class Ledger:
             payload["attempt_id"] = attempt_id
         same_key = self._evals_by_key.get(self.key(payload), [])
         if same_key:
-            first = same_key[0]
-            if all(r["payload"]["result_hash"] == result_hash for r in same_key):
-                payload.update(evidential_weight=0, first_seq=first["seq"])
+            if any(rh is _BAD for _, rh in same_key):
+                raise LedgerError("the ledger holds a completion without a result hash on this key: the reconciler "
+                                  "reports it; no rule is applied past it")
+            first_seq, first_rh = same_key[0]
+            if all(rh == result_hash for _, rh in same_key):
+                payload.update(evidential_weight=0, first_seq=first_seq)
                 return self._append("rerun", payload)
-            payload.update(evidential_weight=0, first_seq=first["seq"], first_result_hash=first["payload"]["result_hash"])
+            payload.update(evidential_weight=0, first_seq=first_seq, first_result_hash=first_rh)
             return self._append("nondeterminism", payload)
-        earlier = [r for r in self._evals if r["type"] == "evaluation" and r["payload"]["spec_hash"] == spec_hash
-                   and r["payload"]["window"]["id"] == window["id"]]
+        earlier = self._earlier(spec_hash, window["id"])
         if earlier:
-            of_record = next((r for r in earlier if r["payload"]["designated"]), earlier[0])
-            payload.update(data_changed=True, designated=False, evidential_weight=0, result_of_record_seq=of_record["seq"])
+            of_record = earlier[0]
+            for e in earlier:
+                if e[2] is _BAD:
+                    raise LedgerError("the ledger holds an evaluation record without a designation")
+                if e[2]:
+                    of_record = e
+                    break
+            payload.update(data_changed=True, designated=False, evidential_weight=0, result_of_record_seq=of_record[0])
         return self._append("evaluation", payload)
 
     def designated_reserve_starts(self, batch: str, domain: str) -> list[str]:
@@ -468,24 +638,27 @@ class Ledger:
         return len(self._evals_by_key)
 
     def unfinished(self) -> list[dict]:
-        return [r for r in self._starts.values() if self._unfinished_one(r)]
+        return [self._record(m[0]) for a, m in self._starts.items() if self._unfinished_id(a)]
 
     def suspended_families(self) -> set[str]:
         """Families with a nondeterminism on record: no tier change until the cause is found."""
-        return {r["payload"]["family"] for r in self.records("nondeterminism")}
+        if self._family_unplaceable:
+            raise LedgerError("the ledger holds a nondeterminism record without a family: the reconciler reports it")
+        return set(self._families)
 
     def result_of_record(self, spec_hash: str, window_id: str) -> dict | None:
         """The first designated evaluation of a spec on a window, which later data revisions never replace."""
-        for r in self.records("evaluation"):
-            p = r["payload"]
-            if p["spec_hash"] == spec_hash and p["window"]["id"] == window_id and p["designated"]:
-                return r
+        for _, pos, designated in self._earlier(spec_hash, window_id, objects_only=False):
+            if designated is _BAD:
+                raise LedgerError("the ledger holds an evaluation record without a designation")
+            if designated:
+                return self._record(pos)
         return None
 
     def run_summary_payload(self) -> dict:
         """What the public index stores about this ledger at the end of a run: no outcome."""
-        return {"ledger_records": len(self._recs), "ledger_head": self.head,
-                "merkle_root": merkle_root([r["hash"] for r in self._recs])}
+        return {"ledger_records": len(self._lines), "ledger_head": self.head,
+                "merkle_root": merkle_root([r["hash"] for r in self.iter_records()])}
 
 
 def recover_torn_tail(path: Path) -> dict:

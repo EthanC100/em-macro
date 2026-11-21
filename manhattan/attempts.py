@@ -11,6 +11,7 @@ accounting failures are reported as violation codes with store and sequence numb
 
 An independently retained head anchor is required to detect suffix deletion.
 """
+import io
 import json
 import re
 from pathlib import Path
@@ -178,7 +179,53 @@ class _Audit:
                 self.read[f"{status}_read"] += 1
 
 
-def _ledger_pass(records: list, audit: _Audit) -> set:
+def _pack(p: dict):
+    """A start payload as compact JSON (Manhattan phase 3: the audit holds every start until the end; a parsed
+    payload costs about four times its JSON). ``_unpack`` gives back an equal object."""
+    try:
+        return json.dumps(p, separators=(",", ":")).encode("ascii")
+    except (TypeError, ValueError):
+        return p                                         # not JSON (a caller's own objects): kept as it is
+
+
+def _unpack(x) -> dict:
+    return json.loads(x) if isinstance(x, bytes) else x
+
+
+def _ledger_snapshot_pass(snapshot: bytes, anchor: tuple, audit: _Audit) -> tuple[set, dict]:
+    """``verify_snapshot``, ``_prefix`` and ``_ledger_pass`` on one snapshot, streamed (Manhattan phase 3): the
+    regular case is verified line by line (``ledger.iter_verified``), then the records up to the anchor are parsed
+    again one at a time for the audit, so the ledger is never held as objects. Anything irregular takes the original
+    path on the same bytes, with its exact errors."""
+    n, head = anchor
+    total, at_anchor = 0, L.GENESIS
+    try:
+        for rec, _ in L.iter_verified(io.BytesIO(snapshot)):
+            total += 1
+            if total == n:
+                at_anchor = rec["hash"]
+    except L.IrregularSnapshot:
+        records, errors = L.verify_snapshot(snapshot)
+        if errors:
+            raise ReconciliationError("the ledger does not verify: " + "; ".join(errors)) from None
+        scope = _prefix(records, anchor, "ledger")
+        return _ledger_pass(scope, audit), {"records": n, "head": head, "beyond": len(records) - n}
+    if n > total or at_anchor != head:
+        raise ReconciliationError("the ledger does not reach its anchor (records deleted, replaced or rewritten)")
+
+    def scope():
+        seen = 0
+        for raw in io.BytesIO(snapshot):
+            if seen == n:
+                return
+            text = raw.decode("utf-8")
+            if text.strip():                             # the lines iter_verified accepted: one record each
+                seen += 1
+                yield json.loads(text)
+    return _ledger_pass(scope(), audit), {"records": n, "head": head, "beyond": total - n}
+
+
+def _ledger_pass(records, audit: _Audit) -> set:
     from . import access as A
     starts, terminal, superseded = {}, {}, set()
     for r in records:
@@ -212,18 +259,19 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                 if ok:
                     try:
                         L.require_code_identity(p.get("code_version"))
-                        L.require_code_identity(starts[prior][1].get("code_version"))
+                        prior_p = _unpack(starts[prior][1])
+                        L.require_code_identity(prior_p.get("code_version"))
                     except L.LedgerError:
                         ok = False
                     ok = ok and {k: v for k, v in p.items() if k != "supersedes"} == \
-                        {k: v for k, v in starts[prior][1].items() if k != "supersedes"}
+                        {k: v for k, v in prior_p.items() if k != "supersedes"}
                 if not ok:
                     audit.v("invalid_retry", "ledger", seq)
                 else:
                     superseded.add(prior)
                     if audit.scoped(p):
                         audit.counts["retries"] += 1
-            starts[r["hash"]] = (seq, p)
+            starts[r["hash"]] = (seq, _pack(p))
             dom = L._reserve_domain(p)
             if dom is not None and p.get("designated") is not True:
                 # S7 N1: a reserve read is the designated evaluation of its (batch, domain) or nothing
@@ -272,7 +320,7 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
             if aid in terminal:
                 audit.v("duplicate_or_contradictory_terminal", "ledger", seq)
                 continue
-            start = starts[aid][1]
+            start = _unpack(starts[aid][1])
             terminal[aid] = "completed"
             if not L.same_identity(start, p):
                 audit.v("identity_or_role_escalation", "ledger", seq)
@@ -293,12 +341,13 @@ def _ledger_pass(records: list, audit: _Audit) -> set:
                 continue
             status = kind.removeprefix("attempt_")
             terminal[aid] = status
-            if not _valid_ledger_terminal(p, starts[aid][1]):
+            start = _unpack(starts[aid][1])
+            if not _valid_ledger_terminal(p, start):
                 audit.v("invalid_terminal_metadata", "ledger", seq)
-            elif audit.scoped(starts[aid][1]):
+            elif audit.scoped(start):
                 audit.ended(status, p.get("data_read", True))
-    for aid, (seq, p) in starts.items():
-        if aid in terminal or not audit.scoped(p):
+    for aid, (seq, packed) in starts.items():
+        if aid in terminal or not (audit.batch is None or audit.scoped(_unpack(packed))):
             continue
         if aid in superseded:
             audit.counts["superseded_interrupted"] += 1
@@ -601,12 +650,7 @@ def reconcile(*, ledger_path=None, ledger_anchor=None, store_chain=None, store_a
     covered, boundary, ids = [], {}, {}
     if ledger_path is not None:
         anchor = _anchor(ledger_anchor, "ledger")
-        records, errors = L.verify_snapshot(_read(ledger_path, "ledger"))
-        if errors:
-            raise ReconciliationError("the ledger does not verify: " + "; ".join(errors))
-        scope = _prefix(records, anchor, "ledger")
-        boundary["ledger"] = {"records": anchor[0], "head": anchor[1], "beyond": len(records) - anchor[0]}
-        ids["ledger"] = _ledger_pass(scope, audit)
+        ids["ledger"], boundary["ledger"] = _ledger_snapshot_pass(_read(ledger_path, "ledger"), anchor, audit)
         covered.append("ledger")
     if store_chain is not None:
         anchor = _anchor(store_anchor, "store")
