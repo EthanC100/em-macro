@@ -87,7 +87,8 @@ def validate(cfg: dict) -> list[str]:
     for dom, w in (windows or {}).items():
         a, b = (_day(w.get("start")), _day(w.get("end"))) if isinstance(w, dict) else (None, None)
         if a is None or b is None or type(a) is not type(b) or a > b:
-            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start on or before end")
+            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end "
+                        "(or the same day)")
     if enabled is True and not windows:
         errs.append("reserve.enabled is true but reserve.windows is empty: the fence must be set first")
     cap = get("exploration", "data_end")
