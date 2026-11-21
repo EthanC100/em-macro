@@ -35,7 +35,18 @@ from manhattan import spec as S
 from .sources import DATASET_KINDS
 
 PATH = Path(__file__).with_name("catalogue.yaml")
+NT_PATH = Path(__file__).with_name("catalogue_nontech.yaml")          # issue #102: the non-technology track
 RESEARCH_FAMILIES = ("A_relative_value", "B_analogues", "C_earnings", "D_diffusion", "E_factor", "F_macro")
+NT_RESEARCH_FAMILIES = ("V_value", "Q_quality", "M_momentum", "R_revisions", "L_low_risk")
+# Each programme is one equity research track (manhattan.tracks) with its own catalogue, id prefix and families.
+PROGRAMMES = {
+    "technology_equities": {"prefix": "TE", "research_families": RESEARCH_FAMILIES, "path": PATH, "extra": ()},
+    "non_technology_equities": {"prefix": "NT", "research_families": NT_RESEARCH_FAMILIES, "path": NT_PATH,
+                                "extra": ("cross_track", "sector_scope", "cross_sector_validation")},
+}
+CROSS_TRACK_ROLES = ("related_not_designated", "designated_replication")
+SECTOR_SCOPES = ("all_non_technology", "non_technology_ex_financials_real_estate")
+_XM = re.compile(r"^XM-[A-Z][A-Z-]+$")
 APPROACHES = ("relative_value", "directional")
 HORIZONS = ("days", "weeks", "months", "quarters")
 LEVELS = ("low", "medium", "high")
@@ -89,8 +100,21 @@ def load(path: Path = PATH) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
+def programme_of(cat: dict) -> str:
+    """The research programme (equity track) a catalogue belongs to; technology when the catalogue predates
+    issue #102 and names none."""
+    return cat.get("programme", "technology_equities")
+
+
 def validate(cat: dict) -> list[str]:
     errs = []
+    prog = programme_of(cat)
+    if prog not in PROGRAMMES:
+        return [f"unknown programme {prog!r}"]
+    conf = PROGRAMMES[prog]
+    id_re = re.compile(rf"^{conf['prefix']}-([A-Z])\d{{2}}$")
+    if cat.get("track", prog) != prog:
+        errs.append("a catalogue's track must equal its programme (one catalogue, one track)")
     if cat.get("status") != "draft":
         errs.append("catalogue status must be 'draft' (nothing in it is evidence)")
     fams = cat.get("families") or []
@@ -109,17 +133,19 @@ def validate(cat: dict) -> list[str]:
             errs.append(f"{g}: a shared family needs at least two members ({members})")
     for f in fams:
         fid = f.get("id", "?")
-        for k in REQUIRED:
+        for k in REQUIRED + conf["extra"]:
             v = f.get(k)
             if v is None or (isinstance(v, (str, list, dict)) and not v):
                 errs.append(f"{fid}: '{k}' is required")
-        m = _ID.match(str(fid))
+        m = id_re.match(str(fid))
         if not m:
-            errs.append(f"{fid}: id must be TE-<A-F><2 digits>")
+            errs.append(f"{fid}: id must be {conf['prefix']}-<letter><2 digits>")
         elif f.get("research_family", "")[:1] != m.group(1):
             errs.append(f"{fid}: id letter does not match research_family")
-        if f.get("research_family") not in RESEARCH_FAMILIES:
-            errs.append(f"{fid}: research_family must be one of {RESEARCH_FAMILIES}")
+        if f.get("research_family") not in conf["research_families"]:
+            errs.append(f"{fid}: research_family must be one of {conf['research_families']}")
+        if conf["extra"]:
+            errs += [f"{fid}: {e}" for e in _nontech_fields(f)]
         if f.get("approach") not in APPROACHES:
             errs.append(f"{fid}: approach must be one of {APPROACHES}")
         if f.get("mechanism_class") not in S.MECHANISM_CLASSES:
@@ -148,22 +174,81 @@ def validate(cat: dict) -> list[str]:
         if _PERF.search(text):
             errs.append(f"{fid}: states a performance figure ({_PERF.search(text).group(0)!r})")
         try:
-            e = S.validate_family(family_draft(f))
+            e = S.validate_family(family_draft(f, programme=prog))
             errs += [f"{fid}: {x}" for x in e]
         except S.SpecError as exc:
             errs.append(f"{fid}: {exc}")
     return errs
 
 
-def family_draft(f: dict) -> dict:
+def _nontech_fields(f: dict) -> list[str]:
+    errs = []
+    ct = f.get("cross_track")
+    if not isinstance(ct, dict) or set(ct) != {"mechanism", "technology_counterpart", "technology_shared_family",
+                                               "role"}:
+        return ["cross_track needs exactly mechanism, technology_counterpart, technology_shared_family and role"]
+    if not _XM.match(str(ct["mechanism"])):
+        errs.append("cross_track.mechanism must look like XM-NAME")
+    if ct["role"] not in CROSS_TRACK_ROLES:
+        errs.append(f"cross_track.role must be one of {CROSS_TRACK_ROLES}")
+    if ct["technology_counterpart"] is not None and not _ID.match(str(ct["technology_counterpart"])):
+        errs.append("cross_track.technology_counterpart must be a TE id or null")
+    if ct["technology_counterpart"] is None and ct["role"] == "designated_replication":
+        errs.append("a designated replication needs a technology counterpart")
+    if f.get("sector_scope") not in SECTOR_SCOPES:
+        errs.append(f"sector_scope must be one of {SECTOR_SCOPES}")
+    if f.get("cross_sector_validation") != "leave_one_sector_out":
+        errs.append("cross_sector_validation must be leave_one_sector_out")
+    if "sector-neutral" not in " ".join(str(f.get("grouped_variants", "")).split()):
+        errs.append("grouped_variants must include the sector-neutral expression (one family, not two)")
+    return errs
+
+
+def cross_track_report(tech: dict, nontech: dict) -> dict:
+    """The two equity catalogues side by side: per-track and combined family counts, and the cross-track links.
+
+    No link removes a family from any count. A linked pair tests one mechanism in two tracks, so the pair is
+    **dependent**: a result in one track is never counted as independent confirmation of the other unless the link
+    was designated as a replication before either was tested. ``problems`` lists every link that does not resolve."""
+    te = {f["id"]: f for f in tech.get("families", [])}
+    nt = nontech.get("families", [])
+    problems, links = [], []
+    mech_seen: dict = {}
+    for f in nt:
+        ct = f.get("cross_track") or {}
+        m = ct.get("mechanism")
+        if m in mech_seen:
+            problems.append(f"{f['id']}: mechanism {m} already used by {mech_seen[m]} (one family per mechanism)")
+        mech_seen[m] = f["id"]
+        cp = ct.get("technology_counterpart")
+        if cp is not None and cp not in te:
+            problems.append(f"{f['id']}: technology counterpart {cp} is not in the technology catalogue")
+        elif cp is not None and ct.get("technology_shared_family") != te[cp].get("shared_family"):
+            problems.append(f"{f['id']}: technology_shared_family does not match {cp}'s shared_family")
+        links.append({"mechanism": m, "non_technology": f["id"], "technology": cp,
+                      "technology_shared_family": ct.get("technology_shared_family"), "role": ct.get("role"),
+                      "independent_evidence": False if cp is not None else None})
+    return {"by_track": {"technology_equities": len(te), "non_technology_equities": len(nt)},
+            "combined_families": len(te) + len(nt), "links": links, "problems": problems,
+            "counting_rule": "every family of both tracks stays in the combined denominator; linked pairs are "
+                             "dependent and never double-counted as independent confirmation"}
+
+
+def family_draft(f: dict, *, programme: str = "technology_equities") -> dict:
     """A Manhattan family spec built from a catalogue entry: a draft, never registered or frozen here. Members of a
-    shared family carry ``shared_family`` so a freeze can register them as hypotheses of one family."""
+    shared family carry ``shared_family`` so a freeze can register them as hypotheses of one family. ``programme``
+    is the entry's equity research track."""
+    if programme not in PROGRAMMES:
+        raise S.SpecError(f"unknown programme {programme!r}")
     extra = {"shared_family": f["shared_family"], "shared_family_enforced": False} if f.get("shared_family") else {}
+    if f.get("cross_track"):
+        extra.update(cross_track_mechanism=f["cross_track"]["mechanism"],
+                     cross_track_role=f["cross_track"]["role"])
     return S.family(**extra, mechanism=" ".join(str(f["rationale"]).split()), mechanism_class=f["mechanism_class"],
                     sign=f["sign"], counterparty=" ".join(str(f["counterparty"]).split()),
                     kill_condition=" ".join(str(f["kill_condition"]).split()),
                     tail_exposure=" ".join(str(f["tail_exposure"]).split()),
-                    catalogue_id=f["id"], programme="technology_equities", approach=f["approach"],
+                    catalogue_id=f["id"], programme=programme, approach=f["approach"],
                     status="draft")
 
 
@@ -178,17 +263,24 @@ def prioritised(cat: dict) -> list[dict]:
     return sorted(cat["families"], key=priority_key)
 
 
+_TITLES = {"technology_equities": "Technology equities", "non_technology_equities": "Non-technology equities"}
+
+
 def render(cat: dict) -> str:
     fams = cat["families"]
-    out = ["# Technology equities: hypothesis-family catalogue", "",
-           "Generated from `manhattan/equities/catalogue.yaml` by `python -m manhattan.equities.catalogue render`. "
+    prog = programme_of(cat)
+    conf = PROGRAMMES[prog]
+    cmd = "python -m manhattan.equities.catalogue render" + ("" if prog == "technology_equities"
+                                                            else f" --programme {prog}")
+    out = [f"# {_TITLES[prog]}: hypothesis-family catalogue", "",
+           f"Generated from `manhattan/equities/{conf['path'].name}` by `{cmd}`. "
            "Do not edit by hand.", "",
            "**Status: draft.** Every row is an untested hypothesis family. Nothing here is evidence, and no "
            "performance figure is stated. Rankings are qualitative 1–5 judgements made before any data were "
            "examined (5 is the favourable end); the priority order is a research-ordering device, not an expected "
            "return.", "",
            f"{len(fams)} families: " + ", ".join(
-               f"{rf} {sum(1 for f in fams if f['research_family'] == rf)}" for rf in RESEARCH_FAMILIES)
+               f"{rf} {sum(1 for f in fams if f['research_family'] == rf)}" for rf in conf["research_families"])
            + f"; relative value {sum(1 for f in fams if f['approach'] == 'relative_value')}, directional "
            f"{sum(1 for f in fams if f['approach'] == 'directional')}.", "",
            "**Multiple-testing denominator.** All " + str(len(fams)) + " entries remain (no id removed or renumbered). "
@@ -268,8 +360,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m manhattan.equities.catalogue")
     ap.add_argument("command", choices=("check", "render"))
     ap.add_argument("--out")
+    ap.add_argument("--programme", choices=tuple(PROGRAMMES), default="technology_equities")
     a = ap.parse_args(argv)
-    cat = load()
+    cat = load(PROGRAMMES[a.programme]["path"])
     errs = validate(cat)
     if a.command == "check":
         for e in errs:
