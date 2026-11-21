@@ -139,7 +139,7 @@ screening method passes, which is a separate track.
 | #86 binding attempt accounting | 2026-11-19 | `bab1a4d` | | merged. `hte/LIMITATIONS.md` A2 and the S16 probe text still say "PR #86 not merged" (stale) |
 
 **#98's CI included #103.** Run 44931299836 tested the merge with main at `b844320`, which already contained
-`905717a`. Since then main has only Janus bookkeeping commits. My own full-suite run on `2577f25` is in §8.
+`905717a`. Since then main has only Janus bookkeeping commits. My own full-suite run on `2577f25` gave 3,935 passed, 168 skipped, 0 failed (§8).
 
 ### B.3 Open pull requests
 
@@ -1020,9 +1020,17 @@ non-existent path, and no tokens.
 - **Reproductions by the sub-reviews and not re-run by me:** C5 truncation, C6 fork, C7 fence, C8(b)(c), C9, C10.
 - **Targeted suites run by the sub-reviews:** `test_manhattan_hte_accounting.py` 60 passed; equities
   registration, non-tech and tracks 75 passed; the separator pins 4 passed.
-- **The full suite:** the result is in the session report that accompanies this file. A first attempt under the
-  container's Python 3.13 failed at collection because `scipy` and `statsmodels` were not installed. That was an
-  environment gap, not a repository defect.
+- **The full suite on main `2577f25`:** `python -m pytest -q -p no:cacheprovider` (no pipe; exit code captured) in a
+  scratch clone, with Python 3.12.3, numpy 2.5.5, pandas 3.1.1, scipy 1.18.1 and statsmodels 0.15.0.
+  - Result: **3,935 passed, 168 skipped, 20 warnings, 0 failed, exit 0**, in 31 minutes on 4 shared cores. The
+    tree was unchanged afterwards.
+  - CI on #98 reported 3,937 passed and 166 skipped. The two extra skips here are environmental; the clone was
+    made from a shallow local repository without tags. This was not investigated further.
+  - The q019 "argument list too long" error that other sessions report did not occur in this container.
+  - A first attempt under the container's Python 3.13 failed at collection because `scipy` and `statsmodels` were
+    not installed: an environment gap, not a repository defect.
+  - Slowest tests: `test_manhattan_adaptive_weight.py` (174 s and 91 s), `hier_analytic` (71 s) and `ops_e2e`
+    setup (56 s).
 
 ### Could not verify
 
