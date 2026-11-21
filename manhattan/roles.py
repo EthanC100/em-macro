@@ -14,6 +14,7 @@ code path that reads dated data must call ``check_read`` first.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -38,14 +39,18 @@ class Fence:
 
     @classmethod
     def from_config(cls, cfg: dict) -> "Fence":
-        """The fence of ``config/manhattan.yaml`` (as parsed by ``yaml.safe_load``). Fails closed: a reserve section
-        that cannot be read exactly as written raises ``FenceConfigError`` instead of being dropped or coerced.
+        """The fence of ``config/manhattan.yaml`` (parsed by ``config.load``, which refuses duplicate keys). Fails
+        closed: a reserve section that cannot be read exactly as written raises ``FenceConfigError`` instead of being
+        dropped or coerced.
 
         A reserve window is looked up by its domain name (``fence.reserve.get(domain)``), so an entry whose key is
-        not that name protects nothing. YAML turns ``1:``, ``yes:``, ``null:`` or ``2020-01-01:`` into a number,
-        boolean, ``None`` or date, so such an entry used to be kept under a key no domain ever matches and its
-        reserve dates were silently unprotected. Likewise ``enabled: "false"`` (a string) used to switch the reserve
-        on, and a window with its start after its end used to protect none of its dates."""
+        not exactly that name protects nothing. YAML turns ``1:``, ``yes:``, ``null:`` or ``2020-01-01:`` into a
+        number, boolean, ``None`` or date, so such an entry used to be kept under a key no domain ever matches and its
+        reserve dates were silently unprotected. A key must therefore be a domain name as Manhattan writes them:
+        lower-case ASCII letters, digits and ``_ . : -`` (which also refuses zero-width, byte-order-mark, look-alike and
+        upper-case variants). ``enabled`` must be a boolean (``enabled: "false"`` used to switch the reserve on);
+        unknown keys are refused rather than ignored (a misspelt ``windows:`` used to drop every window); a window
+        needs exactly ``start`` and ``end``, ISO dates, start before end."""
         if not isinstance(cfg, dict):
             raise FenceConfigError("the configuration is a mapping")
         res = cfg.get("reserve", {})
@@ -53,9 +58,12 @@ class Fence:
             res = {}
         if not isinstance(res, dict):
             raise FenceConfigError("reserve must be a mapping")
+        unknown = [k for k in res if k not in RESERVE_KEYS]
+        if unknown:
+            raise FenceConfigError(f"reserve has unknown keys {unknown!r} (allowed: {', '.join(RESERVE_KEYS)})")
         enabled = res.get("enabled", False)
         if type(enabled) is not bool:
-            raise FenceConfigError("reserve.enabled must be true or false (not a string or number)")
+            raise FenceConfigError("reserve.enabled must be true or false (not a string, number or null)")
         raw = res.get("windows")
         if raw is None:
             raw = {}
@@ -63,16 +71,19 @@ class Fence:
             raise FenceConfigError("reserve.windows must map each domain name to {start, end}")
         windows = {}
         for domain, w in raw.items():
-            if type(domain) is not str or not domain.strip() or domain != domain.strip():
+            if type(domain) is not str or DOMAIN_NAME.fullmatch(domain) is None:
                 raise FenceConfigError(f"reserve.windows has a key that is not a domain name: {domain!r} "
-                                       f"({type(domain).__name__}); quote it in the YAML if it is one")
-            if not isinstance(w, dict) or "start" not in w or "end" not in w:
-                raise FenceConfigError(f"reserve.windows.{domain} needs start and end dates")
+                                       f"({type(domain).__name__}); a domain name is lower-case ASCII letters, digits "
+                                       "and _ . : - (quote it in the YAML if YAML reads it as something else)")
+            if not isinstance(w, dict) or set(w) != {"start", "end"}:
+                raise FenceConfigError(f"reserve.windows.{domain} needs exactly start and end dates")
             start, end = _config_day(w["start"], f"reserve.windows.{domain}.start"), \
                 _config_day(w["end"], f"reserve.windows.{domain}.end")
-            if start > end:
-                raise FenceConfigError(f"reserve.windows.{domain} starts after it ends")
+            if start >= end:
+                raise FenceConfigError(f"reserve.windows.{domain} must start before it ends")
             windows[domain] = (start, end)
+        if enabled and not windows:
+            raise FenceConfigError("reserve.enabled is true but reserve.windows is empty: the fence must be set first")
         exploration = cfg.get("exploration")
         if not isinstance(exploration, dict) or "data_end" not in exploration:
             raise FenceConfigError("exploration.data_end is required")
@@ -80,19 +91,23 @@ class Fence:
                    enabled=enabled)
 
 
+RESERVE_KEYS = ("enabled", "mode", "evaluate_adaptive", "store", "windows")
+DOMAIN_NAME = re.compile(r"[a-z0-9][a-z0-9_.:\-]*", re.ASCII)
+_ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
+
+
 class FenceConfigError(ValueError):
     """The reserve or exploration section of the configuration cannot be read exactly as written (fail closed)."""
 
 
 def _config_day(v, where: str) -> date:
-    """A configuration date: a ``date`` (unquoted YAML ``2020-01-01``) or an ISO ``YYYY-MM-DD`` string. A datetime,
-    a number or anything else is refused, never coerced."""
+    """A configuration date: a ``date`` (unquoted YAML ``2020-01-01``) or a ``YYYY-MM-DD`` string. A datetime, an
+    ISO week date (``2020-W01-1``), a number or anything else is refused, never coerced."""
     if type(v) is date:
         return v
-    if isinstance(v, str):
+    if isinstance(v, str) and _ISO_DAY.fullmatch(v):
         try:
-            if len(v) == 10:
-                return date.fromisoformat(v)
+            return date.fromisoformat(v)
         except ValueError:
             pass
     raise FenceConfigError(f"{where} must be a date YYYY-MM-DD, not {v!r}")

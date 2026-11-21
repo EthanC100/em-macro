@@ -21,8 +21,34 @@ SCREENING_FDR_MAX, FORWARD_FDR_MAX = 0.20, 0.05          # Protocol v3 section 3
 SCREENING_METHODS = (None, "batch_bh_prds", "ebh_elond")   # Protocol v3 sections 4.3 and 4.4
 
 
+class DuplicateKeyError(yaml.YAMLError):
+    """A mapping in the configuration names the same key twice (PyYAML would silently keep the last)."""
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """``yaml.SafeLoader`` that refuses a mapping with a repeated key. A second ``fx_daily:`` window, ``data_end:`` or
+    ``enabled:`` would otherwise silently replace the first (independent review of the reserve-key fix)."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=True)
+            try:
+                if key in seen:
+                    raise DuplicateKeyError(f"duplicate key {key!r} at line {key_node.start_mark.line + 1}")
+                seen.add(key)
+            except TypeError:                            # an unhashable key: SafeLoader refuses it below
+                pass
+        return super().construct_mapping(node, deep=deep)
+
+
+def loads(text: str) -> dict:
+    """Parse configuration text: ``yaml.safe_load`` semantics, but a repeated key in any mapping is an error."""
+    return yaml.load(text, Loader=_StrictLoader) or {}
+
+
 def load(path: Path = CONFIG) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return loads(path.read_text(encoding="utf-8"))
 
 
 def _day(v) -> date | None:
@@ -57,11 +83,8 @@ def validate(cfg: dict) -> list[str]:
         errs.append("reserve.windows must map a domain to {start, end}")
         windows = None
     for dom, w in (windows or {}).items():
-        if type(dom) is not str or not dom.strip() or dom != dom.strip():
-            errs.append(f"reserve.windows has a key that is not a domain name: {dom!r} ({type(dom).__name__}); "
-                        "quote it if it is one (roles.Fence.from_config refuses it)")
         a, b = (_day(w.get("start")), _day(w.get("end"))) if isinstance(w, dict) else (None, None)
-        if a is None or b is None or a >= b:
+        if a is None or b is None or type(a) is not type(b) or a >= b:
             errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end")
     if enabled is True and not windows:
         errs.append("reserve.enabled is true but reserve.windows is empty: the fence must be set first")
@@ -89,6 +112,14 @@ def validate(cfg: dict) -> list[str]:
         errs.append("claims.enabled is true but claims.screening_method is null: the simulation chooses it first")
     if get("trial_ledger", "count_in_trials_csv") not in (None, True, False):
         errs.append("trial_ledger.count_in_trials_csv must be true or false")
+    # the fence: whatever roles.Fence.from_config refuses, validate reports, so the two never disagree
+    from manhattan import roles
+    try:
+        roles.Fence.from_config(cfg)
+    except roles.FenceConfigError as exc:
+        msg = f"fence: {exc}"
+        if msg not in errs:
+            errs.append(msg)
     return errs
 
 

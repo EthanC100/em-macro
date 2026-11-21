@@ -49,8 +49,8 @@ VALID = [
     ("{fx_daily: {start: 2020-01-01, end: 2026-09-30}, equities_us: {start: 2021-01-04, end: 2026-06-30}}", "true"),
     ('{"1": {start: 2020-01-01, end: 2026-09-30}}', "true"),                                # a quoted numeric name
     ('{"yes": {start: 2020-01-01, end: 2026-09-30}}', "false"),
-    ("{fx_daily: {start: 2020-01-01, end: 2020-01-01}}", "false"),                          # a one-day window
-    ("{fx_daily: {start: 2020-01-01, end: 2026-09-30, note: ignored}}", "false"),            # extra keys, as before
+    ('{"hte-synthetic:syn_daily": {start: 2020-01-01, end: 2026-09-30}}', "true"),          # names Manhattan writes
+    ('{fx.daily_v2: {start: 2020-01-01, end: 2026-09-30}}', "true"),
     ("null", "false"),
 ]
 
@@ -100,6 +100,22 @@ def test_a_reserve_key_that_is_not_a_domain_name_is_refused(windows, key):
     assert any("not a domain name" in e for e in MC.validate(c))
 
 
+@pytest.mark.parametrize("key", [
+    "fx_daily\u200b", "\ufefffx_daily", "fx_d\u0430ily", "FX_daily", "Fx_Daily", "fx daily", "fx_daily\t",
+    "fx_dailý", "_fx_daily", "-fx", ":fx", "fx/daily", "fx_daily\u00a0",
+])
+def test_a_look_alike_domain_name_is_refused(key):
+    """Independent review finding 1: zero-width, byte-order-mark, Cyrillic, accented, upper-case or spaced variants of a
+    domain name were accepted and protected nothing (the real domain's reserve dates read as exploration)."""
+    c = cfg("{fx_daily: {start: 2020-01-01, end: 2026-09-30}}", "true")
+    c["reserve"]["windows"] = {key: {"start": date(2020, 1, 1), "end": date(2026, 9, 30)}}
+    c["exploration"]["data_end"] = "2026-12-31"
+    assert roles.check_read("session", "fx_daily", date(2022, 1, 3), date(2022, 2, 1), _old_from_config(c)) == \
+        roles.EXPLORATION                                   # the old parse left fx_daily unprotected
+    with pytest.raises(roles.FenceConfigError, match="not a domain name"):
+        roles.Fence.from_config(c)
+
+
 @pytest.mark.parametrize("windows,key", MALFORMED_KEYS[:4])
 def test_before_this_change_the_reserve_was_silently_unprotected(windows, key):
     """The defect, demonstrated: the old parse kept the entry under a key no domain name equals, so a read of the
@@ -141,11 +157,16 @@ def test_a_quoted_false_used_to_enable_the_reserve():
 
 
 @pytest.mark.parametrize("window,why", [
-    ("{start: 2026-09-30, end: 2020-01-01}", "starts after it ends"),
-    ("{start: 2020-01-01}", "start and end"),
-    ("{end: 2026-09-30}", "start and end"),
-    ("[2020-01-01, 2026-09-30]", "start and end"),
-    ('"2020-01-01..2026-09-30"', "start and end"),
+    ("{start: 2026-09-30, end: 2020-01-01}", "start before it ends"),
+    ("{start: 2020-01-01, end: 2020-01-01}", "start before it ends"),                     # as config.validate
+    ("{start: 2020-01-01}", "exactly start and end"),
+    ("{end: 2026-09-30}", "exactly start and end"),
+    ("{start: 2020-01-01, end: 2026-09-30, note: x}", "exactly start and end"),           # no key is ignored
+    ("{start: 2020-01-01, end: 2026-09-30, Start: 2026-01-01}", "exactly start and end"),
+    ("[2020-01-01, 2026-09-30]", "exactly start and end"),
+    ('"2020-01-01..2026-09-30"', "exactly start and end"),
+    ('{start: "2020-W01-1", end: 2026-09-30}', "date"),                                   # an ISO week date
+    ('{start: "２０２０-01-01", end: 2026-09-30}', "date"),                                   # full-width digits
     ("{start: 2020-01-01T00:00:00, end: 2026-09-30}", "date"),           # a datetime is not a date
     ("{start: 20200101, end: 2026-09-30}", "date"),
     ('{start: "2020-1-1", end: 2026-09-30}', "date"),
@@ -198,3 +219,84 @@ def test_a_datetime_object_is_not_accepted_as_a_date():
     c["reserve"]["windows"]["fx_daily"]["start"] = datetime(2020, 1, 1)
     with pytest.raises(roles.FenceConfigError):
         roles.Fence.from_config(c)
+
+
+# --------------------------------------------- independent review (2026-11-21): duplicates, unknown keys, agreement
+
+DUPLICATES = [
+    ("reserve:\n  enabled: true\n  windows:\n    fx_daily: {start: 2020-01-01, end: 2026-09-30}\n"
+     "    fx_daily: {start: 2026-09-01, end: 2026-09-30}\nexploration:\n  data_end: \"2019-12-31\"\n"),
+    ("reserve:\n  enabled: true\n  windows: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}\n  windows: {}\n"
+     "exploration:\n  data_end: \"2019-12-31\"\n"),
+    ("reserve:\n  enabled: true\n  enabled: false\n  windows: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}\n"
+     "exploration:\n  data_end: \"2019-12-31\"\n"),
+    ("exploration:\n  data_end: \"2019-12-31\"\n  data_end: \"2026-12-31\"\n"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nexploration:\n  data_end: \"2026-12-31\"\n"),
+    ("reserve:\n  windows:\n    fx_daily: {start: 2020-01-01, end: 2026-09-30, end: 2020-02-01}\n"
+     "exploration:\n  data_end: \"2019-12-31\"\n"),
+]
+
+
+@pytest.mark.parametrize("text", DUPLICATES)
+def test_a_repeated_key_is_refused_wherever_the_fence_is_read(text, tmp_path):
+    """Review finding 2: PyYAML silently keeps the last of two equal keys, so a second entry could shrink a window,
+    drop the reserve or widen exploration. config.load and access read the file with a loader that refuses it."""
+    yaml.safe_load(text)                                    # plain safe_load accepts it silently
+    with pytest.raises(MC.DuplicateKeyError):
+        MC.loads(text)
+    p = tmp_path / "manhattan.yaml"
+    p.write_text(text)
+    with pytest.raises(MC.DuplicateKeyError):
+        MC.load(p)
+    with pytest.raises(access.AccessError):
+        access._fence_of(text.encode())
+
+
+def test_the_strict_loader_reads_everything_safe_load_reads():
+    text = (__import__("pathlib").Path(MC.CONFIG)).read_text(encoding="utf-8")
+    assert MC.loads(text) == (yaml.safe_load(text) or {})
+    assert MC.loads("a: &x {b: 1}\nc: *x\n") == {"a": {"b": 1}, "c": {"b": 1}}       # anchors and aliases
+    assert MC.loads("") == {}
+
+
+@pytest.mark.parametrize("text,why", [
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled: true\n  Windows: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}\n", "unknown keys"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  windws: {}\n", "unknown keys"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled: true\n  windows: {}\n", "empty"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled: true\n", "empty"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled:\n", "enabled"),
+    ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled: null\n", "enabled"),
+])
+def test_unknown_keys_null_and_an_empty_enabled_reserve_are_refused(text, why):
+    """Review findings 3 and 5: a misspelt key used to be dropped (a misspelt windows: dropped every window), an
+    enabled reserve with no window parsed though validate rejected it, and enabled: null is not a boolean."""
+    with pytest.raises(roles.FenceConfigError, match=why):
+        roles.Fence.from_config(MC.loads(text))
+
+
+def _verdicts():
+    cases = [cfg(w, e) for w, e in VALID] + [cfg(w, "true") for w, _ in MALFORMED_KEYS]
+    cases += [cfg("{fx_daily: " + w + "}", "true") for w, _ in [
+        ("{start: 2026-09-30, end: 2020-01-01}", 0), ("{start: 2020-01-01, end: 2020-01-01}", 0),
+        ("{start: 20200101, end: 2026-09-30}", 0), ('{start: "20200101", end: 2026-09-30}', 0),
+        ("{start: 2020-01-01T00:00:00, end: 2026-09-30}", 0), ("{start: null, end: 2026-09-30}", 0)]]
+    cases += [cfg("{fx_daily: {start: 2020-01-01, end: 2026-09-30}}", e) for e in ('"false"', "1", "null", "")]
+    cases += [cfg("{}", "true")]
+    return cases
+
+
+@pytest.mark.parametrize("c", _verdicts())
+def test_validate_and_from_config_never_disagree_on_the_fence(c):
+    """Review finding 5: ``python -m manhattan.config check`` (validate) reports every configuration from_config
+    refuses, and never crashes on one."""
+    refused = _call_refused(c)
+    fence_errs = [e for e in MC.validate(c) if e.startswith("fence: ")]
+    assert bool(fence_errs) == refused
+
+
+def _call_refused(c) -> bool:
+    try:
+        roles.Fence.from_config(c)
+        return False
+    except roles.FenceConfigError:
+        return True
