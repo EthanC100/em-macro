@@ -5,7 +5,9 @@
     vols = sector_volatility(world, start, end)       # measured, never assumed
 
 This is **infrastructure validation**: a fixed, declared portfolio rule run through the shared equity pipeline so that
-every control can be checked. It is not a strategy search and not evidence. Every report carries
+every control can be checked. It is not a strategy search and not evidence. **It runs only on a synthetic world**
+(``synthetic.is_synthetic``). No draft catalogue family can be tested through it, and any experiment on another world
+must first be pre-registered and admitted by ``registration.admit`` (hypothesis first; issue #102 review). Every report carries
 ``evidential_weight: 0``, ``scientifically_validated: False`` and ``evidence_class: synthetic_infrastructure``.
 
 **Controls, each tested in tests/test_manhattan_equities_nontech.py:**
@@ -94,15 +96,19 @@ class Sleeve:
 
 
 class _Outcomes:
-    """Daily total returns known at the end of the record (outcomes, never signals), delisting returns included."""
+    """Daily total returns (outcomes, never signals), delisting returns included, known at ``end`` (default: the
+    end of the record). With an ``end``, nothing dated after it is read: a delisting return not yet known then
+    raises (survivorship), it is never assumed."""
 
-    def __init__(self, world):
+    def __init__(self, world, end: date | None = None):
         self.w = world
+        self.end = end
         self._cache: dict = {}
 
     def get(self, sid: str) -> dict:
         if sid not in self._cache:
-            d0, d1 = self.w.days[0], self.w.days[-1]
+            d0 = self.w.days[0]
+            d1 = self.w.days[-1] if self.end is None else max(d for d in self.w.days if d <= self.end)
             rs = self.w.prices.total_returns(sid, d0, d1, as_of=d1, delisting=DelistingPolicy.require())
             self._cache[sid] = dict(zip(rs.days, rs.returns))
         return self._cache[sid]
@@ -127,10 +133,21 @@ def _estimates(world, sid, days, i, n):
     return (float(np.median(dv)) if dv.size else float("nan")), vol
 
 
+def _require_synthetic(world) -> None:
+    """Dormant (issue #102 review): this module runs a portfolio rule and selects a variant, so it runs only on a
+    synthetic world. A real-data experiment goes through ``registration.admit`` and its pre-registration, and even
+    then is refused while ``registration.EXECUTION_ON_REAL_DATA`` is False."""
+    from .synthetic import is_synthetic
+    if not is_synthetic(world):
+        raise EquityDataError("dormant: portfolio rules run only on a synthetic world; any other world needs a "
+                              "pre-registered experiment (registration.admit), and real-data execution is off")
+
+
 def run_sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
                end: date | None = None) -> Sleeve:
     """One costed book. ``lookbacks``: {track: lookback}. With one track, a track-only sleeve; with both, the combined
     book, in which each track has an equal share of capital. ``end``: ignore every session after it (truncation)."""
+    _require_synthetic(world)
     if not isinstance(cost_model, EquityCostModel):
         raise EquityDataError("a cost model with a stated reference is required (no default)")
     for t in lookbacks:
@@ -139,7 +156,7 @@ def run_sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks
     days = list(world.days) if end is None else [d for d in world.days if d <= end]
     n = len(days)
     builders = {t: UniverseBuilder(world.master, world.prices, world.classes, track_rules(t)) for t in lookbacks}
-    out = _Outcomes(world)
+    out = _Outcomes(world, end)
     share = 1.0 / len(lookbacks)
     sl = Sleeve(name, tuple(lookbacks), dict(lookbacks))
     held: dict = {}                    # current (drifted) weights, fraction of capital
@@ -268,6 +285,7 @@ def sector_volatility(world, start: date, end: date) -> dict:
     """Annualised volatility, measured from total returns, by sector and by track. Each day's return is assigned to
     the security's category **as known that day**. Reports the mean single-stock volatility and the volatility of the
     equal-weight sector average. Descriptive; nothing is assumed about which sector is calmer."""
+    _require_synthetic(world)
     days = [d for d in world.days if start <= d <= end]
     by_sector: dict = {}
     single: dict = {}

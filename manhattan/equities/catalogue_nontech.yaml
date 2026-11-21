@@ -7,6 +7,10 @@
 #
 # Universe descriptions are generic on purpose: no tickers or company names appear in this catalogue.
 #
+# DRAFTS, NOT EXPERIMENTS: no entry here can be run. A test needs a pre-registered, immutable experiment
+# specification frozen with its family and admitted by manhattan/equities/registration.py (hypothesis first;
+# docs/manhattan/equities/NON_TECH_TRACK.md section 5a). Freezing is Ethan's (hard rule 4).
+#
 # Hypothesis inflation controls (docs/manhattan/equities/NON_TECH_TRACK.md section 5):
 # - Five families, one per mechanism the issue names. Sector-neutral construction is a REQUIRED VARIANT of every
 #   family (grouped_variants), not a sixth family: a raw and a sector-neutral expression of one mechanism are one

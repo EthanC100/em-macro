@@ -8,6 +8,7 @@ resembles or is calibrated to market data. Every generator takes a seed and retu
 """
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
@@ -19,6 +20,22 @@ from .identity import Company, LifecycleEvent, Security, SecurityMaster, TickerI
 from .prices import Bar, CorporateAction, DelistingReturn, PriceBook, ShareCount
 from .sessions import MarketCalendar
 from .universe import Classification, ClassificationHistory
+
+_SYNTHETIC: dict = {}            # id -> weak reference: worlds made by this package's generators
+
+
+def mark_synthetic(world):
+    """Record a world built by one of this package's synthetic generators (and nothing else)."""
+    _SYNTHETIC[id(world)] = weakref.ref(world)
+    return world
+
+
+def is_synthetic(world) -> bool:
+    """True only for a world a synthetic generator here returned. Research entry points that run a portfolio rule
+    or a registered experiment require it: nothing in the equities package runs on market data (issue #102)."""
+    ref = _SYNTHETIC.get(id(world))
+    return ref is not None and ref() is world
+
 
 HOLIDAYS = (date(2005, 1, 17), date(2005, 7, 4), date(2005, 12, 26), date(2006, 7, 4), date(2006, 12, 25),
             date(2007, 7, 4), date(2007, 12, 25), date(2008, 7, 4))
@@ -184,7 +201,7 @@ def world(seed: int = 7, start: date = date(2004, 1, 2), end: date = date(2008, 
     # one restatement: C03's revenue for 2005-06-30, restated down in 2006
     fs.add(Fact("C03", "revenue", date(2005, 6, 30), "quarter", 50.0, "USD", _ts(cal, date(2006, 2, 1), 17),
                 vintage="restated", source="synthetic"))
-    return World(cal, master, book, classes, fs, borrow, logp, days)
+    return mark_synthetic(World(cal, master, book, classes, fs, borrow, logp, days))
 
 
 def _quarters(start: date, end: date):

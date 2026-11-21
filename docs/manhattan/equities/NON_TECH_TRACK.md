@@ -14,8 +14,11 @@ Code:
 - `manhattan/equities/track_compare.py`: the portfolio comparison and volatility measurement.
 - `manhattan/equities/catalogue_nontech.yaml` with `catalogue.py`: the hypothesis catalogue and its cross-track
   counting.
+- `manhattan/equities/registration.py`: the hypothesis-first gate (§5a). A draft family never becomes an
+  executable experiment without a pre-registered, immutable specification.
 
-Tests: `tests/test_manhattan_tracks.py` and `tests/test_manhattan_equities_nontech.py`. Generated catalogue:
+Tests: `tests/test_manhattan_tracks.py`, `tests/test_manhattan_equities_nontech.py` and
+`tests/test_manhattan_equities_registration.py`. Generated catalogue:
 [HYPOTHESIS_CATALOGUE_NONTECH.md](HYPOTHESIS_CATALOGUE_NONTECH.md).
 
 ## 1. Audit: what exists and what is planned (main at `a3fb970`)
@@ -128,6 +131,97 @@ There are five families, one per mechanism the issue names. Each has its technol
 - **One family per mechanism per track.** No performance figures, tickers or company names; the validator refuses
   them.
 
+## 5a. Hypothesis first: draft families are not experiments (review of #103)
+
+| | draft family | pre-registered experiment |
+|---|---|---|
+| where | `catalogue_nontech.yaml` (and `catalogue.yaml`) | a Manhattan hypothesis spec frozen in a batch with its family |
+| holds | mechanism, sign, counterparty, data, risks, ranking | everything needed to run and judge one test (below) |
+| status | `draft`, untested, unregistered | listed in a manifest that `manhattan.freeze.verify_frozen` accepts |
+| can run | **never** | only through `registration.admit`, and today only on a synthetic world |
+| who | anyone drafts | the freeze is Ethan's (hard rule 4); agents prepare nothing for it here |
+
+**The specification** (`registration.experiment_spec`; every field in `REQUIRED` is mandatory) is a Manhattan
+hypothesis spec. Its family is exactly `catalogue.family_draft(entry)`. It states:
+
+- the economic mechanism and the predicted direction, which must equal the family's;
+- the track, the universe (that track's point-in-time eligibility-rules hash) and the data kinds (within the
+  family's);
+- the signal construction and the declared, finite parameter grid;
+- the benchmark (the track's own costed equal-weight universe);
+- the full transaction-cost model with its reference, and the execution lag (at least 1);
+- the windows: selection up to `selection_end`, then an untouched holdout `[holdout_start, holdout_end]`;
+- the selection rule and machine-checkable rejection criteria;
+- the attempt-accounting identity: batch, `exploration`, `blind`, not designated, in the ledger.
+  `attempt_identity` derives each variant's PR #86 schema-2 identity from the frozen family, hypothesis, variant
+  and primary-executable specs.
+
+**The gate, `registration.admit`, fails closed when:**
+
+- there is no batch, no timestamp proof or no signed tag, or the manifest hash differs (`verify_frozen`);
+- the catalogue family as drafted now is not in the manifest (the family was edited after registration);
+- the spec is not in the manifest (it was modified after registration, or never registered);
+- the spec is incomplete or inconsistent with its family;
+- the batch named for attempt accounting is not the batch that froze the spec;
+- a declared variant or its primary executable for this engine identity is not frozen (the grid or the engine
+  changed).
+
+**After admission:**
+
+- An `ExperimentHandle` keeps a canonical copy of the spec. Runs refuse handles this module did not issue, copies,
+  edited handles and a cost model other than the registered one.
+- `run_selection` runs every declared variant and no other, chooses by the declared rule, and reads nothing dated
+  after `selection_end`. A test instruments the price book to fail on any later read.
+- `run_holdout` needs that selection's lock. It runs only the locked variant on the holdout, once per registration,
+  and evaluates the rejection criteria there only.
+- `count_registered` counts admitted experiments per track and combined, never twice and never in two tracks:
+  - duplicates and the same experiment under another family in the same track are refused;
+  - the same experiment in the other track, and catalogue-linked mechanisms, are reported as dependent;
+  - `independent_confirmations` is 0, and `denominator` is `None` (NT-8 and D-1 stay open).
+
+**Dormant.**
+
+- `EXECUTION_ON_REAL_DATA` is a constant `False`.
+- `run_selection` and `run_holdout` run only on synthetic worlds (`synthetic.is_synthetic`).
+- `track_compare` itself runs only on synthetic worlds, so no performance-based selection is possible on this track
+  outside the gate.
+- The one-look holdout guard lives in the process. Making it persistent requires the holdout read to be an attempt
+  in PR #86's ledger, which depends on D-10 and B4 (§7).
+
+**Adversarial tests** (`tests/test_manhattan_equities_registration.py`, 44):
+
+- missing registrations: no batch, a batch that froze another experiment, no signed tag, a wrong manifest hash, no
+  timestamp;
+- modified specifications: grid, costs, holdout, rejection criteria, signal and lag changed after freezing; a spec
+  file edited in the batch; the catalogue family edited; copied and edited handles; another engine identity; another
+  track;
+- incomplete specifications: every required field, sign flips, data outside the family, lag 0, overlapping windows,
+  empty or unknown criteria;
+- holdout leakage:
+  - an effect planted only in the holdout is invisible to selection and found in the holdout;
+  - no price after the cutoff is read;
+  - no lock means no holdout, and another experiment's lock is refused;
+  - one look only;
+- cross-track double counting: duplicates, the same experiment under another family, linked and same-content
+  pairs across tracks;
+- PR #86 identities validate with `ledger.validate_attempt_identity`;
+- dormancy: unmarked worlds are refused by the gate, `compare` and `sector_volatility`.
+
+**Gate mutation check.** I planted 14 defects:
+
+- the spec or family not checked against the manifest;
+- the signed tag bypassed;
+- selection reading past its cutoff;
+- the holdout run without a lock, or read twice;
+- duplicates or same-track content double counted;
+- a sign flip allowed;
+- the real-data guard removed;
+- the cost model, issued handles or frozen executables not checked;
+- the admitted spec not re-hashed.
+
+13 were caught. The one that survives is the re-hash of an admitted handle's canonical copy. It is defence in
+depth: through any public path, editing a handle first breaks its issue fingerprint, and that refusal is tested.
+
 ## 6. Fixtures, tests and acceptance criteria
 
 **The synthetic world** (`sector_world`) holds:
@@ -175,6 +269,9 @@ which is why the excess over the track's own universe is reported.
 9. In-sample results do not depend on data after the cutoff.
 10. A planted effect is found only in its own track.
 11. The catalogue validates and its cross-track links resolve.
+12. **Hypothesis first** (§5a): no draft family runs, and only a pre-registered, unmodified, complete experiment
+    spec is admitted. Selection reads nothing after its cutoff, the holdout is read once with the locked variant,
+    and no registration is counted twice or as independent across tracks.
 
 A mutation check, which planted a defect for each criterion and ran the tests (retroactive classification,
 same-close fill, dropped delisting returns, ignored costs, missing category guard, dropped REITs, selection on
@@ -193,13 +290,17 @@ trading evidence needs, at least:
 2. **Costs** calibrated by sector and size from recorded spreads. Today's cost models are stated assumptions.
 3. **The protocol.** Protocol v3.1 does not cover single equities (PROTOCOL_EXTENSION_PROPOSAL.md); it needs an
    extension covering both equity tracks.
-4. **Freezes and pre-registrations**, Ethan only, including any designated cross-track replication.
-5. **Reserve windows** per equity domain in `config/manhattan.yaml`, which stays untouched here.
-6. **Integration:**
+4. **Freezes and pre-registrations**, Ethan only, including any designated cross-track replication. The gate
+   (§5a) admits only a verified freeze. Its real-data execution (`EXECUTION_ON_REAL_DATA`) is off, and turning it on
+   is a reviewed change.
+5. **One-look holdout across processes**: each holdout read registered as a PR #86 attempt, which depends on D-10
+   and B4. Today the guard lives in one process.
+6. **Reserve windows** per equity domain in `config/manhattan.yaml`, which stays untouched here.
+7. **Integration:**
    - an HTE equity domain (acceptance GAP-04);
    - attempt accounting for equity evaluations (#86/#98);
    - evidence classification (GAP-03, GAP-06).
-7. **A track-level acceptance gate in the S16 suite**, once the above exist.
+8. **A track-level acceptance gate in the S16 suite**, once the above exist.
 
 ## 8. Owner decisions requested
 

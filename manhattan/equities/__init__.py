@@ -29,6 +29,7 @@ pairs, analogue matches and features are research inputs with zero evidential we
     synthetic     deterministic synthetic fixtures
     sector_synthetic  a synthetic world with technology and non-technology sectors (issue #102)
     track_compare     technology-only, non-technology-only and combined portfolios; measured sector volatility
+    registration      hypothesis first: a draft family runs only as a pre-registered, frozen, admitted experiment
 
 Two research tracks share this package: technology and non-technology equities (issue #102,
 docs/manhattan/equities/NON_TECH_TRACK.md). They differ only in the categories their universes admit.

@@ -36,7 +36,7 @@ from .fundamentals import Fact, FundamentalStore
 from .identity import Company, LifecycleEvent, Security, SecurityMaster, TickerInterval
 from .prices import Bar, CorporateAction, DelistingReturn, PriceBook, ShareCount
 from .sectors import NON_TECHNOLOGY_TRACK, TECHNOLOGY_TRACK, track_of
-from .synthetic import World, _quarters, _ts, calendar
+from .synthetic import World, _quarters, _ts, calendar, mark_synthetic
 from .universe import Classification, ClassificationHistory
 
 # sector -> (market beta, sector-factor daily vol, idiosyncratic daily vol). Invented, chosen only so that some
@@ -105,7 +105,8 @@ RECLASSIFICATIONS = {
 
 def sector_world(seed: int = 102, start: date = date(2004, 1, 2), end: date = date(2008, 12, 31), *,
                  planted_momentum: float = 0.0, planted_track: str = NON_TECHNOLOGY_TRACK,
-                 momentum_lookback: int = 63) -> World:
+                 momentum_lookback: int = 63, planted_from: date | None = None) -> World:
+    """``planted_from``: the planted effect starts on this day (worlds identical before it, for leakage tests)."""
     if planted_track not in (TECHNOLOGY_TRACK, NON_TECHNOLOGY_TRACK):
         raise ValueError("planted_track is an equity research track")
     cal = calendar(start - timedelta(days=1), end + timedelta(days=40))
@@ -134,6 +135,8 @@ def sector_world(seed: int = 102, start: date = date(2004, 1, 2), end: date = da
         members = [sid for sid in ids if _SPEC[sid][2] and track_of(_SPEC[sid][2]) == planted_track]
         cum = {sid: np.cumsum(ret[sid]) for sid in members}
         for t in range(momentum_lookback + 1, n):
+            if planted_from is not None and days[t] < planted_from:
+                continue
             past = {sid: cum[sid][t - 1] - cum[sid][t - 1 - momentum_lookback] for sid in members
                     if live[sid][t] and live[sid][t - 1 - momentum_lookback]}
             if len(past) < 4:
@@ -200,7 +203,7 @@ def sector_world(seed: int = 102, start: date = date(2004, 1, 2), end: date = da
     for cid, (cat, effective, published) in RECLASSIFICATIONS.items():
         classes.add(Classification(cid, cat, effective, None, known_from=published, source="synthetic vendor"))
     logp = {sid: np.where(live[sid], np.cumsum(ret[sid]), np.nan) for sid in ids}
-    return World(cal, master, book, classes, fs, BorrowBook(), logp, days)
+    return mark_synthetic(World(cal, master, book, classes, fs, BorrowBook(), logp, days))
 
 
 def sector_of_security(sid: str) -> str | None:
