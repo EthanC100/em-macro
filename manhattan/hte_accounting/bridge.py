@@ -154,20 +154,31 @@ class Bridge:
                                       date.fromisoformat(w["end"]), "exploration", "evaluation", ident["data_hash"])]
 
     def _batch_state(self, batch: str) -> dict:
-        """Starts of one batch in the ledger: executable -> open attempt IDs; and every terminal by attempt."""
+        """The ledger as seen by one batch: executable -> open attempt IDs, and attempt ID -> its terminals.
+
+        Streams the records of the lifecycle types only (``Ledger.iter_records``, PR #100), so a large ledger is never
+        held as objects; each terminal is kept as ``{type, seq, result_hash}``. An attempt with more than one terminal
+        is kept with all of them: callers refuse it (a forged or duplicated write; the cross-check reports it)."""
         _, L, _ = _pr86()
-        starts = [r for r in self.ledger.records("evaluation_started") if r["payload"].get("batch") == batch]
-        done = {}
-        for r in self.ledger.records():
-            if r["type"] in L.COMPLETIONS + ("attempt_failed", "attempt_aborted") and \
-                    isinstance(r["payload"].get("attempt_id"), str):
-                done[r["payload"]["attempt_id"]] = r
-        superseded = {r["payload"]["supersedes"] for r in starts if isinstance(r["payload"].get("supersedes"), str)}
+        starts: dict[str, tuple] = {}
+        for r in self.ledger.iter_records("evaluation_started"):
+            p = r["payload"]
+            if isinstance(p, dict) and p.get("batch") == batch:
+                starts[r["hash"]] = (p.get("executable"), p.get("supersedes"))
+        done: dict[str, list] = {}
+        for t in L.COMPLETIONS + ("attempt_failed", "attempt_aborted"):
+            for r in self.ledger.iter_records(t):
+                p = r["payload"]
+                a = p.get("attempt_id") if isinstance(p, dict) else None
+                if isinstance(a, str) and a in starts:
+                    done.setdefault(a, []).append({"type": r["type"], "seq": r["seq"],
+                                                   "result_hash": p.get("result_hash")})
+        superseded = {s for _, s in starts.values() if isinstance(s, str)}
         open_by_exe: dict[str, list] = {}
-        for r in starts:
-            if r["hash"] not in done and r["hash"] not in superseded:
-                open_by_exe.setdefault(r["payload"]["executable"], []).append(r["hash"])
-        return {"starts": starts, "done": done, "open": open_by_exe}
+        for a, (exe, _) in starts.items():
+            if a not in done and a not in superseded:
+                open_by_exe.setdefault(exe, []).append(a)
+        return {"starts": len(starts), "done": done, "open": open_by_exe}
 
     def _ledger_head(self) -> dict:
         return {"records": len(self.ledger), "head": self.ledger.head}
@@ -302,9 +313,12 @@ class Bridge:
             for i in range(b["lo"], b["hi"]):
                 a = aids[i]
                 if a in state["done"]:                # a resumed completion: it must be this bridge's own write
-                    d = state["done"][a]
+                    if len(state["done"][a]) != 1:
+                        raise BridgeRefused(f"attempt {a[:16]} has {len(state['done'][a])} terminals: the ledger "
+                                            "needs review")
+                    d = state["done"][a][0]
                     ok = (d["type"] == "attempt_failed") if term[i] == O.TERMINAL["failed"] else (
-                        d["type"] in L.COMPLETIONS and d["payload"]["result_hash"] == bytes(rh[i]).hex())
+                        d["type"] in L.COMPLETIONS and d["result_hash"] == bytes(rh[i]).hex())
                     if not ok:
                         raise BridgeRefused(f"attempt {a[:16]} was closed by something other than this completion")
                     resumed += 1

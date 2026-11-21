@@ -38,6 +38,20 @@ from . import outcomes as O
 from .bridge import _digests, _hexes, _pr86, batch_of, identities, run_records
 
 
+def _verify_file(L, path) -> list[str]:
+    """``ledger.verify(path)``, streamed: the regular case is checked line by line (``iter_verified``); anything
+    irregular, or any problem, is answered by ``verify`` itself, so the errors reported are its own."""
+    try:
+        with open(path, "rb") as f:
+            for _ in L.iter_verified(f):
+                pass
+        return []
+    except FileNotFoundError:
+        return L.verify(path)
+    except L.IrregularSnapshot:
+        return L.verify(path)
+
+
 def crosscheck(runner: Runner, ledger) -> dict:
     t0 = time.perf_counter()
     _, L, _ = _pr86()
@@ -50,22 +64,40 @@ def crosscheck(runner: Runner, ledger) -> dict:
     if hrec["state"] != "closed" or hrec["violations"]:
         if hrec["state"] == "corrupted" or hrec["violations"]:
             v.append({"code": f"hte_run_{hrec['state']}", "hte_violations": hrec["violations"]})
-    errs = L.verify(ledger.path)
+    errs = _verify_file(L, ledger.path)
     if errs:
         v.append({"code": "ledger_does_not_verify", "errors": errs[:5]})
-    lrecs = ledger.records()
     batch = batch_of(run_id)
     idents, lins = identities(runner)
-    starts = {r["hash"]: r for r in lrecs if r["type"] == "evaluation_started" and r["payload"].get("batch") == batch}
+    # one streamed pass over the ledger (Ledger.iter_records, PR #100): this batch's starts and their terminals, kept
+    # as the fields checked below, and the record hashes at every sequence number an HTE record anchors
+    wanted = {r["payload"]["ledger_head"]["records"] for r in recs if r["type"] in ("pr86_registered", "pr86_completed")
+              and isinstance(r["payload"].get("ledger_head"), dict)
+              and isinstance(r["payload"]["ledger_head"].get("records"), int)}
+    starts: dict[str, dict] = {}
     term: dict[str, list] = {}
-    for r in lrecs:
-        a = r["payload"].get("attempt_id") if isinstance(r["payload"], dict) else None
-        if a in starts and r["type"] in L.COMPLETIONS + ("attempt_failed", "attempt_aborted"):
-            term.setdefault(a, []).append(r)
+    at: dict[int, str] = {}
+    n_records = 0
+    for r in ledger.iter_records():
+        n_records += 1
+        if r["seq"] in wanted:
+            at[r["seq"]] = r["hash"]
+        p = r["payload"]
+        if not isinstance(p, dict):
+            continue
+        if r["type"] == "evaluation_started" and p.get("batch") == batch:
+            starts[r["hash"]] = {"seq": r["seq"], "payload": {k: p[k] for k in (*L.IDENTITY_FIELDS, "supersedes")
+                                                               if k in p}}
+        elif r["type"] in L.COMPLETIONS + ("attempt_failed", "attempt_aborted") and p.get("attempt_id") in starts:
+            summary = p.get("summary") if isinstance(p.get("summary"), dict) else {}
+            term.setdefault(p["attempt_id"], []).append({"type": r["type"], "seq": r["seq"], "payload": {
+                **{k: p[k] for k in ("executable", "spec_hash", "family", "data_hash", "window", "result_hash")
+                   if k in p},
+                "summary": {k: summary[k] for k in ("outcome_batch", "row") if k in summary}}})
 
     def anchored(head: dict, code_ctx: str) -> bool:
         n = head["records"]
-        ok = 0 < n <= len(lrecs) and lrecs[n - 1]["hash"] == head["head"]
+        ok = 0 < n <= n_records and at.get(n) == head["head"]
         if not ok:
             v.append({"code": "ledger_anchor_mismatch", "record": code_ctx})
         return ok
@@ -172,7 +204,10 @@ def crosscheck(runner: Runner, ledger) -> dict:
     # 4. PR #86's own strict audit of the whole ledger
     t_bridge = time.perf_counter() - t0
     t1 = time.perf_counter()
-    pr86 = A.reconcile(ledger_path=ledger.path, ledger_anchor={"records": len(lrecs), "head": ledger.head})
+    try:
+        pr86 = A.reconcile(ledger_path=ledger.path, ledger_anchor={"records": n_records, "head": ledger.head})
+    except A.ReconciliationError as exc:                 # reported, never raised past the cross-check
+        pr86 = {"violations": [{"code": "reconciliation_refused", "error": str(exc)[:200]}], "access_reconciled": False}
     t_pr86 = time.perf_counter() - t1
     if pr86["violations"]:
         v.append({"code": "pr86_reconciler", "n": len(pr86["violations"]), "first": pr86["violations"][:3]})

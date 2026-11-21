@@ -512,3 +512,78 @@ def test_guards_refuse_production_ledgers_protected_fences_and_gated_policies(on
     with pytest.raises(B.BridgeRefused, match="exploration"):
         early.begin(Runner(ws, panel, Policy()))
     assert len(book) == 0
+
+
+# ------------------------------------------------- the indexed ledger (PR #100): streamed reads, fail-closed reports
+
+@needs_pr86
+def test_the_bridge_and_cross_check_never_load_the_whole_ledger(on, tmp_path, panel, monkeypatch):
+    """begin, complete, abandon and crosscheck stream the ledger with ``iter_records`` (PR #100) and never call
+    ``records()``, which builds every record as objects at once."""
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+
+    def refuse(*a, **k):
+        raise AssertionError("Ledger.records() called: the whole ledger would be held in memory")
+    monkeypatch.setattr(book, "records", refuse)
+    br = _bridge(book)
+    r, _, _, comp = _cycle(br, ws, panel)
+    rep = crosscheck(r, book)
+    assert rep["consistent"], rep["violations"]
+    assert comp["terminals"] and rep["pr86"]["attempts"] == len(r.view)
+
+
+@needs_pr86
+def test_a_resumed_completion_refuses_an_attempt_with_two_terminals(on, tmp_path, panel, monkeypatch):
+    """A duplicated or forged terminal on an attempt is never silently accepted on resume: the bridge refuses and the
+    cross-check reports it."""
+    from tests.manhattan_attempt_fixtures import forge
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r = Runner(ws, panel, Policy(), chunk_size=32)
+    reg = br.begin(r)
+    r.run()
+    real, calls = book.record_evaluation, []
+
+    def flaky(**kw):
+        if len(calls) == 5:
+            raise OSError("injected crash")
+        calls.append(1)
+        return real(**kw)
+    monkeypatch.setattr(book, "record_evaluation", flaky)
+    with pytest.raises(OSError):
+        br.complete(r, completion_writer=WRITE)
+    monkeypatch.setattr(book, "record_evaluation", real)
+    done = next(x for x in book.iter_records() if x["type"] == "evaluation")
+    forge(book, "attempt_aborted", {"attempt_id": done["payload"]["attempt_id"], "reason": "interrupted",
+                                    "data_read": True})
+    with pytest.raises(B.BridgeRefused, match="2 terminals"):
+        br.complete(r, completion_writer=WRITE)
+    assert reg["attempts"] == len(r.view)
+    rep = crosscheck(r, book)
+    assert not rep["consistent"]
+
+
+@needs_pr86
+@pytest.mark.parametrize("damage", ["edited", "truncated"])
+def test_a_damaged_ledger_file_is_reported_not_raised(on, tmp_path, panel, damage):
+    """The cross-check reports a ledger file that no longer verifies (and PR #86's reconciler refusing it) as
+    violations, so its report is never 'consistent' and it never stops on an exception."""
+    from manhattan.hte_accounting.crosscheck import crosscheck
+    ws, book = _ws(tmp_path / "ws"), _book(tmp_path)
+    br = _bridge(book)
+    r, _, _, _ = _cycle(br, ws, panel)
+    raw = book.path.read_bytes().splitlines(keepends=True)
+    if damage == "edited":
+        i = next(k for k, x in enumerate(raw) if b'"type":"evaluation"' in x)
+        raw[i] = raw[i].replace(b'"n_obs":', b'"n_obs":1', 1)     # a different value: the hash no longer matches
+    else:
+        raw = raw[:-1]
+    book.path.write_bytes(b"".join(raw))
+    rep = crosscheck(r, book)
+    codes = {x["code"] for x in rep["violations"]}
+    assert not rep["consistent"]
+    assert "pr86_reconciler" in codes
+    if damage == "edited":
+        assert "ledger_does_not_verify" in codes
