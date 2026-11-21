@@ -51,6 +51,7 @@ VALID = [
     ('{"yes": {start: 2020-01-01, end: 2026-09-30}}', "false"),
     ('{"hte-synthetic:syn_daily": {start: 2020-01-01, end: 2026-09-30}}', "true"),          # names Manhattan writes
     ('{fx.daily_v2: {start: 2020-01-01, end: 2026-09-30}}', "true"),
+    ("{fx_daily: {start: 2020-01-01, end: 2020-01-01}}", "true"),                           # one day: both inclusive
     ("null", "false"),
 ]
 
@@ -157,8 +158,7 @@ def test_a_quoted_false_used_to_enable_the_reserve():
 
 
 @pytest.mark.parametrize("window,why", [
-    ("{start: 2026-09-30, end: 2020-01-01}", "start before it ends"),
-    ("{start: 2020-01-01, end: 2020-01-01}", "start before it ends"),                     # as config.validate
+    ("{start: 2026-09-30, end: 2020-01-01}", "starts after it ends"),
     ("{start: 2020-01-01}", "exactly start and end"),
     ("{end: 2026-09-30}", "exactly start and end"),
     ("{start: 2020-01-01, end: 2026-09-30, note: x}", "exactly start and end"),           # no key is ignored
@@ -257,6 +257,10 @@ def test_the_strict_loader_reads_everything_safe_load_reads():
     assert MC.loads(text) == (yaml.safe_load(text) or {})
     assert MC.loads("a: &x {b: 1}\nc: *x\n") == {"a": {"b": 1}, "c": {"b": 1}}       # anchors and aliases
     assert MC.loads("") == {}
+    merged = "base: &b {start: 2020-01-01, end: 2026-09-30}\nw:\n  <<: *b\n  end: 2025-01-01\n"
+    assert MC.loads(merged) == yaml.safe_load(merged)                                     # merge keys, as safe_load
+    with pytest.raises(MC.DuplicateKeyError):
+        MC.loads("base: &b {x: 1}\nw:\n  <<: *b\n  y: 1\n  y: 2\n")
 
 
 @pytest.mark.parametrize("text,why", [

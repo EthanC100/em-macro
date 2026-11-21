@@ -50,7 +50,7 @@ class Fence:
         lower-case ASCII letters, digits and ``_ . : -`` (which also refuses zero-width, byte-order-mark, look-alike and
         upper-case variants). ``enabled`` must be a boolean (``enabled: "false"`` used to switch the reserve on);
         unknown keys are refused rather than ignored (a misspelt ``windows:`` used to drop every window); a window
-        needs exactly ``start`` and ``end``, ISO dates, start before end."""
+        needs exactly ``start`` and ``end``, ISO dates, start on or before end (both inclusive)."""
         if not isinstance(cfg, dict):
             raise FenceConfigError("the configuration is a mapping")
         res = cfg.get("reserve", {})
@@ -79,8 +79,9 @@ class Fence:
                 raise FenceConfigError(f"reserve.windows.{domain} needs exactly start and end dates")
             start, end = _config_day(w["start"], f"reserve.windows.{domain}.start"), \
                 _config_day(w["end"], f"reserve.windows.{domain}.end")
-            if start >= end:
-                raise FenceConfigError(f"reserve.windows.{domain} must start before it ends")
+            if start > end:
+                raise FenceConfigError(f"reserve.windows.{domain} starts after it ends (both ends are inclusive: a "
+                                       "one-day window has start == end)")
             windows[domain] = (start, end)
         if enabled and not windows:
             raise FenceConfigError("reserve.enabled is true but reserve.windows is empty: the fence must be set first")

@@ -32,6 +32,8 @@ class _StrictLoader(yaml.SafeLoader):
     def construct_mapping(self, node, deep=False):
         seen = set()
         for key_node, _ in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":   # a merge key (<<): flattened by SafeLoader as before
+                continue
             key = self.construct_object(key_node, deep=True)
             try:
                 if key in seen:
@@ -84,8 +86,8 @@ def validate(cfg: dict) -> list[str]:
         windows = None
     for dom, w in (windows or {}).items():
         a, b = (_day(w.get("start")), _day(w.get("end"))) if isinstance(w, dict) else (None, None)
-        if a is None or b is None or type(a) is not type(b) or a >= b:
-            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end")
+        if a is None or b is None or type(a) is not type(b) or a > b:
+            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start on or before end")
     if enabled is True and not windows:
         errs.append("reserve.enabled is true but reserve.windows is empty: the fence must be set first")
     cap = get("exploration", "data_end")
