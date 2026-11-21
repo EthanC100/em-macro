@@ -121,9 +121,10 @@ results are in `results/manhattan_hte_accounting/` (README there). With 4 worker
 | before PR #100 | 10,344 | 10.5 s | 37.3 s | 23.3 s | 28.8 s | 8.5× | 439 MiB |
 | **indexed (PR #100)** | 10,344 | 11.8 s | 8.3 s | 8.0 s | 4.6 s (1.5 s) | **1.8×** | 278 MiB |
 | **indexed (PR #100)** | 99,552 | 71.6 s | 83.9 s | 78.4 s | 45.0 s (15.1 s) | **2.9×** | 2.0 GiB |
+| **indexed, final head** (re-read file, guards re-checked) | 99,552 | 60.5 s | 83.4 s | 74.2 s | 58.5 s (17.0 s) | **3.6×** | 2.5 GiB |
 | before PR #100, as first published (another machine) | 99,552 | 44.0 s | 258.4 s | 1,083.7 s | 226.6 s (203.4 s) | 35.6× | 3.5 GiB |
 
-The first three rows ran on the same machine, one at a time. On the indexed ledger:
+The first four rows ran on the same machine, one at a time. On the indexed ledger:
 - registration, completion and the cross-check are linear, at about 2.1 ms of accounting per candidate in total;
 - the ledger costs 3.56 kB per candidate, and outcome batches plus the registration file add about 0.5 kB;
 - `_batch_state` and the cross-check stream the ledger with `Ledger.iter_records`, so it is never held as objects.

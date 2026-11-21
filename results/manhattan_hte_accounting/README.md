@@ -42,9 +42,15 @@ branch as first published.
 | `bench_10k_w4_indexed.json` | 10,344 | 11.8 | 8.3 | 8.0 | 4.6 | 2.849 | 1.458 | 1.77× | 2.0 | 35.1 | 3,556 | 20,688 | 21 | 278 | yes |
 | `bench_100k_w4_indexed.json` | 99,552 | 71.6 | 83.9 | 78.4 | 45.0 | 27.587 | 15.115 | 2.9× | 2.1 | 337.8 | 3,558 | 199,104 | 195 | 2,005 | yes |
 
+| `bench_100k_w4_indexed_final.json` (head 393e3a6) | 99,552 | 60.5 | 83.4 | 74.2 | 58.5 | 38.265 | 17.044 | 3.57× | 2.2 | 337.8 | 3,558 | 199,104 | 195 | 2,468 | yes |
+
 - **At 10k on the same machine:** accounting falls from 8.5× to 1.8× the HTE run (89.3 s to 20.9 s), and peak RSS from
   439 to 278 MiB.
 - **At 100k:** accounting is 2.9× the HTE run (207 s), linear at about 2.1 ms per candidate, against 35.6× in the first
   published run above. Peak RSS falls from 3.5 to 2.0 GiB.
 - Every run was consistent, with one PR #86 attempt per candidate, no reconciler violations and at most 512 rows per
   outcome batch.
+- **Final head (393e3a6), after the fixes from the independent verification:** 216 s of accounting, 3.6× the HTE run.
+  The cross-check now reads the ledger file instead of the caller's object, and every guard is re-checked on each
+  operation. That adds about 13 s to the cross-check and 0.5 GiB to peak RSS (2.5 GiB): the cost of auditing the
+  on-disk snapshot.
