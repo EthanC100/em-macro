@@ -145,8 +145,8 @@ screening method passes, which is a separate track.
 
 | PR | state | age | what | assessment |
 |---|---|---|---|---|
-| [#105](https://github.com/EthanC100/em-macro/pull/105) | draft, CI green (run 44921438603) | 0 d | `Fence.from_config` fails closed (reserve keys and values, duplicate YAML keys) | **Needed.** Defect confirmed on main (§C, C7). 23 commits behind main and touches `access.py`; rebase and re-run. Needs a review independent of its author |
-| [#104](https://github.com/EthanC100/em-macro/pull/104) | draft, CI green (run 44918443798) | 0 d | ledger writes U+2028, U+2029 and U+0085 as escapes | **Needed.** Defect reproduced on main (§C, C3). 23 behind. `test_manhattan_ledger_scaling.py` pins the defect and must change with it (the PR does this) |
+| [#105](https://github.com/EthanC100/em-macro/pull/105) | draft, CI green (run 44921438603) | 0 d | `Fence.from_config` fails closed (reserve keys and values, duplicate YAML keys) | **Needed.** Defect confirmed on main (§C, C7). 23 commits behind main, but merges cleanly. Independent review in **B.8**: merge-ready after updating to main and re-running CI; follow-up for the `data_end` cap |
+| [#104](https://github.com/EthanC100/em-macro/pull/104) | draft, CI green (run 44918443798) | 0 d | ledger writes U+2028, U+2029 and U+0085 as escapes | **Needed.** Defect reproduced on main (§C, C3). 23 behind, but merges cleanly. Independent review in **B.8**: merge-ready after updating to main and re-running CI; the ops `Store` needs a separate fix |
 | [#101](https://github.com/EthanC100/em-macro/pull/101) | open, into `dev` | 2 d | Q032: morning-report settlement-clone failures | the night shift's; not Manhattan |
 | [#83](https://github.com/EthanC100/em-macro/pull/83) | draft | 3 d | simulation status, `dev_status`, held-out readiness, decisions D0-D8 | **The most important open PR scientifically.** It records that no screening method is selected. 230 commits behind; `docs/manhattan/phase4/` is not on main. Decide D0-D8 (§E) |
 | [#77](https://github.com/EthanC100/em-macro/pull/77) | open | 4 d | C14: Janus quick checks hourly | **Stale record.** The schedule change is in effect, but `docs/config_changes.md` (protected) has no C14. The config log is 4 days behind reality |
@@ -199,9 +199,91 @@ historical; no action is needed beyond optional clean-up by the owner.
 | Fail-closed YAML and role configuration | **branch only** (PR #105, draft). Live on main (C7) |
 | Reserve configuration safety | same PR #105. Not on main |
 | Owner decision documentation | **on main**: `docs/manhattan/hte_accounting/DECISIONS.md` (via #98). Two more decision sets are on main (`NON_TECH_TRACK.md` §8, `S13_RESEARCH_METHODOLOGY.md` §10). PR #83's D0-D8 are **branch only** |
-| Ops `Store` separator defect | named in PR #104's description; **no branch**; likely the same defect (`manhattan/ops/store.py:319/338` write, `:103/:412` read); not reproduced |
+| Ops `Store` separator defect | named in PR #104's description; **no branch**. **Confirmed (me) at the reader:** a line written as `store.py:319` writes it (`ensure_ascii=False`) holding U+2028 makes `ops.store.read_lines` (`:103`) raise `JSONDecodeError`. The same reader pattern is at `:412` and in `attempts.py:659` (the reconciler's store pass). Needs its own narrow fix; #104 does not cover it |
 
-### B.8 Process observations
+### B.8 Independent review of PR #104 and PR #105 (requested by the owner during this audit)
+
+Method: both branches were fetched into a scratch clone (branches untouched). Each was merged onto main `2577f25`
+alone and then together. I read the diffs line by line, ran the new tests against unpatched main, ran the
+regression suites on the combined merge, and probed #105 adversarially. Nothing was pushed, commented or merged.
+
+**Integration with current main.**
+
+- Both branches start from `e194cb0`.
+- No commit on main since then touches `manhattan/ledger.py`, `roles.py`, `config.py`, `access.py` or
+  `tests/test_manhattan_ledger_scaling.py`.
+- #104 alone, #105 alone, and #104 + #105 together all merge **without conflict**.
+- The two PRs touch disjoint files.
+- On the combined merge, 13 regression suites gave **714 passed, 0 failed** (exit 0):
+  - the two new files;
+  - `ledger_scaling`, `attempts`, `binding_access`, `ops_attempts`, `engine` and `registry`;
+  - `hte_accounting` (#98, merged after the PRs' base);
+  - `prereg` and `prereg_v2` (protected);
+  - `marketdata` and `ops_e2e`.
+- The full suite on the combined merge was **not** run. CI ran on each PR's own head against the older main.
+  **Before merging, update each branch to current main and let the `tests` workflow run on it.**
+
+**Regression coverage (fail before, pass after).**
+
+| PR | new tests | on unpatched main | on the PR | PR's own claim |
+|---|---|---|---|---|
+| #104 | `tests/test_manhattan_ledger_line_separators.py`, 24 | **16 failed, 8 passed** | 24 passed | "15 of the 24 fail". A one-test difference; immaterial, but the description should be corrected |
+| #105 | `tests/test_manhattan_fence_config.py`, 125 collected | **74 failed, 51 passed** | all passed (in the 714) | "126 passed". One fewer collected here; immaterial |
+
+**#104 assessment: correct and narrowly scoped. Merge-ready after rebasing, with three non-blocking notes.**
+
+- **Correctness.**
+  - `record_line` escapes exactly the three characters that `str.splitlines()` treats as boundaries but JSON leaves
+    raw. JSON already escapes the others (all below U+0020), and a test checks the table is complete.
+  - It is used at both writer sites (`_index` and `_append`), which `PublicIndex` inherits.
+  - The hashes are unchanged, because `record_hash` covers the parsed record.
+  - Lines without these characters are byte-identical; PR #100's differential test still requires that.
+- **Note 1: it does not fix the ops `Store`.** The same defect there is confirmed at the reader (B.7). Open a
+  separate narrow fix; do not widen #104.
+- **Note 2: it interacts with C4.** When the line-canonicality check proposed in C4 is added, it must compare
+  against `record_line(rec)`, not plain `json.dumps`. Otherwise every escaped line would be flagged.
+- **Note 3: it does not recover existing raw-separator ledgers.** They stay unreadable, as the PR intends; its
+  option B is an owner-run repair. No tracked JSONL in this repository contains a raw separator (per the PR). The
+  private ledgers are unscanned: **unverified**.
+
+**#105 assessment: correct for what it targets. Merge-ready after rebasing.** One adjacent fail-open is not covered
+and should be a follow-up, not a reason to hold the PR.
+
+- **Correctness.** My probes on the PR's head:
+  - a quoted `"false"` is **refused**;
+  - a repeated `enabled:` is **refused** (`DuplicateKeyError`);
+  - an integer domain key is **refused**;
+  - merge keys still work;
+  - `datetime` values and ISO week dates are refused;
+  - `access._fence_of` still wraps every error as `AccessError`;
+  - `validate` now calls `from_config`, so the two cannot disagree;
+  - the protected `test_manhattan_prereg*.py` pass unchanged.
+- **Typo domains are a usability problem, not a leak.** With a window only under `fx_dialy` and `enabled: true`,
+  a 2021 read of `fx_daily` resolves to **`embargo`**: every date after `exploration.data_end` that no window
+  covers is embargoed. So #105's "typos that are valid domain names" follow-up is about a reserve silently not
+  existing, not about data leaking. The allowlist is still worth having.
+- **Not covered, confirmed (me), pre-existing:** neither `validate` nor `from_config` caps `exploration.data_end`.
+  - Changing it to `"2025-12-31"` passes `validate` with no error.
+  - A 2021 `fx_daily` read then resolves to **`exploration`** instead of `embargo`.
+  - Hard rule 4's 2019-12-31 boundary is enforced for Manhattan only by the value in `config/manhattan.yaml`.
+    The file is owner-protected, so this is a defence-in-depth gap, not an agent-reachable path.
+  - **Recommended follow-up** (owner's choice, since it touches the rule-4 boundary): refuse a `data_end` later than
+    the cap in `config/night.yaml` or 2019-12-31, and refuse a reserve window that starts on or before `data_end`.
+- **Other notes.**
+  - `manhattan/hte/protected.py` still reads the file with plain `safe_load` (informational only, as the PR says).
+  - `validate` imports `roles` inside the function. There is no cycle, but a module-level import would be clearer.
+
+**Whether either needs changes before merging.**
+
+- **Required:** rebase or merge each onto current main, re-run CI on the updated head, and correct the test counts
+  in each description.
+- **Recommended:** a reviewer other than the author signs off; this section is such a review of the diff, not of
+  the authoring session.
+- **Neither needs a code change to be merged.** The ops `Store` fix (for #104) and the `data_end` cap with the
+  domain allowlist (for #105) belong in follow-ups.
+- **Merging is the owner's decision; nothing was merged.**
+
+### B.9 Process observations
 
 1. **No merged Manhattan PR carries an approving review.** Every "independent verification" is an agent's report
    quoted in the PR body. The owner merges.
@@ -471,7 +553,7 @@ not look.
   both to CODEOWNERS on 2026-11-13 (`1a7f653`), and the simulation was dispatched on that commit. ETHAN_ACTIONS item
   19 still reads "drafts". This is PR #83's D0.
 - **G2. No screening method is validated.** See Deliverable A, point 3.
-- **G3. Merges carry no approving review**, and #98's description is stale (B.8).
+- **G3. Merges carry no approving review**, and #98's description is stale (B.9).
 - **G4. Hard rule 16's writer list omits `manhattan-ops-runner.yml` and `manhattan-sim.yml`.** Both are
   `workflow_dispatch`. The first writes to the private `manhattan-ledger` repository; both are guarded to main.
   Recommend the owner adds them to the list.
@@ -574,6 +656,23 @@ I decide nothing here. "What stays prohibited" is the conservative default that 
 removed the cost argument for chunks, and per-chunk would need a redesign of PR #86. No statistical downside. This
 is a formality: confirm it with an `approval_ref` pointing to a written record.
 
+### E.3a DECISIONS.md on main: the exact choices, as the code encodes them
+
+`docs/manhattan/hte_accounting/DECISIONS.md` (merged with #98) and `manhattan/hte_accounting/policy.py`:
+
+| id | where the choice lives | exact values the code accepts | default | DECISIONS.md recommends | S17 recommends |
+|---|---|---|---|---|---|
+| **D-10** | `BridgePolicy.d10_registration` | `"unregistered"` (bridge writes nothing; raises `OwnerDecisionUnsupported`), `"register_every_evaluation"`. `"register_selected_only"` is accepted by the constructor but always refused | `None`, so `OwnerDecisionRequired` | register every evaluation, after A-1 and A-2 | the same, **and only after C3-C6, C8 and D-7** (E.2). Until then the de facto state is "unregistered", plus a ban on using HTE output to choose what is screened |
+| **D-1** | `BridgePolicy.d1_counting_unit`, used only by `policy.denominator()` | one of `registered_executions`, `completed_evaluation_keys`, `executables`, `bindings`, `candidates`, `variants`, `hypotheses`, `families` | `None` | S13's **layered** rule: variants per (family, window) = *m*; one unit per scientific class per batch = *n_b* | the layered rule (E.1). **Gap (confirmed, me):** `D1_ALTERNATIVES` has no "scientific class" unit, and the field takes one unit, not a layered pair. The recommended decision **cannot be recorded in `BridgePolicy` as written**. Before D-1 is recorded, the code needs a class unit (after class merging, S13 M1-M3) and either two fields (`m_unit`, `nb_unit`) or a named `"layered_s13"` value. Do not approximate it with `families` |
+| **B4** | `BridgePolicy.b4_cardinality` | `"per_candidate_attempts"` (implemented), `"per_chunk_attempt"` (raises `OwnerDecisionUnsupported`) | `None` | per candidate | per candidate (E.3) |
+| **A-1** | **not a policy field.** Encoded as the `completion_writer` argument of `Bridge.complete`; `tests/test_manhattan_binding_access.py` `ALLOWED` lists the modules that may call `record_evaluation` | (a) add `manhattan/hte_accounting/bridge.py` to `ALLOWED`; (b) run HTE through `engine.evaluate` under an `AttemptContext`; (c) keep HTE completions out of the ledger | no writer, so `complete` refuses (`OwnerDecisionRequired: A-1`) | (a), exploration only, if D-10 = register | (a), with the proposed test that the bridge never imports or mints a `CompletionProof`, and with `ENABLED` remaining the switch |
+| **A-2** | **not a policy field.** The ledger path the caller passes | (i) a dedicated persistent HTE exploration ledger with its own anchor; (ii) the main Manhattan ledger; (iii) one ledger per run | caller's choice; the bridge refuses ledgers inside the repository and the public index | (i) | (i), **plus** C6's writer lock and D-7's anchor; (iii) must be refused in code (it loses cross-run rerun detection: 1,681 false looks measured) |
+| **A-3** | **not a policy field.** `hte.data.verify_synthetic` in the bridge | (a) hash binding, synthetic panels only (as now); (b) panels loaded into a synthetic `PitStore`, with reads through PR #86 windows | (a), enforced | (a) now, (b) before any real data | the same. (b) is S12's next task (Deliverable H) |
+
+None of these is decided here, and the bridge stays dormant (`ENABLED = False`). Recording a decision means a
+written owner record plus a `BridgePolicy` with an `approval_ref` naming it. Note C18: the code accepts any
+non-empty `approval_ref`, so the record itself, not the string, is the control.
+
 ### E.4 A-1, A-2, A-3 and D-7: who writes, which ledger, data identity and anchor custody
 
 - **A-1 (which module may call `record_evaluation`).** I agree with DECISIONS.md: allow
@@ -625,7 +724,7 @@ Grade 1 evidence exists only forward.
 2. Add the enforcement code (`ledger.py`, `roles.py`, `access.py`, `attempts.py`, `freeze.py`, `evidence.py`) and
    its tests to the CODEOWNERS protected block (C17).
 3. Require a persistent single-look guard in every track before any real data (C1).
-4. A domain allowlist for reserve keys (#105's follow-up).
+4. A domain allowlist for reserve keys (#105's follow-up), and a cap on `exploration.data_end` at the rule-4 boundary in `validate` and `from_config` (B.8: today `"2025-12-31"` validates clean and turns 2021 reads into exploration).
 5. Recovery policy for any ledger already holding a raw separator (#104 option B: an offline, owner-run re-escape).
 6. Confirm the rulesets (item 6) and make "tests / pytest" a required check.
 7. Record C14 (merge or replace PR #77).
@@ -916,6 +1015,8 @@ non-existent path, and no tokens.
   - C4 (unhashed fields and duplicate key verify clean);
   - C8(a) (stranded bridge attempts);
   - C1 (two processes each read the holdout).
+- **PR #104 and #105 review (B.8):** new tests against unpatched main (16/24 and 74/125 fail); 13 regression
+  suites on main + #104 + #105 gave 714 passed, 0 failed; #105 probes; ops `Store` reader reproduction.
 - **Reproductions by the sub-reviews and not re-run by me:** C5 truncation, C6 fork, C7 fence, C8(b)(c), C9, C10.
 - **Targeted suites run by the sub-reviews:** `test_manhattan_hte_accounting.py` 60 passed; equities
   registration, non-tech and tracks 75 passed; the separator pins 4 passed.
