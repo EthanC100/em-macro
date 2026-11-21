@@ -150,7 +150,7 @@ screening method passes, which is a separate track.
 | [#101](https://github.com/EthanC100/em-macro/pull/101) | open, into `dev` | 2 d | Q032: morning-report settlement-clone failures | the night shift's; not Manhattan |
 | [#83](https://github.com/EthanC100/em-macro/pull/83) | draft | 3 d | simulation status, `dev_status`, held-out readiness, decisions D0-D8 | **The most important open PR scientifically.** It records that no screening method is selected. 230 commits behind; `docs/manhattan/phase4/` is not on main. Decide D0-D8 (§E) |
 | [#77](https://github.com/EthanC100/em-macro/pull/77) | open | 4 d | C14: Janus quick checks hourly | **Stale record.** The schedule change is in effect, but `docs/config_changes.md` (protected) has no C14. The config log is 4 days behind reality |
-| [#73](https://github.com/EthanC100/em-macro/pull/73) | open, dev → main | 5 d | night-shift promotion | **Refused** on 2026-11-20 (2 failed tests, missing `yaml` in the site build, ledger rebuild differs). `dev` is 63 ahead and 21 behind main. "Needs Ethan" in the morning report |
+| [#73](https://github.com/EthanC100/em-macro/pull/73) | open, dev → main | 5 d | night-shift promotion | **Refused** on 2026-11-20 (2 failed tests, missing `yaml` in the site build, ledger rebuild differs). `dev` is 63 ahead and 21 behind main. "Needs Ethan" in the morning report. **S17 check:** the full suite on `dev` at `d2eeb25` in a clean Python 3.12 environment gave **3,826 passed, 167 skipped, 0 failed** (exit 0). The 2 failures and the `yaml` error are therefore most likely the promote session's environment, as its own report suspected. Check (b), the ledger rebuild, needs em-macro-data and was not checked |
 
 No open PR has unresolved review threads. #98, #103 and #104's reviews contain no line comments.
 
@@ -1029,6 +1029,7 @@ non-existent path, and no tokens.
   - The q019 "argument list too long" error that other sessions report did not occur in this container.
   - A first attempt under the container's Python 3.13 failed at collection because `scipy` and `statsmodels` were
     not installed: an environment gap, not a repository defect.
+  - The same command on `dev` at `d2eeb25`: **3,826 passed, 167 skipped, 0 failed, exit 0** (B.3, PR #73).
   - Slowest tests: `test_manhattan_adaptive_weight.py` (174 s and 91 s), `hier_analytic` (71 s) and `ops_e2e`
     setup (56 s).
 
