@@ -57,6 +57,9 @@ def validate(cfg: dict) -> list[str]:
         errs.append("reserve.windows must map a domain to {start, end}")
         windows = None
     for dom, w in (windows or {}).items():
+        if type(dom) is not str or not dom.strip() or dom != dom.strip():
+            errs.append(f"reserve.windows has a key that is not a domain name: {dom!r} ({type(dom).__name__}); "
+                        "quote it if it is one (roles.Fence.from_config refuses it)")
         a, b = (_day(w.get("start")), _day(w.get("end"))) if isinstance(w, dict) else (None, None)
         if a is None or b is None or a >= b:
             errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end")

@@ -38,9 +38,64 @@ class Fence:
 
     @classmethod
     def from_config(cls, cfg: dict) -> "Fence":
+        """The fence of ``config/manhattan.yaml`` (as parsed by ``yaml.safe_load``). Fails closed: a reserve section
+        that cannot be read exactly as written raises ``FenceConfigError`` instead of being dropped or coerced.
+
+        A reserve window is looked up by its domain name (``fence.reserve.get(domain)``), so an entry whose key is
+        not that name protects nothing. YAML turns ``1:``, ``yes:``, ``null:`` or ``2020-01-01:`` into a number,
+        boolean, ``None`` or date, so such an entry used to be kept under a key no domain ever matches and its
+        reserve dates were silently unprotected. Likewise ``enabled: "false"`` (a string) used to switch the reserve
+        on, and a window with its start after its end used to protect none of its dates."""
+        if not isinstance(cfg, dict):
+            raise FenceConfigError("the configuration is a mapping")
         res = cfg.get("reserve", {})
-        windows = {d: (_day(w["start"]), _day(w["end"])) for d, w in (res.get("windows") or {}).items()}
-        return cls(exploration_end=_day(cfg["exploration"]["data_end"]), reserve=windows, enabled=bool(res.get("enabled")))
+        if res is None:
+            res = {}
+        if not isinstance(res, dict):
+            raise FenceConfigError("reserve must be a mapping")
+        enabled = res.get("enabled", False)
+        if type(enabled) is not bool:
+            raise FenceConfigError("reserve.enabled must be true or false (not a string or number)")
+        raw = res.get("windows")
+        if raw is None:
+            raw = {}
+        if not isinstance(raw, dict):
+            raise FenceConfigError("reserve.windows must map each domain name to {start, end}")
+        windows = {}
+        for domain, w in raw.items():
+            if type(domain) is not str or not domain.strip() or domain != domain.strip():
+                raise FenceConfigError(f"reserve.windows has a key that is not a domain name: {domain!r} "
+                                       f"({type(domain).__name__}); quote it in the YAML if it is one")
+            if not isinstance(w, dict) or "start" not in w or "end" not in w:
+                raise FenceConfigError(f"reserve.windows.{domain} needs start and end dates")
+            start, end = _config_day(w["start"], f"reserve.windows.{domain}.start"), \
+                _config_day(w["end"], f"reserve.windows.{domain}.end")
+            if start > end:
+                raise FenceConfigError(f"reserve.windows.{domain} starts after it ends")
+            windows[domain] = (start, end)
+        exploration = cfg.get("exploration")
+        if not isinstance(exploration, dict) or "data_end" not in exploration:
+            raise FenceConfigError("exploration.data_end is required")
+        return cls(exploration_end=_config_day(exploration["data_end"], "exploration.data_end"), reserve=windows,
+                   enabled=enabled)
+
+
+class FenceConfigError(ValueError):
+    """The reserve or exploration section of the configuration cannot be read exactly as written (fail closed)."""
+
+
+def _config_day(v, where: str) -> date:
+    """A configuration date: a ``date`` (unquoted YAML ``2020-01-01``) or an ISO ``YYYY-MM-DD`` string. A datetime,
+    a number or anything else is refused, never coerced."""
+    if type(v) is date:
+        return v
+    if isinstance(v, str):
+        try:
+            if len(v) == 10:
+                return date.fromisoformat(v)
+        except ValueError:
+            pass
+    raise FenceConfigError(f"{where} must be a date YYYY-MM-DD, not {v!r}")
 
 
 def _day(v) -> date:
