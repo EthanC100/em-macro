@@ -190,12 +190,12 @@ field list stay unset.
 | F6 | **Retroactive bridging:** a new family matching two tested classes would merge them after the fact and rewrite earlier `n_b` | follows from the union-find |
 | F7 | **Substitution after failure:** promoting another member when a class's first unit fails after reading data is a second look at that class on the window | follows from the census rule |
 | F8 | **Mirror pairs:** they must stay separate classes. A two-sided unit needs (E⁺+E⁻)/2 or 2·min p; "the larger of the two" is invalid (max E can have expectation up to 2). S13 §2.2 and §4.5 disagree on this; held-out scenario H01 treats mirrors as separate units | confirmed (the maths); text conflict noted |
-| F9 | **Adoption status of v3.1 is ambiguous.** The file still reads "a draft, not adopted and not in force" (l.10), but it has been in CODEOWNERS' protected block since `1a7f653`, and the simulation was dispatched on that commit. If it is not adopted, a pre-adoption change is the natural route for D-1; if it is adopted, D-1 needs 3.2. Settling PR #83's D0 comes first | confirmed |
+| F9 | **Adoption status of v3.1, verified 2026-11-22: adopted by conduct, not in writing.** The adoption procedure is PR #56 §1.5. The owner performed every step on 2026-11-13: merged PR #56 at 16:53:36Z; added the five-line CODEOWNERS block at 16:56:01Z (`1a7f653`, "Update CODEOWNERS", author EthanC100); and dispatched the full simulation on that commit at 16:56:57Z (run `43467828524`, actor EthanC100). The recorded hashes on main equal the final pair (`65c19e68…` for SIM_PREREG_v2, `c4ce79d2…` for PROTOCOL_v3.1), and the files hash to them today. Neither file has changed since 11:18Z that day. The file's own "draft, not adopted" line (l.10) could not be edited without breaking the adopted hash. ETHAN_ACTIONS item 19 was never updated. **Consequence:** D-1 Option B is a **Protocol 3.2** change (or a formal amendment), not a pre-adoption change. The owner should confirm adoption in writing (PR #83's D0) before any protocol work | confirmed (GitHub API, hashes) |
 
 ### 3.2 Recommendation
 
-The review recommends, and S17 agrees: **Option B in substance**, adopted as a pre-adoption change to v3.1 (or as
-v3.2 if the owner treats v3.1 as adopted). It holds only with all six rules:
+The review recommends, and S17 agrees: **Option B in substance**, adopted as **Protocol 3.2** (v3.1 is adopted by conduct, F9),
+not a pre-adoption change. It holds only with all six rules:
 
 1. **R, α-wealth and every reported count are per class, first unit only** (closes F3).
 2. **Inheritance is negative-only:** an inherited unit is never a discovery, gets no admission level `a_f`, no tier
