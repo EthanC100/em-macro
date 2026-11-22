@@ -28,6 +28,11 @@ neither a recorded split nor share counts explain is excluded with reason "unres
 annual and a fourth-quarter share count for the same period end that disagree — excludes that security, with the
 error as its reason. It does not raise out of ``snapshot``, which would halt the whole universe.
 
+**Two equity research tracks, one pipeline (issue #102).** ``track_rules`` gives the eligibility rules of the
+technology and the non-technology track. They share every rule except the categories (``sectors``) and, for
+non-technology, REITs as a security type. ``track_snapshots`` forms both universes on one day from the same data and
+checks that they are disjoint and that no member sits outside its track.
+
 **Scope.** The default categories are US-listed technology sub-industries in this package's own taxonomy (vendor
 industry codes are licensed and may be mapped onto it). Listing currency is checked against the rules' currency:
 an international extension adds calendars, currencies and a currency rule, not a second universe framework.
@@ -63,7 +68,8 @@ class Classification:
     source: str = ""
 
     def __post_init__(self):
-        if self.category not in TECH_CATEGORIES and self.category != "non_technology":
+        from .sectors import all_categories
+        if self.category not in all_categories():
             raise EquityDataError(f"{self.company_id}: unknown category {self.category!r}")
         if self.end is not None and self.end < self.start:
             raise EquityDataError(f"{self.company_id}: classification ends before it starts")
@@ -239,3 +245,41 @@ def assert_snapshot_for(snapshot: Snapshot, day: date) -> None:
     """A computation at ``day`` must use the universe formed at ``day``, not a later (or earlier) one."""
     if snapshot.day != day:
         raise IdentityError(f"universe formed on {snapshot.day} used at {day}: future or stale membership")
+
+
+def track_rules(track: str, **over) -> EligibilityRules:
+    """Eligibility rules of one equity research track. The rules are identical across tracks apart from the
+    categories and, for non-technology, the REIT security type (owner decisions NT-1 and NT-2). Any field may be
+    overridden, but the categories must stay inside the track."""
+    from . import sectors
+    cats = sectors.categories_of_track(track)
+    base = {"categories": cats}
+    if track == sectors.NON_TECHNOLOGY_TRACK:
+        base["security_types"] = sectors.NON_TECH_SECURITY_TYPES
+    base.update(over)
+    stray = [c for c in base["categories"] if sectors.track_of(c) != track]
+    if stray:
+        raise EquityDataError(f"categories {stray} are not in the {track} track")
+    bad_types = [t for t in base.get("security_types", ()) if t in sectors.NEVER_IN_EQUITY_TRACKS]
+    if bad_types:
+        raise EquityDataError(f"security types {bad_types} are never in an equity research track")
+    return EligibilityRules(**base)
+
+
+def track_snapshots(master: SecurityMaster, prices: PriceBook, classes: ClassificationHistory, day: date,
+                    rules_by_track: dict, *, fundamentals: FundamentalStore | None = None, borrow=None) -> dict:
+    """``{track: Snapshot}`` for each equity track, formed on ``day`` from the same data. Raises when a security is
+    a member of two tracks or a member's category (as known on ``day``) is outside its track. Both are invariants of
+    the taxonomy, so either one means a configuration error."""
+    from . import sectors
+    snaps = {t: UniverseBuilder(master, prices, classes, r, fundamentals=fundamentals, borrow=borrow).snapshot(day)
+             for t, r in rules_by_track.items()}
+    seen: dict = {}
+    for t, snap in snaps.items():
+        for sid, cat in snap.categories.items():
+            if sectors.track_of(cat) != t:
+                raise EquityDataError(f"{sid}: category {cat} is not in the {t} track on {day}")
+            if sid in seen:
+                raise EquityDataError(f"{sid} is a member of both {seen[sid]} and {t} on {day}")
+            seen[sid] = t
+    return snaps

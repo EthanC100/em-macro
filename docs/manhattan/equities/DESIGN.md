@@ -13,6 +13,7 @@ statistics or simulation. Companion documents:
 - [PROTOCOL_EXTENSION_PROPOSAL.md](PROTOCOL_EXTENSION_PROPOSAL.md): why Protocol v3.1 does not cover single equities
   and what a future version would need, for Ethan's review.
 - [CORRECTIONS.md](CORRECTIONS.md): the S8 audit findings, what changed, and the counterexamples before and after.
+- [NON_TECH_TRACK.md](NON_TECH_TRACK.md): the non-technology equities track (issue #102), on this same pipeline.
 
 Code: `manhattan/equities/` (23 modules and `catalogue.yaml`). Tests: `tests/test_manhattan_equities_*.py` (6 files).
 
