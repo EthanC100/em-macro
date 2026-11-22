@@ -359,3 +359,13 @@ def test_the_harness_modules_import_no_network_client_and_name_no_private_store(
                 assert n.module.split(".")[0] not in network, p.name
             elif isinstance(n, ast.Constant) and isinstance(n.value, str):
                 assert not any(s in n.value.lower() for s in (x.lower() for x in private)), (p.name, n.value[:60])
+
+
+def test_the_harness_is_not_an_evidence_producer():
+    """The S16 probe for an HTE evidence adapter counts every production importer of manhattan.evidence (GAP-03)."""
+    for p in sorted((ROOT / "manhattan/firstlight").glob("*.py")):
+        for n in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            names = ([a.name for a in n.names] if isinstance(n, ast.Import)
+                     else [n.module or ""] + [f"{n.module}.{a.name}" for a in n.names]
+                     if isinstance(n, ast.ImportFrom) else [])
+            assert not any(x.startswith("manhattan.evidence") for x in names), p.name

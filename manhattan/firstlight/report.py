@@ -20,13 +20,15 @@ from pathlib import Path
 
 from manhattan import attempts
 from manhattan import ledger as L
-from manhattan.evidence import E_DESCRIPTIVE
 
 from . import anchor_stub
 
 SCHEMA, PUBLIC_SCHEMA = "firstlight.report/1", "firstlight.public_index/1"
 REPORT_JSON, REPORT_MD, PUBLIC_JSON = "report.json", "report.md", "public_index.json"
 HARNESS_KIND = "firstlight_synthetic_harness"
+# manhattan.evidence.E_DESCRIPTIVE, spelled here: this module is not an evidence producer and must not import that
+# package (the S16 probe for an HTE evidence adapter counts every production importer of it)
+E_DESCRIPTIVE = "descriptive"
 SUMMARY_FIELDS = ("n_obs", "mean_annual", "vol_annual", "sharpe", "turnover_annual", "cost_annual", "skipped_trades")
 EXCLUDED = ("ts_utc", "record hashes", "ledger head", "attempt IDs", "ledger_id", "anchor utc", "ledger merkle_root")
 
