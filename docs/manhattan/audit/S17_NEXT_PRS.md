@@ -174,6 +174,82 @@ HB rerun: after PR-1 and the code-hash policy (K1)
 
 ## 3. D-1: provisional investigation of Option A (no implementation)
 
-Pending the independent S13-role review commissioned on 2026-11-22. Its result and S17's reading of it are recorded
-below when it returns. Until then, nothing about D-1 is implemented or recorded, and θ_M3 and the M1 field list
-stay unset.
+An independent S13-role review was run on 2026-11-22, read-only, with two synthetic experiments. S17 re-ran both
+experiments and checked the cited code and text. Nothing about D-1 is implemented or recorded. θ_M3 and the M1
+field list stay unset.
+
+### 3.1 Findings
+
+| # | finding | status |
+|---|---|---|
+| F1 | **The two options are statistically identical** if they use the same rule for choosing each class's representative. They feed the same vector to the same, unchanged procedure. The choice is about governance and anti-gaming rules, not about the error-rate guarantee | confirmed by construction |
+| F2 | **Option A is not cleanly "compliant with v3.1 as written".** This corrects S17_REMEDIATION_PLAN.md §3.1. It strains: ARCH §5.1 (a channel is defined by what the generator saw, not by a census) and v3.1 l.303 (`n_b` fixed "by the blind template"); l.1203 and §5.5 (an inherited pass has no clause, so it either does nothing or contradicts the Promising-tier entry rule); ARCH §6.3 (an "adaptive" duplicate has forward weight 1, so duplicates leak into the forward record and the §7 model); ARCH §5.2 (a freeze refusal for duplicates is a new blocking ground); `freeze.prepare` (one channel per batch, so a per-family channel needs a code change). It would also keep θ_M3 and the M1 fields, which set `n_b`, outside protocol versioning | confirmed against the cited lines |
+| F3 | **Counting inherited decisions in R breaks the FDR proof** (A.1 needs R counted in the same units as discoveries). Synthetic: 100 batches × 15 classes, 5% true, an adversary registering K copies of each rejected class. Class-level FDR when inherited units are **excluded** from R equals the no-duplicate world: 0.012 for (i), 0.006 for (ii). When inherited units are **counted** in R and K = 100: 0.356 for (i), 0.285 for (ii). Family units with the same adversary: 0.380 and 0.150 | reproduced by S17 (80 replications; the review used 300) |
+| F4 | **"Rejection laundering":** registering near-duplicates of a class that passed, to inherit the pass untested | a real loophole if inheritance can confer a discovery |
+| F5 | **Chaining:** `methodology.identity.merge_classes` is single-linkage union-find and ignores sign. A chain of families each above θ ends as one class whose ends are anti-correlated: at θ = 0.8, 0.9 and 0.95, corr(first, last) = −1.00, −0.92 and −0.96 | reproduced by S17 |
+| F6 | **Retroactive bridging:** a new family matching two tested classes would merge them after the fact and rewrite earlier `n_b` | follows from the union-find |
+| F7 | **Substitution after failure:** promoting another member when a class's first unit fails after reading data is a second look at that class on the window | follows from the census rule |
+| F8 | **Mirror pairs:** they must stay separate classes. A two-sided unit needs (E⁺+E⁻)/2 or 2·min p; "the larger of the two" is invalid (max E can have expectation up to 2). S13 §2.2 and §4.5 disagree on this; held-out scenario H01 treats mirrors as separate units | confirmed (the maths); text conflict noted |
+| F9 | **Adoption status of v3.1 is ambiguous.** The file still reads "a draft, not adopted and not in force" (l.10), but it has been in CODEOWNERS' protected block since `1a7f653`, and the simulation was dispatched on that commit. If it is not adopted, a pre-adoption change is the natural route for D-1; if it is adopted, D-1 needs 3.2. Settling PR #83's D0 comes first | confirmed |
+
+### 3.2 Recommendation
+
+The review recommends, and S17 agrees: **Option B in substance**, adopted as a pre-adoption change to v3.1 (or as
+v3.2 if the owner treats v3.1 as adopted). It holds only with all six rules:
+
+1. **R, α-wealth and every reported count are per class, first unit only** (closes F3).
+2. **Inheritance is negative-only:** an inherited unit is never a discovery, gets no admission level `a_f`, no tier
+   entry and no forward enrolment by inheritance. Its only effect is that the class cannot be retested on that
+   window (closes F4).
+3. **Classes are frozen at freeze.**
+   - A newcomer is compared only with each class's frozen representative (star linkage) or with every member
+     (complete linkage).
+   - An explicit sign check is applied.
+   - A newcomer matching two or more classes inherits nothing and is not blind.
+   - Earlier batches' classes never change (closes F5, F6).
+4. **No substitution after failure:** the class stays in `n_b` with p = 1 (E = 0) and is closed on that window (F7).
+5. **Mirrors stay separate units;** a two-sided unit only with a valid combination (F8).
+6. **One duplication scenario is added to the simulation pre-registration** before any claim. The procedures are
+   unchanged, but nothing yet validates them with duplicates present.
+
+**Owner-only questions:**
+
+- D0 (adoption status);
+- θ_M3 and the M1 field list (§3.3);
+- replication versus inheritance under `disjoint_slices`;
+- whether class handling extends to forward e-LOND enrolment and the §7 model;
+- excluding code version from the look key (S13 §3);
+- the version number.
+
+### 3.3 What the pre-registration of θ_M3 and the M1 fields must contain (no values chosen)
+
+1. A dated, hashed commitment, made before any reserve read and before the first batch frozen under it. It is
+   versioned under protocol §10 and applies only to batches frozen afterwards.
+2. A rationale drawn only from synthetic or exploration **positions** (never P&L), with a statement of who saw what.
+3. The exact M3 statistic:
+   - the position definition and its aggregation to family level;
+   - the instruments common to both families;
+   - the frequency and the minimum overlap;
+   - the treatment of sparse or event positions;
+   - signed correlation;
+   - the linkage rule.
+4. The M1 field list with canonicalisation and explicit exclusions (prose, code version, binding). The sign is
+   always included.
+5. The tie-break for the representative (manifest order fixed before the census). It is stored separately from
+   `merge_classes`'s smallest-id class label. Also the bridge rule and the mirror rule.
+6. A sensitivity table: the class count over a grid of thresholds, reported and never used to choose.
+7. A test fixture proving the class census cannot read reserve or forward returns.
+
+### 3.4 Effect on the D-1 change specification (S17_REMEDIATION_PLAN.md §3.2)
+
+Rows D1-1 to D1-6 stay, with these changes:
+
+- D1-1 gains star or complete linkage, the sign check and the bridge rule;
+- D1-2 drops the per-family `inherited` channel (that was Option A) and stores the class map plus the
+  representative;
+- D1-3 and D1-4 count R per class and never let inheritance confer a discovery;
+- D1-T5 is restated as "inheritance is negative-only";
+- new tests: chaining across sign is refused (F5's reproduction); retroactive bridging is refused; counting
+  inherited units in R is refused (F3's reproduction as a regression test).
+
+None of this is implemented until the owner decides.

@@ -126,6 +126,11 @@ rules M1, M2 and M3 (threshold θ_M3) before freeze."
 
 ### 3.1 The choice the owner must make first
 
+> **Correction (2026-11-22).** An independent S13-role review, which S17 reproduced, found that Option A is **not**
+> cleanly compliant with v3.1 as written. It strains ARCH §5.1, §5.2 and §6.3 and v3.1 l.303 and l.1203. The two
+> options are statistically identical given the same representative rule. The review recommends Option B with six
+> anti-gaming rules; see [S17_NEXT_PRS.md](S17_NEXT_PRS.md) §3. The table below is kept as first written.
+
 | | Option A: classes enforced at freeze (recommended) | Option B: count classes in the procedure |
 |---|---|---|
 | idea | the freeze refuses a batch that holds two families of one class. A family whose class already appeared in an earlier batch is registered **outside the blind channel**: recorded, weight 0, it inherits that class's decision. So "one blind-channel family per batch" in v3.1 *is* "one class" | families stay the unit in storage; a class-level vector of p- or e-values is built from the first unit of each class and fed to the procedure |
