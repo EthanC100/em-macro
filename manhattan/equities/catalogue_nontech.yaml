@@ -1,0 +1,336 @@
+# Non-technology Equities research track: catalogue of hypothesis families (issue #102).
+#
+# Every entry is an UNTESTED hypothesis family in the sense of docs/manhattan/ARCHITECTURE.md section 3:
+# one economic mechanism, one predicted sign, one named counterparty. Nothing in this file is evidence.
+# There are no performance estimates here by design. Rankings are qualitative 1-5 judgements made before any data
+# were examined; 5 is always the favourable end.
+#
+# Universe descriptions are generic on purpose: no tickers or company names appear in this catalogue.
+#
+# DRAFTS, NOT EXPERIMENTS: no entry here can be run. A test needs a pre-registered, immutable experiment
+# specification frozen with its family and admitted by manhattan/equities/registration.py (hypothesis first;
+# docs/manhattan/equities/NON_TECH_TRACK.md section 5a). Freezing is Ethan's (hard rule 4).
+#
+# Hypothesis inflation controls (docs/manhattan/equities/NON_TECH_TRACK.md section 5):
+# - Five families, one per mechanism the issue names. Sector-neutral construction is a REQUIRED VARIANT of every
+#   family (grouped_variants), not a sixth family: a raw and a sector-neutral expression of one mechanism are one
+#   family and one multiple-testing unit (owner decision NT-3).
+# - cross_track links each family to the technology-track family that tests the same mechanism. The two are
+#   separate families in separate tracks and both stay in the combined denominator; a result in one track is never
+#   counted as independent confirmation of the other unless the confirmation was designated before either was
+#   tested (role: designated_replication). Today every link is role: related_not_designated.
+# - cross_sector_validation: leave-one-sector-out; a family whose signal lives in one sector is reported as that
+#   sector's effect, not as a non-technology effect.
+
+version: 1
+status: draft
+programme: non_technology_equities
+track: non_technology_equities
+families:
+
+  - id: NT-V01
+    name: Value across non-technology sectors
+    research_family: V_value
+    approach: directional
+    mechanism_class: risk_premium
+    sign: "+"
+    rationale: >-
+      Stocks priced low relative to fundamentals (earnings, book value, cash flow) carry distress and duration risk
+      that investors require compensation for, and part of the discount reflects extrapolation of poor past growth
+      that does not persist. Holders of cheap stocks are paid for bearing that risk and for providing capital to
+      out-of-favour firms.
+    counterparty: >-
+      Investors who extrapolate recent growth, avoid recently distressed firms for career or mandate reasons, or
+      pay for the comfort of glamour stocks.
+    target_universe: >-
+      US-listed non-technology common stocks, ADRs and REITs passing PIT liquidity, price and history screens,
+      grouped by PIT sector; financials and real estate use sector-appropriate value measures
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, fundamentals_pit]
+    availability_risks:
+      - Fundamentals must be read as first published; restated values are a different vintage and are not used before their publication.
+      - Book value for banks and insurers and net asset value for REITs are not comparable with industrial book value; a single ratio across sectors mixes accounting regimes.
+      - Delisted value stocks (the distressed tail) must stay in the universe with delisting returns, or the premium is overstated.
+    signal_concept: >-
+      Composite of earnings yield, cash-flow yield and book-to-price from the latest fundamentals usable at
+      formation, ranked within PIT sector, using sector-appropriate measures for financials and real estate.
+    holding_horizon: "1-12 months"
+    horizon_bucket: months
+    baselines:
+      - market and sector exposure
+      - size
+      - the technology-track value family as a separate, parallel test
+    confounders:
+      - sector concentration (value clusters in energy, financials and utilities)
+      - interest-rate exposure of long-duration growth versus value
+      - leverage and distress
+    transaction_costs: low
+    cost_notes: >-
+      Monthly or slower rebalancing; small-capitalisation value names have wider spreads and must pass the
+      liquidity screen at formation.
+    validation_requirements:
+      - Formation uses only fundamentals usable at the formation close.
+      - Report raw and sector-neutral expressions together as one family.
+      - Leave-one-sector-out cross-sector validation.
+      - Out-of-sample period fixed before any evaluation.
+    failure_conditions:
+      - The effect disappears after sector neutralisation.
+      - The effect is carried by one sector only.
+      - The effect vanishes once delisting returns are included.
+    kill_condition: >-
+      No positive sector-neutral excess return over the out-of-sample period after costs, with every sector
+      reported, or the effect lives in one sector only.
+    tail_exposure: >-
+      Value crashes in growth-led markets and in credit crises, when cheap stocks are cheap for a reason.
+    implementation_complexity: medium
+    grouped_variants: >-
+      raw and sector-neutral; earnings, cash-flow and book measures and their composite; monthly or quarterly
+      rebalancing. All variants are one family.
+    cross_track:
+      mechanism: XM-VALUE
+      technology_counterpart: TE-E06
+      technology_shared_family: SF-VALUATION
+      role: related_not_designated
+    sector_scope: all_non_technology
+    cross_sector_validation: leave_one_sector_out
+    ranking: {economic_plausibility: 4, data_feasibility: 4, research_cost: 4, implementation_simplicity: 4, distinctiveness: 2, leakage_safety: 4}
+
+  - id: NT-Q01
+    name: Profitability and quality across non-technology sectors
+    research_family: Q_quality
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Investors underweight the persistence of profitability and the accrual component of earnings, so highly
+      profitable firms with conservative accounting are priced as if their margins will revert faster than they do.
+    counterparty: >-
+      Investors who anchor on headline earnings and price growth stories while undervaluing durable but unexciting
+      profitability.
+    target_universe: >-
+      US-listed non-technology common stocks and ADRs passing PIT screens, excluding financials and real estate,
+      whose profitability measures are not comparable
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, fundamentals_pit]
+    availability_risks:
+      - Gross profitability and accruals must come from statements as first filed.
+      - Excluding financials and real estate must use the PIT sector, not today's.
+      - Survivorship inflates quality returns if failed firms are missing.
+    signal_concept: >-
+      Composite of gross profitability, return on assets and low accruals from the latest usable statements,
+      ranked within PIT sector.
+    holding_horizon: "3-12 months"
+    horizon_bucket: months
+    baselines:
+      - market and sector exposure
+      - value (quality and value are negatively related)
+      - the technology-track profitability family as a separate test
+    confounders:
+      - size
+      - low-risk exposure
+      - sector mix
+    transaction_costs: low
+    cost_notes: Slow turnover; quarterly data updates.
+    validation_requirements:
+      - Statements usable at the formation close only.
+      - Raw and sector-neutral expressions reported together as one family.
+      - Leave-one-sector-out cross-sector validation.
+      - Control for value and low-risk exposure.
+    failure_conditions:
+      - The effect is fully explained by value or low-risk exposure.
+      - The effect lives in one sector only.
+    kill_condition: >-
+      No positive sector-neutral excess return out of sample after costs and after controlling for value and
+      low-risk exposure.
+    tail_exposure: >-
+      Junk rallies after market bottoms, when low-quality firms rebound hardest.
+    implementation_complexity: medium
+    grouped_variants: >-
+      raw and sector-neutral; gross profitability, return on assets and accruals and their composite. All variants
+      are one family.
+    cross_track:
+      mechanism: XM-QUALITY
+      technology_counterpart: TE-E04
+      technology_shared_family: null
+      role: related_not_designated
+    sector_scope: non_technology_ex_financials_real_estate
+    cross_sector_validation: leave_one_sector_out
+    ranking: {economic_plausibility: 4, data_feasibility: 4, research_cost: 4, implementation_simplicity: 3, distinctiveness: 2, leakage_safety: 4}
+
+  - id: NT-M01
+    name: Price momentum across non-technology sectors
+    research_family: M_momentum
+    approach: directional
+    mechanism_class: behavioural
+    sign: "+"
+    rationale: >-
+      Investors underreact to gradual information, and positive feedback trading extends trends, so stocks that
+      rose over the past year tend to keep outperforming over the following months.
+    counterparty: >-
+      Investors who anchor on old prices, sell winners early and hold losers (the disposition effect), and slow
+      institutional rebalancing.
+    target_universe: >-
+      US-listed non-technology common stocks, ADRs and REITs passing PIT liquidity, price and history screens
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history]
+    availability_risks:
+      - Returns must be total returns with splits and dividends as known at formation.
+      - The most recent month is skipped to separate momentum from short-term reversal.
+      - Delisted losers must keep their delisting returns, or the short leg looks better than it was.
+    signal_concept: >-
+      Total return over the past year skipping the most recent month, ranked within PIT sector for the
+      sector-neutral expression and across the track for the raw one.
+    holding_horizon: "1-6 months"
+    horizon_bucket: months
+    baselines:
+      - market and sector exposure
+      - sector momentum (the raw expression carries it)
+      - the technology-track momentum family as a separate test
+    confounders:
+      - sector momentum
+      - volatility regime
+      - short-term reversal
+    transaction_costs: medium
+    cost_notes: >-
+      Monthly rebalancing with high turnover; costs and lagged execution are part of every evaluation.
+    validation_requirements:
+      - Signals from total returns known at the formation close; fills at least one session later.
+      - Raw and sector-neutral expressions reported together as one family.
+      - Leave-one-sector-out cross-sector validation.
+      - The lookback grid declared in advance; every variant counted.
+    failure_conditions:
+      - The effect is fully explained by sector momentum.
+      - The effect is eaten by costs at realistic turnover.
+    kill_condition: >-
+      No positive sector-neutral excess return out of sample after costs with execution lagged at least one
+      session.
+    tail_exposure: >-
+      Momentum crashes in sharp market reversals, when past losers rebound violently.
+    implementation_complexity: low
+    grouped_variants: >-
+      raw and sector-neutral; lookbacks from a declared grid; one-month skip. All variants are one family.
+    cross_track:
+      mechanism: XM-MOMENTUM
+      technology_counterpart: TE-E01
+      technology_shared_family: SF-MOMENTUM
+      role: related_not_designated
+    sector_scope: all_non_technology
+    cross_sector_validation: leave_one_sector_out
+    ranking: {economic_plausibility: 4, data_feasibility: 5, research_cost: 5, implementation_simplicity: 5, distinctiveness: 2, leakage_safety: 4}
+
+  - id: NT-R01
+    name: Earnings revisions across non-technology sectors
+    research_family: R_revisions
+    approach: directional
+    mechanism_class: informational
+    sign: "+"
+    rationale: >-
+      Analysts revise forecasts gradually and prices incorporate revisions with a delay, so stocks with upward
+      revisions in expected earnings tend to outperform as the information is absorbed.
+    counterparty: >-
+      Investors who react slowly to the drift in consensus expectations, and analysts who herd and revise in steps.
+    target_universe: >-
+      US-listed non-technology common stocks and ADRs with analyst coverage known at formation, passing PIT
+      screens
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history, analyst_estimates_pit]
+    availability_risks:
+      - Point-in-time analyst estimates (with the time each was entered) are not affordable or verifiable today; the family needs forward collection or a data decision.
+      - Coverage itself is selection; uncovered stocks must be reported, not dropped silently.
+      - Estimate timestamps that are later than the revision date leak information backwards.
+    signal_concept: >-
+      Breadth and size of consensus revisions to forward earnings estimates over the past three months, as known at
+      formation, ranked within PIT sector.
+    holding_horizon: "1-3 months"
+    horizon_bucket: months
+    baselines:
+      - market and sector exposure
+      - price momentum (revisions and momentum are related)
+      - post-earnings drift
+    confounders:
+      - price momentum
+      - earnings surprise
+      - coverage changes
+    transaction_costs: medium
+    cost_notes: Monthly rebalancing; covered names are more liquid.
+    validation_requirements:
+      - Estimates as entered, with entry timestamps, never as revised later.
+      - Raw and sector-neutral expressions reported together as one family.
+      - Leave-one-sector-out cross-sector validation.
+      - Control for price momentum.
+    failure_conditions:
+      - The effect is fully explained by price momentum.
+      - The data needed cannot be verified point in time.
+    kill_condition: >-
+      No positive sector-neutral excess return out of sample after costs and after controlling for momentum, or no
+      verifiable point-in-time estimate history.
+    tail_exposure: >-
+      Crowding with momentum strategies and joint unwinds.
+    implementation_complexity: high
+    grouped_variants: >-
+      raw and sector-neutral; breadth, size and dispersion of revisions. All variants are one family.
+    cross_track:
+      mechanism: XM-REVISIONS
+      technology_counterpart: TE-C04
+      technology_shared_family: SF-REVISIONS
+      role: related_not_designated
+    sector_scope: all_non_technology
+    cross_sector_validation: leave_one_sector_out
+    ranking: {economic_plausibility: 4, data_feasibility: 1, research_cost: 2, implementation_simplicity: 3, distinctiveness: 2, leakage_safety: 2}
+
+  - id: NT-L01
+    name: Low-risk anomaly across non-technology sectors
+    research_family: L_low_risk
+    approach: directional
+    mechanism_class: structural
+    sign: "-"
+    rationale: >-
+      Leverage-constrained investors who want more risk buy high-beta and high-volatility stocks instead of
+      levering low-risk ones, bidding up risky stocks; risk-adjusted returns of low-risk stocks are therefore
+      higher than their risk implies. The predicted sign is negative in risk: lower beta, higher risk-adjusted return.
+    counterparty: >-
+      Benchmarked and leverage-constrained investors who reach for beta, and retail investors with a preference for
+      lottery-like stocks.
+    target_universe: >-
+      US-listed non-technology common stocks, ADRs and REITs passing PIT screens; volatility measured, never assumed
+      from the sector label
+    required_data: [security_master, prices_daily, corporate_actions, delisting_returns, market_calendar, classification_history]
+    availability_risks:
+      - Beta and volatility must be estimated from returns known at formation, with a stated window.
+      - Sector labels are not a proxy for risk; utilities and staples are not assumed calmer.
+      - Delisted high-volatility stocks must keep their delisting returns.
+    signal_concept: >-
+      Trailing beta and idiosyncratic volatility estimated on returns known at formation; low-risk minus high-risk,
+      beta-balanced, within PIT sector for the sector-neutral expression.
+    holding_horizon: "1-12 months"
+    horizon_bucket: months
+    baselines:
+      - market exposure (beta-balanced construction)
+      - sector exposure (low-risk clusters in utilities and staples)
+      - quality and value
+    confounders:
+      - interest-rate exposure of bond-like sectors
+      - quality
+      - sector concentration
+    transaction_costs: low
+    cost_notes: Slow turnover; leverage and short financing must be costed for beta balancing.
+    validation_requirements:
+      - Risk estimated from returns known at formation only.
+      - Raw and sector-neutral expressions reported together as one family.
+      - Leave-one-sector-out cross-sector validation.
+      - Control for interest-rate exposure, quality and value.
+    failure_conditions:
+      - The effect is fully a bet on bond-like sectors and falling rates.
+      - The effect vanishes after sector neutralisation.
+    kill_condition: >-
+      No positive sector-neutral beta-balanced excess return out of sample after costs, including leverage and
+      short financing.
+    tail_exposure: >-
+      Rising-rate shocks hit bond-like low-risk sectors; crowded low-volatility unwinds.
+    implementation_complexity: medium
+    grouped_variants: >-
+      raw and sector-neutral; beta and idiosyncratic volatility measures. All variants are one family.
+    cross_track:
+      mechanism: XM-LOW-RISK
+      technology_counterpart: null
+      technology_shared_family: null
+      role: related_not_designated
+    sector_scope: all_non_technology
+    cross_sector_validation: leave_one_sector_out
+    ranking: {economic_plausibility: 4, data_feasibility: 5, research_cost: 4, implementation_simplicity: 4, distinctiveness: 3, leakage_safety: 4}
