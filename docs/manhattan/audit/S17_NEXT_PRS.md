@@ -253,3 +253,28 @@ Rows D1-1 to D1-6 stay, with these changes:
   inherited units in R is refused (F3's reproduction as a regression test).
 
 None of this is implemented until the owner decides.
+
+## 4. Status, 2026-11-22 (coordination outcome)
+
+| PR | lane / agent | head | independent review | full suite | merge conditions still open |
+|---|---|---|---|---|---|
+| [#108](https://github.com/EthanC100/em-macro/pull/108) PR-1 ledger integrity II | A / S11 | `e3c595a` | round 1 approve with small changes (5) → **round 2 approve** | 4003 passed, 168 skipped, exit 0 (author and reviewer) | #104 merged first (Codex); owner approval; the HB rerun and code-hash policy come after |
+| [#106](https://github.com/EthanC100/em-macro/pull/106) PR-2 freeze verification and persistent holdout | B / S16 | `4b88069` | round 1 approve with changes (6) → **round 2 approve** | 3973 passed, 168 skipped, exit 0 (author and reviewer) | PR-1 (#108) for the concurrent-look guarantee; production signing pin stays empty; owner approval |
+| [#107](https://github.com/EthanC100/em-macro/pull/107) PR-3 First Light cap and synthetic harness | F / S12 | `161f804` | round 1 approve with changes (9, including a cap bypass through `datetime64[3D]`) → **round 2 approve** | 4040 passed, 168 skipped, exit 0 (author and reviewer) | owner approval; owner decision on the variant-log cutoff design (explicit `engine.evaluate` argument versus the scoped override) |
+
+- **Overlap.** No two lanes edited the same file. #104 and #105 were untouched.
+- **The audit branch's copy of the cap** received the identical multi-day-unit fix (`7e4d23b`). #107 holds the canonical copy.
+- **D-1, independent reproduction.** The duplicate-inflation and anti-correlation findings were reproduced by an independent reviewer with its own code (not the earlier scripts):
+  - **Inflation:** class-level FDR about 0.01 → 0.26–0.44 for (i) and 0.12–0.38 for (ii) at K = 100.
+  - **Chaining:** one class containing pairs with corr −0.9 to −1.0 at θ = 0.9, 0.95 and 0.99. The minimum chain is 7 families at θ = 0.9.
+  - **Refinement 1:** duplicates also break candidate (i)'s **unit-level** guarantee (0.218 > 0.20 at K = 100). Candidate (ii)'s unit-level guarantee holds.
+  - **Refinement 2:** the sign problem is in the proposed transitive M3 rule. `merge_classes` is key-based and nothing calls it.
+- **Not done, by instruction:**
+  - no merge;
+  - no protocol amendment or D-1 record;
+  - no θ_M3 or M1 fields;
+  - no HB rerun;
+  - no anchors repository;
+  - no GitHub protection change;
+  - no switch enabled;
+  - no real data.
