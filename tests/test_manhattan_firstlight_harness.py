@@ -575,3 +575,28 @@ def test_child_processes_get_no_token_secret_or_key(monkeypatch, tmp_path):
     monkeypatch.setattr(harness.subprocess, "run", fake_run)
     harness._subprocess_run(tmp_path / "x", SEED)
     assert seen and not any(m in k.upper() for k in seen for m in ("TOKEN", "SECRET", "KEY", "PASSWORD", "GIT_CONFIG"))
+
+
+def test_a_failure_after_a_recorded_and_logged_evaluation_still_makes_the_run_incomplete(monkeypatch, tmp_path):
+    """The census and the variant log can both be whole while the run itself raised: complete is then False."""
+    from manhattan.engine import evaluate as E
+    original, calls = E.evaluate, []
+
+    def then_raise(*a, **k):
+        out = original(*a, **k)
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("after the record and the log row")
+        return out
+    monkeypatch.setattr(E, "evaluate", then_raise)
+    res = harness.run(tmp_path / "out", SEED)
+    assert res["census"]["completed"] == GRID_SIZE and res["census"]["unfinished"] == 0
+    assert res["this_run"]["failed"] == 1 and res["complete"] is False
+
+
+def test_the_anchor_check_turns_any_unexpected_error_into_a_failure(clean, monkeypatch):
+    def boom(path):
+        raise RuntimeError("unexpected")
+    monkeypatch.setattr(anchor_stub, "read_anchors", boom)
+    v = anchor_stub.verify_against_anchor(clean[0] / harness.LEDGER_REL, clean[0] / harness.ANCHORS_REL)
+    assert v["ok"] is False and "cannot be checked" in v["problems"][-1] and v["independently_anchored"] is False
