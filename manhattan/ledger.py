@@ -52,6 +52,26 @@ class LedgerError(RuntimeError):
     pass
 
 
+# Characters that ``str.splitlines()`` (which ``verify_snapshot`` uses) treats as line boundaries but
+# ``json.dumps(ensure_ascii=False)`` writes unescaped. JSON escapes every other one, since all are below U+0020.
+LINE_BREAKS = {"\x85": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}
+
+
+def record_line(rec: dict) -> str:
+    """The line a record is written as: its JSON with sorted keys and no spaces, and with U+0085, U+2028 and U+2029
+    written as JSON escapes.
+
+    These characters can only occur inside JSON strings, where ``\\uXXXX`` is the same character, so the line parses
+    to the same record, and its hash (computed over the parsed record, ``record_hash``) is unchanged. Written raw they
+    are line boundaries to ``verify_snapshot``, which then cannot read the ledger (U+2028/U+2029/U+0085 ledger
+    defect). Lines without them are unchanged, byte for byte."""
+    line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    for ch, escaped in LINE_BREAKS.items():
+        if ch in line:
+            line = line.replace(ch, escaped)
+    return line
+
+
 def record_hash(rec: dict) -> str:
     return hashlib.sha256(S.canonical_bytes({k: rec[k] for k in FIELDS})).hexdigest()
 
@@ -355,7 +375,7 @@ class Ledger:
 
     def _index(self, rec: dict, line: str | bytes | None = None) -> None:
         if line is None:
-            line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            line = record_line(rec)
         pos = len(self._lines)
         self._lines.append(line.encode("utf-8") if isinstance(line, str) else bytes(line))
         self._head = rec["hash"]
@@ -460,7 +480,7 @@ class Ledger:
                "payload": json.loads(S.canonical_bytes(payload)), "prev_hash": self.head}
         rec["hash"] = record_hash(rec)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        line = record_line(rec)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
             f.flush()
