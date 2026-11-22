@@ -190,36 +190,83 @@ def test_p1c_opening_a_ledger_creates_nothing(tmp_path):
 _WORKER = r"""
 import os, sys, time
 from manhattan import ledger as L
-path, who, n, go = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
-deadline = time.time() + 60
-while not os.path.exists(go):
-    if time.time() > deadline:
-        raise SystemExit("no start signal")
-    time.sleep(0.001)
+path, who, other, sync = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+n, burst, overlap, lead = (int(x) for x in sys.argv[5:9])
+
+
+def progress(name):
+    # the other writer's completed appends, as it last published them (never more than the truth)
+    try:
+        with open(os.path.join(sync, "progress-" + name)) as f:
+            return int(f.read())
+    except FileNotFoundError:
+        return 0
+
+
+def publish(count):
+    tmp = os.path.join(sync, f"progress-{who}.tmp")
+    with open(tmp, "w") as f:
+        f.write(str(count))
+    os.replace(tmp, os.path.join(sync, "progress-" + who))
+
+
+def wait(ready, what):
+    deadline = time.time() + 120
+    while not ready():
+        if time.time() > deadline:
+            raise SystemExit(f"{who}: timed out waiting for {what}")
+        time.sleep(0.0005)
+
+
+wait(lambda: os.path.exists(os.path.join(sync, "go")), "the start signal")
 book = L.Ledger(path, writer=who, protocol="f" * 64)
 done = stale = 0
+
+
+def my_turn():
+    # Bursts of `burst` appends, the leader's burst j first, then the other's burst j. A burst may start once the
+    # other writer is within `overlap` appends of finishing its preceding burst, so the two really append at the
+    # same time (on the lock, with stale handles) at every handover.
+    j = done // burst
+    return progress(other) >= min((j if lead else j + 1) * burst - overlap, n)
+
+
 while done < n:
+    wait(my_turn, other + "'s burst")
     try:
         book.append("screening_decision", {"by": who, "i": done})
-        done += 1
     except L.LedgerError as e:
         if "stale" not in str(e):
             raise
-        stale += 1                                   # another process appended: reopen and try again
+        stale += 1                                   # the other process appended: reopen and try again
         book = L.Ledger(path, writer=who, protocol="f" * 64)
+        continue
+    done += 1
+    publish(done)
 print(stale)
 """
 
 
 def test_p1d_two_processes_appending_concurrently_keep_one_linear_chain(tmp_path):
-    """The S17 fork reproduction with two real processes, 1,000 appends each, started together. On main both
-    handles appended on their own heads and the file forked (``seq is 2, expected 3``; unopenable)."""
-    n = 1000
-    path, go = tmp_path / "ledger.jsonl", tmp_path / "go"
+    """The S17 fork reproduction with two real processes, 1,000 appends each, started together, each appending
+    through its own long-lived handle. On main both handles appended on their own heads and the file forked
+    (``seq is 2, expected 3``; unopenable).
+
+    The interleaving is deterministic: a file handshake makes the writers take bursts of ``burst`` appends in
+    turn, each burst starting while the other writer still has ``overlap`` appends of its burst to make, so at
+    every handover both append at once. Whatever the scheduler does, A's burst j+1 cannot start before B's burst j
+    has, nor B's burst j+1 before A's burst j+1: B[0] < A[K] < B[K] < A[2K] < ... is forced, at least
+    ``2 * (n // burst) - 2`` switches. Each switch after the first means the resuming writer held a handle the other
+    had made stale: refused and reopened, never forked."""
+    n, burst, overlap = 1000, 8, 2
+    path, sync = tmp_path / "ledger.jsonl", tmp_path / "sync"
+    sync.mkdir()
     env = dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""))
-    procs = [subprocess.Popen([sys.executable, "-c", _WORKER, str(path), who, str(n), str(go)], cwd=ROOT, env=env,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for who in ("A", "B")]
-    go.touch()
+    procs = [subprocess.Popen([sys.executable, "-c", _WORKER, str(path), who, other, str(sync), str(n), str(burst),
+                               str(overlap), lead], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True)
+             for who, other, lead in (("A", "B", "1"), ("B", "A", "0"))]
+    (sync / "go").touch()
     outs = [p.communicate(timeout=600) for p in procs]
     assert [p.returncode for p in procs] == [0, 0], outs
     assert L.verify(path) == []
@@ -231,8 +278,9 @@ def test_p1d_two_processes_appending_concurrently_keep_one_linear_chain(tmp_path
     for who in ("A", "B"):
         assert [r["payload"]["i"] for r in recs if r["writer"] == who] == list(range(n))
     writers = [r["writer"] for r in recs]
-    assert sum(a != b for a, b in zip(writers, writers[1:])) >= 2     # the two writers interleaved
-    assert sum(int(o) for o, _ in outs) > 0              # and stale handles were met and refused
+    switches = sum(a != b for a, b in zip(writers, writers[1:]))
+    assert switches >= 2 * (n // burst) - 2              # interleaved by construction (here at least 248)
+    assert sum(int(o) for o, _ in outs) >= switches - 1  # each resumption after the first met a stale handle
     assert book.append("screening_decision", {"by": "after"})["seq"] == 2 * n + 1
 
 
