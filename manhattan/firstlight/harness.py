@@ -28,9 +28,18 @@ computation and the report files byte for byte.
 
 **The variant log.** ``engine.evaluate`` also logs each exploration evaluation with ``nightshift.logs.log_variant``
 (hard rule 6), whose cutoff is read from main's ``config/night.yaml`` through a ``git fetch`` at every call. That
-would reach the network and write refs outside ``--out``. For the duration of the evaluations only, the harness
-gives ``log_variant`` the First Light constant cutoff (``cap.DATA_END``, 2019-12-31) instead, and the rows go to
-``--out/ledger/exploration_variants.csv``, never to ``results/exploration/log.csv``. See the PR's gap list.
+would reach the network and write refs outside ``--out``. So the harness reads the explorer cutoff of the **local**
+``config/night.yaml`` from disk (no git, no network), refuses to run if it is unreadable or earlier than
+``cap.DATA_END``, and for the duration of the evaluations only gives ``log_variant`` ``min(local cutoff,
+cap.DATA_END)``: it can only tighten, never widen. The rows go to ``--out/ledger/exploration_variants.csv``, never
+to ``results/exploration/log.csv``, and a run is complete only with exactly one row per completion. The override
+replaces a module attribute, so it is held under a module-level lock and **the harness is single-threaded**: nothing
+else in the process may log variants while it runs. The clean design, an explicit cutoff argument to
+``engine.evaluate``/``log_variant`` taken as the minimum with main's, changes existing files and is an owner
+decision outside this PR.
+
+**Secrets.** ``reproduce`` starts its child processes with every ``*TOKEN*``, ``*SECRET*``, ``*KEY*``,
+``*PASSWORD*``, ``*CREDENTIAL*`` and ``GIT_CONFIG_*`` variable removed from the environment.
 """
 from __future__ import annotations
 
@@ -41,10 +50,12 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import date
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 from manhattan import access
 from manhattan import config as mconfig
@@ -73,6 +84,9 @@ SWITCHES = (("reserve", "enabled"), ("claims", "enabled"), ("forward", "real_mon
 LEDGER_REL, LOG_REL, ANCHORS_REL = "ledger/ledger.jsonl", "ledger/exploration_variants.csv", "anchors"
 DATA_REL, FREEZE_REL, REPORT_REL = "data", "freeze", "report"
 EXIT_OK, EXIT_INCOMPLETE, EXIT_REFUSED = 0, 1, 3
+NIGHT_CONFIG = ROOT / "config/night.yaml"          # read from disk only: never fetched
+_LOG_LOCK = threading.Lock()
+SECRET_MARKERS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL")
 
 
 class HarnessRefused(RuntimeError):
@@ -142,17 +156,38 @@ def strategy(point: dict) -> backtest.Strategy:
 
 # ---------------------------------------------------------------- pieces of a run
 
-@contextlib.contextmanager
-def _variant_log_cutoff_is_the_cap():
-    """``engine.evaluate``'s exploration variant log takes its cutoff from main's night.yaml by ``git fetch``; here
-    it is the cap constant instead (no network, nothing written outside --out). Restored on exit."""
-    from nightshift import logs
-    original = logs.main_cutoff
-    logs.main_cutoff = lambda: cap.DATA_END
+def variant_log_cutoff() -> date:
+    """The cutoff the harness gives the variant log: ``min(local explorer cutoff, cap.DATA_END)``. The local
+    ``config/night.yaml`` is read from disk; unreadable, or earlier than the cap, refuses the run."""
     try:
+        cfg = yaml.safe_load(Path(NIGHT_CONFIG).read_text(encoding="utf-8"))
+        v = cfg["explorer"]["data_end"]
+        local = v if type(v) is date else date.fromisoformat(v)
+    except Exception as e:                       # noqa: BLE001 - unreadable means refuse
+        raise HarnessRefused(f"the local config/night.yaml explorer cutoff is unreadable ({type(e).__name__})") \
+            from None
+    if local < cap.DATA_END:
+        raise HarnessRefused(f"the local explorer cutoff {local} is earlier than First Light's {cap.DATA_END}: "
+                             "the harness's window would be refused by the variant log")
+    return min(local, cap.DATA_END)
+
+
+@contextlib.contextmanager
+def _variant_log_cutoff(cutoff: date):
+    """Give ``nightshift.logs.log_variant`` ``cutoff`` instead of a ``git fetch`` of main's night.yaml, under a
+    module-level lock (single-threaded). Restored on exit."""
+    from nightshift import logs
+    if cutoff > cap.DATA_END:
+        raise HarnessRefused("the variant-log cutoff can only tighten the cap")
+    if not _LOG_LOCK.acquire(blocking=False):
+        raise HarnessRefused("another harness run in this process holds the variant log (single-threaded)")
+    original = logs.main_cutoff
+    try:
+        logs.main_cutoff = lambda: cutoff
         yield
     finally:
         logs.main_cutoff = original
+        _LOG_LOCK.release()
 
 
 def _probes(capped: cap.CappedStore) -> dict:
@@ -181,7 +216,9 @@ def _probes(capped: cap.CappedStore) -> dict:
     return out
 
 
-def _freeze(out: Path, sp: dict, code_commit: str) -> tuple[freeze.Batch, dict]:
+def _freeze(out: Path, sp: dict, code_commit: str, *, resume: bool = False) -> tuple[freeze.Batch, dict]:
+    """Prepare the batch; write it (fresh run) or compare it with the one on disk before writing nothing (resume);
+    then ask ``verify_frozen``, which must refuse it for want of the owner's proof only."""
     fence = cap.fence()
     batch = freeze.prepare(
         BATCH_NUMBER, [sp["family"]], [sp["hypothesis"]], channel="blind",
@@ -190,7 +227,16 @@ def _freeze(out: Path, sp: dict, code_commit: str) -> tuple[freeze.Batch, dict]:
         fence={**access.fence_snapshot(fence, DOMAIN), "source": "manhattan.firstlight.cap (a constant in code)"},
         code_version=code_commit, critic_records=["SYNTHETIC: no critic review; harness fixture, not a review"])
     d = out / FREEZE_REL
-    written = freeze.write(batch, d)
+    if resume:
+        written = d / batch.id
+        try:
+            on_disk = (written / freeze.MANIFEST).read_bytes()
+        except OSError:
+            raise HarnessRefused("the interrupted run has no frozen batch") from None
+        if on_disk != S.canonical_bytes(batch.manifest):
+            raise HarnessRefused("the regenerated batch is not the interrupted run's")
+    else:
+        written = freeze.write(batch, d)
     try:
         freeze.verify_frozen(d, BATCH_NUMBER, expected_manifest_hash=batch.manifest_hash,
                              tag_is_signed=lambda tag, root: False)
@@ -245,26 +291,32 @@ def run(out: Path, seed: int, *, resume: bool = False, after_register=None) -> d
     (tests only) is called with ``(index, attempt context)`` after each registration, before the window is opened:
     the fault-injection point."""
     switches = check_switches()
+    log_cutoff = variant_log_cutoff()
     out = Path(out).resolve()
     _prepare_out(out, resume)
     version = evaluate.code_version()
     code_commit = version["commit"]
     data_dir = out / DATA_REL
-    contract = synthetic.build(data_dir, seed)
+    contract, raw = synthetic.make(seed)
+    if resume:                                   # compare everything before writing anything
+        try:
+            prior = synthetic.read_contract(data_dir)
+        except (OSError, ValueError):
+            raise HarnessRefused("the interrupted run's data contract is unreadable") from None
+        if {k: v for k, v in prior.items() if k != "pit_data_hash"} != contract:
+            raise HarnessRefused("the regenerated dataset is not the interrupted run's (seed or generator)")
+    else:
+        synthetic.write_file(data_dir, raw)
     capped = synthetic.load(data_dir, contract)
     contract["pit_data_hash"] = capped.store.data_hash()
     if resume:
-        if synthetic.read_contract(data_dir) != contract:
+        if prior != contract:
             raise HarnessRefused("the regenerated dataset is not the interrupted run's")
     else:
         synthetic.write_contract(data_dir, contract)
     probes = _probes(capped)
     sp = specs(code_commit)
-    if resume:
-        manifest = (out / FREEZE_REL / f"AB-{BATCH_NUMBER:04d}" / freeze.MANIFEST).read_bytes()
-    batch, info = _freeze(out, sp, code_commit)
-    if resume and S.canonical_bytes(batch.manifest) != manifest:
-        raise HarnessRefused("the regenerated batch is not the interrupted run's")
+    batch, info = _freeze(out, sp, code_commit, resume=resume)
 
     ledger_path, anchors_dir = out / LEDGER_REL, out / ANCHORS_REL
     protocol = hashlib.sha256(PROTOCOL_FILE.read_bytes()).hexdigest()
@@ -292,7 +344,7 @@ def run(out: Path, seed: int, *, resume: bool = False, after_register=None) -> d
             open_by_spec[r["payload"].get("spec_hash")] = r["hash"]
     counts = {"evaluated": 0, "skipped_completed": 0, "retried_interrupted": 0, "failed": 0}
     data_hash = capped.store.data_hash()
-    with _variant_log_cutoff_is_the_cap():
+    with _variant_log_cutoff(log_cutoff):
         for i, (v, x) in enumerate(sp["variants"]):
             xh = S.spec_hash(x)
             if xh in done:
@@ -322,11 +374,16 @@ def run(out: Path, seed: int, *, resume: bool = False, after_register=None) -> d
                                 "mode": "resume" if resume else "fresh", "probes": probes, "switches": switches,
                                 "this_run": counts, **book.run_summary_payload()})
     anchor_stub.write_anchor(anchors_dir, ledger_path, event="run_close", run_id=run_id, code_commit=code_commit)
-    files = report.write(ledger_path, anchors_dir, out / REPORT_REL)
+    try:
+        files = report.write(ledger_path, anchors_dir, out / REPORT_REL, variant_log=out / LOG_REL)
+    except report.ReportRefused as e:
+        return {"out": str(out), "complete": False, "census": None, "this_run": counts, "report_refused": str(e),
+                "report_sha256": None}
     rep = json.loads(files[report.REPORT_JSON])
     c = rep["census"]
-    complete = (c["balanced"] and c["unfinished"] == 0 and c["failed"] == 0 and c["aborted"] == 0
-                and c["violations"] == 0 and rep["variants_evaluated"] == rep["variants_in_grid"])
+    complete = (counts["failed"] == 0 and c["balanced"] and c["unfinished"] == 0 and c["failed"] == 0
+                and c["aborted"] == 0 and c["violations"] == 0
+                and rep["variants_evaluated"] == rep["variants_in_grid"])
     return {"out": str(out), "complete": complete, "census": c, "this_run": counts,
             "report_sha256": {k: hashlib.sha256(b).hexdigest() for k, b in files.items()}}
 
@@ -346,8 +403,19 @@ def result_hashes(ledger_path: Path) -> dict:
     return out
 
 
+def child_env(environ=None) -> dict:
+    """The environment for a child run: everything but tokens, secrets, keys, passwords and credentials. The
+    ``GIT_CONFIG_*`` group (count, keys and values, which can carry credentials) goes as a whole, since git refuses
+    a count without its keys; the child needs only ``git rev-parse``."""
+    environ = os.environ if environ is None else environ
+    env = {k: v for k, v in environ.items() if not any(m in k.upper() for m in SECRET_MARKERS)
+           and not k.upper().startswith("GIT_CONFIG_")}
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
+
+
 def _subprocess_run(out: Path, seed: int) -> subprocess.CompletedProcess:
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env = child_env()
     return subprocess.run([sys.executable, "-m", "manhattan.firstlight.harness", "--out", str(out), "--seed",
                            str(seed)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
 

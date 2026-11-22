@@ -7,15 +7,19 @@ Three files:
 * ``public_index.json``: the one artefact meant to be public. It carries no outcome key (``ledger.OUTCOME_KEYS``);
   ``scan_public`` checks it and the builder refuses to write one that fails.
 
-Nothing in-memory from the run is used: the inputs are the ledger file and the anchors directory. The builder
-refuses (fail closed) unless the ledger verifies against its anchors with no unanchored tail and the latest anchor
-closes a run. Run-specific fields (record timestamps, record and head hashes, attempt IDs, anchor times) are left
+Nothing in-memory from the run is used: the inputs are the ledger file and the anchors directory (and the run's
+variant log, which is checked but adds nothing). The builder refuses (fail closed) unless the ledger verifies
+against its anchors with no unanchored tail and the latest anchor closes a run, every completion is an
+exploration-role, weight-0 result of a frozen variant, one per variant, and the variant log holds exactly one row
+per evaluation. Run-specific fields (record timestamps, record and head hashes, attempt IDs, anchor times) are left
 out of the report so that two runs of the same code on the same seed give byte-identical reports; they stay in
 the ledger and the anchors file.
 """
 from __future__ import annotations
 
+import csv
 import json
+from collections import Counter
 from pathlib import Path
 
 from manhattan import attempts
@@ -54,8 +58,36 @@ def _freeze_record(recs: list[dict]) -> dict:
     return found[0]
 
 
-def build(ledger_path: Path, anchors_dir: Path) -> dict:
-    """The report as a dict (and, under ``"public"``, the public index), or ``ReportRefused``."""
+def _check_completions(recs: list[dict], grid: list[dict], variant_log: Path) -> None:
+    """Every completion is an exploration result of weight 0 for a variant of the frozen grid, one per variant, and
+    has exactly one row in the variant log (hard rule 6); the log has no other row."""
+    comps = [r for r in recs if r["type"] in L.COMPLETIONS]
+    known = {v["executable"] for v in grid}
+    for r in comps:
+        p = r["payload"]
+        if p.get("role") != "exploration" or p.get("evidential_weight") != 0:
+            raise ReportRefused(f"record {r['seq']}: a completion that is not exploration-role with weight 0")
+        if p.get("executable") not in known:
+            raise ReportRefused(f"record {r['seq']}: a completion of an executable outside the frozen grid")
+    twice = sorted(x for x, n in Counter(r["payload"]["executable"] for r in comps).items() if n > 1)
+    if twice:
+        raise ReportRefused("more than one completion for " + ", ".join(twice))
+    try:
+        with Path(variant_log).open(newline="", encoding="utf-8") as f:
+            refs = Counter(row.get("code_ref") for row in csv.DictReader(f))
+    except OSError:
+        refs = Counter()
+    want = {r["hash"] for r in comps if r["type"] == "evaluation"}
+    missing = sorted(h[:16] for h in want if refs[h] != 1)
+    extra = sorted(str(h)[:16] for h in refs if h not in want)
+    if missing or extra:
+        raise ReportRefused(f"the variant log does not hold exactly one row per evaluation (missing or repeated: "
+                            f"{len(missing)}, unknown: {len(extra)})")
+
+
+def build(ledger_path: Path, anchors_dir: Path, variant_log: Path) -> dict:
+    """The report as a dict (and, under ``"public"``, the public index), or ``ReportRefused``. ``variant_log`` is
+    the run's exploration variant log, checked against the completions (it adds nothing to the report)."""
     check = anchor_stub.verify_against_anchor(ledger_path, anchors_dir)
     if not check["ok"]:
         raise ReportRefused("the ledger does not verify against its anchors: " + "; ".join(check["problems"]))
@@ -70,6 +102,7 @@ def build(ledger_path: Path, anchors_dir: Path) -> dict:
                                ledger_anchor={"records": latest["records"], "head": latest["head"]})
     fz = _freeze_record(recs)
     fp = fz["payload"]
+    _check_completions(recs, fp["variants"], variant_log)
     if any(r["type"] == "evaluation_started" and r["seq"] < fz["seq"] for r in recs):
         raise ReportRefused("an evaluation was registered before the batch was frozen")
 
@@ -205,9 +238,9 @@ def markdown(rep: dict) -> str:
     return "\n".join(out)
 
 
-def write(ledger_path: Path, anchors_dir: Path, directory: Path) -> dict:
-    """Build and write the three files; returns {name: bytes}."""
-    rep = build(ledger_path, anchors_dir)
+def write(ledger_path: Path, anchors_dir: Path, directory: Path, *, variant_log: Path) -> dict:
+    """Build and write the three files; returns {name: bytes}. Nothing is written when it refuses."""
+    rep = build(ledger_path, anchors_dir, variant_log)
     public = rep.pop("public")
     files = {REPORT_JSON: dumps(rep), REPORT_MD: markdown(rep).encode("utf-8"), PUBLIC_JSON: dumps(public)}
     if scan_public(json.loads(files[PUBLIC_JSON])):

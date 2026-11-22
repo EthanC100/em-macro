@@ -114,7 +114,8 @@ def test_p3f_the_in_process_run_matches_the_subprocess_runs(clean, tmp_path):
 
 def test_two_report_builds_from_one_ledger_are_byte_identical(clean, tmp_path):
     out, _ = clean
-    files = report.write(out / harness.LEDGER_REL, out / harness.ANCHORS_REL, tmp_path / "again")
+    files = report.write(out / harness.LEDGER_REL, out / harness.ANCHORS_REL, tmp_path / "again",
+                         variant_log=out / harness.LOG_REL)
     for name, data in files.items():
         assert data == (out / harness.REPORT_REL / name).read_bytes()
 
@@ -164,7 +165,7 @@ def test_p3g_a_killed_run_leaves_a_visible_unfinished_attempt_that_the_retry_sup
     assert not anchor_stub.verify_against_anchor(out / harness.LEDGER_REL, out / harness.ANCHORS_REL)["ok"]
     assert anchor_stub.verify_against_anchor(out / harness.LEDGER_REL, out / harness.ANCHORS_REL, open_run=True)["ok"]
     with pytest.raises(report.ReportRefused):
-        report.build(out / harness.LEDGER_REL, out / harness.ANCHORS_REL)
+        report.build(out / harness.LEDGER_REL, out / harness.ANCHORS_REL, out / harness.LOG_REL)
     with pytest.raises(harness.HarnessRefused):                      # a fresh run never reuses the directory
         harness.run(out, SEED)
 
@@ -201,7 +202,7 @@ def test_p3h_truncation_by_one_record_is_detected(clean, tmp_path):
     v = anchor_stub.verify_against_anchor(led, c / harness.ANCHORS_REL)
     assert not v["ok"] and any("truncated" in p for p in v["problems"])
     with pytest.raises(report.ReportRefused):
-        report.build(led, c / harness.ANCHORS_REL)
+        report.build(led, c / harness.ANCHORS_REL, c / harness.LOG_REL)
 
 
 @pytest.mark.parametrize("target", ["middle", "first"])
@@ -223,7 +224,7 @@ def test_p3h_a_hash_valid_prefix_rewrite_is_detected(clean, tmp_path, target):
     want = "no anchor for this ledger id" if target == "first" else "rewritten"
     assert any(want in p for p in v["problems"]), v["problems"]
     with pytest.raises(report.ReportRefused):
-        report.build(led, c / harness.ANCHORS_REL)
+        report.build(led, c / harness.ANCHORS_REL, c / harness.LOG_REL)
 
 
 def test_p3h_a_removed_or_edited_anchor_and_an_unanchored_tail_are_detected(clean, tmp_path):
@@ -244,7 +245,7 @@ def test_p3h_a_removed_or_edited_anchor_and_an_unanchored_tail_are_detected(clea
     v = anchor_stub.verify_against_anchor(led, adir)
     assert not v["ok"] and v["tail"] == 1
     with pytest.raises(report.ReportRefused):
-        report.build(led, adir)
+        report.build(led, adir, c / harness.LOG_REL)
 
 
 def test_the_anchor_stub_refuses_to_anchor_a_ledger_that_no_longer_matches(clean, tmp_path):
@@ -369,3 +370,208 @@ def test_the_harness_is_not_an_evidence_producer():
                      else [n.module or ""] + [f"{n.module}.{a.name}" for a in n.names]
                      if isinstance(n, ast.ImportFrom) else [])
             assert not any(x.startswith("manhattan.evidence") for x in names), p.name
+
+
+# ---------------------------------------------------------------- PR #107 review: variant log completeness (item 2)
+
+@pytest.mark.parametrize("fail_on", ["every", "third"])
+def test_a_run_whose_variant_logging_fails_is_incomplete_and_unreported(monkeypatch, tmp_path, fail_on):
+    from nightshift import logs
+    original, calls = logs.log_variant, []
+
+    def flaky(*a, **k):
+        calls.append(1)
+        if fail_on == "every" or len(calls) == 3:
+            raise ValueError("variant log refused")
+        return original(*a, **k)
+    monkeypatch.setattr(logs, "log_variant", flaky)
+    res = harness.run(tmp_path / "out", SEED)
+    assert res["complete"] is False and res["this_run"]["failed"] == (GRID_SIZE if fail_on == "every" else 1)
+    assert "variant log" in res["report_refused"]
+    assert not (tmp_path / "out" / harness.REPORT_REL).exists()
+    if fail_on == "every":
+        assert harness.main(["--out", str(tmp_path / "cli"), "--seed", str(SEED)]) == harness.EXIT_INCOMPLETE
+
+
+def test_the_report_refuses_a_variant_log_missing_or_repeating_a_row(clean, tmp_path):
+    c = _copy(clean[0], tmp_path)
+    log = c / harness.LOG_REL
+    rows = log.read_text(encoding="utf-8").splitlines()
+    for bad in (rows[:-1], rows + rows[-1:]):
+        log.write_text("\n".join(bad) + "\n", encoding="utf-8")
+        with pytest.raises(report.ReportRefused, match="variant log"):
+            report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, log)
+    log.unlink()
+    with pytest.raises(report.ReportRefused, match="variant log"):
+        report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, log)
+
+
+# ---------------------------------------------------------------- item 3: the variant-log cutoff only tightens
+
+@pytest.mark.parametrize("text", ['explorer:\n  data_end: "2014-12-31"\n', "explorer: {}\n", "- a list\n", None])
+def test_the_local_explorer_cutoff_must_be_readable_and_reach_the_cap(monkeypatch, tmp_path, text):
+    night = tmp_path / "night.yaml"
+    if text is not None:
+        night.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(harness, "NIGHT_CONFIG", night)
+    with pytest.raises(harness.HarnessRefused, match="explorer cutoff"):
+        harness.run(tmp_path / "out", SEED)
+    assert not (tmp_path / "out").exists()
+
+
+def test_the_variant_log_cutoff_is_never_wider_than_the_cap(monkeypatch, tmp_path):
+    assert harness.variant_log_cutoff() == cap.DATA_END                       # the repository's night.yaml
+    night = tmp_path / "night.yaml"
+    night.write_text('explorer:\n  data_end: "2023-12-31"\n', encoding="utf-8")
+    monkeypatch.setattr(harness, "NIGHT_CONFIG", night)
+    assert harness.variant_log_cutoff() == cap.DATA_END                       # min(local, cap)
+    with pytest.raises(harness.HarnessRefused):
+        with harness._variant_log_cutoff(date(2020, 1, 1)):
+            pass
+    from nightshift import logs
+    with harness._variant_log_cutoff(cap.DATA_END):
+        assert logs.main_cutoff() == cap.DATA_END
+        with pytest.raises(harness.HarnessRefused, match="single-threaded"):   # the lock is held
+            with harness._variant_log_cutoff(cap.DATA_END):
+                pass
+    assert not harness._LOG_LOCK.locked()
+
+
+# ---------------------------------------------------------------- item 4: the raw store stays inside the harness
+
+def test_the_harness_never_hands_out_the_raw_store(clean):
+    import re
+    from manhattan.engine import pit
+
+    def walk(x):
+        assert not isinstance(x, (pit.PitStore, cap.CappedStore))
+        for y in (x.values() if isinstance(x, dict) else x if isinstance(x, (list, tuple)) else ()):
+            walk(y)
+    walk(clean[1])
+    src = (ROOT / "manhattan/firstlight/harness.py").read_text(encoding="utf-8")
+    uses = re.findall(r"capped\.store(\.data_hash\(\)|\))", src)
+    assert len(uses) == src.count("capped.store") and "ctx.window(capped.store)" in src
+    tree = ast.parse(src)
+    assert not any(isinstance(n, ast.Return) and isinstance(n.value, ast.Name) and n.value.id == "capped"
+                   for n in ast.walk(tree))
+
+
+# ---------------------------------------------------------------- item 5: a refused resume writes nothing
+
+def _tree(d: Path) -> dict:
+    import hashlib
+    return {p.relative_to(d).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(d.rglob("*")) if p.is_file()}
+
+
+def test_a_resume_with_another_seed_is_refused_before_anything_is_written(clean, tmp_path):
+    c = _copy(clean[0], tmp_path)
+    before = _tree(c)
+    with pytest.raises(harness.HarnessRefused, match="seed"):
+        harness.run(c, SEED + 1, resume=True)
+    assert _tree(c) == before
+
+
+# ---------------------------------------------------------------- item 6: the anchor check never raises
+
+@pytest.mark.parametrize("mangle", ["records_string", "not_json", "a_list", "head_number", "not_utf8"])
+def test_a_malformed_anchor_fails_the_check_without_raising(clean, tmp_path, mangle):
+    c = _copy(clean[0], tmp_path)
+    apath = next((c / harness.ANCHORS_REL).glob("*.jsonl"))
+    lines = [x for x in apath.read_bytes().split(b"\n") if x]
+    a = json.loads(lines[-1])
+    if mangle == "records_string":
+        a["records"] = str(a["records"])
+        lines[-1] = json.dumps(a, sort_keys=True, separators=(",", ":")).encode()
+    elif mangle == "head_number":
+        a["head"] = 7
+        lines[-1] = json.dumps(a, sort_keys=True, separators=(",", ":")).encode()
+    elif mangle == "not_json":
+        lines[-1] = b"{not json"
+    elif mangle == "a_list":
+        lines[-1] = b"[1,2,3]"
+    else:
+        lines[-1] = b"\xff\xfe"
+    apath.write_bytes(b"\n".join(lines) + b"\n")
+    v = anchor_stub.verify_against_anchor(c / harness.LEDGER_REL, c / harness.ANCHORS_REL)
+    assert v["ok"] is False and v["problems"] and v["independently_anchored"] is False
+    with pytest.raises(report.ReportRefused):
+        report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, c / harness.LOG_REL)
+
+
+# ---------------------------------------------------------------- item 7: one exploration completion per variant
+
+def _forge_append(led: Path, type_: str, payload: dict) -> None:
+    """Append a hash-valid record as a writer holding the file could, then anchor it as a closed run."""
+    last = json.loads(anchor_stub.ledger_lines(led.read_bytes())[-1])
+    rec = {"seq": last["seq"] + 1, "ts_utc": last["ts_utc"], "type": type_, "writer": last["writer"],
+           "protocol": last["protocol"], "payload": payload, "prev_hash": last["hash"]}
+    rec["hash"] = L.record_hash(rec)
+    with led.open("ab") as f:
+        f.write(json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n")
+    anchor_stub.write_anchor(led.parent.parent / harness.ANCHORS_REL, led, event="run_close", run_id="forged",
+                             code_commit="0" * 40)
+
+
+@pytest.mark.parametrize("change,match", [({}, "more than one completion"),
+                                          ({"role": "forward"}, "exploration-role"),
+                                          ({"evidential_weight": 1}, "weight 0"),
+                                          ({"executable": "AX-0000000000000000"}, "outside the frozen grid")])
+def test_the_report_refuses_extra_foreign_or_non_exploration_completions(clean, tmp_path, change, match):
+    c = _copy(clean[0], tmp_path)
+    led = c / harness.LEDGER_REL
+    first = next(r for r in L.read(led) if r["type"] == "evaluation")
+    _forge_append(led, "rerun", {**first["payload"], **change})
+    assert anchor_stub.verify_against_anchor(led, c / harness.ANCHORS_REL)["ok"]   # only the content check can tell
+    with pytest.raises(report.ReportRefused, match=match):
+        report.build(led, c / harness.ANCHORS_REL, c / harness.LOG_REL)
+
+
+# ---------------------------------------------------------------- item 8: mutants of the probes and the close check
+
+@pytest.mark.parametrize("weaken", ["declared_window", "read", "load"])
+def test_the_run_stops_if_a_cap_probe_is_not_refused(monkeypatch, tmp_path, weaken):
+    if weaken == "declared_window":
+        monkeypatch.setattr(cap, "check_declared_windows", lambda windows: None)
+    elif weaken == "read":
+        monkeypatch.setattr(cap.CappedReader, "window", lambda self, start, end: None)
+    else:
+        original = cap.CappedStore.add
+
+        def add(self, series, periods, values, **kw):
+            if series == "probe_after_cap":
+                return None                                                    # a cap that lets 2020 in
+            return original(self, series, periods, values, **kw)
+        monkeypatch.setattr(cap.CappedStore, "add", add)
+    with pytest.raises(cap.CapError, match="probe"):
+        harness.run(tmp_path / "out", SEED)
+    assert not (tmp_path / "out" / harness.LEDGER_REL).exists()
+
+
+def test_the_report_refuses_unless_the_latest_anchor_closes_a_run(clean, tmp_path):
+    c = _copy(clean[0], tmp_path)
+    anchor_stub.write_anchor(c / harness.ANCHORS_REL, c / harness.LEDGER_REL, event="heartbeat", run_id="x",
+                             code_commit="0" * 40)
+    assert anchor_stub.verify_against_anchor(c / harness.LEDGER_REL, c / harness.ANCHORS_REL)["ok"]
+    with pytest.raises(report.ReportRefused, match="run_close"):
+        report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, c / harness.LOG_REL)
+
+
+# ---------------------------------------------------------------- item 9: no secrets reach the child processes
+
+def test_child_processes_get_no_token_secret_or_key(monkeypatch, tmp_path):
+    env = {"PATH": "/usr/bin", "HOME": "/h", "DATA_REPO_READ_TOKEN": "t", "GITHUB_TOKEN": "g", "GH_TOKEN": "h",
+           "MY_SECRET": "s", "api_key": "k", "SIGNING_KEY_PATH": "p", "DB_PASSWORD": "w",
+           "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "http.extraheader", "GIT_CONFIG_VALUE_0": "AUTH x"}
+    out = harness.child_env(env)
+    assert set(out) == {"PATH", "HOME", "PYTHONDONTWRITEBYTECODE"}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw["env"])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(harness.subprocess, "run", fake_run)
+    harness._subprocess_run(tmp_path / "x", SEED)
+    assert seen and not any(m in k.upper() for k in seen for m in ("TOKEN", "SECRET", "KEY", "PASSWORD", "GIT_CONFIG"))

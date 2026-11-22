@@ -211,3 +211,25 @@ def test_nothing_in_manhattan_imports_first_light():
             if isinstance(n, ast.ImportFrom) and n.module == "manhattan" and any(a.name == "firstlight"
                                                                                   for a in n.names):
                 pytest.fail(f"{rel} imports First Light")
+
+
+# ---------------------------------------------------------------- multi-day numpy units (PR #107 review)
+
+@pytest.mark.parametrize("unit", ["2D", "3D", "7D"])
+@pytest.mark.parametrize("field", ["periods", "available"])
+def test_multi_day_units_are_refused_for_periods_and_availabilities(unit, field):
+    """datetime64[3D] quantizes 2020-01-02 down to 2019-12-31: the unit and its step must be exactly ("D", 1)."""
+    late = np.array(["2020-01-02"], dtype=f"datetime64[{unit}]")
+    ok = np.array(["2019-12-02"], dtype="datetime64[D]")
+    c = cap.CappedStore(synthetic=True)
+    with pytest.raises(cap.CapError, match="whole days"):
+        if field == "periods":
+            c.add(SERIES, late, [1.0], lag_days=0)
+        else:
+            c.add(SERIES, ok, [1.0], available=late)
+    assert c.store.names() == []
+
+
+def test_a_three_day_array_would_have_hidden_a_2020_value():
+    a = np.array(["2020-01-02"], dtype="datetime64[3D]")
+    assert a.astype("datetime64[D]")[0] <= np.datetime64("2019-12-31")     # why the step matters

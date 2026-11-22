@@ -52,7 +52,7 @@ def as_day(value, what: str) -> date:
 def _days(values, what: str) -> np.ndarray:
     """Calendar days as ``datetime64[D]``: from ``date`` objects or a ``datetime64[D]`` array, nothing else."""
     if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-        if np.datetime_data(values.dtype)[0] != "D":
+        if np.datetime_data(values.dtype) != ("D", 1):          # [3D] would quantize 2020-01-02 to 2019-12-31
             raise CapError(f"{what} must be whole days (datetime64[D]), not {values.dtype}")
         out = values.astype("datetime64[D]")
     else:
@@ -82,7 +82,12 @@ class CappedStore:
 
     @property
     def store(self) -> pit.PitStore:
-        """The underlying store (read it through ``reader``; anything added to it directly is detected there)."""
+        """The underlying ``pit.PitStore``, uncapped. Read it only through ``reader`` (or an attempt registered with
+        ``fence()`` and windows passing ``check_declared_windows``). **It is not itself capped**: code holding it can
+        ``add`` 2020+ values directly and open them with a ``pit.Reader`` under a wider fence. That is outside the
+        cap's guarantee, which covers values loaded through ``add`` and reads through ``reader``; such an addition is
+        detected afterwards (``CappedReader.window`` and ``add`` refuse a store changed outside ``add``, and a
+        registered attempt refuses a changed data identity). The First Light harness never hands it to other code."""
         return self._pit
 
     def add(self, series: str, periods, values, *, available=None, lag_days: int | None = None) -> None:

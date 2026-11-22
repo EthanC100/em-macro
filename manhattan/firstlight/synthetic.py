@@ -76,18 +76,27 @@ def from_csv(raw: bytes) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     return days, {s: np.array([float(r[i + 1]) for r in body]) for i, s in enumerate(SERIES)}
 
 
-def build(directory: Path, seed: int) -> dict:
-    """Write the synthetic file and its contract under ``directory``; return the contract (``pit_data_hash`` is
-    filled by ``load``)."""
+def make(seed: int) -> tuple[dict, bytes]:
+    """(contract, file bytes), in memory: nothing is written (``pit_data_hash`` is filled after ``load``)."""
     days, levels = generate(seed)
     raw = to_csv(days, levels)
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / CSV_NAME).write_bytes(raw)
     contract = {"schema": "firstlight.synthetic_contract/1", "synthetic": True, "real_data": False, "licensed": False,
                 "generator": GENERATOR, "seed": seed, "series": list(SERIES), "start": str(days[0]),
                 "end": str(days[-1]), "rows": int(days.size), "availability_lag_days": LAG_DAYS,
                 "file": CSV_NAME, "file_sha256": hashlib.sha256(raw).hexdigest(),
                 "note": "SYNTHETIC: generated from a seed; no market data, no licensed source"}
+    return contract, raw
+
+
+def write_file(directory: Path, raw: bytes) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / CSV_NAME).write_bytes(raw)
+
+
+def build(directory: Path, seed: int) -> dict:
+    """Write the synthetic file under ``directory``; return its contract."""
+    contract, raw = make(seed)
+    write_file(directory, raw)
     return contract
 
 

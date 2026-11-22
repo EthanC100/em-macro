@@ -98,9 +98,27 @@ def write_anchor(anchors_dir: Path, ledger_path: Path, *, event: str, run_id: st
 
 
 def verify_against_anchor(ledger_path: Path, anchors_dir: Path, *, open_run: bool = False) -> dict:
-    """S17_ANCHOR_DESIGN.md section 5 against the local anchors file. Never raises for a mismatch: returns
-    ``ok: False`` with the problems (fail closed for every caller that checks ``ok``)."""
+    """S17_ANCHOR_DESIGN.md section 5 against the local anchors file. Never raises: a mismatch, a malformed anchor
+    or an unreadable file returns ``ok: False`` with the problems (fail closed for every caller that checks ``ok``)."""
     problems: list[str] = []
+    out = {"ok": False, "problems": problems}
+    try:
+        return _verify(Path(ledger_path), Path(anchors_dir), open_run, problems)
+    except Exception as e:                       # noqa: BLE001 - whatever cannot be checked fails
+        problems.append(f"the ledger or its anchors cannot be checked ({type(e).__name__})")
+        out.update({"ledger_records": 0, "anchored_records": 0, "tail": 0, "anchors": 0, "latest_event": None,
+                    "checked_against_anchor": False, "independently_anchored": False, "custody": CUSTODY})
+        return out
+
+
+def _valid_anchor(a) -> bool:
+    return (isinstance(a, dict) and set(a) == set(FIELDS) and a["schema"] == SCHEMA and a["event"] in EVENTS
+            and type(a["records"]) is int and a["records"] >= 1 and isinstance(a["head"], str)
+            and len(a["head"]) == 64 and all(c in "0123456789abcdef" for c in a["head"])
+            and all(isinstance(a[k], str) for k in ("ledger_id", "prev_anchor", "run_id", "code_commit", "utc")))
+
+
+def _verify(ledger_path: Path, anchors_dir: Path, open_run: bool, problems: list) -> dict:
     out = {"ok": False, "problems": problems, "ledger_records": 0, "anchored_records": 0, "tail": 0, "anchors": 0,
            "latest_event": None, "checked_against_anchor": False, "independently_anchored": False,
            "custody": CUSTODY}
@@ -116,30 +134,34 @@ def verify_against_anchor(ledger_path: Path, anchors_dir: Path, *, open_run: boo
         problems.append("the ledger is empty")
         return out
     lid = ledger_id(snapshot)
-    anchors = read_anchors(anchors_path(anchors_dir, lid))
+    try:
+        anchors = read_anchors(anchors_path(anchors_dir, lid))
+    except (ValueError, UnicodeDecodeError):
+        problems.append("an anchor line is not JSON")
+        return out
     if not anchors:
         problems.append("no anchor for this ledger id (its first record was rewritten, or it was never anchored)")
         return out
     out["anchors"] = len(anchors)
     prev, last_n = GENESIS_ANCHOR, 0
     for i, (a, raw) in enumerate(anchors, 1):
-        if set(a) != set(FIELDS) or _line(a) != raw or a["schema"] != SCHEMA or a["event"] not in EVENTS:
+        if not _valid_anchor(a) or _line(a) != raw:
             problems.append(f"anchor {i}: malformed or not canonical")
             return out
         if a["prev_anchor"] != prev:
             problems.append(f"anchor {i}: prev_anchor breaks the anchor chain (an anchor was removed or edited)")
         if a["ledger_id"] != lid:
             problems.append(f"anchor {i}: names another ledger")
-        if type(a["records"]) is not int or a["records"] < max(last_n, 1):
+        if a["records"] < last_n:
             problems.append(f"anchor {i}: record count runs backwards")
-        prev, last_n = _sha(raw), a["records"] if type(a["records"]) is int else last_n
+        prev, last_n = _sha(raw), a["records"]
     latest = anchors[-1][0]
     out["anchored_records"], out["latest_event"] = latest["records"], latest["event"]
     if len(recs) < latest["records"]:
         problems.append(f"truncated: the ledger holds {len(recs)} records, the latest anchor {latest['records']}")
     for i, (a, _) in enumerate(anchors, 1):
         n = a["records"]
-        if type(n) is int and 1 <= n <= len(recs) and recs[n - 1]["hash"] != a["head"]:
+        if n <= len(recs) and recs[n - 1]["hash"] != a["head"]:
             problems.append(f"anchor {i}: record {n} no longer has the anchored head (the prefix was rewritten)")
     tail = max(len(recs) - latest["records"], 0)
     out["tail"] = tail
