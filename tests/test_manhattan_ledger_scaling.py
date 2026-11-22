@@ -410,13 +410,23 @@ def test_line_separators_in_payloads_are_written_escaped_and_reopen(tmp_path, se
 
 
 def test_a_stale_ledger_object_cannot_fork_the_chain_unnoticed(tmp_path):
+    """Ledger integrity II (S17 C6): the stale handle's append is now refused under the writer lock with nothing
+    written, so the chain never forks. Main's ledger (the reference) appended on its stale head; the fork was
+    caught only when the file was reopened."""
     first, second = _book(tmp_path), _book(tmp_path)
     second.append("screening_decision", {"by": "second"})
-    first.append("screening_decision", {"by": "first"})   # appended on its stale head
+    before = first.path.read_bytes()
+    with pytest.raises(L.LedgerError, match="stale"):
+        first.append("screening_decision", {"by": "first"})
+    assert first.path.read_bytes() == before and len(_book(tmp_path)) == 1
+    ref = tmp_path / "ref.jsonl"
+    r_first, r_second = (RL.Ledger(ref, writer="w", protocol=PROTOCOL) for _ in range(2))
+    r_second.append("screening_decision", {"by": "second"})
+    r_first.append("screening_decision", {"by": "first"})   # main: appended on its stale head
     with pytest.raises(L.LedgerError, match="does not verify"):
-        _book(tmp_path)
+        _book(tmp_path, "ref.jsonl")
     with pytest.raises(L.LedgerError, match="does not verify"):
-        RL.Ledger(first.path, writer="w", protocol=PROTOCOL)
+        RL.Ledger(ref, writer="w", protocol=PROTOCOL)
 
 
 def test_a_malformed_forged_evaluation_makes_the_rule_refuse_not_decide(tmp_path):

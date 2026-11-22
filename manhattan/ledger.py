@@ -14,9 +14,20 @@ unseen: ``evaluation`` (one look); seen with the same ``result_hash``: ``rerun``
 different one: ``nondeterminism`` (both kept, the family suspended from tier changes); the same spec on a window
 with a different ``data_hash``: a new ``evaluation`` flagged ``data_changed``, the first designated result
 staying the result of record.
+
+Integrity of the file itself (ledger integrity II, S17 C4 and C6). On every read, a record's keys are exactly
+``FIELDS`` and ``hash``, its line is ``record_line(record)`` byte for byte, and no JSON object in it repeats a key:
+the hash covers only ``FIELDS``, so anything else on a line (an extra key, a repeated key, another spelling) would be
+data no hash protects. Appends are serialized across processes by an exclusive ``flock`` on the sidecar
+``<ledger>.lock``; under it the file's last record must be this handle's head (a stale handle is refused and nothing
+is written), and the line is written and made durable (``fsync``; also ``F_FULLFSYNC`` on macOS; the directory too
+when the file is created) before the lock is released. A write that fails part-way leaves the handle unusable;
+``recover_torn_tail`` is the recovery path.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -32,6 +43,7 @@ TYPES = ("batch_freeze", "critic_review", "evaluation_started", "evaluation", "r
          "screening_decision", "eprocess_update", "tier_change", "dormancy", "window_retired", "correction",
          "run_summary", "attempt_failed", "attempt_aborted")
 FIELDS = ("seq", "ts_utc", "type", "writer", "protocol", "payload", "prev_hash")
+RECORD_KEYS = frozenset((*FIELDS, "hash"))          # every key a stored record has, and the only ones
 ROLES = ("exploration", "reserve", "forward")
 # Phase 4B: the identity every new registered attempt must carry, and the reason classes a terminal may give
 IDENTITY_FIELDS = ("executable", "variant", "hypothesis", "family", "batch", "role", "channel", "designated",
@@ -70,6 +82,34 @@ def record_line(rec: dict) -> str:
         if ch in line:
             line = line.replace(ch, escaped)
     return line
+
+
+class _DuplicateKey(ValueError):
+    pass
+
+
+def _duplicates(pairs: list) -> list:
+    seen: set = set()
+    return [k for k, _ in pairs if k in seen or seen.add(k)]
+
+
+def _unique_pairs(pairs: list) -> dict:
+    """``object_pairs_hook`` refusing a JSON object that repeats a key (``json`` alone keeps the last silently)."""
+    d = dict(pairs)
+    if len(d) != len(pairs):
+        raise _DuplicateKey(_duplicates(pairs)[0])
+    return d
+
+
+def _line_problem(rec: dict, line: str) -> str | None:
+    """What makes a parsed record's line other than ``record_line(rec)``: keys outside the hashed record, or another
+    spelling of it (whitespace, key order, escapes). None for a canonical line."""
+    extra = set(rec) - RECORD_KEYS
+    if extra:
+        return "fields outside the hashed record: " + ", ".join(sorted(map(str, extra)))
+    if line != record_line(rec):
+        return "the line is not the canonical form of its record (record_line)"
+    return None
 
 
 def record_hash(rec: dict) -> str:
@@ -112,9 +152,23 @@ def forward_observation_weight(*, eligible: bool, registration_weight: int, reco
 
 
 def read(path: Path) -> list[dict]:
+    """The records of a ledger file, not verified as a chain, but each line held to its record's canonical form: a
+    repeated JSON key, a key outside the hashed record or another spelling raises ``LedgerError``."""
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    out = []
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line, object_pairs_hook=_unique_pairs)
+        except _DuplicateKey as e:
+            raise LedgerError(f"line {n}: duplicate key {e.args[0]!r}") from None
+        bad = _line_problem(rec, line) if isinstance(rec, dict) else None
+        if bad:
+            raise LedgerError(f"line {n}: {bad}")
+        out.append(rec)
+    return out
 
 
 def verify(path: Path, anchor: str | None = None) -> list[str]:
@@ -142,8 +196,9 @@ def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[di
     for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
+        dups: list = []
         try:
-            rec = json.loads(line)
+            rec = json.loads(line, object_pairs_hook=lambda pairs: _noting_duplicates(pairs, dups))
         except json.JSONDecodeError:
             return recs, errs + [f"line {n}: not JSON"]
         if not isinstance(rec, dict):
@@ -157,10 +212,27 @@ def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[di
             return recs, errs + [f"record {rec['seq']}: hash does not match its content (the record was edited)"]
         if rec["type"] not in TYPES:
             errs.append(f"record {rec['seq']}: unknown type {rec['type']}")
+        # The hash covers FIELDS only: anything else the line says is reported, and the chain is read on (S17 C4).
+        if dups:
+            errs.append(f"record {rec['seq']}: duplicate key {', '.join(sorted(set(map(str, dups))))} in its line "
+                        "(a reader may take either value)")
+        else:
+            bad = _line_problem(rec, line)
+            if bad:
+                errs.append(f"record {rec['seq']}: {bad}")
         prev = rec["hash"]
     if anchor is not None and prev != anchor:
         errs.append(f"head hash is {prev}, but the anchor says {anchor} (records are missing or the file was replaced)")
     return recs, errs
+
+
+def _noting_duplicates(pairs: list, dups: list) -> dict:
+    """``object_pairs_hook`` for ``verify_snapshot``: the object ``json`` builds (the last value of a repeated key),
+    with each repeated key noted in ``dups``, so that the line is reported rather than read silently."""
+    d = dict(pairs)
+    if len(d) != len(pairs):
+        dups.extend(_duplicates(pairs))
+    return d
 
 
 class IrregularSnapshot(Exception):
@@ -176,7 +248,8 @@ def iter_verified(lines):
     valid. At the first thing ``verify_snapshot`` would report or might split differently (invalid UTF-8, another
     line boundary inside a line, JSON that does not parse, a sequence, chain, hash or type problem, an exception),
     it raises ``IrregularSnapshot`` and the caller answers from ``verify_snapshot`` on the same bytes. The fast path
-    therefore never accepts what ``verify_snapshot`` refuses, and never reports a different problem."""
+    therefore never accepts what ``verify_snapshot`` refuses, and never reports a different problem. That includes
+    the line checks: a repeated key, a key outside the hashed record, a line other than ``record_line(record)``."""
     prev, n = GENESIS, 0
     for raw in lines:
         try:
@@ -188,10 +261,11 @@ def iter_verified(lines):
         if not pieces or not pieces[0].strip():
             continue
         try:
-            rec = json.loads(pieces[0])
+            rec = json.loads(pieces[0], object_pairs_hook=_unique_pairs)
             n += 1
             ok = (isinstance(rec, dict) and rec.get("seq") == n and rec.get("prev_hash") == prev
-                  and all(k in rec for k in FIELDS) and rec.get("hash") == record_hash(rec) and rec["type"] in TYPES)
+                  and all(k in rec for k in FIELDS) and rec.get("hash") == record_hash(rec) and rec["type"] in TYPES
+                  and _line_problem(rec, pieces[0]) is None)
         except Exception:                                 # noqa: BLE001 - verify_snapshot decides what it was
             raise IrregularSnapshot from None
         if not ok:
@@ -314,6 +388,80 @@ def _hashable(v) -> bool:
         return False
 
 
+# ---- the writer lock and durable appends (S17 C6)
+_FULLFSYNC = getattr(fcntl, "F_FULLFSYNC", None) if sys.platform == "darwin" else None
+
+
+def lock_path(path: Path) -> Path:
+    """The sidecar file whose ``flock`` serializes the writers (and orders the readers) of a ledger file."""
+    path = Path(path)
+    return path.with_name(path.name + ".lock")
+
+
+@contextlib.contextmanager
+def _flocked(path: Path, *, exclusive: bool):
+    """Hold ``flock`` on the sidecar lock of ``path``: exclusive for a writer (creating the lock file), shared for a
+    reader. A reader never creates a file: with no lock file (no locking writer has written there) or one it cannot
+    open, it reads unlocked, as before."""
+    fd = None
+    try:
+        fd = os.open(lock_path(path), (os.O_RDWR | os.O_CREAT) if exclusive else os.O_RDONLY, 0o666)
+    except OSError:
+        if exclusive:
+            raise
+    try:
+        if fd is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)                                  # closing the descriptor releases the lock
+
+
+def _last_hash(fd: int) -> str:
+    """The ``hash`` of the last record in the open ledger file (``GENESIS`` when it holds none), read backwards from
+    the end. A file that does not end with a newline ends in a partial line: refused, so that a new line is never
+    glued onto it (``recover_torn_tail`` is the recovery)."""
+    size = os.fstat(fd).st_size
+    if size == 0:
+        return GENESIS
+    if os.pread(fd, 1, size - 1) != b"\n":
+        raise LedgerError("the ledger file ends in a partial line: run recover_torn_tail before appending")
+    pos, buf = size, b""
+    while True:
+        start = max(0, pos - 65536)
+        buf, pos = os.pread(fd, pos - start, start) + buf, start
+        body = buf.rstrip()
+        cut = body.rfind(b"\n")
+        if cut != -1 or pos == 0:
+            break
+    last = body[cut + 1:]
+    if not last:
+        return GENESIS
+    try:
+        rec = json.loads(last.decode("utf-8"))
+        head = rec["hash"]
+    except (UnicodeDecodeError, ValueError, TypeError, KeyError):
+        raise LedgerError("the ledger file's last line is not a record: the file does not verify") from None
+    if not isinstance(head, str):
+        raise LedgerError("the ledger file's last line is not a record: the file does not verify")
+    return head
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        view = view[os.write(fd, view):]
+
+
+def _fsync_dir(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class Ledger:
     """One ledger file. ``append`` is the only way a record is written.
 
@@ -332,6 +480,11 @@ class Ledger:
 
     def __init__(self, path: Path, writer: str, protocol: str):
         self.path, self.writer, self.protocol = Path(path), writer, protocol
+        self._unusable: str | None = None             # why appends are refused after a failed write (S17 C1-7)
+        with _flocked(self.path, exclusive=False):     # never a line a writer is still writing
+            self._load()
+
+    def _load(self) -> None:
         self._reset()
         try:
             with self.path.open("rb") as f:
@@ -471,9 +624,19 @@ class Ledger:
 
     def _append(self, type_: str, payload: dict, ts_utc: str | None = None) -> dict:
         """Append one record. The line is flushed and ``fsync``ed before this returns, so a registration that
-        returned survives a crash of the process (Phase 4B)."""
+        returned survives a crash of the process (Phase 4B).
+
+        Under an exclusive ``flock`` on ``lock_path(self.path)`` (S17 C6): the file's last record must be this
+        handle's head, else the handle is stale (another handle or process appended) and ``LedgerError`` is raised
+        with nothing written; then the line is written, ``fsync``ed (and ``F_FULLFSYNC``ed on macOS), and the
+        directory ``fsync``ed when this append created the file. If writing or syncing raises, the file may hold a
+        partial line or a record this handle has not indexed: the handle refuses every later append (reopen it;
+        ``recover_torn_tail`` first if the file ends in a partial line)."""
         if type_ not in TYPES:
             raise LedgerError(f"unknown record type {type_}")
+        if self._unusable is not None:
+            raise LedgerError(f"this ledger handle is unusable ({self._unusable}): reopen the ledger, after "
+                              "recover_torn_tail if the file ends in a partial line")
         rec = {"seq": len(self._lines) + 1,
                "ts_utc": ts_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                "type": type_, "writer": self.writer, "protocol": self.protocol,
@@ -481,10 +644,32 @@ class Ledger:
         rec["hash"] = record_hash(rec)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         line = record_line(rec)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(line + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+        data = (line + "\n").encode("utf-8")           # what cannot be encoded raises here, before any write
+        with _flocked(self.path, exclusive=True):
+            try:
+                fd, created = os.open(self.path, os.O_RDWR | os.O_APPEND), False
+            except FileNotFoundError:
+                fd, created = None, True
+            try:
+                on_file = GENESIS if fd is None else _last_hash(fd)
+                if on_file != self._head:
+                    raise LedgerError("stale ledger handle: the file's last record is not this handle's head "
+                                      "(another handle or process appended); nothing was written: reopen the ledger")
+                if fd is None:
+                    fd = os.open(self.path, os.O_RDWR | os.O_APPEND | os.O_CREAT, 0o666)
+                try:
+                    _write_all(fd, data)
+                    os.fsync(fd)
+                    if _FULLFSYNC is not None:
+                        fcntl.fcntl(fd, _FULLFSYNC)
+                    if created:
+                        _fsync_dir(self.path.parent)
+                except BaseException as e:
+                    self._unusable = f"an append failed part-way: {type(e).__name__}"
+                    raise
+            finally:
+                if fd is not None:
+                    os.close(fd)
         self._index(rec, line)
         return rec
 
@@ -687,8 +872,16 @@ def recover_torn_tail(path: Path) -> dict:
     Only a final fragment that has no newline and does not parse as a JSON object is moved, byte for byte, to
     ``<name>.torn-<sha256>`` beside the ledger; a complete final record that lost only its newline gets the newline.
     Anything else (a damaged record in the middle, an edited record) is not a torn tail and is refused: ``verify``
-    reports it and the ledger stays unopenable. Returns what was done."""
+    reports it and the ledger stays unopenable. Returns what was done. Runs under the writers' exclusive lock, so it
+    never meets an append in progress."""
     path = Path(path)
+    if not path.exists():
+        return {"status": "clean"}
+    with _flocked(path, exclusive=True):
+        return _recover_torn_tail(path)
+
+
+def _recover_torn_tail(path: Path) -> dict:
     data = path.read_bytes() if path.exists() else b""
     if not data or data.endswith(b"\n"):
         return {"status": "clean"}
