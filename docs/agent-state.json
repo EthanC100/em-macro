@@ -462,6 +462,16 @@
    "commits": [],
    "note": "refused: no pytest/yaml in env, no private store (403), Ledger rebuild differs; PR #73 left open",
    "session": "https://claude.ai/code/session_01Ayx8qbTbF7mijozbs4zsTb"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-22T23:41:16+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev sync: merged main (4da7c55; first merge 66ce146 rejected on push as night-worker 43fde2d landed during the 28-min suite, re-merged), no auto_resolved; full suite 3958 passed after pip PyYAML (Debian PyYAML lacks RECORD, broke test_site_check_sees_only_the_site_requirements in this container); triage: 0 filed (one finding updates Q024 evidence: energy marks now to 17 Nov, 3 business-day lag unflagged; fold into Q030; Actions API 403); 0 approved/blocked; chain already stopped by night-worker 23:35 (nothing approved)",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
