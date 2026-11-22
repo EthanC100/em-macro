@@ -45,8 +45,10 @@ CHANNELS = S.CHANNELS
 # fingerprint). EMPTY in production: no key is pinned, so every real batch freeze is refused (owner action below).
 ALLOWED_FREEZE_SIGNERS: frozenset = frozenset()
 NO_PINNED_SIGNER = ("no owner signing key is pinned (manhattan.freeze.ALLOWED_FREEZE_SIGNERS is empty), so every "
-                    "batch freeze is refused. Owner action: Ethan adds his signing-key fingerprint to "
-                    "ALLOWED_FREEZE_SIGNERS in a reviewed change on main")
+                    "batch freeze is refused. Owner action, both needed before any freeze verifies: Ethan adds his "
+                    "signing-key fingerprint to ALLOWED_FREEZE_SIGNERS in a reviewed change on main, and an "
+                    "OpenTimestamps attestation verifier (with a Bitcoin block-header source) is provided for "
+                    "OpenTimestampsVerifier, which refuses every proof until then")
 
 
 class FreezeError(RuntimeError):
@@ -189,9 +191,15 @@ def git_tag_signer(tag: str, root: Path, manifest_path: Path, raw: bytes) -> str
     found = _GPG_VALIDSIG.findall(out) + _SSH_GOOD.findall(out)
     if len(set(found)) != 1:
         return None
+    # ``<rev>:<path>`` is resolved from the repository's top level, whatever directory ``root`` is in it (the
+    # batches directory by default): take the manifest's path relative to the top level
+    top = _git(["rev-parse", "--show-toplevel"], root)
+    if top is None or top.returncode != 0:
+        return None
     try:
-        rel = Path(manifest_path).resolve().relative_to(root).as_posix()
-    except ValueError:
+        toplevel = Path(top.stdout.decode("utf-8").strip()).resolve()
+        rel = Path(manifest_path).resolve().relative_to(toplevel).as_posix()
+    except (UnicodeDecodeError, ValueError):
         return None
     shown = _git(["show", f"{tag}^{{commit}}:{rel}"], root)
     if shown is None or shown.returncode != 0 or shown.stdout != raw:
@@ -219,10 +227,10 @@ def verify_frozen(directory: Path, number: int, *, expected_manifest_hash: str |
     ``ALLOWED_FREEZE_SIGNERS`` refuses every batch), then the timestamp proof **verified** against the manifest's
     SHA-256, then the tag: signed, by a pinned key, on a commit holding this manifest. ``root``: the repository
     holding the tag (default ``directory``)."""
-    return _verify(Path(directory), number, expected_manifest_hash, root, _TRUST)
+    return _verify_batch(Path(directory), number, expected_manifest_hash, root, _TRUST)
 
 
-def _verify(directory: Path, number: int, expected_manifest_hash: str | None, root, trust: _Trust) -> dict:
+def _verify_batch(directory: Path, number: int, expected_manifest_hash: str | None, root, trust: _Trust) -> dict:
     d = directory / f"AB-{number:04d}"
     path = d / MANIFEST
     if not path.is_file():

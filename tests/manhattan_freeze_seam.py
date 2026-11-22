@@ -4,7 +4,7 @@
 (``ALLOWED_FREEZE_SIGNERS``) is empty, so every real freeze is refused. Tests that need an admitted batch use this
 module, which lives under ``tests/`` (not in the ``manhattan`` package), and a static test
 (``tests/test_manhattan_freeze_verification.py``) pins that no module under ``manhattan/`` references it, or the
-private names it reaches (``freeze._TRUST``, ``registration._mint``, ``synthetic._register``).
+private names it reaches (``freeze._TRUST``, ``registration._mint``, ``synthetic._register_world``).
 
 Everything here is a deterministic **fixture**: an HMAC "signature" by a fixture key, and a fixture "timestamp
 proof" that is the manifest's SHA-256 behind a fixture prefix. Neither is a cryptographic signature or an
@@ -100,7 +100,7 @@ def mint(obj):
 def mark_synthetic(world, label: str):
     """Register a test-built world (for instance an instrumented copy of a generator's world) as synthetic."""
     from manhattan.equities import synthetic as SY
-    return SY._register(world, provenance=hashlib.sha256(f"test fixture world: {label}".encode()).hexdigest())
+    return SY._register_world(world, provenance=hashlib.sha256(f"test fixture world: {label}".encode()).hexdigest())
 
 
 @contextlib.contextmanager

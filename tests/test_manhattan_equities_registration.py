@@ -366,7 +366,7 @@ def test_dormant_nothing_runs_on_a_world_that_is_not_a_synthetic_fixture(admitte
     with pytest.raises(R.RegistrationError, match="synthetic"):
         R.run_selection(unmarked, exp, cm)
     with pytest.raises(EquityDataError, match="synthetic"):
-        TC.compare(unmarked, TC.CompareConfig(is_end=date(2006, 12, 29)), cm)
+        TC._compare(unmarked, TC.CompareConfig(is_end=date(2006, 12, 29)), cm)
     with pytest.raises(EquityDataError, match="synthetic"):
         TC.sector_volatility(unmarked, date(2004, 1, 2), date(2005, 1, 3))
     tree = ast.parse((ROOT / "manhattan/equities/registration.py").read_text(encoding="utf-8"))

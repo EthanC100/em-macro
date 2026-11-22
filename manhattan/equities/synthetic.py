@@ -29,7 +29,7 @@ _SYNTHETIC: dict = {}            # id -> (weak reference, provenance hash): worl
 _GENERATORS = ("manhattan.equities.synthetic", "manhattan.equities.sector_synthetic")
 
 
-def _provenance(frame) -> str:
+def _world_provenance(frame) -> str:
     """SHA-256 of the generator (module and function) and the arguments it was called with."""
     code = frame.f_code
     names = code.co_varnames[:code.co_argcount + code.co_kwonlyargcount]
@@ -38,7 +38,7 @@ def _provenance(frame) -> str:
     return hashlib.sha256(json.dumps(desc, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def _register(world, *, provenance: str):
+def _register_world(world, *, provenance: str):
     _SYNTHETIC[id(world)] = (weakref.ref(world), provenance)
     return world
 
@@ -52,7 +52,7 @@ def mark_synthetic(world):
     caller = sys._getframe(1)
     if caller.f_globals.get("__name__") not in _GENERATORS:
         raise EquityDataError("only this package's synthetic generators mark a world synthetic")
-    return _register(world, provenance=_provenance(caller))
+    return _register_world(world, provenance=_world_provenance(caller))
 
 
 def is_synthetic(world) -> bool:
@@ -126,7 +126,7 @@ def _ts(cal: MarketCalendar, d: date, hh: int = 7, mm: int = 0) -> datetime:
     return datetime.combine(d, time(hh, mm), cal.tz)
 
 
-@dataclass
+@dataclass(frozen=True)
 class World:
     calendar: MarketCalendar
     master: SecurityMaster

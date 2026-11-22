@@ -45,9 +45,13 @@ the frozen batch, so a forged, edited or unfrozen handle is refused.
   lookback is in the registered grid, that it tried every registered variant, and that its choice is the rule's.
 - ``run_holdout`` runs only that variant, only on the holdout, and only once per (batch, spec, holdout window): the
   look is first recorded as the batch's **designated** reserve evaluation in the persistent Manhattan ledger
-  (``access.register_evaluation``), so a second look in any process, after a reload or a restart, is refused. The
-  holdout must lie in an enabled reserve window of the fence: with main's configuration every real holdout is
-  refused. ``track_compare.run_sleeve`` reads only the selection window; the holdout is read through here only.
+  (``access.register_evaluation``), so a second look in any process, after a reload or a restart, is refused
+  **if it records into the same ledger file**: the designation is per ledger file (a PR #86 property), so the
+  guarantee holds only when every look uses the one authoritative ledger (owner decisions A-1/A-2). The holdout
+  must lie in an enabled reserve window of the fence: with main's configuration every real holdout is refused.
+- No public path reads past the registered selection window: ``track_compare.run_sleeve`` takes an admitted
+  experiment and cuts at its registered ``selection_end`` (not a caller's configuration); the out-of-sample report
+  ``track_compare._compare`` and the unchecked ``_sleeve`` are private (name scan in test_manhattan_binding_access).
 - The rejection criteria are evaluated there and nowhere else.
 
 **Dormant.** ``EXECUTION_ON_REAL_DATA`` is a constant ``False``. An admitted experiment runs only on a synthetic
@@ -361,6 +365,14 @@ def _choose(grid, rows: dict) -> int:
     return max(grid, key=lambda lb: (rows[lb].get("sharpe", float("-inf")), -lb))
 
 
+def selection_config(exp: ExperimentHandle, cost_model: EquityCostModel):
+    """The registered selection configuration of an admitted experiment (``track_compare.CompareConfig``): its
+    ``is_end`` is the registered ``selection_end``. Re-verifies the handle and its freeze, and the cost model."""
+    h = _require(exp)
+    _require_costs(h, cost_model)
+    return _config(h)
+
+
 def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> SelectionLock:
     """Every declared variant over data up to ``selection_end`` (nothing later is read), chosen by the declared rule.
     Synthetic worlds only."""
@@ -373,8 +385,7 @@ def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> 
     cfg = _config(h)
     rows = {}
     for lb in cfg.lookbacks:
-        sl = run_sleeve(world, cfg, cost_model, {exp.track: lb}, name=f"{exp.catalogue_id}:{lb}",
-                        end=cfg.is_end)
+        sl = run_sleeve(world, exp, cost_model, lb, name=f"{exp.catalogue_id}:{lb}")
         rows[lb] = _split(sl, cfg.is_end)[0]
     best = _choose(cfg.lookbacks, rows)
     return _mint(SelectionLock(exp.spec_hash, best, len(rows), json.dumps(rows, sort_keys=True)))
@@ -480,8 +491,16 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
     identity (``engine.evaluate.code_version()``); required, none: refused.
 
     The look's start record is durable before any holdout value is computed, and it consumes the designation
-    whatever happens next (D-13). It is not completed in the ledger: a completion needs ``engine.evaluate``'s proof
-    from a PIT read, and the equities pipeline reads a synthetic world, not a PIT store (stated in the result)."""
+    whatever happens next (D-13).
+
+    **One look per ledger file.** The designation lives in the ledger it is recorded in (a PR #86 property): a look
+    recorded in a *different* ledger file finds no earlier start there and is not refused. The single-look guarantee
+    therefore holds only when every look records into the one authoritative Manhattan ledger, which owner decisions
+    A-1/A-2 (who writes, which ledger) must fix before any real holdout; until then the production path is refused
+    anyway (no ledger default, main's fence). A test pins this: a second ledger file gives a second look.
+
+    The look is not completed in the ledger: a completion needs ``engine.evaluate``'s proof from a PIT read, and
+    the equities pipeline reads a synthetic world, not a PIT store (stated in the result)."""
     from .synthetic import is_synthetic
     from .track_compare import LABEL, _sleeve, metrics, replace
     h, manifest = _require(exp, with_manifest=True)

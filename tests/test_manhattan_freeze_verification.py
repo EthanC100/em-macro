@@ -16,11 +16,18 @@ Acceptance tests P2-a to P2-h of ``docs/manhattan/audit/S17_NEXT_PRS.md`` (branc
 - P2-h  ``track_compare.run_sleeve`` on a holdout window, outside the gate, is refused;
 - C10   a family whose declared signal and sign no executable signal implements cannot be registered.
 
+Review of PR #106: a real GPG-signed tag verifies with ``root`` = the batches directory, and a signed tag on a
+commit holding another manifest is refused (mutation M5); the holdout is read only after its ledger start (M12);
+``run_sleeve`` cuts at the registered selection end, and the out-of-sample report is private; the single look is per
+ledger file (a stated limitation); a marked world is frozen; the private names are in the name-based scan of
+``tests/test_manhattan_binding_access.py``.
+
 Synthetic only: every batch, signature, timestamp proof, fence and ledger is a fixture in a temporary directory.
 """
 from __future__ import annotations
 
 import ast
+import dataclasses
 import hashlib
 import importlib
 import inspect
@@ -28,7 +35,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -160,6 +167,82 @@ def test_p2a_the_git_tag_check_needs_a_valid_signature_on_this_manifest(tmp_path
     assert FZ.git_tag_signer("manhattan-batch-0002", tmp_path, m, b"{}") is None         # no such tag
 
 
+def _gpg_repo(tmp_path, monkeypatch):
+    """A temporary repository and a throwaway GPG key in a temporary GNUPGHOME (test fixture key, never pinned in
+    production). Returns (git command prefix, repository, fingerprint)."""
+    import shutil
+    import tempfile
+    if not shutil.which("gpg"):
+        pytest.skip("gpg is not installed")
+    home = tempfile.mkdtemp(prefix="gpg")            # short path: gpg-agent's socket lives there
+    monkeypatch.setenv("GNUPGHOME", home)
+    subprocess.run(["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "", "--quick-gen-key",
+                    "Manhattan test fixture <fixture@example.invalid>", "ed25519", "sign", "never"],
+                   check=True, capture_output=True)
+    cols = subprocess.run(["gpg", "--batch", "--list-keys", "--with-colons"], check=True, capture_output=True,
+                          text=True).stdout
+    fpr = next(line.split(":")[9] for line in cols.splitlines() if line.startswith("fpr:"))
+    repo = tmp_path / "repo"
+    git = ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", f"user.signingkey={fpr}",
+           "-c", "gpg.program=gpg", "-c", "gpg.format=openpgp", "-c", "commit.gpgSign=false"]
+    subprocess.run(git + ["init", "-q", str(repo)], check=True)
+    return git, repo, fpr, home
+
+
+def _gpg_cleanup(home):
+    import os
+    import shutil
+    subprocess.run(["gpgconf", "--kill", "gpg-agent"], env={**os.environ, "GNUPGHOME": home}, capture_output=True)
+    shutil.rmtree(home, ignore_errors=True)
+
+
+def _commit_and_sign(git, repo, number):
+    subprocess.run(git + ["add", "-A"], cwd=repo, check=True)
+    subprocess.run(git + ["commit", "-q", "-m", f"batch {number}"], cwd=repo, check=True)
+    subprocess.run(git + ["tag", "-s", FZ.TAG.format(n=number), "-m", "fixture"], cwd=repo, check=True,
+                   capture_output=True)
+
+
+def test_a_real_signed_tag_verifies_from_the_batches_directory(tmp_path, monkeypatch, nt, cm):
+    git, repo, fpr, home = _gpg_repo(tmp_path, monkeypatch)
+    try:
+        batches = repo / "data" / "manhattan" / "batches"          # root defaults to the batches directory
+        hyp, b = _batch(batches, nt, cm, 784)
+        m = batches / b.id / FZ.MANIFEST
+        _commit_and_sign(git, repo, 784)
+        assert FZ.git_tag_signer(FZ.TAG.format(n=784), batches, m, m.read_bytes()) == fpr
+        assert FZ.git_tag_signer(FZ.TAG.format(n=784), repo, m, m.read_bytes()) == fpr
+        seam.stamp(batches, 784)
+        with seam.trust(signers={fpr}, tag_signer=FZ.git_tag_signer):    # a fixture pin of this throwaway key
+            assert FZ.verify_frozen(batches, 784, expected_manifest_hash=b.manifest_hash)["batch"] == 784
+            assert _admit(nt, hyp, b, batches).batch == "AB-0784"
+        with seam.trust(tag_signer=FZ.git_tag_signer), pytest.raises(FZ.FreezeError, match="not a pinned owner"):
+            FZ.verify_frozen(batches, 784)                     # a valid signature, but not by the pinned key
+        with pytest.raises(FZ.FreezeError, match="ALLOWED_FREEZE_SIGNERS is empty"):
+            FZ.verify_frozen(batches, 784)                     # production: nothing pinned
+    finally:
+        _gpg_cleanup(home)
+
+
+def test_m5_a_signed_tag_on_a_commit_holding_another_manifest_is_refused(tmp_path, monkeypatch, nt, cm):
+    git, repo, fpr, home = _gpg_repo(tmp_path, monkeypatch)
+    try:
+        batches = repo / "batches"
+        _batch(batches, nt, cm, 785)
+        _commit_and_sign(git, repo, 785)                        # the tag signs this first manifest
+        import shutil
+        shutil.rmtree(batches / "AB-0785")
+        hyp, b = _batch(batches, nt, cm, 785, windows={**WINDOWS, "holdout_end": date(2008, 6, 30)})
+        m = batches / b.id / FZ.MANIFEST
+        assert FZ.git_tag_signer(FZ.TAG.format(n=785), batches, m, m.read_bytes()) is None
+        seam.stamp(batches, 785)
+        with seam.trust(signers={fpr}, tag_signer=FZ.git_tag_signer):
+            with pytest.raises(FZ.FreezeError, match="does not hold this manifest"):
+                FZ.verify_frozen(batches, 785)
+    finally:
+        _gpg_cleanup(home)
+
+
 # ------------------------------------------------------------------------------------------------ P2-b
 
 def test_p2b_a_tag_signed_by_a_key_that_is_not_pinned_is_refused(tmp_path, nt, cm):
@@ -283,6 +366,24 @@ def test_p2e_no_reset_by_clearing_a_new_handle_or_a_reload(tmp_path, nt, cm):
     assert len(_starts(book)) == 1
 
 
+def test_known_limitation_the_single_look_is_per_ledger_file(tmp_path, nt, cm):
+    """Documented, not fixed here (PR #86 property; run_holdout's docstring): the designation lives in the ledger it
+    is recorded in, so a look recorded in another ledger file is not refused. The guarantee needs the one
+    authoritative ledger (owner decisions A-1/A-2). If this starts failing, the limitation was closed: update the
+    docstring."""
+    base = tmp_path / "batches"
+    hyp, b = _batch(base, nt, cm, 788)
+    seam.freeze_fixture(base, 788)
+    world = SS.sector_world()
+    with seam.trust():
+        exp = _admit(nt, hyp, b, base)
+        lock = R.run_selection(world, exp, cm)
+        for name in ("ledger-a.jsonl", "ledger-b.jsonl"):
+            R.run_holdout(world, exp, lock, cm, ledger=_ledger(tmp_path / name), fence=FENCE, code_version=CV)
+    assert len(_starts(tmp_path / "ledger-a.jsonl")) == len(_starts(tmp_path / "ledger-b.jsonl")) == 1
+    assert "One look per ledger file" in R.run_holdout.__doc__
+
+
 # ------------------------------------------------------------------------------------------------ P2-f
 
 def test_p2f_forged_selection_locks_and_handles_are_refused(tmp_path, nt, cm):
@@ -347,13 +448,72 @@ def test_p2g_a_2023_2026_holdout_is_refused_with_mains_configuration(tmp_path, n
 
 # ------------------------------------------------------------------------------------------------ P2-h
 
-def test_p2h_run_sleeve_outside_the_gate_reads_no_holdout(cm):
+def test_p2h_run_sleeve_outside_the_gate_reads_no_holdout(tmp_path, nt, cm):
     world = SS.sector_world()
-    cfg = TC.CompareConfig(is_end=date(2006, 12, 29), lookbacks=(63, 126, 252))
-    for end in (date(2008, 12, 31), date(2006, 12, 30), None):
-        with pytest.raises(EquityDataError, match="selection window"):
-            TC.run_sleeve(world, cfg, cm, {NT: 126}, name="direct", end=end)
-    assert TC.run_sleeve(world, cfg, cm, {NT: 126}, name="selection", end=cfg.is_end).days[-1] <= cfg.is_end
+    # the review's bypass: a caller configuration whose is_end is the end of the holdout (519 holdout days before)
+    cfg = TC.CompareConfig(is_end=date(2008, 12, 31), lookbacks=(63, 126, 252))
+    with pytest.raises((EquityDataError, TypeError)):
+        TC.run_sleeve(world, cfg, cm, {NT: 126}, name="direct", end=date(2008, 12, 31))
+    assert not hasattr(TC, "compare")                          # the out-of-sample report is private (_compare)
+    base = tmp_path / "batches"
+    hyp, b = _batch(base, nt, cm, 786)
+    seam.freeze_fixture(base, 786)
+    with seam.trust():
+        exp = _admit(nt, hyp, b, base)
+        for end in (date(2008, 12, 31), date(2007, 1, 2), date(2006, 12, 30), datetime(2006, 12, 29, 23)):
+            with pytest.raises(EquityDataError, match="registered selection window"):
+                TC.run_sleeve(world, exp, cm, 126, name="direct", end=end)     # the cutoff is the registered spec's
+        with pytest.raises(EquityDataError, match="not a declared variant"):
+            TC.run_sleeve(world, exp, cm, 252, name="direct")
+        with pytest.raises(R.RegistrationError, match="cost model differs"):
+            TC.run_sleeve(world, exp, EquityCostModel(**{**COSTS, "impact": 0.0}), 126, name="direct")
+        sl = TC.run_sleeve(world, exp, cm, 126, name="selection")
+        assert sl.days[-1] <= WINDOWS["selection_end"]
+    with pytest.raises(R.RegistrationError, match="ALLOWED_FREEZE_SIGNERS is empty"):
+        TC.run_sleeve(world, exp, cm, 126, name="direct")        # production: the handle's freeze does not verify
+
+
+def test_m12_the_holdout_is_read_only_after_its_ledger_start(tmp_path, nt, cm):
+    """Mutation M12 (the look registered after the holdout read) fails here: any read dated in the holdout before
+    the ledger holds the look's start raises."""
+    base, book = tmp_path / "batches", tmp_path / "ledger.jsonl"
+    hyp, b = _batch(base, nt, cm, 787)
+    seam.freeze_fixture(base, 787)
+    w = SS.sector_world()
+    reads = []
+
+    class Guard:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            attr = getattr(self._inner, name)
+            if not callable(attr):
+                return attr
+
+            def guarded(*args, **kw):
+                for v in list(args) + list(kw.values()):
+                    if isinstance(v, date) and v >= WINDOWS["holdout_start"]:
+                        if not _starts(book):
+                            raise AssertionError(f"{name} read {v} before the holdout look was recorded")
+                        reads.append(v)
+                return attr(*args, **kw)
+            return guarded
+
+    guarded = seam.mark_synthetic(dataclasses.replace(w, prices=Guard(w.prices)), "M12 instrumented world")
+    with seam.trust():
+        exp = _admit(nt, hyp, b, base)
+        lock = R.run_selection(guarded, exp, cm)
+        assert reads == []                                       # selection read nothing in the holdout
+        R.run_holdout(guarded, exp, lock, cm, ledger=_ledger(book), fence=FENCE, code_version=CV)
+    assert reads and len(_starts(book)) == 1
+
+
+def test_a_marked_world_cannot_be_changed_afterwards():
+    w = SS.sector_world()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        w.prices = None
+    assert SY.provenance(w) == SY.provenance(SS.sector_world()) != SY.provenance(SS.sector_world(seed=103))
 
 
 # ------------------------------------------------------------------------------------------------ C10
@@ -370,67 +530,21 @@ def test_c10_the_momentum_families_still_register(nt, cm):
 
 # ------------------------------------------------------------------------------------------------ static
 
-PRIVATE = {                        # private names of a module, and the other production modules allowed to use them
-    "manhattan.freeze": ({"_TRUST", "_Trust", "_PRODUCTION", "_verify"}, ()),
-    "manhattan.equities.registration": ({"_mint", "_HANDLE_KEY", "_seal_of"}, ()),
-    "manhattan.equities.synthetic": ({"_register", "_SYNTHETIC", "_provenance"}, ()),
-    "manhattan.equities.track_compare": ({"_sleeve"}, ("manhattan.equities.registration",)),
-}
-
-
-def _module_name(p: Path) -> str:
-    parts = list(p.relative_to(ROOT).with_suffix("").parts)
-    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
-
-
-def _private_uses(p: Path) -> list:
-    """(module, name) for every private name of ``PRIVATE`` that the file ``p`` imports or reads as an attribute."""
-    me = _module_name(p)
-    package = me if p.name == "__init__.py" else me.rpartition(".")[0]
-    tree = ast.parse(p.read_text(encoding="utf-8"))
-    alias, out = {}, []
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Import):
-            for a in n.names:
-                if a.asname:
-                    alias[a.asname] = a.name
-        elif isinstance(n, ast.ImportFrom):
-            base = n.module or ""
-            if n.level:
-                pkg = package.split(".")
-                base = ".".join(pkg[:len(pkg) - n.level + 1] + ([n.module] if n.module else []))
-            for a in n.names:
-                full = f"{base}.{a.name}"
-                if full in PRIVATE:
-                    alias[a.asname or a.name] = full
-                if base in PRIVATE and a.name in PRIVATE[base][0]:
-                    out.append((base, a.name))
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Attribute):
-            v = n.value
-            name = alias.get(v.id) if isinstance(v, ast.Name) else None
-            if isinstance(v, ast.Attribute):            # manhattan.freeze._TRUST
-                name = ast.unparse(v)
-            if name in PRIVATE and n.attr in PRIVATE[name][0]:
-                out.append((name, n.attr))
-    return [(m, x) for m, x in out if m != me and me not in PRIVATE[m][1]]
+PR2_NAMES = ("_TRUST", "_PRODUCTION", "_Trust", "_verify_batch", "_mint", "_HANDLE_KEY", "_seal_of", "_sealed",
+             "_SYNTHETIC", "_register_world", "_world_provenance", "_GENERATORS", "_sleeve", "_compare",
+             "manhattan_freeze_seam")
 
 
 def test_static_no_production_module_references_the_test_seam_or_the_private_trust():
-    bad = []
-    for p in sorted((ROOT / "manhattan").rglob("*.py")):
-        rel = p.relative_to(ROOT).as_posix()
-        text = p.read_text(encoding="utf-8")
-        if "manhattan_freeze_seam" in text:
-            bad.append((rel, "manhattan_freeze_seam"))
-        bad += [(rel, f"{m}.{x}") for m, x in _private_uses(p)]
-        if rel not in ("manhattan/equities/synthetic.py", "manhattan/equities/sector_synthetic.py") and \
-                re.search(r"\bmark_synthetic\b", text):
-            bad.append((rel, "mark_synthetic"))
+    from test_manhattan_binding_access import ALLOWED, scan
+    assert set(PR2_NAMES) <= set(ALLOWED)                          # pinned in the one name-based allowlist
+    sources = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8")
+               for p in sorted((ROOT / "manhattan").rglob("*.py"))}
+    assert {k: v for k, v in scan(sources).items() if k in PR2_NAMES} == {}
+    # the scan sees what the seam reaches, wherever it would sit under manhattan/
+    found = scan({"manhattan/ops/rogue.py": (ROOT / "tests/manhattan_freeze_seam.py").read_text(encoding="utf-8")})
+    assert {"_TRUST", "_PRODUCTION", "_Trust", "_mint", "_register_world"} <= set(found)
+    bad = [rel for rel, text in sources.items()
+           if rel not in ("manhattan/equities/synthetic.py", "manhattan/equities/sector_synthetic.py")
+           and re.search(r"\bmark_synthetic\b", text)]
     assert bad == []
-    # the scan sees the uses it must see
-    seam_file = ROOT / "tests/manhattan_freeze_seam.py"
-    assert {("manhattan.freeze", "_TRUST"), ("manhattan.equities.registration", "_mint"),
-            ("manhattan.equities.synthetic", "_register")} <= set(_private_uses(seam_file))
-    assert ("manhattan.equities.track_compare", "_sleeve") not in _private_uses(
-        ROOT / "manhattan/equities/registration.py")                                # an allowed caller
