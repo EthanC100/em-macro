@@ -13,8 +13,9 @@ family (``catalogue.family_draft``). Both hashes must be listed in a batch manif
 verify_frozen`` accepts, which means:
 
 - the manifest and every spec in it still match their hashes and the Merkle root;
-- the manifest has an external timestamp proof;
-- the commit carries a **signed** tag.
+- the manifest's external timestamp proof **verifies** against its hash;
+- the tag is signed by a **pinned** owner key (``freeze.ALLOWED_FREEZE_SIGNERS``, empty until Ethan pins his key:
+  until then every real batch is refused). Neither check can be substituted by a caller (S17 C2).
 
 A freeze is a pre-registration and is Ethan's alone (CLAUDE.md hard rule 4; ``freeze.authorise``). This module
 prepares nothing for freezing and freezes nothing.
@@ -32,15 +33,21 @@ prepares nothing for freezing and freezes nothing.
   derives from the frozen family, hypothesis, variant and primary-executable specs.
 
 **Fail closed.** ``admit`` raises on a missing or unverifiable freeze, on a spec or family whose hash is not in the
-manifest (any edit after registration changes the hash), and on an incomplete or inconsistent spec. An admitted
-``ExperimentHandle`` keeps a canonical copy of the spec and its hash. ``run_*`` re-checks both, and refuses objects
-this module did not issue and objects changed since.
+manifest (any edit after registration changes the hash), on an incomplete or inconsistent spec, and on a family whose
+declared signal and sign no executable signal implements (S17 C10). An admitted ``ExperimentHandle`` keeps a canonical
+copy of the spec and its hash and is sealed by this module. ``run_*`` re-check the seal and the spec, and re-verify
+the frozen batch, so a forged, edited or unfrozen handle is refused.
 
 **The holdout is untouched until the selection is locked.**
 
 - ``run_selection`` reads nothing after ``selection_end``. It runs every declared variant, never another, chooses by
-  the declared rule and returns a lock that names the chosen variant.
-- ``run_holdout`` runs only that variant, only on the holdout, and only once per registration.
+  the declared rule and returns a sealed lock that names the chosen variant. ``run_holdout`` checks that the lock's
+  lookback is in the registered grid, that it tried every registered variant, and that its choice is the rule's.
+- ``run_holdout`` runs only that variant, only on the holdout, and only once per (batch, spec, holdout window): the
+  look is first recorded as the batch's **designated** reserve evaluation in the persistent Manhattan ledger
+  (``access.register_evaluation``), so a second look in any process, after a reload or a restart, is refused. The
+  holdout must lie in an enabled reserve window of the fence: with main's configuration every real holdout is
+  refused. ``track_compare.run_sleeve`` reads only the selection window; the holdout is read through here only.
 - The rejection criteria are evaluated there and nowhere else.
 
 **Dormant.** ``EXECUTION_ON_REAL_DATA`` is a constant ``False``. An admitted experiment runs only on a synthetic
@@ -50,10 +57,14 @@ combined and decides no denominator (owner decisions NT-8 and D-1).
 """
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import hmac
 import json
-import weakref
+import secrets
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 from manhattan import freeze as FZ
 from manhattan import spec as S
@@ -69,6 +80,11 @@ REQUIRED = ("schema", "track", "catalogue_id", "mechanism", "mechanism_class", "
             "universe", "signal", "grid", "benchmark", "costs", "execution", "windows", "selection_rule",
             "rejection_criteria", "attempt_accounting", "primary_binding", "domain")
 SIGNAL_FUNCTIONS = ("trailing_total_return/1",)
+# What each executable signal implements (S17 C10): the catalogue families whose declared signal it executes, and the
+# predicted sign of its construction. ``trailing_total_return/1`` goes long the top fraction of trailing total
+# return (skipping the most recent month) ranked across the track: the momentum families' signal, sign "+". A value,
+# quality, revision or low-risk family has no executable signal yet and cannot be registered with this one.
+SIGNAL_IMPLEMENTS = {"trailing_total_return/1": {"families": ("NT-M01", "TE-E01"), "sign": "+"}}
 BENCHMARKS = ("equal_weight_track_universe/1",)
 SELECTION_RULES = ("max_in_sample_net_sharpe/1",)
 CRITERION_METRICS = ("excess_sharpe", "excess_ann_return", "max_drawdown")
@@ -154,6 +170,12 @@ def validate_spec(entry: dict, hyp: dict, *, programme: str) -> list[str]:
     sig = h["signal"]
     if sig.get("function") not in SIGNAL_FUNCTIONS or not str(sig.get("construction", "")).strip():
         errs.append("experiment spec: signal function and construction are required")
+    else:
+        impl = SIGNAL_IMPLEMENTS[sig["function"]]
+        if entry["id"] not in impl["families"] or entry["sign"] != impl["sign"] or h["predicted_sign"] != impl["sign"]:
+            errs.append(f"experiment spec: no executable signal implements family {entry['id']}'s declared signal "
+                        f"and sign ({sig['function']} executes only {list(impl['families'])}, sign "
+                        f"{impl['sign']!r}; S17 C10)")
     if set(h["grid"]) != {"lookback"} or any(not isinstance(x, int) or x <= int(sig.get("skip", 0))
                                              for x in h["grid"]["lookback"]):
         errs.append("experiment spec: the grid declares integer lookbacks longer than skip")
@@ -186,9 +208,29 @@ def validate_spec(entry: dict, hyp: dict, *, programme: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------------------------------- the gate
+#
+# No in-memory "already issued" or "already read" sets (S17 C1). An admitted handle is re-verified against its frozen
+# batch on every use, and carries a seal (an HMAC under a key that never leaves this process) that only ``_mint``
+# sets, so a forged or edited handle or lock is refused. The holdout's one look is recorded in the persistent
+# Manhattan ledger before anything is read: a second look, in this process or any other, finds it there.
 
-_ISSUED: dict = {}
-_HOLDOUT_READ: set = set()
+_HANDLE_KEY = secrets.token_bytes(32)          # in-process only: handles and locks do not outlive the process
+
+
+def _seal_of(obj) -> str:
+    fields = {f.name: getattr(obj, f.name) for f in dataclasses.fields(obj) if f.name != "seal"}
+    return hmac.new(_HANDLE_KEY, repr((type(obj).__name__, sorted(fields.items()))).encode("utf-8"),
+                    hashlib.sha256).hexdigest()
+
+
+def _mint(obj):
+    """Seal an object this module issues (``admit``'s handles, ``run_selection``'s locks). Private: no production
+    module references it (static test); tests reach it through the test-only seam under ``tests/``."""
+    return dataclasses.replace(obj, seal=_seal_of(obj))
+
+
+def _sealed(obj) -> bool:
+    return isinstance(getattr(obj, "seal", None), str) and hmac.compare_digest(obj.seal, _seal_of(obj))
 
 
 @dataclass(frozen=True)
@@ -201,31 +243,29 @@ class ExperimentHandle:
     batch: str
     manifest_hash: str
     executables: tuple          # (variant point, variant hash, executable hash) of every declared variant
+    batch_dir: str = ""         # the frozen batch, re-verified on every use
+    batch_number: int = 0
+    seal: str = dataclasses.field(default="", repr=False)
 
     @property
     def spec(self) -> dict:
         return json.loads(self.canonical)
 
 
-def _issue(obj):
-    _ISSUED[id(obj)] = (weakref.ref(obj), repr(obj))
-    return obj
-
-
 def issued(obj) -> bool:
-    e = _ISSUED.get(id(obj))
-    return e is not None and e[0]() is obj and e[1] == repr(obj)
+    """Whether ``obj`` carries this module's seal (and was not edited since)."""
+    return type(obj) in (ExperimentHandle, SelectionLock) and _sealed(obj)
 
 
 def admit(entry: dict, hyp: dict, *, programme: str, batch_dir, batch_number: int, manifest_hash: str,
-          code_version: str, tag_is_signed=FZ.git_tag_is_signed) -> ExperimentHandle:
+          code_version: str) -> ExperimentHandle:
     """The only way to an executable experiment. ``batch_dir``/``batch_number``/``manifest_hash``: the frozen batch
     holding the family and this spec. ``code_version``: the engine identity its primary executables were frozen with.
-    ``tag_is_signed`` defaults to ``git verify-tag``, and tests substitute it exactly as ``verify_frozen`` allows.
-    Raises ``RegistrationError`` unless everything holds."""
+    The freeze is checked by ``freeze.verify_frozen`` and nothing else: its signature and timestamp checks cannot be
+    substituted here (S17 C2), and with no owner key pinned every real batch is refused. Raises
+    ``RegistrationError`` unless everything holds."""
     try:
-        manifest = FZ.verify_frozen(batch_dir, batch_number, expected_manifest_hash=manifest_hash,
-                                    tag_is_signed=tag_is_signed)
+        manifest = FZ.verify_frozen(Path(batch_dir), batch_number, expected_manifest_hash=manifest_hash)
     except (FZ.FreezeError, OSError, KeyError, ValueError) as exc:
         raise RegistrationError(f"no verified freeze: {exc}") from None
     family = C.family_draft(entry, programme=programme)
@@ -252,8 +292,8 @@ def admit(entry: dict, hyp: dict, *, programme: str, batch_dir, batch_number: in
             raise RegistrationError("a declared variant or its primary executable is not in the frozen batch (the "
                                     "grid or the engine identity changed)")
         exes.append((v["point"]["lookback"], S.spec_hash(v), S.spec_hash(x)))
-    return _issue(ExperimentHandle(sh, fh, S.canonical_bytes(hyp), programme, entry["id"],
-                                   f"AB-{batch_number:04d}", manifest_hash, tuple(exes)))
+    return _mint(ExperimentHandle(sh, fh, S.canonical_bytes(hyp), programme, entry["id"], f"AB-{batch_number:04d}",
+                                  manifest_hash, tuple(exes), str(Path(batch_dir).resolve()), batch_number))
 
 
 def attempt_identity(exp: ExperimentHandle, lookback: int, *, data_hash: str, window: dict,
@@ -271,12 +311,26 @@ def attempt_identity(exp: ExperimentHandle, lookback: int, *, data_hash: str, wi
             "code_version": dict(code_version), "track": h["track"]}
 
 
-def _require(exp) -> dict:
-    if type(exp) is not ExperimentHandle or not issued(exp):
-        raise RegistrationError("not an admitted experiment (only admit issues one; copies and edits are refused)")
-    if S.spec_hash(json.loads(exp.canonical)) != exp.spec_hash:     # defence in depth: an edit also breaks issue
+def _frozen_manifest(exp: ExperimentHandle) -> dict:
+    """Re-verify the handle's batch (``freeze.verify_frozen``) and that it still holds this experiment."""
+    try:
+        manifest = FZ.verify_frozen(Path(exp.batch_dir), exp.batch_number, expected_manifest_hash=exp.manifest_hash)
+    except (FZ.FreezeError, OSError, KeyError, ValueError) as exc:
+        raise RegistrationError(f"the experiment's freeze does not verify: {exc}") from None
+    frozen = set(manifest.get("spec_hashes", ()))
+    if not {exp.spec_hash, exp.family_hash, *(h for e in exp.executables for h in e[1:])} <= frozen \
+            or exp.batch != f"AB-{exp.batch_number:04d}":
+        raise RegistrationError("the experiment is not in the batch its handle names")
+    return manifest
+
+
+def _require(exp, *, with_manifest: bool = False):
+    if type(exp) is not ExperimentHandle or not _sealed(exp):
+        raise RegistrationError("not an admitted experiment (only admit issues one; edits are refused)")
+    if S.spec_hash(json.loads(exp.canonical)) != exp.spec_hash:     # defence in depth: an edit also breaks the seal
         raise RegistrationError("the admitted specification changed after admission")
-    return exp.spec
+    manifest = _frozen_manifest(exp)
+    return (exp.spec, manifest) if with_manifest else exp.spec
 
 
 def _require_costs(h: dict, cost_model: EquityCostModel) -> None:
@@ -299,6 +353,12 @@ class SelectionLock:
     chosen_lookback: int
     variants_tried: int
     in_sample: str               # canonical JSON of every variant's in-sample metrics
+    seal: str = dataclasses.field(default="", repr=False)
+
+
+def _choose(grid, rows: dict) -> int:
+    """The declared rule (``max_in_sample_net_sharpe/1``): the highest in-sample net Sharpe; ties to the shorter."""
+    return max(grid, key=lambda lb: (rows[lb].get("sharpe", float("-inf")), -lb))
 
 
 def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> SelectionLock:
@@ -316,28 +376,125 @@ def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> 
         sl = run_sleeve(world, cfg, cost_model, {exp.track: lb}, name=f"{exp.catalogue_id}:{lb}",
                         end=cfg.is_end)
         rows[lb] = _split(sl, cfg.is_end)[0]
-    best = max(cfg.lookbacks, key=lambda lb: (rows[lb].get("sharpe", float("-inf")), -lb))
-    return _issue(SelectionLock(exp.spec_hash, best, len(rows), json.dumps(rows, sort_keys=True)))
+    best = _choose(cfg.lookbacks, rows)
+    return _mint(SelectionLock(exp.spec_hash, best, len(rows), json.dumps(rows, sort_keys=True)))
 
 
-def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: EquityCostModel) -> dict:
-    """The locked variant on the holdout, once per registration; the rejection criteria are evaluated here only."""
-    from .synthetic import is_synthetic
-    from .track_compare import LABEL, metrics, replace, run_sleeve
-    h = _require(exp)
-    _require_costs(h, cost_model)
-    if type(lock) is not SelectionLock or not issued(lock) or lock.spec_hash != exp.spec_hash:
+def _require_lock(exp: ExperimentHandle, lock) -> None:
+    """The lock is this module's, for this experiment, and agrees with the registration: its lookback is a declared
+    variant, it tried every declared variant (the census of the frozen grid), and its choice is the declared rule's
+    on the in-sample metrics it records (S17 C1)."""
+    if type(lock) is not SelectionLock or not _sealed(lock) or lock.spec_hash != exp.spec_hash:
         raise RegistrationError("no selection lock issued for this experiment: the holdout stays untouched")
+    grid = [e[0] for e in exp.executables]
+    if isinstance(lock.chosen_lookback, bool) or lock.chosen_lookback not in grid:
+        raise RegistrationError("the locked lookback is not a declared variant of the registered grid")
+    if isinstance(lock.variants_tried, bool) or lock.variants_tried != len(grid):
+        raise RegistrationError(f"the lock's variant count ({lock.variants_tried}) disagrees with the registered "
+                                f"grid ({len(grid)} variants)")
+    try:
+        rows = {int(k): v for k, v in json.loads(lock.in_sample).items()}
+    except (TypeError, ValueError, AttributeError):
+        raise RegistrationError("the lock's in-sample record is malformed") from None
+    if sorted(rows) != sorted(grid) or any(not isinstance(v, dict) for v in rows.values()):
+        raise RegistrationError("the lock's in-sample record is not one row per registered variant")
+    if _choose(grid, rows) != lock.chosen_lookback:
+        raise RegistrationError("the locked lookback is not the declared selection rule's choice")
+
+
+def _designated_window(exp: ExperimentHandle, manifest: dict, h: dict, lookback: int) -> str:
+    xh = next(e[2] for e in exp.executables if e[0] == lookback)
+    ids = {d.get("window") for d in manifest.get("designated_evaluations") or ()
+           if isinstance(d, dict) and d.get("executable") == xh and d.get("domain") == h["domain"]}
+    if len(ids) != 1 or not isinstance(next(iter(ids)), str):
+        raise RegistrationError("the frozen manifest names no designated holdout evaluation of this variant in "
+                                f"{h['domain']} (freeze.prepare reserve_window_ids): the holdout stays untouched")
+    return ids.pop()
+
+
+def _previous_look(ledger, batch: str, hypothesis: str, window_id: str) -> str | None:
+    for r in ledger.records("evaluation_started"):
+        p = r.get("payload") or {}
+        if p.get("batch") == batch and p.get("hypothesis") == hypothesis and \
+                isinstance(p.get("window"), dict) and p["window"].get("id") == window_id:
+            return r.get("hash")
+    return None
+
+
+def _register_look(exp, h, manifest, lock, world, cfg, *, ledger, fence, code_version):
+    """Record the holdout's one look in the persistent ledger (``access.register_evaluation``) before any read.
+
+    The look is a **designated** reserve-role engine evaluation of the frozen batch, keyed by (batch, experiment
+    spec, holdout window): the window is the one the manifest designates for the locked variant in the spec's
+    domain, with the spec's holdout dates. ``access`` re-derives the role from the fence: the holdout must lie in an
+    enabled reserve window of that domain, so with main's configuration (reserve off, no windows) every real holdout
+    is refused. A second look is refused if the ledger holds any start of this (batch, spec, window), and by
+    ``access``'s one designated reserve evaluation per (batch, domain) (D-6, D-13: never released)."""
+    from manhattan import access, roles
+    from manhattan import ledger as L
+
+    from .synthetic import provenance
+    if not isinstance(ledger, L.Ledger) or isinstance(ledger, L.PublicIndex):
+        raise RegistrationError("a holdout look is recorded in the persistent Manhattan ledger before it is read; "
+                                "no ledger was given, so the holdout stays untouched")
+    hs, he = (h["windows"][k] for k in ("holdout_start", "holdout_end"))
+    window_id = _designated_window(exp, manifest, h, lock.chosen_lookback)
+    hypothesis = f"AH-{exp.spec_hash[:16]}"
+    prior = _previous_look(ledger, exp.batch, hypothesis, window_id)
+    if prior is not None:
+        raise RegistrationError(f"the holdout of this registration was already read (ledger attempt {prior[:16]}): "
+                                "one look only")
+    data_hash = provenance(world)
+    if data_hash is None:
+        raise RegistrationError("dormant: an admitted experiment runs only on a synthetic world")
+    if not isinstance(code_version, dict):
+        raise RegistrationError("a holdout look records the code identity it runs with (code_version: the Git "
+                                "commit and a content digest, as engine.evaluate.code_version() returns)")
+    window = {"id": window_id, "start": hs, "end": he, "frequency": "daily"}
+    identity = {**attempt_identity(exp, lock.chosen_lookback, data_hash=data_hash, window=window,
+                                   code_version=code_version),
+                "role": roles.RESERVE, "designated": True}
+    token = roles.RunnerToken(exp.batch, exp.manifest_hash, True,
+                              frozenset((d["domain"], d["window"]) for d in manifest.get("designated_evaluations") or ()
+                                        if isinstance(d, dict) and isinstance(d.get("domain"), str)
+                                        and isinstance(d.get("window"), str)),
+                              frozenset(manifest.get("spec_hashes", ())))
+    declared = {"id": window_id, "domain": h["domain"], "start": hs, "end": he, "role": roles.RESERVE,
+                "purpose": "evaluation", "data_hash": data_hash}
+    try:
+        ctx = access.register_evaluation(ledger, identity=identity, windows=[declared], caller=roles.RUNNER,
+                                         fence=fence, holding=int(cfg.rebalance_every), token=token)
+    except (roles.RoleError, L.LedgerError) as exc:          # access.AccessError is a roles.RoleError
+        raise RegistrationError(f"the holdout look is not authorized: {exc}") from None
+    return ctx
+
+
+def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: EquityCostModel, *, ledger=None,
+                fence=None, code_version: dict | None = None) -> dict:
+    """The locked variant on the holdout, once per (batch, spec, holdout window), recorded in ``ledger`` first.
+
+    ``ledger``: the persistent Manhattan ``ledger.Ledger`` the look is recorded in; there is no default (none:
+    refused). ``fence``: ``None`` uses the authoritative configuration verified against the code's commit
+    (``access.verified_fence``, D-12); main's has the reserve off and no windows, so a real holdout is refused. Tests
+    pass a synthetic ``roles.Fence`` and a ledger in a temporary directory. ``code_version``: the attempt's code
+    identity (``engine.evaluate.code_version()``); required, none: refused.
+
+    The look's start record is durable before any holdout value is computed, and it consumes the designation
+    whatever happens next (D-13). It is not completed in the ledger: a completion needs ``engine.evaluate``'s proof
+    from a PIT read, and the equities pipeline reads a synthetic world, not a PIT store (stated in the result)."""
+    from .synthetic import is_synthetic
+    from .track_compare import LABEL, _sleeve, metrics, replace
+    h, manifest = _require(exp, with_manifest=True)
+    _require_costs(h, cost_model)
+    _require_lock(exp, lock)
     if not is_synthetic(world) or EXECUTION_ON_REAL_DATA:
         raise RegistrationError("dormant: an admitted experiment runs only on a synthetic world")
-    if exp.spec_hash in _HOLDOUT_READ:
-        raise RegistrationError("the holdout of this registration was already read: one look only")
-    _HOLDOUT_READ.add(exp.spec_hash)
     cfg = _config(h)
+    ctx = _register_look(exp, h, manifest, lock, world, cfg, ledger=ledger, fence=fence, code_version=code_version)
     hs, he = (date.fromisoformat(h["windows"][k]) for k in ("holdout_start", "holdout_end"))
-    sl = run_sleeve(world, cfg, cost_model, {exp.track: lock.chosen_lookback}, name="holdout", end=he)
-    bench = run_sleeve(world, replace(cfg, top_fraction=1.0), cost_model, {exp.track: lock.chosen_lookback},
-                       name="holdout-benchmark", end=he)
+    sl = _sleeve(world, cfg, cost_model, {exp.track: lock.chosen_lookback}, name="holdout", end=he)
+    bench = _sleeve(world, replace(cfg, top_fraction=1.0), cost_model, {exp.track: lock.chosen_lookback},
+                    name="holdout-benchmark", end=he)
     keep = [i for i, d in enumerate(sl.days) if hs <= d <= he]
     net, bnet = sl.net[keep], bench.net[keep]
     m, ex = metrics(net), metrics(net - bnet)
@@ -348,7 +505,10 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
             and ops[c["op"]](values[c["metric"]], float(c["value"]))]
     return {**LABEL, "spec_hash": exp.spec_hash, "batch": exp.batch, "track": exp.track,
             "catalogue_id": exp.catalogue_id, "chosen_lookback": lock.chosen_lookback,
-            "holdout": {"start": hs.isoformat(), "end": he.isoformat(), "days": len(keep)},
+            "holdout": {"start": hs.isoformat(), "end": he.isoformat(), "days": len(keep),
+                        "window_id": ctx.evaluation_window.id},
+            "ledger": {"attempt_id": ctx.attempt_id, "recorded": "designated reserve start (evaluation_started)",
+                       "completion": "not recorded: no PIT read, so no engine.evaluate completion proof"},
             "metrics": m, "excess_over_benchmark": ex, "rejected": bool(hits), "criteria_met": hits}
 
 

@@ -8,15 +8,30 @@ manifest hash an **external timestamp**. Only then may a designated evaluation s
 Under CLAUDE.md hard rule 4 a freeze is a pre-registration and is Ethan's (``freeze.authority: ethan_only``):
 an agent **prepares** a batch (``prepare``), Ethan reviews, merges, tags and timestamps. ``authorise`` refuses an
 agent's freeze. ``verify_frozen`` is the runner's check before any designated evaluation, and it refuses a batch
-whose tag is missing or unsigned, whose manifest or specs no longer match their hashes, or whose timestamp proof
-is missing.
+whose manifest or specs no longer match their hashes, whose timestamp proof does not **verify** against the manifest
+hash, or whose tag is missing, unsigned, signed by a key that is not pinned, or not on the frozen manifest.
+
+**Fail closed (S17 C2; PR-2).** Verification needs two things this module does not invent:
+
+- ``ALLOWED_FREEZE_SIGNERS``: the owner's signing-key fingerprint(s). It is **empty**, so every real freeze is
+  refused until Ethan adds his fingerprint in a reviewed change on main (``NO_PINNED_SIGNER`` names the action).
+- an OpenTimestamps verifier able to check the proof's Bitcoin attestation (``OpenTimestampsVerifier``). Only the
+  proof's structure and its digest are checked here; the attestation cannot be verified without a block-header
+  source, so the production verifier refuses (fail closed) rather than trust a file's existence.
+
+The signature and timestamp checks are not parameters of ``verify_frozen``: a caller cannot substitute them. Tests
+reach a deterministic fixture key and fixture proof through a test-only seam under ``tests/`` (a static
+test pins that no module under ``manhattan/`` references it or the private trust it swaps).
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from . import ledger as L
 from . import spec as S
@@ -25,6 +40,13 @@ MANIFEST = "manifest.json"
 TIMESTAMP_PROOF = "manifest.json.ots"
 TAG = "manhattan-batch-{n:04d}"
 CHANNELS = S.CHANNELS
+
+# The owner's signing-key fingerprints (GPG primary-key fingerprint, 40 upper-case hex, or an SSH "SHA256:..." key
+# fingerprint). EMPTY in production: no key is pinned, so every real batch freeze is refused (owner action below).
+ALLOWED_FREEZE_SIGNERS: frozenset = frozenset()
+NO_PINNED_SIGNER = ("no owner signing key is pinned (manhattan.freeze.ALLOWED_FREEZE_SIGNERS is empty), so every "
+                    "batch freeze is refused. Owner action: Ethan adds his signing-key fingerprint to "
+                    "ALLOWED_FREEZE_SIGNERS in a reviewed change on main")
 
 
 class FreezeError(RuntimeError):
@@ -115,17 +137,92 @@ def authorise(actor: str, config: dict) -> None:
         raise FreezeError("a delegated freeze is the runner's, and the signed tag is still Ethan's")
 
 
-def git_tag_is_signed(tag: str, root: Path) -> bool:
-    """True when ``git verify-tag`` accepts the tag (a lightweight or unsigned tag does not pass)."""
+# ---------------------------------------------------------------- verification (S17 C2)
+
+OTS_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
+OTS_SHA256 = 0x08
+
+
+class OpenTimestampsVerifier:
+    """The production timestamp verifier: ``verify(proof, digest)`` returns only if ``proof`` is an OpenTimestamps
+    proof of ``digest`` (the manifest's SHA-256) with a verified Bitcoin attestation, and raises ``FreezeError``
+    otherwise.
+
+    The detached-proof header is parsed here (magic, major version 1, SHA-256 file-hash operation, digest), so a
+    file that is not a proof, or a proof of another file, is refused with its reason. Verifying the attestation
+    needs an OpenTimestamps verifier with a Bitcoin block-header source; none is configured (no network client is
+    installed or called), so every proof is then **refused**: fail closed, never accepted for existing."""
+
+    def verify(self, proof: bytes, digest: bytes) -> None:
+        if not isinstance(proof, (bytes, bytearray)) or not proof.startswith(OTS_MAGIC):
+            raise FreezeError("the timestamp proof is not an OpenTimestamps proof")
+        rest = bytes(proof[len(OTS_MAGIC):])
+        if len(rest) < 2 + 32 or rest[0] != 0x01 or rest[1] != OTS_SHA256:
+            raise FreezeError("the timestamp proof is not a version-1 OpenTimestamps proof of a SHA-256 file hash")
+        if rest[2:34] != digest:
+            raise FreezeError("the timestamp proof is for another file than this manifest")
+        raise FreezeError("the timestamp proof's Bitcoin attestation cannot be verified: no OpenTimestamps verifier "
+                          "with a block-header source is configured (fail closed). Owner action: provide one")
+
+
+def _git(args: list, root: Path) -> subprocess.CompletedProcess | None:
     try:
-        return subprocess.run(["git", "verify-tag", tag], cwd=root, capture_output=True).returncode == 0
-    except OSError:
-        return False
+        return subprocess.run(["git", *args], cwd=root, capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
-def verify_frozen(directory: Path, number: int, *, expected_manifest_hash: str | None = None, root: Path | None = None,
-                  tag_is_signed=git_tag_is_signed) -> dict:
-    """The runner's check before a designated evaluation: returns the manifest or raises ``FreezeError``."""
+_GPG_VALIDSIG = re.compile(r"^\[GNUPG:\] VALIDSIG (?:\S+ ){9}([0-9A-F]{40})\s*$", re.M)
+_SSH_GOOD = re.compile(r'^Good "git" signature for \S+ with \S+ key (SHA256:[A-Za-z0-9+/=]+)\s*$', re.M)
+
+
+def git_tag_signer(tag: str, root: Path, manifest_path: Path, raw: bytes) -> str | None:
+    """The fingerprint of the key whose good signature ``git verify-tag`` accepts on ``tag``, provided the tagged
+    commit holds exactly this manifest; ``None`` otherwise (no tag, a lightweight or unsigned tag, a bad signature,
+    another manifest at the tag). GPG: the primary-key fingerprint of ``VALIDSIG``; SSH: the key's SHA256
+    fingerprint. Whether that key is the owner's is decided by the pin, not here."""
+    root = Path(root).resolve()
+    v = _git(["verify-tag", "--raw", tag], root)
+    if v is None or v.returncode != 0:
+        return None
+    out = (v.stderr or b"").decode("utf-8", "replace") + (v.stdout or b"").decode("utf-8", "replace")
+    found = _GPG_VALIDSIG.findall(out) + _SSH_GOOD.findall(out)
+    if len(set(found)) != 1:
+        return None
+    try:
+        rel = Path(manifest_path).resolve().relative_to(root).as_posix()
+    except ValueError:
+        return None
+    shown = _git(["show", f"{tag}^{{commit}}:{rel}"], root)
+    if shown is None or shown.returncode != 0 or shown.stdout != raw:
+        return None
+    return found[0]
+
+
+@dataclass(frozen=True)
+class _Trust:
+    """What ``verify_frozen`` trusts: the pinned signers, the tag-signature check and the timestamp verifier."""
+    signers: frozenset
+    tag_signer: Callable
+    timestamp: object
+
+
+_PRODUCTION = _Trust(frozenset(ALLOWED_FREEZE_SIGNERS), git_tag_signer, OpenTimestampsVerifier())
+_TRUST = _PRODUCTION          # swapped only by the test-only seam under tests/ (pinned by a static test)
+
+
+def verify_frozen(directory: Path, number: int, *, expected_manifest_hash: str | None = None,
+                  root: Path | None = None) -> dict:
+    """The runner's check before a designated evaluation: returns the manifest or raises ``FreezeError``.
+
+    Internal consistency (canonical manifest, recorded hash, every spec, Merkle root), then the pin (an empty
+    ``ALLOWED_FREEZE_SIGNERS`` refuses every batch), then the timestamp proof **verified** against the manifest's
+    SHA-256, then the tag: signed, by a pinned key, on a commit holding this manifest. ``root``: the repository
+    holding the tag (default ``directory``)."""
+    return _verify(Path(directory), number, expected_manifest_hash, root, _TRUST)
+
+
+def _verify(directory: Path, number: int, expected_manifest_hash: str | None, root, trust: _Trust) -> dict:
     d = directory / f"AB-{number:04d}"
     path = d / MANIFEST
     if not path.is_file():
@@ -150,8 +247,20 @@ def verify_frozen(directory: Path, number: int, *, expected_manifest_hash: str |
         hashes.append(want)
     if L.merkle_root(hashes) != manifest["merkle_root"]:
         raise FreezeError(f"batch {number}: the Merkle root does not match the specs")
-    if not (d / TIMESTAMP_PROOF).is_file():
+    if not trust.signers:
+        raise FreezeError(f"batch {number}: {NO_PINNED_SIGNER}")
+    proof = d / TIMESTAMP_PROOF
+    if not proof.is_file():
         raise FreezeError(f"batch {number}: no external timestamp proof ({TIMESTAMP_PROOF})")
-    if not tag_is_signed(TAG.format(n=number), root or directory):
-        raise FreezeError(f"batch {number}: the tag {TAG.format(n=number)} is missing or not signed")
+    try:
+        trust.timestamp.verify(proof.read_bytes(), hashlib.sha256(raw).digest())
+    except FreezeError as e:
+        raise FreezeError(f"batch {number}: {e}") from None
+    tag = TAG.format(n=number)
+    signer = trust.tag_signer(tag, Path(root) if root is not None else directory, path, raw)
+    if not signer:
+        raise FreezeError(f"batch {number}: the tag {tag} is missing or not signed, or does not hold this manifest")
+    if signer not in trust.signers:
+        raise FreezeError(f"batch {number}: the tag {tag} is signed by {signer}, which is not a pinned owner key "
+                          "(ALLOWED_FREEZE_SIGNERS)")
     return manifest

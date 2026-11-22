@@ -433,39 +433,46 @@ def test_an_agent_prepares_and_only_ethan_freezes():
 
 
 def test_runner_refuses_an_unsigned_changed_or_untimestamped_batch(tmp_path):
+    # the signature and timestamp checks are not parameters of verify_frozen (S17 C2): the fixture key and fixture
+    # proof come from the test-only seam (tests/manhattan_freeze_seam.py; tests/test_manhattan_freeze_verification.py)
+    import manhattan_freeze_seam as seam
     b = batch()
     d = freeze.write(b, tmp_path)
-    signed, unsigned = (lambda tag, root: tag == "manhattan-batch-0001"), (lambda tag, root: False)
-    with pytest.raises(freeze.FreezeError, match="no external timestamp proof"):
-        freeze.verify_frozen(tmp_path, 1, tag_is_signed=signed)
-    (d / freeze.TIMESTAMP_PROOF).write_bytes(b"proof")
-    with pytest.raises(freeze.FreezeError, match="missing or not signed"):
-        freeze.verify_frozen(tmp_path, 1, tag_is_signed=unsigned)
-    with pytest.raises(freeze.FreezeError, match="missing or not signed"):
-        freeze.verify_frozen(tmp_path, 1, root=tmp_path)                       # real git: there is no such tag
-    assert freeze.verify_frozen(tmp_path, 1, expected_manifest_hash=b.manifest_hash, tag_is_signed=signed) == \
-        json.loads(S.canonical_bytes(b.manifest))
-    with pytest.raises(freeze.FreezeError, match="does not match the hash recorded"):
-        freeze.verify_frozen(tmp_path, 1, expected_manifest_hash="00" * 32, tag_is_signed=signed)
-    with pytest.raises(freeze.FreezeError, match="no manifest"):
-        freeze.verify_frozen(tmp_path, 2, tag_is_signed=signed)
-    spec_file = sorted((d / "specs").glob("AF-*.json"))[0]
-    original = spec_file.read_bytes()
-    spec_file.write_bytes(original.replace(b"importers", b"exporters"))        # a spec edited after the freeze
-    with pytest.raises(freeze.FreezeError, match="does not match its content"):
-        freeze.verify_frozen(tmp_path, 1, tag_is_signed=signed)
-    spec_file.unlink()
-    with pytest.raises(freeze.FreezeError, match="missing"):
-        freeze.verify_frozen(tmp_path, 1, tag_is_signed=signed)
-    spec_file.write_bytes(original)
-    m = json.loads((d / freeze.MANIFEST).read_text())
-    m["designated_evaluations"] = []                                            # the manifest edited after the freeze
-    (d / freeze.MANIFEST).write_bytes(S.canonical_bytes(m))
-    with pytest.raises(freeze.FreezeError, match="does not match the hash recorded"):
-        freeze.verify_frozen(tmp_path, 1, expected_manifest_hash=b.manifest_hash, tag_is_signed=signed)
-    (d / freeze.MANIFEST).write_text(json.dumps(b.manifest, indent=1))
-    with pytest.raises(freeze.FreezeError, match="not in canonical form"):
-        freeze.verify_frozen(tmp_path, 1, tag_is_signed=signed)
+    with pytest.raises(freeze.FreezeError, match="ALLOWED_FREEZE_SIGNERS is empty"):
+        freeze.verify_frozen(tmp_path, 1, root=tmp_path)                       # production: no owner key is pinned
+    with seam.trust():
+        with pytest.raises(freeze.FreezeError, match="no external timestamp proof"):
+            freeze.verify_frozen(tmp_path, 1)
+        (d / freeze.TIMESTAMP_PROOF).write_bytes(b"proof")
+        with pytest.raises(freeze.FreezeError, match="does not verify"):
+            freeze.verify_frozen(tmp_path, 1)
+        seam.stamp(tmp_path, 1)
+        with pytest.raises(freeze.FreezeError, match="missing or not signed"):
+            freeze.verify_frozen(tmp_path, 1)                                   # no signature at all
+        seam.sign(tmp_path, 1)
+        assert freeze.verify_frozen(tmp_path, 1, expected_manifest_hash=b.manifest_hash) == \
+            json.loads(S.canonical_bytes(b.manifest))
+        with pytest.raises(freeze.FreezeError, match="does not match the hash recorded"):
+            freeze.verify_frozen(tmp_path, 1, expected_manifest_hash="00" * 32)
+        with pytest.raises(freeze.FreezeError, match="no manifest"):
+            freeze.verify_frozen(tmp_path, 2)
+        spec_file = sorted((d / "specs").glob("AF-*.json"))[0]
+        original = spec_file.read_bytes()
+        spec_file.write_bytes(original.replace(b"importers", b"exporters"))    # a spec edited after the freeze
+        with pytest.raises(freeze.FreezeError, match="does not match its content"):
+            freeze.verify_frozen(tmp_path, 1)
+        spec_file.unlink()
+        with pytest.raises(freeze.FreezeError, match="missing"):
+            freeze.verify_frozen(tmp_path, 1)
+        spec_file.write_bytes(original)
+        m = json.loads((d / freeze.MANIFEST).read_text())
+        m["designated_evaluations"] = []                                        # the manifest edited after the freeze
+        (d / freeze.MANIFEST).write_bytes(S.canonical_bytes(m))
+        with pytest.raises(freeze.FreezeError, match="does not match the hash recorded"):
+            freeze.verify_frozen(tmp_path, 1, expected_manifest_hash=b.manifest_hash)
+        (d / freeze.MANIFEST).write_text(json.dumps(b.manifest, indent=1))
+        with pytest.raises(freeze.FreezeError, match="not in canonical form"):
+            freeze.verify_frozen(tmp_path, 1)
 
 
 # ------------------------------------------------------------------ D-09 generator templates

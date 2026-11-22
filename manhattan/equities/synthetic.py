@@ -8,6 +8,9 @@ resembles or is calibrated to market data. Every generator takes a seed and retu
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import sys
 import weakref
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -15,26 +18,54 @@ from datetime import date, datetime, time, timedelta
 import numpy as np
 
 from .costs import BorrowBook, BorrowRecord
+from .errors import EquityDataError
 from .fundamentals import Fact, FundamentalStore
 from .identity import Company, LifecycleEvent, Security, SecurityMaster, TickerInterval
 from .prices import Bar, CorporateAction, DelistingReturn, PriceBook, ShareCount
 from .sessions import MarketCalendar
 from .universe import Classification, ClassificationHistory
 
-_SYNTHETIC: dict = {}            # id -> weak reference: worlds made by this package's generators
+_SYNTHETIC: dict = {}            # id -> (weak reference, provenance hash): worlds made by this package's generators
+_GENERATORS = ("manhattan.equities.synthetic", "manhattan.equities.sector_synthetic")
+
+
+def _provenance(frame) -> str:
+    """SHA-256 of the generator (module and function) and the arguments it was called with."""
+    code = frame.f_code
+    names = code.co_varnames[:code.co_argcount + code.co_kwonlyargcount]
+    desc = {"generator": f"{frame.f_globals.get('__name__')}.{code.co_name}",
+            "arguments": {n: repr(frame.f_locals.get(n)) for n in names}}
+    return hashlib.sha256(json.dumps(desc, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _register(world, *, provenance: str):
+    _SYNTHETIC[id(world)] = (weakref.ref(world), provenance)
+    return world
 
 
 def mark_synthetic(world):
-    """Record a world built by one of this package's synthetic generators (and nothing else)."""
-    _SYNTHETIC[id(world)] = weakref.ref(world)
-    return world
+    """Record a world returned by one of this package's synthetic generators, and nothing else (S17 C1).
+
+    Callable only from a generator module of this package (``_GENERATORS``): any other caller is refused, so no
+    production code can mark an arbitrary object synthetic. The record keeps the world's provenance hash (generator
+    and arguments), which is the data identity a registered holdout look declares."""
+    caller = sys._getframe(1)
+    if caller.f_globals.get("__name__") not in _GENERATORS:
+        raise EquityDataError("only this package's synthetic generators mark a world synthetic")
+    return _register(world, provenance=_provenance(caller))
 
 
 def is_synthetic(world) -> bool:
     """True only for a world a synthetic generator here returned. Research entry points that run a portfolio rule
     or a registered experiment require it: nothing in the equities package runs on market data (issue #102)."""
-    ref = _SYNTHETIC.get(id(world))
-    return ref is not None and ref() is world
+    e = _SYNTHETIC.get(id(world))
+    return e is not None and e[0]() is world
+
+
+def provenance(world) -> str | None:
+    """The provenance hash of a synthetic world (``None`` for anything else)."""
+    e = _SYNTHETIC.get(id(world))
+    return e[1] if e is not None and e[0]() is world else None
 
 
 HOLIDAYS = (date(2005, 1, 17), date(2005, 7, 4), date(2005, 12, 26), date(2006, 7, 4), date(2006, 12, 25),

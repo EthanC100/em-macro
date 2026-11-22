@@ -143,16 +143,36 @@ def _require_synthetic(world) -> None:
                               "pre-registered experiment (registration.admit), and real-data execution is off")
 
 
-def run_sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
-               end: date | None = None) -> Sleeve:
-    """One costed book. ``lookbacks``: {track: lookback}. With one track, a track-only sleeve; with both, the combined
-    book, in which each track has an equal share of capital. ``end``: ignore every session after it (truncation)."""
+def _check_sleeve_args(world, cost_model, lookbacks) -> None:
     _require_synthetic(world)
     if not isinstance(cost_model, EquityCostModel):
         raise EquityDataError("a cost model with a stated reference is required (no default)")
     for t in lookbacks:
         if t not in EQUITY_TRACKS:
             raise EquityDataError(f"{t!r} is not an equity research track")
+
+
+def run_sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
+               end: date | None = None) -> Sleeve:
+    """One costed book over the **selection window only**. ``lookbacks``: {track: lookback}. With one track, a
+    track-only sleeve; with both, the combined book, in which each track has an equal share of capital. ``end``:
+    ignore every session after it (truncation); it is required and must be on or before ``cfg.is_end``.
+
+    A window past ``cfg.is_end`` is a holdout: it is read once, for the locked variant of an admitted experiment,
+    through ``registration.run_holdout`` (which records the look in the persistent ledger first), never directly
+    here (S17 C1)."""
+    _check_sleeve_args(world, cost_model, lookbacks)
+    if end is None or end > cfg.is_end:
+        raise EquityDataError("run_sleeve reads the selection window only (end on or before cfg.is_end): a holdout "
+                              "is read once, through registration.run_holdout")
+    return _sleeve(world, cfg, cost_model, lookbacks, name=name, end=end)
+
+
+def _sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
+            end: date | None = None) -> Sleeve:
+    """``run_sleeve`` without the selection-window check: ``compare`` (the declared infrastructure report) and the
+    registration gate's holdout only (a static test pins its callers)."""
+    _check_sleeve_args(world, cost_model, lookbacks)
     days = list(world.days) if end is None else [d for d in world.days if d <= end]
     n = len(days)
     builders = {t: UniverseBuilder(world.master, world.prices, world.classes, track_rules(t)) for t in lookbacks}
@@ -241,7 +261,7 @@ def compare(world, cfg: CompareConfig, cost_model: EquityCostModel, *, end: date
     for t in tracks:
         rows = []
         for lb in cfg.lookbacks:
-            sl = run_sleeve(world, cfg, cost_model, {t: lb}, name=f"{t}:{lb}", end=end)
+            sl = _sleeve(world, cfg, cost_model, {t: lb}, name=f"{t}:{lb}", end=end)
             ins, oos, _, oos_net, oos_days = _split(sl, cfg.is_end)
             rows.append({"lookback": lb, "in_sample": ins, "_oos": oos, "_oos_net": oos_net, "_oos_days": oos_days,
                          "decisions": len(sl.decisions), "unfilled": len(sl.unfilled)})
@@ -257,14 +277,14 @@ def compare(world, cfg: CompareConfig, cost_model: EquityCostModel, *, end: date
     # earn the market; only the excess over their own universe speaks to the signal
     bench_cfg = replace(cfg, top_fraction=1.0)
     for t in tracks:
-        b = run_sleeve(world, bench_cfg, cost_model, {t: cfg.lookbacks[0]}, name=f"{t}:equal_weight", end=end)
+        b = _sleeve(world, bench_cfg, cost_model, {t: cfg.lookbacks[0]}, name=f"{t}:equal_weight", end=end)
         bins, boos, _, b_oos, b_days = _split(b, cfg.is_end)
         days_t, net_t = oos_series[t]
         if list(b_days) != list(days_t):
             raise EquityDataError(f"{t}: benchmark and sleeve out-of-sample days differ")
         variants[t]["benchmark_equal_weight"] = {"in_sample": bins, "out_of_sample": boos}
         variants[t]["out_of_sample_excess_over_benchmark"] = metrics(net_t - b_oos)
-    comb = run_sleeve(world, cfg, cost_model, dict(chosen), name="combined_equities", end=end)
+    comb = _sleeve(world, cfg, cost_model, dict(chosen), name="combined_equities", end=end)
     cins, coos, _, comb_oos, comb_days = _split(comb, cfg.is_end)
     (dt, nt), (dn, nn) = oos_series[TECHNOLOGY_TRACK], oos_series[NON_TECHNOLOGY_TRACK]
     if list(dt) != list(dn):
