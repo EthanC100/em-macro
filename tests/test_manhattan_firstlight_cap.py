@@ -162,6 +162,21 @@ def test_only_calendar_days_are_accepted_for_loads(periods):
         cap.CappedStore(synthetic=True).add(SERIES, periods, [1.0], lag_days=0)
 
 
+@pytest.mark.parametrize("unit", ["2D", "3D", "7D"])
+@pytest.mark.parametrize("which", ["periods", "available"])
+def test_multi_day_units_are_refused_because_they_quantize_dates_across_the_cap(unit, which):
+    """Review of PR #107: datetime64[3D] holding 2020-01-02 is the 2019-12-31 bucket; it must not load."""
+    late = np.array(["2020-01-02"], dtype=f"datetime64[{unit}]")
+    ok = np.array(["2019-12-02"], dtype="datetime64[D]")
+    c = cap.CappedStore(synthetic=True)
+    with pytest.raises(cap.CapError):
+        if which == "periods":
+            c.add(SERIES, late, [42.0], lag_days=0)
+        else:
+            c.add(SERIES, ok, [42.0], available=late)
+    assert c.store.names() == []
+
+
 @pytest.mark.parametrize("lag", [-1, 1.5, True, None])
 def test_bad_publication_lags_are_refused(lag):
     kw = {"lag_days": lag} if lag is not None else {}

@@ -52,7 +52,7 @@ def as_day(value, what: str) -> date:
 def _days(values, what: str) -> np.ndarray:
     """Calendar days as ``datetime64[D]``: from ``date`` objects or a ``datetime64[D]`` array, nothing else."""
     if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-        if np.datetime_data(values.dtype)[0] != "D":
+        if np.datetime_data(values.dtype) != ("D", 1):          # [3D] etc. would quantize 2020 days onto 2019
             raise CapError(f"{what} must be whole days (datetime64[D]), not {values.dtype}")
         out = values.astype("datetime64[D]")
     else:
