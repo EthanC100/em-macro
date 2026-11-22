@@ -422,6 +422,116 @@ def test_recover_torn_tail_waits_for_the_writer_lock(tmp_path):
     assert result["status"] == "torn_tail_quarantined" and L.verify(path) == []
 
 
+def test_an_unsupported_full_fsync_does_not_fail_a_written_append(tmp_path, monkeypatch):
+    """``F_FULLFSYNC`` runs after the line is written and ``fsync``ed. Where it is not supported (ENOTSUP) the append
+    has succeeded: reporting it as failed would poison the handle and invite a duplicate registration on retry."""
+    real_fcntl = fcntl.fcntl
+
+    def unsupported(fd, cmd, *a):
+        if cmd == 51:
+            raise OSError(errno.ENOTSUP, "Operation not supported")
+        return real_fcntl(fd, cmd, *a)
+
+    monkeypatch.setattr(L, "_FULLFSYNC", 51)
+    monkeypatch.setattr(fcntl, "fcntl", unsupported)
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    first = book.append("screening_decision", {"i": 0})
+    second = book.append("screening_decision", {"i": 1})          # the handle is still usable
+    assert (first["seq"], second["seq"]) == (1, 2)
+    assert L.verify(path) == [] and _book(path).records() == book.records()
+
+
+# ------------------------------------------------------------------------------------------------ framing
+
+def _framed(path, how: str) -> None:
+    """Re-frame a valid three-record file; every record line itself stays canonical."""
+    raw = path.read_bytes()
+    first = raw.index(b"\n")
+    if how == "crlf":
+        raw = raw.replace(b"\n", b"\r\n")
+    elif how == "crlf_one_line":
+        raw = raw[:first] + b"\r" + raw[first:]
+    elif how == "cr_as_terminator":
+        raw = raw[:first] + b"\r" + raw[first + 1:]
+    elif how in ("ff", "fs", "gs", "rs", "nel", "vt"):
+        ch = {"ff": "\x0c", "fs": "\x1c", "gs": "\x1d", "rs": "\x1e", "nel": "\x85", "vt": "\x0b"}[how]
+        raw = raw[:-1] + ch.encode() + b"\n"                      # a trailing line break on the last line
+    elif how == "blank_line":
+        raw = raw[:first + 1] + b"\n" + raw[first + 1:]
+    elif how == "whitespace_line":
+        raw = raw[:first + 1] + b"  \t\n" + raw[first + 1:]
+    elif how == "trailing_blank_line":
+        raw = raw + b"\n"
+    elif how == "no_final_newline":
+        raw = raw[:-1]
+    else:
+        raise AssertionError(how)
+    path.write_bytes(raw)
+
+
+FRAMINGS = ["crlf", "crlf_one_line", "cr_as_terminator", "ff", "fs", "gs", "rs", "nel", "vt", "blank_line",
+            "whitespace_line", "trailing_blank_line", "no_final_newline"]
+
+
+@pytest.mark.parametrize("how", FRAMINGS)
+def test_the_file_must_be_exactly_canonical_lines_each_ending_in_a_newline(tmp_path, how):
+    """``str.splitlines`` accepted CRLF, other line breaks (``\\x0c``, ``\\x1c``-``\\x1e``, ``\\x85``, ...), blank
+    lines and a missing final newline; the hash sees none of them. Every reader now refuses them."""
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    for i in range(3):
+        book.append("screening_decision", {"i": i})
+    _framed(path, how)
+    errs = _refused_everywhere(path)
+    want = {"blank_line": "a blank line", "whitespace_line": "a blank line", "trailing_blank_line": "a blank line",
+            "no_final_newline": "no final newline"}.get(how, "another line break")
+    assert len(errs) == 1 and want in errs[0], errs
+    records, _ = L.verify_snapshot(path.read_bytes())
+    assert len(records) == 3                                      # the chain itself is intact: framing alone
+    if how in ("crlf", "ff", "fs", "gs", "rs", "nel", "vt", "trailing_blank_line", "no_final_newline"):
+        before = path.read_bytes()
+        with pytest.raises(L.LedgerError):
+            book.append("screening_decision", {"i": 3})          # the last line is checked byte for byte
+        assert path.read_bytes() == before
+    assert L.verify(path) == errs
+
+
+def test_many_framing_problems_are_summarized(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    for i in range(5):
+        book.append("screening_decision", {"i": i})
+    _framed(path, "crlf")
+    assert L.verify(path) == ["line 1: another line break in the line (a record line ends in \\n alone); "
+                              "and 4 more such line(s)"]
+
+
+# ------------------------------------------------------------------------------------------------ readers' lock
+
+@pytest.mark.parametrize("reader", ["Ledger", "PublicIndex", "verify", "read"])
+def test_readers_wait_for_a_writer_holding_the_lock(tmp_path, reader):
+    """``Ledger()``, ``verify`` and ``read`` take the shared lock (when the lock file exists), so they never read
+    while an append holds the exclusive lock (a half-written line)."""
+    path = tmp_path / "ledger.jsonl"
+    cls = L.PublicIndex if reader == "PublicIndex" else L.Ledger
+    _book(path, cls).append("screening_decision", {"i": 0})
+    call = {"Ledger": lambda: len(_book(path)), "PublicIndex": lambda: len(_book(path, L.PublicIndex)),
+            "verify": lambda: L.verify(path), "read": lambda: len(L.read(path))}[reader]
+    fd = os.open(L.lock_path(path), os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)                                # a writer is mid-append
+    result = []
+    t = threading.Thread(target=lambda: result.append(call()))
+    try:
+        t.start()
+        time.sleep(0.4)
+        assert result == []                                       # still waiting
+    finally:
+        os.close(fd)
+    t.join(10)
+    assert result == [[] if reader == "verify" else 1]
+
+
 # ------------------------------------------------------------------------------------------------ code identity
 
 # SHA-256 of every file of the simulation's code identities (manhattan/sim/run.py CODE_FILES, CODE_FILES_HB,

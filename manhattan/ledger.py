@@ -16,7 +16,8 @@ with a different ``data_hash``: a new ``evaluation`` flagged ``data_changed``, t
 staying the result of record.
 
 Integrity of the file itself (ledger integrity II, S17 C4 and C6). On every read, a record's keys are exactly
-``FIELDS`` and ``hash``, its line is ``record_line(record)`` byte for byte, and no JSON object in it repeats a key:
+``FIELDS`` and ``hash``, its line is ``record_line(record)`` byte for byte (the file is exactly those lines, each
+ending in ``"\\n"`` and nothing else), and no JSON object in it repeats a key:
 the hash covers only ``FIELDS``, so anything else on a line (an extra key, a repeated key, another spelling) would be
 data no hash protects. Appends are serialized across processes by an exclusive ``flock`` on the sidecar
 ``<ledger>.lock``; under it the file's last record must be this handle's head (a stale handle is refused and nothing
@@ -151,15 +152,40 @@ def forward_observation_weight(*, eligible: bool, registration_weight: int, reco
     return evidential_weight(channel, "forward", False, reconstructed)
 
 
+def _framing_problems(text: str) -> list[str]:
+    """Where a decoded ledger file is not exactly record lines each ending in ``"\\n"`` (lines counted by ``"\\n"``):
+    a blank or whitespace-only line, another line break (``"\\r"``, ``"\\x0c"``, ``"\\x1c"``, ``"\\x85"``, ...) in
+    or at the end of a line, a last line without its newline. ``str.splitlines`` alone would accept all of these.
+    The first problem is reported, with the number of further ones."""
+    found = []
+    segments = text.split("\n")
+    last = segments.pop()
+    for n, seg in enumerate(segments, 1):
+        if not seg.strip():
+            found.append(f"line {n}: a blank line (a ledger file holds record lines only)")
+        elif seg.splitlines() != [seg]:
+            found.append(f"line {n}: another line break in the line (a record line ends in \\n alone)")
+    if last:
+        found.append(f"line {len(segments) + 1}: no final newline (a torn write: recover_torn_tail)")
+    if len(found) > 1:
+        return [f"{found[0]}; and {len(found) - 1} more such line(s)"]
+    return found
+
+
 def read(path: Path) -> list[dict]:
-    """The records of a ledger file, not verified as a chain, but each line held to its record's canonical form: a
-    repeated JSON key, a key outside the hashed record or another spelling raises ``LedgerError``."""
+    """The records of a ledger file, not verified as a chain, but held to the file format: every line its record's
+    canonical form, ending in ``"\\n"`` alone. A repeated JSON key, a key outside the hashed record, another
+    spelling or another framing raises ``LedgerError``. Read under the shared lock when the lock file exists."""
+    path = Path(path)
     if not path.exists():
         return []
+    with _flocked(path, exclusive=False):
+        text = path.read_bytes().decode("utf-8")
+    framing = _framing_problems(text)
+    if framing:
+        raise LedgerError(framing[0])
     out = []
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
-            continue
+    for n, line in enumerate(text.split("\n")[:-1], 1):
         try:
             rec = json.loads(line, object_pairs_hook=_unique_pairs)
         except _DuplicateKey as e:
@@ -172,9 +198,12 @@ def read(path: Path) -> list[dict]:
 
 
 def verify(path: Path, anchor: str | None = None) -> list[str]:
-    """Problems found in a ledger file; preserve the legacy optional-anchor API."""
+    """Problems found in a ledger file; preserve the legacy optional-anchor API. The file is read under the shared
+    lock when the lock file exists, so a line being appended is never seen half-written."""
+    path = Path(path)
     try:
-        snapshot = path.read_bytes()
+        with _flocked(path, exclusive=False):
+            snapshot = path.read_bytes()
     except FileNotFoundError:
         snapshot = b""
     return verify_snapshot(snapshot, anchor=anchor)[1]
@@ -185,14 +214,19 @@ def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[di
 
     Callers must process these returned records, rather than reopen the file.
     ``verify`` retains its historic optional-anchor API.
+
+    Records are read from ``str.splitlines()`` lines and each problem is reported as before; when the chain is read
+    to its end, the bytes must also be exactly ``record_line(record) + "\\n"`` for each record in turn, so any other
+    framing (CRLF, blank lines, other line breaks, no final newline) is reported too (``_framing_problems``).
     """
     errs: list[str] = []
     prev = GENESIS
     recs = []
     try:
-        lines = snapshot.decode("utf-8").splitlines()
+        text = snapshot.decode("utf-8")
     except UnicodeDecodeError:
         return [], ["ledger is not UTF-8"]
+    lines = text.splitlines()
     for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
@@ -221,6 +255,7 @@ def verify_snapshot(snapshot: bytes, anchor: str | None = None) -> tuple[list[di
             if bad:
                 errs.append(f"record {rec['seq']}: {bad}")
         prev = rec["hash"]
+    errs += _framing_problems(text)
     if anchor is not None and prev != anchor:
         errs.append(f"head hash is {prev}, but the anchor says {anchor} (records are missing or the file was replaced)")
     return recs, errs
@@ -244,22 +279,24 @@ def iter_verified(lines):
     ``io.BytesIO(snapshot)``), checking the chain exactly as ``verify_snapshot`` does, one line at a time, so that
     nothing but the current record is held in memory.
 
-    It covers the regular case only: every line valid UTF-8, one record per ``\\n``-terminated line, every record
-    valid. At the first thing ``verify_snapshot`` would report or might split differently (invalid UTF-8, another
-    line boundary inside a line, JSON that does not parse, a sequence, chain, hash or type problem, an exception),
+    It covers the regular case only: every line valid UTF-8, exactly one record per ``\\n``-terminated line, every
+    record valid. At the first thing ``verify_snapshot`` would report or might split differently (invalid UTF-8,
+    another line break in a line, a blank line, no final newline, JSON that does not parse, a sequence, chain,
+    hash or type problem, an exception),
     it raises ``IrregularSnapshot`` and the caller answers from ``verify_snapshot`` on the same bytes. The fast path
     therefore never accepts what ``verify_snapshot`` refuses, and never reports a different problem. That includes
     the line checks: a repeated key, a key outside the hashed record, a line other than ``record_line(record)``."""
     prev, n = GENESIS, 0
     for raw in lines:
+        if not raw.endswith(b"\n"):
+            raise IrregularSnapshot                       # no final newline: a framing problem
         try:
-            pieces = raw.decode("utf-8").splitlines()
+            line = raw[:-1].decode("utf-8")
         except UnicodeDecodeError:
             raise IrregularSnapshot from None
-        if len(pieces) > 1:
-            raise IrregularSnapshot
-        if not pieces or not pieces[0].strip():
-            continue
+        if line.splitlines() != [line] or not line.strip():
+            raise IrregularSnapshot                       # another line break, or a blank line
+        pieces = [line]
         try:
             rec = json.loads(pieces[0], object_pairs_hook=_unique_pairs)
             n += 1
@@ -393,7 +430,11 @@ _FULLFSYNC = getattr(fcntl, "F_FULLFSYNC", None) if sys.platform == "darwin" els
 
 
 def lock_path(path: Path) -> Path:
-    """The sidecar file whose ``flock`` serializes the writers (and orders the readers) of a ledger file."""
+    """The sidecar file whose ``flock`` serializes the writers of a ledger file (``append``, ``recover_torn_tail``:
+    exclusive). The readers of this module (``Ledger()``, ``verify``, ``read``) take it shared when it exists, so
+    they never see a line half-written. ``verify_snapshot`` and ``iter_verified`` take bytes, not a path: a caller
+    that reads the file itself (``attempts.reconcile``, ``hte_accounting.crosscheck``) is not ordered against an
+    append and may meet a half-written last line, which it reports as a problem (it is never accepted)."""
     path = Path(path)
     return path.with_name(path.name + ".lock")
 
@@ -421,29 +462,27 @@ def _flocked(path: Path, *, exclusive: bool):
 def _last_hash(fd: int) -> str:
     """The ``hash`` of the last record in the open ledger file (``GENESIS`` when it holds none), read backwards from
     the end. A file that does not end with a newline ends in a partial line: refused, so that a new line is never
-    glued onto it (``recover_torn_tail`` is the recovery)."""
+    glued onto it (``recover_torn_tail`` is the recovery). The last line is the bytes between the last two
+    newlines, exactly as the readers frame it; a blank one is refused (such a file does not verify)."""
     size = os.fstat(fd).st_size
     if size == 0:
         return GENESIS
     if os.pread(fd, 1, size - 1) != b"\n":
         raise LedgerError("the ledger file ends in a partial line: run recover_torn_tail before appending")
-    pos, buf = size, b""
+    pos, buf = size - 1, b""                              # the final newline excluded
     while True:
         start = max(0, pos - 65536)
         buf, pos = os.pread(fd, pos - start, start) + buf, start
-        body = buf.rstrip()
-        cut = body.rfind(b"\n")
+        cut = buf.rfind(b"\n")
         if cut != -1 or pos == 0:
             break
-    last = body[cut + 1:]
-    if not last:
-        return GENESIS
+    last = buf[cut + 1:]
     try:
         rec = json.loads(last.decode("utf-8"))
         head = rec["hash"]
     except (UnicodeDecodeError, ValueError, TypeError, KeyError):
         raise LedgerError("the ledger file's last line is not a record: the file does not verify") from None
-    if not isinstance(head, str):
+    if not isinstance(head, str) or not isinstance(rec, dict) or record_line(rec).encode("utf-8") != last:
         raise LedgerError("the ledger file's last line is not a record: the file does not verify")
     return head
 
@@ -661,7 +700,11 @@ class Ledger:
                     _write_all(fd, data)
                     os.fsync(fd)
                     if _FULLFSYNC is not None:
-                        fcntl.fcntl(fd, _FULLFSYNC)
+                        try:
+                            fcntl.fcntl(fd, _FULLFSYNC)
+                        except OSError:
+                            pass                          # unsupported here (ENOTSUP, some file systems); fsync ran,
+                                                          # and the record is written: report the append, as SQLite does
                     if created:
                         _fsync_dir(self.path.parent)
                 except BaseException as e:

@@ -357,7 +357,8 @@ def test_corrupted_ledgers_are_refused_exactly_as_before(tmp_path, damage):
                                        "no_final_newline"])
 def test_irregular_files_take_the_reference_path(tmp_path, irregular):
     """Inputs the streaming fast path does not cover are answered by ``verify_snapshot`` on the same bytes: the
-    current ledger and reconciler accept exactly what the reference accepts, with the same records."""
+    current ledger and reconciler give the reference's answer, except that a framing other than one canonical line
+    per "\\n" is now refused (ledger integrity II)."""
     book = _book(tmp_path)
     ident = identity(5)
     a = _register(book, ident)
@@ -381,9 +382,19 @@ def test_irregular_files_take_the_reference_path(tmp_path, irregular):
         raw = raw.rstrip(b"\n")
     book.path.write_bytes(raw)
     got = _call(lambda: _book(tmp_path).records())
-    assert got == _call(lambda: RL.Ledger(book.path, writer="w", protocol=PROTOCOL).records())
-    assert _call(lambda: AT.reconcile(ledger_path=book.path, ledger_anchor=anchor)) == \
-        _call(lambda: RA.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    ref = _call(lambda: RL.Ledger(book.path, writer="w", protocol=PROTOCOL).records())
+    rec_got = _call(lambda: AT.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    rec_ref = _call(lambda: RA.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    if irregular in ("crlf", "blank_lines", "nbsp_line", "no_final_newline"):
+        # Ledger integrity II: the file must be exactly record_line(record) + "\n" per record, so these framings,
+        # which the reference (main) accepted through str.splitlines, are now refused and reported
+        assert ref[0] == "ok" and rec_ref[0] == "ok"
+        assert got[0] == "raise" and "does not verify" in got[2]
+        assert rec_got[0] == "raise" or rec_got[1]["violations"]
+        assert L.verify(book.path)
+        return
+    assert got == ref
+    assert rec_got == rec_ref
 
 
 @pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])

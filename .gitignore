@@ -238,3 +238,4 @@ results/manhattan_sim/heartbeat.json
 results/manhattan_sim/heartbeat.json.tmp
 results/manhattan_sim/.run.lock/
 results/manhattan_sim/logs/
+*.jsonl.lock
