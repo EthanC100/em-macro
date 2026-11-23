@@ -1,13 +1,16 @@
 {
  "schema": 1,
- "lock": null,
- "night": "2026-11-22",
+ "lock": {
+  "routine": "night-worker",
+  "acquired_at": "2026-11-23T23:36:20+08:00",
+  "session": "https://claude.ai/code/session_01Ayx8qe4sLREmiVZWwSpZYb",
+  "cap": 4,
+  "safe_mode": true
+ },
+ "night": "2026-11-23",
  "runs_used": 0,
  "last_kind": null,
- "chain_stopped": {
-  "reason": "night-worker: approved queue empty, explorer done (guard next = stop)",
-  "at": "2026-11-22T23:35:55+08:00"
- },
+ "chain_stopped": null,
  "log": [
   {
    "routine": "night-start",
