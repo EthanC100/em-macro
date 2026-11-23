@@ -19,11 +19,23 @@ Integrity of the file itself (ledger integrity II, S17 C4 and C6). On every read
 ``FIELDS`` and ``hash``, its line is ``record_line(record)`` byte for byte (the file is exactly those lines, each
 ending in ``"\\n"`` and nothing else), and no JSON object in it repeats a key:
 the hash covers only ``FIELDS``, so anything else on a line (an extra key, a repeated key, another spelling) would be
-data no hash protects. Appends are serialized across processes by an exclusive ``flock`` on the sidecar
-``<ledger>.lock``; under it the file's last record must be this handle's head (a stale handle is refused and nothing
-is written), and the line is written and made durable (``fsync``; also ``F_FULLFSYNC`` on macOS; the directory too
-when the file is created) before the lock is released. A write that fails part-way leaves the handle unusable;
-``recover_torn_tail`` is the recovery path.
+data no hash protects. Appends are serialized across processes by an exclusive ``flock`` on the ledger file itself;
+under it the file's last record must be this handle's head (a stale handle is refused and nothing is written), and the
+line is written and made durable (``fsync``; also ``F_FULLFSYNC`` on macOS; the directory too when the file is
+created) before the lock is released. A write that fails part-way leaves the handle unusable; ``recover_torn_tail``
+is the recovery path.
+
+Lock identity (S17 C6, alias review). The lock is taken on the open ledger file, never on a name derived from the
+path a caller passed: ``flock`` belongs to the file (its inode), so every alias of one ledger (a symlink, a hard link,
+a relative or ``..`` path, a bind mount) shares one lock. Each operation opens the path once, refuses anything that
+is not a regular file, locks that descriptor, and only then checks that the path still names that same file (device
+and inode, still linked); every byte it reads or writes goes through that one descriptor. A path replaced, renamed or
+removed around the lock is refused, and an append whose file was replaced while it wrote raises (the handle becomes
+unusable) instead of reporting a record that the ledger path no longer holds. Threat model: local POSIX file systems
+on which ``flock`` is coherent across every process using the ledger (Linux ext4, xfs, btrfs, tmpfs; macOS APFS).
+Network and user-space file systems (NFS, SMB, FUSE) are not supported: their locking is not assumed. The adversary
+is concurrent or misconfigured processes (aliases, stale handles, a replaced file), not a local user with write
+access to the file, who can rewrite it outright; that is what an anchor kept outside the file is for (``verify``).
 """
 from __future__ import annotations
 
@@ -33,6 +45,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -175,12 +188,11 @@ def _framing_problems(text: str) -> list[str]:
 def read(path: Path) -> list[dict]:
     """The records of a ledger file, not verified as a chain, but held to the file format: every line its record's
     canonical form, ending in ``"\\n"`` alone. A repeated JSON key, a key outside the hashed record, another
-    spelling or another framing raises ``LedgerError``. Read under the shared lock when the lock file exists."""
-    path = Path(path)
-    if not path.exists():
-        return []
-    with _flocked(path, exclusive=False):
-        text = path.read_bytes().decode("utf-8")
+    spelling or another framing raises ``LedgerError``. Read under the shared lock on the ledger file."""
+    with _locked_ledger(Path(path), exclusive=False) as (fd, _):
+        if fd is None:
+            return []
+        text = _read_all(fd).decode("utf-8")
     framing = _framing_problems(text)
     if framing:
         raise LedgerError(framing[0])
@@ -199,13 +211,9 @@ def read(path: Path) -> list[dict]:
 
 def verify(path: Path, anchor: str | None = None) -> list[str]:
     """Problems found in a ledger file; preserve the legacy optional-anchor API. The file is read under the shared
-    lock when the lock file exists, so a line being appended is never seen half-written."""
-    path = Path(path)
-    try:
-        with _flocked(path, exclusive=False):
-            snapshot = path.read_bytes()
-    except FileNotFoundError:
-        snapshot = b""
+    lock on the ledger file, so a line being appended is never seen half-written."""
+    with _locked_ledger(Path(path), exclusive=False) as (fd, _):
+        snapshot = b"" if fd is None else _read_all(fd)
     return verify_snapshot(snapshot, anchor=anchor)[1]
 
 
@@ -429,34 +437,74 @@ def _hashable(v) -> bool:
 _FULLFSYNC = getattr(fcntl, "F_FULLFSYNC", None) if sys.platform == "darwin" else None
 
 
-def lock_path(path: Path) -> Path:
-    """The sidecar file whose ``flock`` serializes the writers of a ledger file (``append``, ``recover_torn_tail``:
-    exclusive). The readers of this module (``Ledger()``, ``verify``, ``read``) take it shared when it exists, so
-    they never see a line half-written. ``verify_snapshot`` and ``iter_verified`` take bytes, not a path: a caller
-    that reads the file itself (``attempts.reconcile``, ``hte_accounting.crosscheck``) is not ordered against an
-    append and may meet a half-written last line, which it reports as a problem (it is never accepted)."""
-    path = Path(path)
-    return path.with_name(path.name + ".lock")
+def _identity(st: os.stat_result) -> tuple[int, int]:
+    return st.st_dev, st.st_ino
+
+
+def _lock_fd(fd: int, exclusive: bool) -> None:
+    """``flock`` on the open ledger file (blocking). A separate function only so that tests can interleave."""
+    fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+
+
+def _same_file(path: Path, fd: int) -> bool:
+    """Whether ``path`` (following symlinks) still names the open, still-linked file ``fd``."""
+    try:
+        now = os.stat(path)
+    except OSError:
+        return False
+    st = os.fstat(fd)
+    return st.st_nlink > 0 and _identity(now) == _identity(st)
 
 
 @contextlib.contextmanager
-def _flocked(path: Path, *, exclusive: bool):
-    """Hold ``flock`` on the sidecar lock of ``path``: exclusive for a writer (creating the lock file), shared for a
-    reader. A reader never creates a file: with no lock file (no locking writer has written there) or one it cannot
-    open, it reads unlocked, as before."""
-    fd = None
+def _locked_ledger(path: Path, *, exclusive: bool, create: bool = False):
+    """Open the ledger file once and lock that descriptor: exclusive for a writer, shared for a reader. Yields
+    ``(fd, created)``, or ``(None, False)`` when the file does not exist and ``create`` is false (a reader never
+    creates anything). The lock is on the file itself, so every alias of it shares the lock; after locking, the path
+    must still name the same file, or ``LedgerError`` (fail closed: a ledger file is never replaced). Anything that is
+    not a regular file is refused before it is locked (``O_NONBLOCK``: a FIFO never blocks the open). Every read and
+    write of the operation goes through the yielded descriptor, never through the path again."""
+    path = Path(path)
+    flags = ((os.O_RDWR | os.O_APPEND) if exclusive else os.O_RDONLY) | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+    created = False
     try:
-        fd = os.open(lock_path(path), (os.O_RDWR | os.O_CREAT) if exclusive else os.O_RDONLY, 0o666)
-    except OSError:
-        if exclusive:
-            raise
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        if not create:
+            fd = None
+        else:
+            try:
+                fd, created = os.open(path, flags | os.O_CREAT | os.O_EXCL, 0o666), True
+            except FileExistsError:                       # another writer created it first: use theirs
+                try:
+                    fd = os.open(path, flags)
+                except FileNotFoundError:                 # a dangling symlink, or a path that keeps changing
+                    raise LedgerError(f"{path} names no ledger file and one cannot be created there safely (a "
+                                      "dangling symlink or a path that is changing): refused") from None
+    if fd is None:
+        yield None, False
+        return
     try:
-        if fd is not None:
-            fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-        yield
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise LedgerError(f"{path} is not a regular file: a ledger is one")
+        _lock_fd(fd, exclusive)
+        if not _same_file(path, fd):
+            raise LedgerError("the ledger path was replaced, renamed or removed while it was being opened: refused "
+                              "(nothing was written); a ledger file is never replaced")
+        yield fd, created
     finally:
-        if fd is not None:
-            os.close(fd)                                  # closing the descriptor releases the lock
+        os.close(fd)                                      # closing the descriptor releases the lock
+
+
+def _read_all(fd: int) -> bytes:
+    """Every byte of the open file, read from offset 0 (independent of the descriptor's position)."""
+    chunks, off = [], 0
+    while True:
+        b = os.pread(fd, 1 << 20, off)
+        if not b:
+            return b"".join(chunks)
+        chunks.append(b)
+        off += len(b)
 
 
 def _last_hash(fd: int) -> str:
@@ -520,25 +568,22 @@ class Ledger:
     def __init__(self, path: Path, writer: str, protocol: str):
         self.path, self.writer, self.protocol = Path(path), writer, protocol
         self._unusable: str | None = None             # why appends are refused after a failed write (S17 C1-7)
-        with _flocked(self.path, exclusive=False):     # never a line a writer is still writing
-            self._load()
+        with _locked_ledger(self.path, exclusive=False) as (fd, _):   # never a line a writer is still writing
+            self._load(fd)
 
-    def _load(self) -> None:
+    def _load(self, fd: int | None) -> None:
+        """Index the records of the open, share-locked ledger file ``fd`` (``None``: there is no file yet)."""
         self._reset()
+        if fd is None:
+            return
         try:
-            with self.path.open("rb") as f:
+            with open(fd, "rb", closefd=False) as f:
                 for rec, line in iter_verified(f):
                     self._index(rec, line)
-        except FileNotFoundError:
-            pass
         except IrregularSnapshot:
             # the exact 4A-1a answer: verify, then index every record of the verified snapshot
             self._reset()
-            try:
-                snapshot = self.path.read_bytes()
-            except FileNotFoundError:
-                snapshot = b""
-            recs, errs = verify_snapshot(snapshot)
+            recs, errs = verify_snapshot(_read_all(fd))
             if errs:
                 raise LedgerError("the ledger does not verify: " + "; ".join(errs)) from None
             for rec in recs:
@@ -665,11 +710,14 @@ class Ledger:
         """Append one record. The line is flushed and ``fsync``ed before this returns, so a registration that
         returned survives a crash of the process (Phase 4B).
 
-        Under an exclusive ``flock`` on ``lock_path(self.path)`` (S17 C6): the file's last record must be this
-        handle's head, else the handle is stale (another handle or process appended) and ``LedgerError`` is raised
-        with nothing written; then the line is written, ``fsync``ed (and ``F_FULLFSYNC``ed on macOS), and the
-        directory ``fsync``ed when this append created the file. If writing or syncing raises, the file may hold a
-        partial line or a record this handle has not indexed: the handle refuses every later append (reopen it;
+        Under an exclusive ``flock`` on the ledger file itself (S17 C6; every alias of the file shares it): the
+        file's last record must be this handle's head, else the handle is stale (another handle or process appended)
+        and ``LedgerError`` is raised with nothing written; then the line is written, ``fsync``ed (and
+        ``F_FULLFSYNC``ed on macOS), and the directory ``fsync``ed when this append created the file. A handle whose
+        ledger file has disappeared is refused before anything is created. If the path stops naming the written file
+        before the lock is released (the file was replaced), ``LedgerError`` is raised and the handle is unusable:
+        the record is not in the file the path names. If writing or syncing raises, the file may hold a partial line
+        or a record this handle has not indexed: the handle refuses every later append (reopen it;
         ``recover_torn_tail`` first if the file ends in a partial line)."""
         if type_ not in TYPES:
             raise LedgerError(f"unknown record type {type_}")
@@ -681,38 +729,34 @@ class Ledger:
                "type": type_, "writer": self.writer, "protocol": self.protocol,
                "payload": json.loads(S.canonical_bytes(payload)), "prev_hash": self.head}
         rec["hash"] = record_hash(rec)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         line = record_line(rec)
         data = (line + "\n").encode("utf-8")           # what cannot be encoded raises here, before any write
-        with _flocked(self.path, exclusive=True):
+        if self._head != GENESIS and not os.path.lexists(self.path):
+            raise LedgerError("stale ledger handle: its ledger file no longer exists; nothing was written")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with _locked_ledger(self.path, exclusive=True, create=True) as (fd, created):
+            on_file = _last_hash(fd)
+            if on_file != self._head:
+                raise LedgerError("stale ledger handle: the file's last record is not this handle's head "
+                                  "(another handle or process appended); nothing was written: reopen the ledger")
             try:
-                fd, created = os.open(self.path, os.O_RDWR | os.O_APPEND), False
-            except FileNotFoundError:
-                fd, created = None, True
-            try:
-                on_file = GENESIS if fd is None else _last_hash(fd)
-                if on_file != self._head:
-                    raise LedgerError("stale ledger handle: the file's last record is not this handle's head "
-                                      "(another handle or process appended); nothing was written: reopen the ledger")
-                if fd is None:
-                    fd = os.open(self.path, os.O_RDWR | os.O_APPEND | os.O_CREAT, 0o666)
-                try:
-                    _write_all(fd, data)
-                    os.fsync(fd)
-                    if _FULLFSYNC is not None:
-                        try:
-                            fcntl.fcntl(fd, _FULLFSYNC)
-                        except OSError:
-                            pass                          # unsupported here (ENOTSUP, some file systems); fsync ran,
+                _write_all(fd, data)
+                os.fsync(fd)
+                if _FULLFSYNC is not None:
+                    try:
+                        fcntl.fcntl(fd, _FULLFSYNC)
+                    except OSError:
+                        pass                              # unsupported here (ENOTSUP, some file systems); fsync ran,
                                                           # and the record is written: report the append, as SQLite does
-                    if created:
-                        _fsync_dir(self.path.parent)
-                except BaseException as e:
-                    self._unusable = f"an append failed part-way: {type(e).__name__}"
-                    raise
-            finally:
-                if fd is not None:
-                    os.close(fd)
+                if created:
+                    _fsync_dir(Path(os.path.realpath(self.path)).parent)
+            except BaseException as e:
+                self._unusable = f"an append failed part-way: {type(e).__name__}"
+                raise
+            if not _same_file(self.path, fd):
+                self._unusable = "the ledger file was replaced while a record was being appended"
+                raise LedgerError("the ledger path was replaced, renamed or removed during the append: the record "
+                                  "was written to a file the path no longer names; this handle is unusable")
         self._index(rec, line)
         return rec
 
@@ -915,17 +959,18 @@ def recover_torn_tail(path: Path) -> dict:
     Only a final fragment that has no newline and does not parse as a JSON object is moved, byte for byte, to
     ``<name>.torn-<sha256>`` beside the ledger; a complete final record that lost only its newline gets the newline.
     Anything else (a damaged record in the middle, an edited record) is not a torn tail and is refused: ``verify``
-    reports it and the ledger stays unopenable. Returns what was done. Runs under the writers' exclusive lock, so it
-    never meets an append in progress."""
+    reports it and the ledger stays unopenable. Returns what was done. Runs under the writers' exclusive lock on the
+    ledger file (shared by every alias of it), so it never meets an append in progress; the file is repaired in place
+    through the locked descriptor, never replaced."""
     path = Path(path)
-    if not path.exists():
-        return {"status": "clean"}
-    with _flocked(path, exclusive=True):
-        return _recover_torn_tail(path)
+    with _locked_ledger(path, exclusive=True) as (fd, _):
+        if fd is None:
+            return {"status": "clean"}
+        return _recover_torn_tail(path, fd)
 
 
-def _recover_torn_tail(path: Path) -> dict:
-    data = path.read_bytes() if path.exists() else b""
+def _recover_torn_tail(path: Path, fd: int) -> dict:
+    data = _read_all(fd)
     if not data or data.endswith(b"\n"):
         return {"status": "clean"}
     cut = data.rfind(b"\n") + 1
@@ -937,10 +982,8 @@ def _recover_torn_tail(path: Path) -> dict:
     if isinstance(rec, dict):
         if verify_snapshot(data + b"\n")[1]:
             raise LedgerError("the final record is complete JSON but does not verify: not a torn write")
-        with path.open("ab") as f:
-            f.write(b"\n")
-            f.flush()
-            os.fsync(f.fileno())
+        _write_all(fd, b"\n")                             # the descriptor appends (O_APPEND)
+        os.fsync(fd)
         return {"status": "newline_restored"}
     head_recs, head_errs = verify_snapshot(head)
     if head_errs:
@@ -955,10 +998,8 @@ def _recover_torn_tail(path: Path) -> dict:
     digest = hashlib.sha256(tail).hexdigest()
     side = path.with_name(f"{path.name}.torn-{digest}")
     side.write_bytes(tail)
-    with path.open("r+b") as f:
-        f.truncate(cut)
-        f.flush()
-        os.fsync(f.fileno())
+    os.ftruncate(fd, cut)
+    os.fsync(fd)
     return {"status": "torn_tail_quarantined", "bytes": len(tail), "quarantine": side.name}
 
 

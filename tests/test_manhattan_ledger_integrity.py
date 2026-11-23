@@ -5,8 +5,9 @@ index), repeat a key (readers disagree on the record) or spell the record differ
 key set ``FIELDS`` plus ``hash``, the canonical line ``record_line(record)`` byte for byte, and no repeated key.
 
 C6: appends took ``seq`` and ``prev_hash`` from the handle's memory with no lock, so two handles forked the chain.
-An append now holds an exclusive ``flock`` on ``<ledger>.lock``, refuses a stale handle (the file's last record is not
-its head) with nothing written, and syncs before releasing. A write that fails part-way leaves the handle unusable.
+An append now holds an exclusive ``flock`` on the ledger file itself (so every alias of the file shares it), refuses
+a stale handle (the file's last record is not its head) with nothing written, and syncs before releasing. A write that
+fails part-way leaves the handle unusable. A path replaced, renamed or removed around the lock is refused.
 
 Acceptance ids P1-a .. P1-f are those of S17_NEXT_PRS.md; P1-c is also covered by the existing ledger suites.
 """
@@ -176,7 +177,7 @@ def test_p1c_the_committed_exploration_ledger_still_verifies():
     assert L.verify(path) == []
     with path.open("rb") as f:
         assert sum(1 for _ in L.iter_verified(f)) == len(_book(path)) > 0
-    assert not L.lock_path(path).exists()                 # opening to read never creates the lock file
+    assert not path.with_name(path.name + ".lock").exists()   # no sidecar: the lock is on the ledger file itself
 
 
 def test_p1c_opening_a_ledger_creates_nothing(tmp_path):
@@ -288,7 +289,7 @@ def test_p1d_an_append_waits_for_the_writer_lock(tmp_path):
     path = tmp_path / "ledger.jsonl"
     book = _book(path)
     book.append("screening_decision", {"n": 1})
-    fd = os.open(L.lock_path(path), os.O_RDWR)
+    fd = os.open(path, os.O_RDWR)                        # the lock is on the ledger file itself
     fcntl.flock(fd, fcntl.LOCK_EX)                       # another writer holds the lock
     done = threading.Event()
     t = threading.Thread(target=lambda: (book.append("screening_decision", {"n": 2}), done.set()))
@@ -456,7 +457,7 @@ def test_recover_torn_tail_waits_for_the_writer_lock(tmp_path):
     path = tmp_path / "ledger.jsonl"
     _book(path).append("screening_decision", {"i": 0})
     path.write_bytes(path.read_bytes() + b'{"hash":"ab')
-    fd = os.open(L.lock_path(path), os.O_RDWR)
+    fd = os.open(path, os.O_RDWR)                        # the lock is on the ledger file itself
     fcntl.flock(fd, fcntl.LOCK_EX)
     result = {}
     t = threading.Thread(target=lambda: result.update(L.recover_torn_tail(path)))
@@ -566,7 +567,7 @@ def test_readers_wait_for_a_writer_holding_the_lock(tmp_path, reader):
     _book(path, cls).append("screening_decision", {"i": 0})
     call = {"Ledger": lambda: len(_book(path)), "PublicIndex": lambda: len(_book(path, L.PublicIndex)),
             "verify": lambda: L.verify(path), "read": lambda: len(L.read(path))}[reader]
-    fd = os.open(L.lock_path(path), os.O_RDWR)
+    fd = os.open(path, os.O_RDWR)                        # the lock is on the ledger file itself
     fcntl.flock(fd, fcntl.LOCK_EX)                                # a writer is mid-append
     result = []
     t = threading.Thread(target=lambda: result.append(call()))
@@ -621,3 +622,293 @@ def test_no_simulation_code_file_but_the_ledger_changed():
         assert hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() == digest, rel
     assert run.code_hash("STD") == "da641c096d17bbf4" and run.code_hash("HB") == "0b8dd1af6db62c9f"
     assert run.code_hash("STD", version="v2") == "9d1b680ff7e19ca7"
+
+
+# ------------------------------------------------------------------------------------- lock identity across aliases
+# Review of #108 (2026-11-23, alias blocker): the lock used to be a sidecar named from the path the caller passed
+# (``<path>.lock``), so the same ledger opened through its real path and through a symlink or a hard link took two
+# different locks, and two concurrent appends could both write seq 2 (a forked, unopenable chain). The lock is now
+# ``flock`` on the ledger file itself, which every alias shares. Threat model: local POSIX file systems with coherent
+# ``flock`` (not NFS, SMB or FUSE); concurrent or misconfigured processes, not a writer who rewrites the file.
+
+def _alias(tmp_path, path, kind):
+    """Another name for the ledger file ``path``: a symlink to it, a hard link, a ``..`` path, or the same name
+    through a symlinked directory."""
+    if kind == "symlink":
+        alias = tmp_path / "alias.jsonl"
+        alias.symlink_to(path)
+    elif kind == "hardlink":
+        alias = tmp_path / "hard.jsonl"
+        os.link(path, alias)
+    elif kind == "dotdot":
+        (tmp_path / "sub").mkdir()
+        alias = tmp_path / "sub" / ".." / path.name
+    else:                                                   # symlinked_dir
+        (tmp_path / "linkdir").symlink_to(tmp_path, target_is_directory=True)
+        alias = tmp_path / "linkdir" / path.name
+    assert os.path.samefile(alias, path) and str(alias) != str(path)
+    return alias
+
+
+_ALIAS_WORKER = r"""
+import json, os, sys, time
+from manhattan import ledger as L
+alias, sync = sys.argv[1], sys.argv[2]
+book = L.Ledger(alias, writer="B", protocol="f" * 64)          # loads the same head as the parent's handle
+open(os.path.join(sync, "loaded"), "w").close()
+deadline = time.time() + 60
+while not os.path.exists(os.path.join(sync, "go")):
+    if time.time() > deadline:
+        raise SystemExit("timed out waiting for go")
+    time.sleep(0.001)
+try:
+    out = {"ok": book.append("screening_decision", {"by": "B"})["seq"]}
+except L.LedgerError as e:
+    out = {"refused": str(e)}
+tmp = os.path.join(sync, "result.tmp")
+with open(tmp, "w") as f:
+    f.write(json.dumps(out))
+os.replace(tmp, os.path.join(sync, "result"))
+"""
+
+
+def _wait_for(p: Path, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while not p.exists():
+        assert time.time() < deadline, f"timed out waiting for {p.name}"
+        time.sleep(0.005)
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "dotdot", "symlinked_dir"])
+def test_alias_two_processes_same_head_at_most_one_append_at_seq_2(tmp_path, monkeypatch, kind):
+    """Deterministic interleaving. Both handles load the ledger at seq 1: B in another process through an alias, A
+    here through the real path. A takes the writer lock, checks its head and is held just before writing (a gated
+    write); only then is B told to append. B must wait for A's lock (the same file), and once A has written seq 2,
+    B's append is refused as stale with nothing written. On the sidecar lock, B took another lock, appended seq 2
+    while A held its own, and A then wrote a second seq 2: a fork."""
+    path = tmp_path / "ledger.jsonl"
+    _book(path).append("screening_decision", {"i": 0})
+    alias = _alias(tmp_path, path, kind)
+    sync = tmp_path / "sync"
+    sync.mkdir()
+    env = dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""))
+    proc = subprocess.Popen([sys.executable, "-c", _ALIAS_WORKER, str(alias), str(sync)], cwd=ROOT, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        _wait_for(sync / "loaded")
+        book_a = _book(path, writer="A")
+        entered, release = threading.Event(), threading.Event()
+        real_write = L._write_all
+
+        def gated(fd, data):                               # A holds the lock and has checked its head
+            entered.set()
+            assert release.wait(60)
+            return real_write(fd, data)
+
+        monkeypatch.setattr(L, "_write_all", gated)
+        got = {}
+        t = threading.Thread(target=lambda: got.update(seq=book_a.append("screening_decision", {"by": "A"})["seq"]))
+        t.start()
+        assert entered.wait(60)
+        (sync / "go").touch()
+        time.sleep(1.5)
+        b_finished_while_a_held_the_lock = (sync / "result").exists()
+        release.set()
+        t.join(60)
+        out, err = proc.communicate(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert proc.returncode == 0, err
+    assert not b_finished_while_a_held_the_lock            # B waited on the same lock as A
+    assert got["seq"] == 2
+    result = json.loads((sync / "result").read_text())
+    assert "refused" in result and "stale" in result["refused"], result
+    assert L.verify(path) == [] and L.verify(alias) == []
+    recs = L.read(alias)
+    assert [r["seq"] for r in recs] == [1, 2] and recs[1]["writer"] == "A"
+    assert len({r["prev_hash"] for r in recs}) == 2         # one linear chain, no fork
+    assert _book(alias).append("screening_decision", {"after": 1})["seq"] == 3
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "dotdot", "symlinked_dir"])
+def test_alias_stale_head_is_refused_and_nothing_is_written(tmp_path, kind):
+    path = tmp_path / "ledger.jsonl"
+    _book(path).append("screening_decision", {"i": 0})
+    alias = _alias(tmp_path, path, kind)
+    a, b = _book(path, writer="A"), _book(alias, writer="B")
+    assert a.append("screening_decision", {"by": "A"})["seq"] == 2
+    before = path.read_bytes()
+    with pytest.raises(L.LedgerError, match="stale"):
+        b.append("screening_decision", {"by": "B"})
+    assert path.read_bytes() == before and L.verify(alias) == []
+    assert _book(alias, writer="B").append("screening_decision", {"by": "B"})["seq"] == 3   # after reopening
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink"])
+@pytest.mark.parametrize("op", ["append", "Ledger", "verify", "read", "recover_torn_tail"])
+def test_alias_operations_wait_for_a_lock_held_through_the_real_path(tmp_path, kind, op):
+    path = tmp_path / "ledger.jsonl"
+    _book(path).append("screening_decision", {"i": 0})
+    alias = _alias(tmp_path, path, kind)
+    book = _book(alias)
+    call = {"append": lambda: book.append("screening_decision", {"i": 1})["seq"],
+            "Ledger": lambda: len(_book(alias)), "verify": lambda: L.verify(alias),
+            "read": lambda: len(L.read(alias)), "recover_torn_tail": lambda: L.recover_torn_tail(alias)["status"]}[op]
+    fd = os.open(path, os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)                         # a writer on the real path is mid-append
+    result = []
+    t = threading.Thread(target=lambda: result.append(call()))
+    try:
+        t.start()
+        time.sleep(0.5)
+        assert result == []                                # waiting on the same lock
+    finally:
+        os.close(fd)
+    t.join(10)
+    assert result == [{"append": 2, "Ledger": 1, "verify": [], "read": 1, "recover_torn_tail": "clean"}[op]]
+
+
+@pytest.mark.parametrize("sidecar", ["held_file", "symlink_to_ledger", "dangling_symlink", "fifo", "directory"])
+def test_a_stale_or_hostile_lock_sidecar_is_ignored(tmp_path, sidecar):
+    """No ``<ledger>.lock`` is used any more: whatever sits at that name (a file another process holds locked, a
+    symlink, a FIFO that would block an opener, a directory) neither blocks nor changes any operation."""
+    path = tmp_path / "ledger.jsonl"
+    _book(path).append("screening_decision", {"i": 0})
+    side = tmp_path / "ledger.jsonl.lock"
+    held = None
+    if sidecar == "held_file":
+        side.write_bytes(b"")
+        held = os.open(side, os.O_RDWR)
+        fcntl.flock(held, fcntl.LOCK_EX)
+    elif sidecar == "symlink_to_ledger":
+        side.symlink_to(path)
+    elif sidecar == "dangling_symlink":
+        side.symlink_to(tmp_path / "nowhere")
+    elif sidecar == "fifo":
+        os.mkfifo(side)
+    else:
+        side.mkdir()
+    done = []
+    t = threading.Thread(target=lambda: done.append((_book(path).append("screening_decision", {"i": 1})["seq"],
+                                                     L.verify(path), len(L.read(path)),
+                                                     L.recover_torn_tail(path)["status"])), daemon=True)
+    try:
+        t.start()
+        t.join(10)
+    finally:
+        if held is not None:
+            os.close(held)
+    assert done == [(2, [], 2, "clean")]
+    assert not (tmp_path / "nowhere").exists()
+
+
+def test_a_path_replaced_before_the_lock_is_refused_and_nothing_is_written(tmp_path, monkeypatch):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    copy = tmp_path / "copy.jsonl"
+    copy.write_bytes(path.read_bytes())
+    old = os.stat(path).st_ino
+    real_lock = L._lock_fd
+
+    def replace_then_lock(fd, exclusive):                  # the path is replaced between open and lock
+        if exclusive:
+            os.replace(copy, path)
+        return real_lock(fd, exclusive)
+
+    monkeypatch.setattr(L, "_lock_fd", replace_then_lock)
+    before = path.read_bytes()
+    with pytest.raises(L.LedgerError, match="replaced"):
+        book.append("screening_decision", {"i": 1})
+    assert os.stat(path).st_ino != old and path.read_bytes() == before and L.verify(path) == []
+
+
+def test_a_path_replaced_during_the_append_raises_and_the_handle_is_unusable(tmp_path, monkeypatch):
+    """The record lands in the file the descriptor holds; the path no longer names it, so the append must not report
+    success."""
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    copy = tmp_path / "copy.jsonl"
+    copy.write_bytes(path.read_bytes())
+    real_write = L._write_all
+
+    def replace_then_write(fd, data):
+        os.replace(copy, path)
+        return real_write(fd, data)
+
+    monkeypatch.setattr(L, "_write_all", replace_then_write)
+    with pytest.raises(L.LedgerError, match="replaced"):
+        book.append("screening_decision", {"i": 1})
+    monkeypatch.setattr(L, "_write_all", real_write)
+    assert [r["seq"] for r in L.read(path)] == [1] and L.verify(path) == []
+    with pytest.raises(L.LedgerError, match="unusable"):
+        book.append("screening_decision", {"i": 2})
+    assert _book(path).append("screening_decision", {"i": 2})["seq"] == 2
+
+
+@pytest.mark.parametrize("op", ["append", "recover_torn_tail", "Ledger"])
+def test_a_path_renamed_or_removed_around_the_lock_is_refused(tmp_path, monkeypatch, op):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    real_lock = L._lock_fd
+
+    def rename_then_lock(fd, exclusive):
+        os.rename(path, tmp_path / "moved.jsonl")
+        monkeypatch.setattr(L, "_lock_fd", real_lock)
+        return real_lock(fd, exclusive)
+
+    monkeypatch.setattr(L, "_lock_fd", rename_then_lock)
+    call = {"append": lambda: book.append("screening_decision", {"i": 1}),
+            "recover_torn_tail": lambda: L.recover_torn_tail(path), "Ledger": lambda: _book(path)}[op]
+    with pytest.raises(L.LedgerError, match="replaced, renamed or removed"):
+        call()
+    assert not path.exists() and [r["seq"] for r in L.read(tmp_path / "moved.jsonl")] == [1]
+
+
+def test_a_handle_whose_ledger_was_removed_creates_nothing(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    path.unlink()
+    with pytest.raises(L.LedgerError, match="no longer exists"):
+        book.append("screening_decision", {"i": 1})
+    assert not path.exists()
+
+
+def test_a_dangling_symlink_is_never_created_through(tmp_path):
+    target, link = tmp_path / "target.jsonl", tmp_path / "link.jsonl"
+    link.symlink_to(target)
+    book = _book(link)
+    assert len(book) == 0
+    with pytest.raises(L.LedgerError, match="dangling symlink"):
+        book.append("screening_decision", {"i": 0})
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("kind", ["fifo", "directory"])
+@pytest.mark.parametrize("op", ["Ledger", "verify", "read", "append", "recover_torn_tail"])
+def test_a_ledger_path_that_is_not_a_regular_file_is_refused_without_blocking(tmp_path, kind, op):
+    path = tmp_path / "ledger.jsonl"
+    os.mkfifo(path) if kind == "fifo" else path.mkdir()
+    book = L.Ledger.__new__(L.Ledger)                       # an empty handle, as if loaded before the swap
+    book.path, book.writer, book.protocol, book._unusable = path, "w", PROTOCOL, None
+    book._reset()
+    call = {"Ledger": lambda: _book(path), "verify": lambda: L.verify(path), "read": lambda: L.read(path),
+            "append": lambda: book.append("screening_decision", {"i": 0}),
+            "recover_torn_tail": lambda: L.recover_torn_tail(path)}[op]
+    out = []
+
+    def run():
+        try:
+            call()
+            out.append("accepted")
+        except (L.LedgerError, IsADirectoryError) as e:
+            out.append(type(e).__name__)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(10)
+    assert out and out[0] != "accepted", out
