@@ -1,0 +1,70 @@
+{
+ "book": "janus",
+ "id": "J027",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-23T23:15:21+00:00",
+ "postmortem": {
+  "thesis_right": "untested",
+  "skill_or_luck": "mixed",
+  "what_happened": "Filled at 3.45% on 19 Nov, the Bund yield fell to 3.39% on 20 Nov and 3.37% on 23 Nov as the AI-led US equity sell-off drove a haven bid and oil kept falling; a later C08 review flipped the side and closed the position after three sessions, well before the 20-day question could resolve.",
+  "assessment": "A three-session hold says little about a 20-trading-day view, so the thesis is untested. But the haven risk that hurt it was already the live regime on 18 Nov (an equity drawdown under way), and the thesis anchored on a mid-November high and listed soft euro-area data, a yield-lowering factor, as support for higher yields. That is a process flaw, not only noise; the loss was small and partly costs from flipping a one-point lean.",
+  "do_differently": "1) List the live market regime (equity drawdown, haven flows) among the drivers of every bond forecast, without assuming a fixed stock-bond sign while central banks are hiking. 2) Check that every cited driver points the same way as the forecast. 3) Avoid day-to-day side flips of one-point leans, which only generate costs.",
+  "sources": [
+   {
+    "title": "German Bund yields tick up as equities rout pauses",
+    "url": "https://rallies.ai/news/german-bund-yields-tick-up-as-equities-rout-pauses-4ada1d25e7678e4c"
+   },
+   {
+    "title": "Reuters Trading Day: Market euphoria as Huang returns to Nvidia",
+    "url": "https://www.investing.com/news/economy-news/trading-day-market-euphoria-as-huang-returns-to-nvidia-5046578"
+   },
+   {
+    "title": "Invezz: Brent slides over 3% below $90 as surplus fears build",
+    "url": "https://invezz.com/news/2026/11/23/oil-price-today-brent-below-90-surplus-fears/"
+   }
+  ],
+  "opposition": {
+   "case_against": "Calling this 'luck' lets the process off the hook. The haven risk that sank the short was already the prevailing regime on 18 Nov, not a surprise. The S&P had fallen five sessions in a row and was 6.3% below its record, with the S&P down 3.1% on the week by that close. The VIX was in the 20s, and on 9 Nov the Bund had already hit its lowest since August on an earlier tech sell-off. The 'highest since late October' level near 3.4% was set on 13 Nov during an equity rebound that had already reversed by 18 Nov. So the thesis anchored on a stale high and left the live driver out. It also argued against itself: it cited 'euro-area data soft' as a reason for a yield-higher view it held at only 49%. On the lesson, an equity-haven rule is the wrong generalisation for this regime. With the Fed and ECB both hiking, stocks and bonds have not reliably moved in opposite directions: in the week of 6 Nov the S&P had its worst week since April 2025 while US 2y and 10y yields rose. The real lesson is that the position should not exist at 49%, or should be sized and banded so it cannot flip. The draft's '-8.6% S&P week' figure is not verified. Sources show about -5.1% Fri-to-Thu (7,561.67 to 7,175.83), and Friday's close could not be found. Trading Economics puts the Bund near or below 3.3% on 20 to 23 Nov, which does not match the book's marks of 3.39 and 3.37.",
+   "key_risks": [
+    "Treating as noise a risk that was visible and in force at decision time (the AI equity drawdown and haven bid) understates a process error",
+    "The equity-haven lesson can mislead in a hiking regime where stocks and bonds have sometimes moved together (early-November data surprises)",
+    "The '-8.6% S&P week' figure in the draft is unverified and probably overstated (-5.1% Fri-to-Thu confirmed)",
+    "Book marks (3.39 / 3.37) may not match public closes near or below 3.3%, so the post-mortem P&L may be understated or use an inconsistent mark source",
+    "The thesis listed a yield-lowering factor (soft data) as support for a yield-higher call: an incoherence the draft does not mention",
+    "At 49% any outcome is 'luck' by construction, so the skill/luck field carries no information unless the forecaster's input set is audited"
+   ],
+   "probability_view_wrong": 60,
+   "sources": [
+    {
+     "title": "AI Stocks Drag the S&P 500 Back Toward the November 5th Lows (TheStreet, 16 Nov 2026)",
+     "url": "https://pro.thestreet.com/market-commentary/ai-stocks-drag-the-sp-500-back-toward-the-november-5th-lows"
+    },
+    {
+     "title": "US stocks: Dow falls on Nvidia earnings, Fed rate hikes (IBTimes, 18 Nov 2026)",
+     "url": "https://www.ibtimes.com/us-stocks-dow-falls-nvidia-earnings-fed-rate-hikes-3809938"
+    },
+    {
+     "title": "How major US stock indexes fared Thursday 11/19/2026 (La Nacion/AP)",
+     "url": "https://www.lanacion.com.ar/usa/how-major-us-stock-indexes-fared-thursday-11192026-nid19112026/"
+    },
+    {
+     "title": "S&P 500 Falls 0.23% to 7323.63 (Morningstar/Dow Jones)",
+     "url": "https://www.morningstar.com/news/dow-jones/202611188038/sp-500-falls-023-to-732363-data-talk"
+    },
+    {
+     "title": "Bund Yields Climb to Two-Week High (Trading Economics, 13 Nov 2026)",
+     "url": "https://tradingeconomics.com/germany/government-bond-yield/news/601061"
+    },
+    {
+     "title": "German Bund Yields Ease (Trading Economics, stream to 23 Nov 2026)",
+     "url": "https://tradingeconomics.com/germany/government-bond-yield/news/600706"
+    },
+    {
+     "title": "Tech Bounces, but the S&P 500 Still Has Its Worst Week Since April 2025 (TheStreet, 6 Nov 2026)",
+     "url": "https://pro.thestreet.com/market-commentary/tech-bounces-but-the-sp-500-still-has-its-worst-week-since-april-2025"
+    }
+   ],
+   "model": "claude-opus-5-5"
+  }
+ }
+}
