@@ -724,19 +724,22 @@ class Ledger:
         if self._unusable is not None:
             raise LedgerError(f"this ledger handle is unusable ({self._unusable}): reopen the ledger, after "
                               "recover_torn_tail if the file ends in a partial line")
+        expected_head = self.head
         rec = {"seq": len(self._lines) + 1,
                "ts_utc": ts_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                "type": type_, "writer": self.writer, "protocol": self.protocol,
-               "payload": json.loads(S.canonical_bytes(payload)), "prev_hash": self.head}
+               "payload": json.loads(S.canonical_bytes(payload)), "prev_hash": expected_head}
         rec["hash"] = record_hash(rec)
         line = record_line(rec)
         data = (line + "\n").encode("utf-8")           # what cannot be encoded raises here, before any write
-        if self._head != GENESIS and not os.path.lexists(self.path):
-            raise LedgerError("stale ledger handle: its ledger file no longer exists; nothing was written")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with _locked_ledger(self.path, exclusive=True, create=True) as (fd, created):
+        can_create = expected_head == GENESIS
+        if can_create:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        with _locked_ledger(self.path, exclusive=True, create=can_create) as (fd, created):
+            if fd is None:
+                raise LedgerError("stale ledger handle: its ledger file no longer exists; nothing was written")
             on_file = _last_hash(fd)
-            if on_file != self._head:
+            if on_file != expected_head:
                 raise LedgerError("stale ledger handle: the file's last record is not this handle's head "
                                   "(another handle or process appended); nothing was written: reopen the ledger")
             try:
@@ -757,7 +760,7 @@ class Ledger:
                 self._unusable = "the ledger file was replaced while a record was being appended"
                 raise LedgerError("the ledger path was replaced, renamed or removed during the append: the record "
                                   "was written to a file the path no longer names; this handle is unusable")
-        self._index(rec, line)
+            self._index(rec, line)
         return rec
 
     def correction(self, target_seq: int, fields: dict, reason: str) -> dict:
@@ -966,7 +969,10 @@ def recover_torn_tail(path: Path) -> dict:
     with _locked_ledger(path, exclusive=True) as (fd, _):
         if fd is None:
             return {"status": "clean"}
-        return _recover_torn_tail(path, fd)
+        result = _recover_torn_tail(path, fd)
+        if not _same_file(path, fd):
+            raise LedgerError("the ledger path was replaced, renamed or removed during recovery")
+        return result
 
 
 def _recover_torn_tail(path: Path, fd: int) -> dict:

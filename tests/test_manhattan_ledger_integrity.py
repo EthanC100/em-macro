@@ -878,6 +878,52 @@ def test_a_handle_whose_ledger_was_removed_creates_nothing(tmp_path):
     assert not path.exists()
 
 
+def test_a_ledger_removed_as_append_opens_it_is_not_recreated(tmp_path, monkeypatch):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    real_open = os.open
+    opened = []
+
+    def remove_then_open(name, flags, *args, **kwargs):
+        if name == path:
+            if not opened:
+                path.unlink()
+            opened.append(flags)
+        return real_open(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(L.os, "open", remove_then_open)
+    with pytest.raises(L.LedgerError, match="no longer exists"):
+        book.append("screening_decision", {"i": 1})
+    assert opened and all(not flags & os.O_CREAT for flags in opened)
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("complete_record", [True, False])
+def test_recovery_refuses_a_path_replaced_during_sync(tmp_path, monkeypatch, complete_record):
+    path = tmp_path / "ledger.jsonl"
+    book = _book(path)
+    book.append("screening_decision", {"i": 0})
+    valid = path.read_bytes()
+    path.write_bytes(valid[:-1] if complete_record else valid + b'{"hash":"')
+    replacement = tmp_path / "replacement.jsonl"
+    replacement.write_bytes(valid)
+    real_fsync = os.fsync
+    repaired_inode = path.stat().st_ino
+
+    def replace_then_sync(fd):
+        if os.fstat(fd).st_ino == repaired_inode:
+            os.replace(replacement, path)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(L.os, "fsync", replace_then_sync)
+    with pytest.raises(L.LedgerError, match="during recovery"):
+        L.recover_torn_tail(path)
+    assert path.stat().st_ino != repaired_inode
+    assert path.read_bytes() == valid
+    assert L.verify(path) == []
+
+
 def test_a_dangling_symlink_is_never_created_through(tmp_path):
     target, link = tmp_path / "target.jsonl", tmp_path / "link.jsonl"
     link.symlink_to(target)
