@@ -29,19 +29,31 @@ class _StrictLoader(yaml.SafeLoader):
     """``yaml.SafeLoader`` that refuses a mapping with a repeated key. A second ``fx_daily:`` window, ``data_end:`` or
     ``enabled:`` would otherwise silently replace the first (independent review of the reserve-key fix)."""
 
-    def construct_mapping(self, node, deep=False):
-        seen = set()
-        for key_node, _ in node.value:
-            if key_node.tag == "tag:yaml.org,2002:merge":   # a merge key (<<): flattened by SafeLoader as before
-                continue
-            key = self.construct_object(key_node, deep=True)
-            try:
-                if key in seen:
-                    raise DuplicateKeyError(f"duplicate key {key!r} at line {key_node.start_mark.line + 1}")
-                seen.add(key)
-            except TypeError:                            # an unhashable key: SafeLoader refuses it below
-                pass
-        return super().construct_mapping(node, deep=deep)
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._checked_mappings = set()
+
+    def flatten_mapping(self, node):
+        # SafeLoader also calls this for inline merge sources. Check each node before flattening adds inherited keys.
+        if node not in self._checked_mappings:
+            self._checked_mappings.add(node)
+            seen = set()
+            merge_seen = False
+            for key_node, _ in node.value:
+                line = key_node.start_mark.line + 1
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    if merge_seen:
+                        raise DuplicateKeyError(f"duplicate merge key '<<' at line {line}")
+                    merge_seen = True
+                    continue
+                key = self.construct_object(key_node, deep=True)
+                try:
+                    if key in seen:
+                        raise DuplicateKeyError(f"duplicate key {key!r} at line {line}")
+                    seen.add(key)
+                except TypeError:                        # SafeLoader refuses unhashable keys during construction
+                    pass
+        return super().flatten_mapping(node)
 
 
 def loads(text: str) -> dict:

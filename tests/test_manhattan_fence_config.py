@@ -263,6 +263,26 @@ def test_the_strict_loader_reads_everything_safe_load_reads():
         MC.loads("base: &b {x: 1}\nw:\n  <<: *b\n  y: 1\n  y: 2\n")
 
 
+@pytest.mark.parametrize("text", [
+    "a: &a {color: blue}\nb: &b {color: green}\nitem: {<<: *a, <<: *b}\n",
+    "item: {<<: {color: blue, color: green}}\n",
+    "item: {<<: [{color: blue, color: green}]}\n",
+])
+def test_duplicate_keys_in_a_merge_are_refused(text):
+    with pytest.raises(MC.DuplicateKeyError, match="duplicate"):
+        MC.loads(text)
+
+
+def test_one_merge_key_can_inherit_from_multiple_mappings():
+    text = (
+        "a: &a {color: blue, shape: circle}\n"
+        "b: &b {color: green, size: small}\n"
+        "item: &item {<<: [*a, *b], shape: square}\n"
+        "other: {<<: *item}\n"
+    )
+    assert MC.loads(text) == yaml.safe_load(text)
+
+
 @pytest.mark.parametrize("text,why", [
     ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  enabled: true\n  Windows: {fx_daily: {start: 2020-01-01, end: 2026-09-30}}\n", "unknown keys"),
     ("exploration:\n  data_end: \"2019-12-31\"\nreserve:\n  windws: {}\n", "unknown keys"),
