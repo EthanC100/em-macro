@@ -1,6 +1,10 @@
 {
  "schema": 1,
- "lock": null,
+ "lock": {
+  "routine": "promote",
+  "acquired_at": "2026-11-24T05:40:06+08:00",
+  "session": "https://claude.ai/code/session_01Ayx8qaw5weNmrbTDhTttvb"
+ },
  "night": "2026-11-23",
  "runs_used": 1,
  "last_kind": "worker",
