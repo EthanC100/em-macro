@@ -38,12 +38,12 @@ Every one of these keeps working unchanged. "Identity" is who GitHub sees push t
 | task (prompt source) | schedule | identity on main | writes | model / effort |
 |---|---|---|---|---|
 | **Janus Quick Check** (trig_01Sxfs75…; `docs/janus/quick_check.md`) | hourly at :15, every day | **Ethan's GitHub user via the Claude GitHub App** (commit author "Claude <noreply@anthropic.com>") | `data/janus/records.jsonl` (+ seals) through `scripts/janus_commit.sh` | model not set (account default); every one of the 151 check records says `claude-sonnet-5-5`. Effort: not shown by the API (default) |
-| **Janus Quick Check 2** (trig_01AqFEVG…) | hourly at :45, every day | same | same | same |
+| **Janus Quick Check 2** (trig_01AqFEVG…) | hourly at :45, every day, when the list was read. Observed 2026-11-23 (Q033) from `data/janus/records.jsonl`: :45 checks (at :47-:49 UTC) recorded hourly until 2026-11-13 12:49Z, none recorded since; Ethan to confirm whether the task still exists | same | same | same |
 | **Janus Daily Review** (trig_01WFz73C…; `docs/janus/daily_review.md`) | 07:07 Singapore daily (23:07 UTC = 18:07 New York) | same | `data/janus/`, `data/ledger/postmortems`, seals | not set; records say `claude-sonnet-5-5` (The Opposition as a subagent of the same model). Effort: default |
 | Horizon Daily Briefing | 09:34 Singapore daily | none: writes a Claude Docs document, no git push | | not set |
 | Horizon Weekly Brief (the "weekly review") | Saturdays 18:00 Singapore | none (Claude Docs) | | not set |
 | Month-ahead report | 28th, 21:00 Singapore | none (Claude Docs) | | not set |
-| Ledger forecast resolver (`docs/ledger/forecast_resolver.md`) | documented as a daily task, **but not on the account's task list** (`docs/todo.md`: "Create the scheduled tasks", unticked) | would be Ethan via the Claude App | `data/ledger/forecasts.csv`, seals via ledger_commit.sh | — |
+| Ledger forecast resolver (`docs/ledger/forecast_resolver.md`) | documented as a daily task, **but not on the account's task list** (`docs/todo.md`: "Create the remaining scheduled tasks", unticked) | would be Ethan via the Claude App | `data/ledger/forecasts.csv`, seals via ledger_commit.sh | — |
 | Ledger monthly letters (`docs/letters/monthly_letters.md`) | documented for the 3rd-6th, **not on the task list** | same | letters via ledger_commit.sh | — |
 | **ledger-daily kick** (trig_0163uwae…, moved 2026-11-12 from trig_01Ci634N…, now disabled; Q018, approved by Ethan) | **06:07 and 22:07 UTC** daily (`7 6,22 * * *`) | none: no commit; it dispatches `ledger-daily.yml` on main through the Claude GitHub App (`workflow_dispatch`, no inputs; skipped while a run created in the last 20 minutes is still queued or in progress) | nothing (dispatch only) | `claude-sonnet-5-5`. Fires into the standing dispatch-only session with em-macro attached (session_01Ayx8qdoCGG…, "Workflow kicks: ledger-daily + systematic-monthly (dispatch only)", created 2026-11-12), whose standing rules allow only `workflow_dispatch` of ledger-daily and of systematic-monthly with `only_if_due=true`, and a run-list check; it acts only on a scheduled wake-up (it refuses requests relayed from other sessions). Why: GitHub creates this repository's schedule events 5.5-10.5 hours late (Q018), so ledger-daily's crons are backups. Note: a task fired by hand runs in a fresh session without the repository or these rules, not in the standing session; only scheduled fires use it |
 | **systematic-monthly kick** (trig_01Wskske…, moved 2026-11-12 from trig_017kAF1L…, now disabled; Q002, approved by Ethan) | **07:23 UTC on the 3rd** of each month (`23 7 3 * *`) | none: no commit; it dispatches `systematic.yml` on main through the Claude GitHub App (`workflow_dispatch` with `only_if_due=true`, never without it; if GitHub refuses the input it dispatches nothing) | nothing (dispatch only) | `claude-sonnet-5-5`. Fires into the same standing dispatch-only session as the ledger-daily kick (session_01Ayx8qdoCGG…). The workflow's `due` gate, not the kick, decides whether the rebalance still has to run, so the kick and the backup crons never rebalance twice. Safe check 2026-11-12: run 43182461362, gate run=false, update skipped |
@@ -82,7 +82,7 @@ say what to pick.
 refuses to start while ledger-daily, systematic-monthly, ledger-intake, shadows-setup, private-commitments or
 ledger-screener is queued or running (it also refuses when the API cannot be read), and inside fixed windows: the
 Janus daily review (23:00-23:45 UTC) and the 3rd-of-month rebalance (07:15-09:30 UTC). Night work never touches
-main's files directly, so the Janus quick checks (every 30 minutes, all night) never collide with it.
+main's files directly, so the Janus quick checks (hourly, all night) never collide with it.
 
 ## 3. How a night runs
 
@@ -341,7 +341,7 @@ usage (about 4x the Janus load). Interactive sessions (like this one) come on to
 - The private store is read through the Janus CLI's read-only clone; the promote rebuild uses one path for both
   builds and records its commit before and after, so the 7-day settlement re-request cannot create a difference.
 - The promotion compares main with **main merged with dev** (the tree the PR produces), not dev alone, because
-  main keeps moving all night (Janus checks every 30 minutes).
+  main keeps moving all night (Janus quick checks every hour).
 - ledger-daily runs late into the night window, so the guard checks the Actions API instead of trusting cron times.
 
 ## Dry run (2026-11-09, 22:52-23:25 Singapore, real time, in the setup session)
