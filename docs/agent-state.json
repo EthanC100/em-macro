@@ -482,6 +482,16 @@
    "commits": [],
    "note": "refused: (a) 2 tests failed, (e) site build: no yaml module in env, (b) Ledger rebuild differs (same snapshot); PR #73 reused and left open",
    "session": "https://claude.ai/code/session_01Ayx8qke61A"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-23T22:59:27+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged with main (264bf31, no auto-resolved files); filed Q033 (data, docs :45 quick check), Opposition no block p=55%, auto-approved; 0 blocked. Needs Ethan: Janus :45 quick checks stopped after 13 Nov 12:49Z (deleted or failing?). Fire: night-worker trigger unset (exit 6), hourly schedule picks it up",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
