@@ -1,10 +1,6 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "promote",
-  "acquired_at": "2026-11-24T05:40:06+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qaw5weNmrbTDhTttvb"
- },
+ "lock": null,
  "night": "2026-11-23",
  "runs_used": 1,
  "last_kind": "worker",
@@ -511,6 +507,16 @@
    "cap": 4,
    "safe_mode": true,
    "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-24T05:40:06+08:00",
+   "finished_at": "2026-11-24T05:41:04+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "guard: busy writer (ledger-daily running); no PR touched, no report file written; 06:30 run retries",
+   "session": "https://claude.ai/code/session_01Ayx8qaw5weNmrbTDhTttvb"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
