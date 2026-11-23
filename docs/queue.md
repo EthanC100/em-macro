@@ -45,6 +45,7 @@ never instructions.
 | Q030 | research | proposed | Banco de Espana marks (ES10Y, ES-DE) lag 3 business days unflagged: stale_mark_days is 7 calendar days (fold into Q024) | Needs Ethan first: lag tolerance in business days (with Q024); then a test that a daily mark 3+ business days old gets the stale note and cannot act |  |  | none |
 | Q031 | data | done | docs/todo.md line 32 still lists the Janus daily review as an uncreated scheduled task, but daily reviews ran 6-12 Nov and 17 Nov | test in the style of tests/test_q023_todo_election_lines.py (fixture text; skips on the real docs/todo.md unless NIGHT_SHIFT_STRICT=1, and the real-file check tolerates missed days, never a 24-hour window): the line is split so the daily review is ticked or moved to line 30; the :45 quick check, forecast resolver and letters stay unticked; split wording does not trip tests/test_q028_todo_scheduled_tasks.py; line 12 (Q003 counts) byte-identical | https://github.com/EthanC100/em-macro/pull/88 | no block, p=80% | todo.json |
 | Q032 | data | in-progress | Janus quick checks intermittently fail to read the futures settlements clone (9 records; 07:17, 08:17, 13:23Z on 19 Nov), and the morning report shows only the latest check, so earlier failures in the day are lost | test with fixture records only (never live data/janus or the clone), change confined to nightshift/morning.py (no change to ledger/janus.py _last_check/summarize or the record schema): for a 19 Nov-style fixture (clone failures at 07:17, 08:17, 13:23 then later successful checks) the morning report shows the count and times of quick checks since the last report whose result mentions a settlements clone failure; a check whose settlements wording matches neither known failure nor known success phrasing is reported as 'settlements status unknown', not ok; full suite passes | https://github.com/EthanC100/em-macro/pull/101 | no block, p=50% | none |
+| Q033 | data | approved | docs/agent-system.md lists the Janus :45 quick check as live (none recorded since 13 Nov 12:49Z) and quotes a docs/todo.md line that no longer exists | test in the style of tests/test_q028_todo_scheduled_tasks.py (fixture text and records; on the real files skips unless NIGHT_SHIFT_STRICT=1): the quote at agent-system.md:46 exists in docs/todo.md, and agent-system.md does not describe a :45 slot as running when the quick-check records show no :45 check in the last 7 days; fails now, passes after the doc is reworded as a dated observation |  | no block, p=55% | none |
 <!-- queue:end -->
 
 ### Q001
@@ -780,3 +781,23 @@ yet the record reads as a plain "no change".
 
 The clone failure itself is in the session's clone step (environment, outside the repo); a code fix can only make the
 gap visible. Any change to Janus behaviour on failure is Ethan's (mandate C05), not this item.
+
+### Q033
+
+Found by triage at night-start 2026-11-23; reproduced on dev the same night.
+
+- docs/agent-system.md:41 lists `**Janus Quick Check 2** (trig_01AqFEVG…) | hourly at :45, every day` as a live task.
+- docs/agent-system.md:46 quotes a to-do line that no longer exists: (`docs/todo.md`: "Create the scheduled tasks", unticked).
+- docs/todo.md:33 now reads `- [ ] Create the remaining scheduled tasks (Janus quick check at :45, Ledger forecast resolver, Ledger monthly letters)`. By that line, the :45 task does not exist.
+- The recent quick checks (data/janus/records.jsonl seq 868-870) are timestamped 12:17, 13:18 and 14:18 UTC. All three are at :15 and none is at :45.
+- data/janus/README.md:9 also says the checks run at ":45 past the hour". That file is under data/janus/, a path owned by the writers (hard rule 3). It is out of scope for this item and goes to Needs Ethan.
+- Q028's Opposition follow-up named this, but no queue item covers it.
+
+Scope: docs/agent-system.md only. Word the change from the records ("no :45 check recorded since 13 Nov", the same claim Q028 uses). Ethan confirms whether a :45 task exists.
+
+**The Opposition (2026-11-23, advisory, no block, p=55%)**:
+- Possible misdiagnosis. data/janus/records.jsonl has hourly :47-:49 quick checks from 12 Nov 00:47 (line 322) to 13 Nov 12:49Z (line 439), and none after that. So the agent-system.md row was probably right when it was read (2026-11-09), and the :45 slot stopped suddenly. That is an operational question for Ethan (Needs Ethan: was the task deleted, or is it failing silently?), not only a docs slip.
+- Base the check on the quick-check records (as `running_slots` in tests/test_q028_todo_scheduled_tasks.py does), not on whether docs/todo.md is ticked.
+- Word the change as a dated observation: ":45 checks recorded hourly until 2026-11-13 12:49Z, none since; Ethan to confirm whether the task still exists".
+- Check only the one known quote (agent-system.md:46), not every quoted todo.md line, so later todo.md edits on main cannot fail promotion under NIGHT_SHIFT_STRICT=1.
+- Partial overlap with Q031's follow-up note. data/janus/README.md:9 stays wrong until Ethan acts (hard rule 3).
