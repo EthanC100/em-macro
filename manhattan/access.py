@@ -313,8 +313,8 @@ def _git_config(commit: str, root) -> bytes:
 
 def _fence_of(raw: bytes) -> roles.Fence:
     try:
-        import yaml
-        data = yaml.safe_load(raw.decode("utf-8")) or {}
+        from manhattan import config as mconfig
+        data = mconfig.loads(raw.decode("utf-8"))      # yaml.safe_load, refusing a repeated key
         return roles.Fence.from_config(data)
     except Exception as exc:                             # noqa: BLE001 - any parse or shape error fails closed
         raise AccessError("the configuration cannot be read as a fence") from exc
