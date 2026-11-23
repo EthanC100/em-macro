@@ -1,13 +1,79 @@
 {
- "since": "2026-11-22T06:17:18+00:00",
- "at": "2026-11-22T22:25:15+00:00",
+ "since": "2026-11-22T22:25:15+00:00",
+ "at": "2026-11-23T06:17:16+00:00",
  "items": [
   {
-   "book": "me",
+   "book": "algorithm",
    "kind": "pnl",
-   "label": "me",
-   "change": 0.0295,
-   "text": "me: +0.03 index points (to 98.97)"
+   "label": "algorithm v1.0",
+   "change": 0.3264,
+   "text": "algorithm v1.0: +0.33 index points (to 101.18)"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J042",
+   "text": "Janus J042 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J043",
+   "text": "Janus J043 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J044",
+   "text": "Janus J044 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J045",
+   "text": "Janus J045 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J046",
+   "text": "Janus J046 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J047",
+   "text": "Janus J047 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "close",
+   "link": "#/position/janus/J048",
+   "text": "Janus J048 cancelled"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J049",
+   "text": "Janus opened J049: short JP10Y"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J050",
+   "text": "Janus opened J050: long JPY"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J051",
+   "text": "Janus opened J051: short BRL"
+  },
+  {
+   "book": "janus",
+   "kind": "trade",
+   "link": "#/position/janus/J052",
+   "text": "Janus opened J052: short MXN"
   }
  ]
 }
