@@ -4,7 +4,10 @@
  "night": "2026-11-23",
  "runs_used": 1,
  "last_kind": "worker",
- "chain_stopped": null,
+ "chain_stopped": {
+  "reason": "approved queue empty; Q033 PR #109 open into dev awaiting review/merge",
+  "at": "2026-11-24T01:31:10+08:00"
+ },
  "log": [
   {
    "routine": "night-start",
