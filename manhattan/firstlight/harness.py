@@ -14,8 +14,8 @@ Synthetic data only. It writes nothing outside ``--out`` and refuses to run unle
    2020-01-02, a read reaching 2020-01-02 and a declared window ending 2020-01-02 are each refused;
 3. declares one family and one hypothesis with a 12-point trend grid (``spec``), and freezes the batch with
    ``freeze.prepare``/``freeze.write`` into ``--out``. **This is a synthetic freeze, not owner-signed**:
-   ``freeze.verify_frozen`` is called and refuses it for want of the timestamp proof and the signed tag (genuine
-   verification is PR-2's); its content checks (canonical manifest, spec hashes, Merkle root) run first and pass;
+   ``freeze.verify_frozen`` checks the content (canonical manifest, spec hashes, Merkle root) first and then refuses
+   the batch because it lacks the required owner attestation;
 4. writes a ``batch_freeze`` record to a scratch ledger under ``--out`` and anchors it, then registers each variant
    as an exploration-role attempt (``access.register_evaluation`` with the cap's own fence, every declared window
    passing ``cap.check_declared_windows`` and the capped reader) and evaluates it through ``engine.evaluate``
@@ -218,7 +218,7 @@ def _probes(capped: cap.CappedStore) -> dict:
 
 def _freeze(out: Path, sp: dict, code_commit: str, *, resume: bool = False) -> tuple[freeze.Batch, dict]:
     """Prepare the batch; write it (fresh run) or compare it with the one on disk before writing nothing (resume);
-    then ask ``verify_frozen``, which must refuse it for want of the owner's proof only."""
+    then ask ``verify_frozen``, which must refuse it at the signing-key or timestamp-proof check."""
     fence = cap.fence()
     batch = freeze.prepare(
         BATCH_NUMBER, [sp["family"]], [sp["hypothesis"]], channel="blind",
@@ -237,18 +237,21 @@ def _freeze(out: Path, sp: dict, code_commit: str, *, resume: bool = False) -> t
             raise HarnessRefused("the regenerated batch is not the interrupted run's")
     else:
         written = freeze.write(batch, d)
+    expected_refusals = (
+        f"batch {BATCH_NUMBER}: {freeze.NO_PINNED_SIGNER}",
+        f"batch {BATCH_NUMBER}: no external timestamp proof ({freeze.TIMESTAMP_PROOF})",
+    )
     try:
-        freeze.verify_frozen(d, BATCH_NUMBER, expected_manifest_hash=batch.manifest_hash,
-                             tag_is_signed=lambda tag, root: False)
-        verification = "ACCEPTED"
-    except freeze.FreezeError as e:
-        verification = str(e)
-    if "no external timestamp proof" not in verification:
-        raise freeze.FreezeError(f"the synthetic freeze did not verify as expected: {verification}")
+        freeze.verify_frozen(d, BATCH_NUMBER, expected_manifest_hash=batch.manifest_hash)
+    except freeze.FreezeError as exc:
+        if str(exc) not in expected_refusals:
+            raise
+    else:
+        raise freeze.FreezeError("production verification accepted an unsigned synthetic freeze")
     info = {"batch": batch.id, "manifest_hash": batch.manifest_hash, "merkle_root": batch.manifest["merkle_root"],
             "kind": "synthetic freeze, not owner-signed",
             "verification": "content checks passed (canonical manifest, spec hashes, Merkle root); verify_frozen "
-                            "refuses it: no external timestamp proof and no signed tag (PR-2's work)",
+                            "refused it because required owner attestation is absent",
             "directory": written.relative_to(out).as_posix()}
     return batch, info
 
