@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-23",
- "runs_used": 1,
- "last_kind": "worker",
+ "night": "2026-11-24",
+ "runs_used": 0,
+ "last_kind": null,
  "chain_stopped": {
-  "reason": "approved queue empty; Q033 PR #109 open into dev awaiting review/merge",
-  "at": "2026-11-24T01:31:10+08:00"
+  "reason": "dev conflicts with main: data/janus/records.jsonl, data/ledger/automation_log.csv, data/ledger/changes.json, data/ledger/marks.csv, data/ledger/state.json, data/ledger/stress.json (criss-cross merge: two merge bases e551b7a and 64fb0fb; dev carries Janus quick check commit 6bec6bd)",
+  "at": "2026-11-24T22:33:45+08:00"
  },
  "log": [
   {
