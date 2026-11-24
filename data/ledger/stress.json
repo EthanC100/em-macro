@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 6.003,
+    "janus": 5.383,
     "me": 0.526
    },
    "positions": [
@@ -203,18 +203,9 @@
     },
     {
      "book": "janus",
-     "id": "J052",
-     "instrument": "MXN",
-     "pnl_pct": 0.621,
-     "move": "10.297 -> 12.705 (2008-08-29 to 2008-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J053",
      "instrument": "US10Y",
-     "pnl_pct": -0.069,
+     "pnl_pct": -0.068,
      "move": "3.83 -> 4.01 (2008-08-29 to 2008-10-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -333,7 +324,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 3.087,
+    "janus": 2.564,
     "me": 0.29
    },
    "positions": [
@@ -546,18 +537,9 @@
     },
     {
      "book": "janus",
-     "id": "J052",
-     "instrument": "MXN",
-     "pnl_pct": 0.519,
-     "move": "19.73 -> 23.448 (2020-02-28 to 2020-03-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J053",
      "instrument": "US10Y",
-     "pnl_pct": 0.188,
+     "pnl_pct": 0.185,
      "move": "1.13 -> 0.7 (2020-02-28 to 2020-03-31)",
      "source": "FRED DGS10",
      "monthly": false
@@ -663,7 +645,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": -0.597,
+    "janus": -0.467,
     "me": 0.317
    },
    "positions": [
@@ -876,18 +858,9 @@
     },
     {
      "book": "janus",
-     "id": "J052",
-     "instrument": "MXN",
-     "pnl_pct": -0.11,
-     "move": "20.514 -> 19.848 (2021-12-30 to 2022-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J053",
      "instrument": "US10Y",
-     "pnl_pct": -1.109,
+     "pnl_pct": -1.088,
      "move": "1.52 -> 4.1 (2021-12-31 to 2022-10-31)",
      "source": "FRED DGS10",
      "monthly": false

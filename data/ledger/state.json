@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-24",
- "at": "2026-11-24T20:24:10+00:00",
+ "at": "2026-11-24T22:15:20+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -79,7 +79,7 @@
  "index": {
   "algorithm v1.0": 102.1147,
   "algorithm v1.1": 100.0,
-  "janus": 99.9959,
+  "janus": 99.9947,
   "me": 98.485
  },
  "janus": {
@@ -443,9 +443,9 @@
   "J052": {
    "direction": "short",
    "instrument": "MXN",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.032,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J053": {
    "direction": "long",
@@ -515,7 +515,7 @@
    "instrument": "MXN",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   }
  },
  "janus_no_trades": 8,
