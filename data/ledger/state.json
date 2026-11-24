@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-24",
- "at": "2026-11-24T16:49:59+00:00",
+ "at": "2026-11-24T20:24:10+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 101.7317,
+  "algorithm v1.0": 102.1147,
   "algorithm v1.1": 100.0,
-  "janus": 99.983,
+  "janus": 99.9959,
   "me": 98.485
  },
  "janus": {
@@ -282,9 +282,9 @@
   "J029": {
    "direction": "short",
    "instrument": "EUR",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.011,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J030": {
    "direction": "short",
@@ -429,16 +429,16 @@
   "J050": {
    "direction": "long",
    "instrument": "JPY",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0006,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J051": {
    "direction": "short",
    "instrument": "BRL",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.1103,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J052": {
    "direction": "short",
@@ -466,7 +466,7 @@
    "instrument": "DE10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J056": {
    "direction": "short",
@@ -480,35 +480,35 @@
    "instrument": "EUR",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J058": {
    "direction": "short",
    "instrument": "GBP",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J059": {
    "direction": "long",
    "instrument": "JPY",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J060": {
    "direction": "short",
    "instrument": "AUD",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J061": {
    "direction": "short",
    "instrument": "BRL",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J062": {
    "direction": "short",
