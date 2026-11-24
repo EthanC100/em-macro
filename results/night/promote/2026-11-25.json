@@ -1,0 +1,32 @@
+{
+ "base": "918400f",
+ "head": "4bc77e8",
+ "today": "2026-11-25",
+ "checks": {
+  "d_conflict_free": {
+   "ok": false,
+   "conflicts": [
+    "data/janus/records.jsonl",
+    "data/ledger/automation_log.csv",
+    "data/ledger/changes.json",
+    "data/ledger/derivative_pnl.csv",
+    "data/ledger/marks.csv",
+    "data/ledger/state.json",
+    "data/ledger/stress.json"
+   ],
+   "detail": "ct in data/ledger/changes.json\nAuto-merging data/ledger/derivative_pnl.csv\nCONFLICT (content): Merge conflict in data/ledger/derivative_pnl.csv\nAuto-merging data/ledger/marks.csv\nCONFLICT (content): Merge conflict in data/ledger/marks.csv\nAuto-merging data/ledger/state.json\nCONFLICT (content): Merge conflict in data/ledger/state.json\nAuto-merging data/ledger/stress.json\nCONFLICT (content): Merge conflict in data/ledger/stress.json\nAutomatic merge failed; fix conflicts and then commit the result."
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 24
+  }
+ },
+ "ok": false,
+ "dev_commits_ahead": 1076,
+ "mode": "promote",
+ "reasons": [
+  "(d) merge conflicts: ['data/janus/records.jsonl', 'data/ledger/automation_log.csv', 'data/ledger/changes.json', 'data/ledger/derivative_pnl.csv', 'data/ledger/marks.csv', 'data/ledger/state.json', 'data/ledger/stress.json']"
+ ],
+ "pr": "https://github.com/EthanC100/em-macro/pull/73"
+}
