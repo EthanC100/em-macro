@@ -357,7 +357,8 @@ def test_corrupted_ledgers_are_refused_exactly_as_before(tmp_path, damage):
                                        "no_final_newline"])
 def test_irregular_files_take_the_reference_path(tmp_path, irregular):
     """Inputs the streaming fast path does not cover are answered by ``verify_snapshot`` on the same bytes: the
-    current ledger and reconciler accept exactly what the reference accepts, with the same records."""
+    current ledger and reconciler give the reference's answer, except that a framing other than one canonical line
+    per "\\n" is now refused (ledger integrity II)."""
     book = _book(tmp_path)
     ident = identity(5)
     a = _register(book, ident)
@@ -381,9 +382,19 @@ def test_irregular_files_take_the_reference_path(tmp_path, irregular):
         raw = raw.rstrip(b"\n")
     book.path.write_bytes(raw)
     got = _call(lambda: _book(tmp_path).records())
-    assert got == _call(lambda: RL.Ledger(book.path, writer="w", protocol=PROTOCOL).records())
-    assert _call(lambda: AT.reconcile(ledger_path=book.path, ledger_anchor=anchor)) == \
-        _call(lambda: RA.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    ref = _call(lambda: RL.Ledger(book.path, writer="w", protocol=PROTOCOL).records())
+    rec_got = _call(lambda: AT.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    rec_ref = _call(lambda: RA.reconcile(ledger_path=book.path, ledger_anchor=anchor))
+    if irregular in ("crlf", "blank_lines", "nbsp_line", "no_final_newline"):
+        # Ledger integrity II: the file must be exactly record_line(record) + "\n" per record, so these framings,
+        # which the reference (main) accepted through str.splitlines, are now refused and reported
+        assert ref[0] == "ok" and rec_ref[0] == "ok"
+        assert got[0] == "raise" and "does not verify" in got[2]
+        assert rec_got[0] == "raise" or rec_got[1]["violations"]
+        assert L.verify(book.path)
+        return
+    assert got == ref
+    assert rec_got == rec_ref
 
 
 @pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
@@ -410,13 +421,23 @@ def test_line_separators_in_payloads_are_written_escaped_and_reopen(tmp_path, se
 
 
 def test_a_stale_ledger_object_cannot_fork_the_chain_unnoticed(tmp_path):
+    """Ledger integrity II (S17 C6): the stale handle's append is now refused under the writer lock with nothing
+    written, so the chain never forks. Main's ledger (the reference) appended on its stale head; the fork was
+    caught only when the file was reopened."""
     first, second = _book(tmp_path), _book(tmp_path)
     second.append("screening_decision", {"by": "second"})
-    first.append("screening_decision", {"by": "first"})   # appended on its stale head
+    before = first.path.read_bytes()
+    with pytest.raises(L.LedgerError, match="stale"):
+        first.append("screening_decision", {"by": "first"})
+    assert first.path.read_bytes() == before and len(_book(tmp_path)) == 1
+    ref = tmp_path / "ref.jsonl"
+    r_first, r_second = (RL.Ledger(ref, writer="w", protocol=PROTOCOL) for _ in range(2))
+    r_second.append("screening_decision", {"by": "second"})
+    r_first.append("screening_decision", {"by": "first"})   # main: appended on its stale head
     with pytest.raises(L.LedgerError, match="does not verify"):
-        _book(tmp_path)
+        _book(tmp_path, "ref.jsonl")
     with pytest.raises(L.LedgerError, match="does not verify"):
-        RL.Ledger(first.path, writer="w", protocol=PROTOCOL)
+        RL.Ledger(ref, writer="w", protocol=PROTOCOL)
 
 
 def test_a_malformed_forged_evaluation_makes_the_rule_refuse_not_decide(tmp_path):

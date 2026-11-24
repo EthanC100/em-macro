@@ -212,7 +212,7 @@ def test_any_edit_deletion_insertion_or_reordering_is_detected(tmp_path):
     forged = json.loads(lg.path.read_text().splitlines()[1])
     forged["payload"]["note"] = "forged"
     forged["hash"] = L.record_hash(forged)                                         # a self-consistent forged record
-    tamper(lg.path, lambda ls: [ls[0], json.dumps(forged)] + ls[2:])
+    tamper(lg.path, lambda ls: [ls[0], L.record_line(forged)] + ls[2:])          # written as the writer would
     assert L.verify(lg.path) == ["record 3: prev_hash does not match the record before it"]
     lg = fresh("truncate.jsonl")
     head = lg.head
