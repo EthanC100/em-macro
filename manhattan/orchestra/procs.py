@@ -86,7 +86,10 @@ class ProcsUnavailable(RuntimeError):
 
 
 def group(pgid: int, *, use_proc: bool | None = None) -> list[Proc]:
-    """Every process whose process group is ``pgid``. Raises ``ProcsUnavailable`` if the table cannot be read."""
+    """Processes whose process group is ``pgid``; Linux zombies are excluded because they have exited.
+
+    Raises ``ProcsUnavailable`` if the table cannot be read.
+    """
     use_proc = PROC.is_dir() and (PROC / "self" / "stat").exists() if use_proc is None else use_proc
     out = []
     if use_proc:
@@ -101,7 +104,9 @@ def group(pgid: int, *, use_proc: bool | None = None) -> list[Proc]:
             try:
                 s = (PROC / e / "stat").read_text()
                 rest = s[s.rfind(")") + 2:].split()
-                if int(rest[2]) != pgid:                       # field 5: pgrp
+                # A zombie has exited and cannot run or hold a lock. Containers may leave it unreaped under
+                # PID 1 indefinitely; counting a recorded zombie would defer the next invocation forever.
+                if rest[0] == "Z" or int(rest[2]) != pgid:     # fields 3: state, 5: pgrp
                     continue
                 cmd = (PROC / e / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
                 # field 24: rss in pages; field 22: start time in clock ticks since boot

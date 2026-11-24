@@ -557,6 +557,32 @@ def test_an_unreadable_process_table_is_never_an_empty_group(macos):
     assert _members(501, Path(INV)) == []                   # nothing verified, nothing killed; retried next tick
 
 
+@pytest.mark.parametrize("state", ["R", "S", "T", "D", "I"])
+def test_linux_recorded_zombie_does_not_block_a_live_worker(monkeypatch, tmp_path, state):
+    """A dead spawn helper can remain under PID 1 forever. Keep live/stopped workers, not its zombie identity."""
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.journal import atomic_write_json
+    from manhattan.orchestra.supervisor import _members
+    proc = tmp_path / "proc"
+    (proc / "self").mkdir(parents=True)
+    (proc / "self/stat").touch()
+    for pid, status in ((501, state), (502, "Z")):
+        entry = proc / str(pid)
+        entry.mkdir()
+        fields = [status, "1", "501"] + ["0"] * 19
+        fields[19], fields[21] = "12345", "2"  # start time, RSS pages
+        (entry / "stat").write_text(f"{pid} (spawn helper) " + " ".join(fields))
+        (entry / "cmdline").write_bytes(b"python\0spawn-helper\0" if status != "Z" else b"")
+    monkeypatch.setattr(procs, "PROC", proc)
+    inv = tmp_path / "inv"
+    atomic_write_json(inv / "members.json", [[501, "jiffies:12345"], [502, "jiffies:12345"]])
+    assert [p.pid for p in procs.group(501, use_proc=True)] == [501]
+    assert _members(501, inv) == [501]
+    (proc / "501/stat").write_text((proc / "501/stat").read_text().replace(f") {state} ", ") Z ", 1))
+    assert procs.group(501, use_proc=True) == []
+    assert _members(501, inv) == []
+
+
 def test_macos_network_volumes_are_refused_and_local_ones_accepted(macos, monkeypatch, tmp_path):
     from manhattan.orchestra import procs
     want = {"/Users/ethan/orchestra": "apfs", "/private/tmp/orchestra": "apfs", "/Volumes/Fast SSD/o": "apfs",
