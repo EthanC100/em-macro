@@ -1,0 +1,31 @@
+{
+ "book": "me",
+ "id": "D003",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-24T23:11:03+00:00",
+ "postmortem": {
+  "thesis_right": "no",
+  "skill_or_luck": "mixed",
+  "what_happened": "Strikes did not restart after the midterms: Trump deferred further action on Iran to after the new year if talks fail, and Qatar pushed to revive US-Iran talks. Supply stayed comfortable despite the constrained Strait of Hormuz (Libya's Sharara reopened, record Russian flows to China and India under US waivers, strategic reserves), so Brent fell about 3.5% on 23 Nov to its lowest close since late August and the March 2027 contract went through the 85 exit, auto-resolving the spread at a loss of about 1.2% of account.",
+  "assessment": "The thesis was a timing call on a lame-duck president restarting strikes within about five weeks; the actual signal (deferral to after the new year) was available as a risk in the 'change_mind' list but the probability of 60% against roughly 50% implied overstated how fast escalation would come. Capping loss with a spread and a hard futures exit worked as designed: the loss was about 60% of the premium budget rather than all of it. Paying extreme implied volatility for a binary event with a short horizon meant the position needed the event, not just drift, and supply-side slack was under-weighted in the thesis.",
+  "do_differently": "1) Separate 'escalation eventually' from 'escalation before expiry': price the hazard per week and require the edge to survive a deferral scenario. 2) Weigh non-Gulf supply (Libya, Russian flows under waivers, reserves) explicitly before an upside oil call. 3) With implied volatility extreme, prefer a longer-dated or cheaper structure, or wait for a catalyst date rather than buying at entry on a narrative.",
+  "sources": [
+   {
+    "title": "Oil touches three-month lows as rising supply offsets Hormuz threat (Reuters via Lufkin Daily News)",
+    "url": "https://lufkindailynews.com/news_reuters/business/oil-touches-three-month-lows-as-rising-supply-offsets-hormuz-threat/article_9b0e6433-9a8b-5064-9f29-a0158943b89d.html"
+   },
+   {
+    "title": "Oil prices fall as Qatar backs diplomacy to end Iran war (AGBI)",
+    "url": "https://www.agbi.com/oil-and-gas/2026/11/oil-prices-fall-as-qatar-backs-diplomacy-to-end-iran-war/"
+   },
+   {
+    "title": "Oil Slides Below $90 to Three-Month Low as Rising Supply Tests OPEC+ (TipRanks)",
+    "url": "https://www.tipranks.com/news/oil-slides-below-90-to-three-month-low-as-rising-supply-tests-opec-before-sunday-vote"
+   },
+   {
+    "title": "Oil Prices Hold Near Three-Month Lows Despite Hormuz Mine Claims (OilPrice)",
+    "url": "https://oilprice.com/Latest-Energy-News/World-News/Oil-Prices-Hold-Near-Three-Month-Lows-Despite-Hormuz-Mine-Claims.html"
+   }
+  ]
+ }
+}
