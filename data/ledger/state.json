@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-23",
- "at": "2026-11-23T22:24:27+00:00",
+ "as_of": "2026-11-24",
+ "at": "2026-11-24T06:12:31+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,7 +77,7 @@
   }
  },
  "index": {
-  "algorithm v1.0": 101.3259,
+  "algorithm v1.0": 101.0856,
   "algorithm v1.1": 100.0,
   "janus": 100.1059,
   "me": 98.9747
@@ -424,7 +424,7 @@
    "instrument": "JP10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "cancelled"
   },
   "J050": {
    "direction": "long",
@@ -446,8 +446,78 @@
    "net": null,
    "reason": null,
    "status": "open"
+  },
+  "J053": {
+   "direction": "long",
+   "instrument": "US10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J054": {
+   "direction": "long",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J055": {
+   "direction": "short",
+   "instrument": "DE10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J056": {
+   "direction": "short",
+   "instrument": "JP10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J057": {
+   "direction": "short",
+   "instrument": "EUR",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J058": {
+   "direction": "short",
+   "instrument": "GBP",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J059": {
+   "direction": "long",
+   "instrument": "JPY",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J060": {
+   "direction": "short",
+   "instrument": "AUD",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J061": {
+   "direction": "short",
+   "instrument": "BRL",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J062": {
+   "direction": "short",
+   "instrument": "MXN",
+   "net": null,
+   "reason": null,
+   "status": "pending"
   }
  },
  "janus_no_trades": 8,
- "latest_mark": "2026-11-23"
+ "latest_mark": "2026-11-24"
 }
