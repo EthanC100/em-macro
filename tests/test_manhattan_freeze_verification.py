@@ -309,9 +309,18 @@ with seam.trust():
                   manifest_hash=sys.argv[7], code_version="c" * 40)
     world = SS.sector_world()
     lock = R.run_selection(world, exp, cm)
+    book = L.Ledger(ledger_path, writer="test fixture", protocol="0" * 64)
+    if len(sys.argv) > 8:
+        import time
+        ready, peer_ready = map(Path, sys.argv[8:10])
+        ready.touch()
+        deadline = time.monotonic() + 90
+        while not peer_ready.exists():
+            if time.monotonic() >= deadline:
+                raise RuntimeError("the other process did not open the ledger")
+            time.sleep(0.01)
     try:
-        v = R.run_holdout(world, exp, lock, cm, ledger=L.Ledger(ledger_path, writer="test fixture",
-                                                                protocol="0" * 64),
+        v = R.run_holdout(world, exp, lock, cm, ledger=book,
                           fence=fence, code_version={"commit": "c" * 40, "engine_sha256": "e" * 64})
         print(json.dumps({"status": "read", "rejected": v["rejected"], "attempt": v["ledger"]["attempt_id"]}))
     except R.RegistrationError as e:
@@ -340,6 +349,45 @@ def test_p2d_two_processes_get_exactly_one_look(tmp_path, nt, cm):
     assert (p0["role"], p0["designated"], p0["batch"], p0["window"]["id"]) == ("reserve", True, "AB-0777",
                                                                                HOLDOUT_WINDOW)
     assert _ledger(book).designated_reserve_starts("AB-0777", DOMAIN) == [out[0]["attempt"]]
+    assert L.verify(book) == []
+
+
+def test_simultaneous_synthetic_holdout_starts_share_one_ledger(tmp_path, nt, cm):
+    base, book = tmp_path / "batches", tmp_path / "ledger.jsonl"
+    hyp, batch = _batch(base, nt, cm, 777)
+    seam.freeze_fixture(base, 777)
+    script = tmp_path / "child.py"
+    script.write_text(CHILD)
+    book.touch()
+    alias = tmp_path / "alias.jsonl"
+    alias.symlink_to(book)
+    ready = [tmp_path / "first.ready", tmp_path / "second.ready"]
+
+    # Both children open the same empty ledger before either attempts registration.
+    children = []
+    try:
+        for i, path in enumerate((book, alias)):
+            args = [sys.executable, str(script), str(ROOT), str(base), "777", str(path),
+                    json.dumps(hyp, default=str), json.dumps(COSTS), batch.manifest_hash,
+                    str(ready[i]), str(ready[1 - i])]
+            children.append(subprocess.Popen(args, cwd=ROOT, stdout=subprocess.PIPE,
+                                             stderr=subprocess.PIPE, text=True))
+        outcomes = []
+        for child in children:
+            stdout, stderr = child.communicate(timeout=120)
+            assert child.returncode == 0, stderr[-2000:]
+            outcomes.append(json.loads(stdout.strip().splitlines()[-1]))
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+                child.communicate()
+
+    assert sorted(o["status"] for o in outcomes) == ["read", "refused"]
+    accepted = next(o for o in outcomes if o["status"] == "read")
+    refused = next(o for o in outcomes if o["status"] == "refused")
+    assert "stale ledger handle" in refused["error"]
+    assert [r["hash"] for r in _starts(book)] == [accepted["attempt"]]
     assert L.verify(book) == []
 
 
