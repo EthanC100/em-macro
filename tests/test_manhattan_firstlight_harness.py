@@ -600,3 +600,78 @@ def test_the_anchor_check_turns_any_unexpected_error_into_a_failure(clean, monke
     monkeypatch.setattr(anchor_stub, "read_anchors", boom)
     v = anchor_stub.verify_against_anchor(clean[0] / harness.LEDGER_REL, clean[0] / harness.ANCHORS_REL)
     assert v["ok"] is False and "cannot be checked" in v["problems"][-1] and v["independently_anchored"] is False
+
+
+@pytest.mark.parametrize("name", [
+    "DATA_REPO_URL", "HTTPS_PROXY", "http_proxy", "ALL_PROXY", "GITHUB_PAT", "NETRC", "SSH_AUTH_SOCK",
+    "AUTHORIZATION", "COOKIE", "AWS_PROFILE", "GOOGLE_APPLICATION_CREDENTIALS", "PYTHONPATH",
+    "PYTHONSTARTUP", "PYTHONHOME", "LD_PRELOAD", "GIT_SSH_COMMAND", "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_COUNT", "GIT_CONFIG_VALUE_0", "ARBITRARY_UNRECOGNIZED_NAME",
+])
+def test_reproduction_children_do_not_inherit_unneeded_account_or_injection_variables(name):
+    # Synthetic marker only; the test never reads or prints the real environment.
+    supplied = {"PATH": "/usr/bin", "HOME": "/fixture", name: "https://fixture:fake@invalid.example"}
+    expected = {"PATH": "/usr/bin", "HOME": "/fixture", "PYTHONDONTWRITEBYTECODE": "1"}
+    assert harness.child_env(supplied) == expected
+    assert name in supplied  # filtering must not mutate the parent's environment
+
+
+def test_reproduction_forwards_runtime_locale_and_thread_settings_only(monkeypatch, tmp_path):
+    supplied = {"PATH": "/usr/bin", "HOME": "/fixture", "LANG": "C.UTF-8", "OMP_NUM_THREADS": "1",
+                "TMPDIR": str(tmp_path), "SSH_AUTH_SOCK": "/fixture/agent", "PYTHONPATH": "/fixture/injection"}
+    expected = {k: v for k, v in supplied.items() if k not in ("SSH_AUTH_SOCK", "PYTHONPATH")}
+    expected["PYTHONDONTWRITEBYTECODE"] = "1"
+    monkeypatch.setattr(harness.os, "environ", supplied)
+    def fake_run(cmd, **kwargs):
+        assert kwargs["env"] == expected
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(harness.subprocess, "run", fake_run)
+    assert harness._subprocess_run(tmp_path / "out", SEED).returncode == 0
+
+
+@pytest.mark.parametrize("text", ['explorer:\n  data_end: "2014-12-31"\n', "explorer: {}\n", "- a list\n", None])
+@pytest.mark.parametrize("existing_empty_directory", [False, True])
+def test_reproduce_refuses_bad_cutoff_before_writes_or_children(monkeypatch, tmp_path, text,
+                                                              existing_empty_directory):
+    night = tmp_path / "night.yaml"
+    if text is not None:
+        night.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(harness, "NIGHT_CONFIG", night)
+    out = tmp_path / "repro"
+    if existing_empty_directory:
+        out.mkdir()
+    monkeypatch.setattr(harness, "_subprocess_run", lambda *a: pytest.fail("a refused run must spawn no child"))
+    with pytest.raises(harness.HarnessRefused, match="explorer cutoff"):
+        harness.reproduce(out, SEED)
+    assert out.exists() == existing_empty_directory
+    if out.exists():
+        assert not list(out.iterdir())
+    assert harness.main(["--out", str(out), "--seed", str(SEED), "--reproduce"]) == harness.EXIT_REFUSED
+
+
+@pytest.mark.parametrize("head", ["z" * 64, "a" * 63, "a" * 65, "A" * 64])
+def test_anchor_heads_require_lowercase_sha256_syntax(clean, tmp_path, head):
+    c = _copy(clean[0], tmp_path)
+    apath = next((c / harness.ANCHORS_REL).glob("*.jsonl"))
+    lines = [x for x in apath.read_bytes().split(b"\n") if x]
+    a = json.loads(lines[-1])
+    a["head"] = head
+    lines[-1] = json.dumps(a, sort_keys=True, separators=(",", ":")).encode()
+    apath.write_bytes(b"\n".join(lines) + b"\n")
+    assert not anchor_stub.verify_against_anchor(c / harness.LEDGER_REL, c / harness.ANCHORS_REL)["ok"]
+    with pytest.raises(report.ReportRefused):
+        report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, c / harness.LOG_REL)
+
+
+def test_variant_log_extra_unknown_row_is_refused(clean, tmp_path):
+    import csv
+    c = _copy(clean[0], tmp_path)
+    log = c / harness.LOG_REL
+    with log.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    unknown = {**rows[0], "code_ref": "f" * 64}
+    with log.open("a", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writerow(unknown)
+    with pytest.raises(report.ReportRefused, match="unknown"):
+        report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, log)

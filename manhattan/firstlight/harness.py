@@ -38,8 +38,9 @@ else in the process may log variants while it runs. The clean design, an explici
 ``engine.evaluate``/``log_variant`` taken as the minimum with main's, changes existing files and is an owner
 decision outside this PR.
 
-**Secrets.** ``reproduce`` starts its child processes with every ``*TOKEN*``, ``*SECRET*``, ``*KEY*``,
-``*PASSWORD*``, ``*CREDENTIAL*`` and ``GIT_CONFIG_*`` variable removed from the environment.
+**Child environment.** ``reproduce`` forwards only the documented runtime allowlist (paths, locale and numerical
+thread controls). Credentials, proxy URLs, authentication-agent sockets and Python/Git injection settings are not
+inherited. This isolates environment variables; it is not a filesystem or network sandbox.
 """
 from __future__ import annotations
 
@@ -86,7 +87,12 @@ DATA_REL, FREEZE_REL, REPORT_REL = "data", "freeze", "report"
 EXIT_OK, EXIT_INCOMPLETE, EXIT_REFUSED = 0, 1, 3
 NIGHT_CONFIG = ROOT / "config/night.yaml"          # read from disk only: never fetched
 _LOG_LOCK = threading.Lock()
-SECRET_MARKERS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL")
+CHILD_ENV_KEYS = frozenset({
+    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ",
+    "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
+    "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+})
 
 
 class HarnessRefused(RuntimeError):
@@ -407,12 +413,14 @@ def result_hashes(ledger_path: Path) -> dict:
 
 
 def child_env(environ=None) -> dict:
-    """The environment for a child run: everything but tokens, secrets, keys, passwords and credentials. The
-    ``GIT_CONFIG_*`` group (count, keys and values, which can carry credentials) goes as a whole, since git refuses
-    a count without its keys; the child needs only ``git rev-parse``."""
+    """Only platform paths, locale and numerical thread controls reach the synthetic child.
+
+    An allowlist excludes credentials even when their names do not contain a secret marker, including proxy URLs,
+    PATs, NETRC and SSH_AUTH_SOCK. Python and Git configuration injection variables are excluded too. The child
+    uses its explicit interpreter and repository cwd; it needs no inherited account or network configuration.
+    """
     environ = os.environ if environ is None else environ
-    env = {k: v for k, v in environ.items() if not any(m in k.upper() for m in SECRET_MARKERS)
-           and not k.upper().startswith("GIT_CONFIG_")}
+    env = {k: v for k, v in environ.items() if k in CHILD_ENV_KEYS}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
@@ -428,6 +436,7 @@ def reproduce(out: Path, seed: int) -> dict:
     hash of every computation, the census, and the three report files byte for byte. Writes
     ``out/reproduction.json``."""
     check_switches()
+    variant_log_cutoff()                       # refuse before creating output or spawning either child
     out = Path(out).resolve()
     _prepare_out(out, False)
     runs = {}
