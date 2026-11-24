@@ -186,6 +186,9 @@ def _refs(tree: ast.AST) -> set[str]:
 PIT, ACCESS, LEDGER, STORE = ("manhattan/engine/pit.py", "manhattan/access.py", "manhattan/ledger.py",
                               "manhattan/ops/store.py")
 EVALUATE, RUNNER = "manhattan/engine/evaluate.py", "manhattan/ops/runner.py"
+# PR-2 (S17 C1, C2): the freeze check's trust and the equities gate's minting, marking and unchecked readers
+EQ_FREEZE, EQ_REG = "manhattan/freeze.py", "manhattan/equities/registration.py"
+EQ_SYN, EQ_TC = "manhattan/equities/synthetic.py", "manhattan/equities/track_compare.py"
 ALLOWED = {
     # pit: minting, sealing and the per-process grant registry
     "_open_window": {PIT, ACCESS}, "_SEAL_KEY": {PIT}, "_seal": {PIT}, "_GRANTS": {PIT}, "_fields": {PIT},
@@ -214,6 +217,14 @@ ALLOWED = {
     # the Store's raw writer (journal, git) behind the sealed write
     "_append_local": {STORE}, "_commit": {STORE}, "_push": {STORE}, "_transact": {STORE}, "_apply": {STORE},
     "_verify_entry": {STORE}, "_reset_to_remote": {STORE, ACCESS},
+    # PR-2: freeze.verify_frozen's trust (the pin, the tag check, the timestamp verifier); the equities gate's seal,
+    # the synthetic-world registry, and the readers that do not stop at the registered selection end. Tests reach
+    # them through tests/manhattan_freeze_seam.py only (not scanned: it is not under manhattan/)
+    "_TRUST": {EQ_FREEZE}, "_PRODUCTION": {EQ_FREEZE}, "_Trust": {EQ_FREEZE}, "_verify_batch": {EQ_FREEZE},
+    "_mint": {EQ_REG}, "_HANDLE_KEY": {EQ_REG}, "_seal_of": {EQ_REG}, "_sealed": {EQ_REG},
+    "_SYNTHETIC": {EQ_SYN}, "_register_world": {EQ_SYN}, "_world_provenance": {EQ_SYN}, "_GENERATORS": {EQ_SYN},
+    "_sleeve": {EQ_TC, EQ_REG}, "_compare": {EQ_TC},
+    "manhattan_freeze_seam": set(),
 }
 
 
@@ -257,12 +268,34 @@ def test_private_access_paths_are_used_only_where_allowed():
     ("from manhattan import access\naccess._COMPUTED.discard('a')", "_COMPUTED"),
     ("def f(ctx):\n    ctx._computing = True", "_computing"),
     ("def f(vf):\n    object.__setattr__(vf, '_tag', 'x')", "_tag"),
+    # PR-2 review: the forms that reached freeze's trust past the first, import-based scan
+    ("import dataclasses\nfrom manhattan.equities import registration as R\n"
+     "R.FZ._TRUST = dataclasses.replace(R.FZ._TRUST, signers={'ME'}, tag_signer=lambda *a: 'ME')", "_TRUST"),
+    ("from manhattan.equities.registration import FZ\nFZ._TRUST = None", "_TRUST"),
+    ("from manhattan import freeze\nsetattr(freeze, '_TRUST', None)", "_TRUST"),
+    ("import sys\nt = sys.modules['manhattan.freeze']._TRUST", "_TRUST"),
+    ("from manhattan.freeze import verify_frozen\nverify_frozen.__globals__['_TRUST'] = None", "_TRUST"),
+    ("import manhattan.freeze as anything\nanything._PRODUCTION", "_PRODUCTION"),
+    ("import importlib\nimportlib.import_module('manhattan.freeze')._Trust", "_Trust"),
+    ("from manhattan.freeze import _verify_batch", "_verify_batch"),
+    ("from manhattan.equities import registration as R\nh = R._mint(object())", "_mint"),
+    ("k = getattr(__import__('manhattan.equities.registration'), '_HANDLE_KEY')", "_HANDLE_KEY"),
+    ("from manhattan.equities import synthetic as SY\nSY._SYNTHETIC[id(o)] = o", "_SYNTHETIC"),
+    ("from manhattan.equities.synthetic import _register_world", "_register_world"),
+    ("from manhattan.equities.track_compare import _sleeve", "_sleeve"),
+    ("from manhattan.equities import track_compare as TC\nTC._compare(w, c, m)", "_compare"),
+    ("import manhattan_freeze_seam", "manhattan_freeze_seam"),
 ])
 def test_the_scan_detects_prohibited_references(snippet, name):
     """N3: a module outside the allowlist that reaches a private access path is flagged."""
     assert name in scan({"manhattan/ops/rogue.py": snippet})
-    assert scan({ACCESS if name not in ("_append_local", "_append", "_GRANTS") else
-                 {"_append_local": STORE, "_append": LEDGER, "_GRANTS": PIT}[name]: snippet}) .get(name) is None
+    owners = ALLOWED[name]
+    owner = {"_append_local": STORE, "_append": LEDGER, "_GRANTS": PIT}.get(name) or (
+        ACCESS if ACCESS in owners or not owners else sorted(owners)[0])
+    if not owners:
+        assert name in scan({owner: snippet})                   # nobody is allowed (the test-only seam)
+    else:
+        assert scan({owner: snippet}).get(name) is None
 
 
 # ------------------------------------------------------------------ identities
