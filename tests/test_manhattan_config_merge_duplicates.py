@@ -53,16 +53,18 @@ def test_a_duplicate_inside_a_merge_source_is_refused_by_the_loader(name):
 @pytest.mark.parametrize("name", sorted(ATTACKS))
 def test_the_fence_parser_refuses_it_and_never_reads_the_window_as_exploration(name):
     """The consumer path: ``access._fence_of`` parses the authoritative file and must fail closed."""
-    with pytest.raises(access.AccessError):
+    with pytest.raises(access.AccessError) as exc:
         access._fence_of(ATTACKS[name].encode("utf-8"))
+    assert isinstance(exc.value.__cause__, MC.DuplicateKeyError)
 
 
 def test_the_reviewed_reproduction_no_longer_turns_a_reserve_date_into_exploration():
     """On ae7d4b6 this text parsed, the window was discarded, and fx_daily on 2015-01-05 was exploration."""
     text = ATTACKS["inline_block_merge"]
+    unsafe = roles.Fence.from_config(yaml.safe_load(text))
+    assert roles.role_of(date(2015, 1, 5), "fx_daily", unsafe) == roles.EXPLORATION
     with pytest.raises(MC.DuplicateKeyError):
-        fence = roles.Fence.from_config(MC.loads(text))
-        assert roles.role_of(date(2015, 1, 5), "fx_daily", fence) != roles.EXPLORATION   # pragma: no cover
+        MC.loads(text)
 
 
 LEGITIMATE = {
@@ -91,3 +93,18 @@ def test_a_legitimately_merged_window_still_protects_its_dates(name):
     fence = roles.Fence.from_config(MC.loads(LEGITIMATE[name]))
     assert fence.reserve["fx_daily"] == (date(2010, 1, 1), date(2018, 12, 31))
     assert roles.role_of(date(2015, 1, 5), "fx_daily", fence) != roles.EXPLORATION
+
+
+@pytest.mark.parametrize("text", [
+    "reserve: { !!merge '<<': {windows: {}, windows: {}} }",
+    "reserve: !!map {windows: {}, windows: {}}",
+    "items: [{<<: {windows: {}, windows: {}}}]",
+    "x: {true: 1, 1: 2}",
+    "x: {1: a, 1.0: b}",
+])
+def test_tagged_sequence_and_type_variant_duplicates_are_refused(text):
+    with pytest.raises(MC.DuplicateKeyError):
+        MC.loads(text)
+    with pytest.raises(access.AccessError) as exc:
+        access._fence_of(text.encode())
+    assert isinstance(exc.value.__cause__, MC.DuplicateKeyError)
