@@ -527,6 +527,16 @@
    "commits": [],
    "note": "refused on (d): dev conflicts with main in data/ files (criss-cross); PR #73 updated, ok false",
    "session": "https://claude.ai/code/session_01Ayx8qb5o5BC58U1UqY4hFW"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-25T23:07:09+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (shallow clone unshallowed first; no auto_resolved files), tests 4228 passed after fixing an env-only PyYAML install; triage 1 finding, not filed (overlaps Q024/Q030: daily mark exactly 7 days old not flagged stale, marks.py:581 uses > not >=; 5 energy marks dated 17 Nov fetched 24 Nov called fresh by Janus quick check); Actions API 403 for triage; 0 filed/approved/blocked; guard next=stop",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
