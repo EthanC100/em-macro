@@ -13,7 +13,7 @@ liveness bug exposed by the host, not evidence that those helpers kept running.
 
 ## Correction and boundaries
 
-The Linux process-table reader excludes only explicit `Z` state entries. Live,
+The Linux process-table reader excludes an entry only when every task is explicitly `Z` and the task-id set is stable across the read. A `Z` leader alone can have live worker threads. Missing, empty, unreadable or malformed task information keeps the recorded process in the group. Live,
 sleeping, stopped, uninterruptible and idle workers remain members. Existing
 PID/start-time matching, unrelated-process protection, process-table refusal,
 retry accounting and resource controls are unchanged. No invocation is marked
@@ -37,3 +37,15 @@ No protected paths, workflows, schedules, scientific rules, signing keys,
 research switches or trading controls change. Only synthetic fixtures and
 disposable smoke jobs are used. This draft requires independent review and
 must not be merged by the overnight session.
+
+## S17 correction
+
+The original leader-only rule was unsafe: `pthread_exit` can leave a zombie leader
+with a live worker. New synthetic fixtures cover that case, unknown task state,
+and stable all-zombie groups. The PID/start identity still authorizes targeting.
+
+Governance remains an explicit blocker: retargeting this published history to
+`dev` currently exposes 22 files including unrelated writer data and accounting
+changes. Rewriting history or silently reverting those paths is not permitted.
+The focused correction remains draft pending explicit owner day-session adoption
+or an owner-approved integration route into dev. Nothing is merged here.

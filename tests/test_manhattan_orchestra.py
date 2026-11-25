@@ -572,6 +572,8 @@ def test_linux_recorded_zombie_does_not_block_a_live_worker(monkeypatch, tmp_pat
         fields = [status, "1", "501"] + ["0"] * 19
         fields[19], fields[21] = "12345", "2"  # start time, RSS pages
         (entry / "stat").write_text(f"{pid} (spawn helper) " + " ".join(fields))
+        (entry / "task" / str(pid)).mkdir(parents=True)
+        (entry / "task" / str(pid) / "stat").write_text((entry / "stat").read_text())
         (entry / "cmdline").write_bytes(b"python\0spawn-helper\0" if status != "Z" else b"")
     monkeypatch.setattr(procs, "PROC", proc)
     inv = tmp_path / "inv"
@@ -579,6 +581,7 @@ def test_linux_recorded_zombie_does_not_block_a_live_worker(monkeypatch, tmp_pat
     assert [p.pid for p in procs.group(501, use_proc=True)] == [501]
     assert _members(501, inv) == [501]
     (proc / "501/stat").write_text((proc / "501/stat").read_text().replace(f") {state} ", ") Z ", 1))
+    (proc / "501/task/501/stat").write_text((proc / "501/stat").read_text())
     assert procs.group(501, use_proc=True) == []
     assert _members(501, inv) == []
 
@@ -800,3 +803,41 @@ def test_real_macos_peak_rss_units():
     block[::4096] = b"1" * len(block[::4096])
     mb = maxrss_mb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     assert 64 <= mb < 8192                                  # bytes on macOS; as KiB it would read ~1000x larger
+
+
+@pytest.mark.parametrize('tasks', ['live', 'missing', 'empty', 'malformed', 'unreadable'])
+def test_zombie_leader_with_live_or_unknown_tasks_remains_a_member(monkeypatch, tmp_path, tasks):
+    from manhattan.orchestra import procs
+    from manhattan.orchestra.journal import atomic_write_json
+    from manhattan.orchestra.supervisor import _members
+    proc = tmp_path / 'proc'
+    entry = proc / '501'
+    entry.mkdir(parents=True)
+    (proc / 'self').mkdir()
+    (proc / 'self/stat').touch()
+    fields = ['Z', '1', '501'] + ['0'] * 19
+    fields[19], fields[21] = '12345', '2'
+    leader = '501 (leader) ' + ' '.join(fields)
+    (entry / 'stat').write_text(leader)
+    (entry / 'cmdline').write_bytes(b'')
+    if tasks != 'missing':
+        (entry / 'task').mkdir()
+    if tasks in ('live', 'malformed'):
+        for tid, state in ((501, 'Z'), (502, 'S')):
+            p = entry / 'task' / str(tid)
+            p.mkdir()
+            (p / 'stat').write_text(leader.replace(') Z ', f') {state} '))
+        if tasks == 'malformed':
+            (entry / 'task/502/stat').write_text('broken')
+    if tasks == 'unreadable':
+        real_iterdir = Path.iterdir
+        def denied(p):
+            if p == entry / 'task':
+                raise PermissionError('synthetic refusal')
+            return real_iterdir(p)
+        monkeypatch.setattr(Path, 'iterdir', denied)
+    monkeypatch.setattr(procs, 'PROC', proc)
+    inv = tmp_path / 'inv'
+    atomic_write_json(inv / 'members.json', [[501, 'jiffies:12345']])
+    assert [p.pid for p in procs.group(501)] == [501]
+    assert _members(501, inv) == [501]

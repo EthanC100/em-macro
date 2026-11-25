@@ -86,7 +86,7 @@ class ProcsUnavailable(RuntimeError):
 
 
 def group(pgid: int, *, use_proc: bool | None = None) -> list[Proc]:
-    """Processes whose process group is ``pgid``; Linux zombies are excluded because they have exited.
+    """Processes whose process group is ``pgid``; Linux entries are excluded only when all tasks are zombies.
 
     Raises ``ProcsUnavailable`` if the table cannot be read.
     """
@@ -104,11 +104,25 @@ def group(pgid: int, *, use_proc: bool | None = None) -> list[Proc]:
             try:
                 s = (PROC / e / "stat").read_text()
                 rest = s[s.rfind(")") + 2:].split()
-                # A zombie has exited and cannot run or hold a lock. Containers may leave it unreaped under
-                # PID 1 indefinitely; counting a recorded zombie would defer the next invocation forever.
-                if rest[0] == "Z" or int(rest[2]) != pgid:     # fields 3: state, 5: pgrp
+                if int(rest[2]) != pgid:                      # field 5: pgrp
                     continue
-                cmd = (PROC / e / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+                if rest[0] == "Z":
+                    # pthread_exit can leave a Z leader with live worker threads. Unknown/empty task tables
+                    # remain members: never allow overlapping invocations on the strength of a leader alone.
+                    try:
+                        tasks = list((PROC / e / "task").iterdir())
+                        states = [p.joinpath("stat").read_text().rsplit(")", 1)[1].split()[0] for p in tasks]
+                        stable = {p.name for p in tasks} == {p.name for p in (PROC / e / "task").iterdir()}
+                        if states and stable and all(state == "Z" for state in states):
+                            continue
+                    except (OSError, IndexError):
+                        pass
+                try:
+                    cmd = (PROC / e / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+                except OSError:
+                    if rest[0] != "Z":
+                        raise
+                    cmd = ""  # recorded PID/start identity still matches a Z leader with unreadable tasks
                 # field 24: rss in pages; field 22: start time in clock ticks since boot
                 out.append(Proc(int(e), int(rest[21]) * page, cmd.rstrip(), "jiffies:" + rest[19]))
             except (OSError, IndexError, ValueError):
