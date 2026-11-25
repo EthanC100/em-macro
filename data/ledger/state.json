@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-25",
- "at": "2026-11-25T16:20:35+00:00",
+ "at": "2026-11-25T19:44:37+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 102.3773,
+  "algorithm v1.0": 102.8597,
   "algorithm v1.1": 100.0,
-  "janus": 99.9797,
+  "janus": 100.0358,
   "me": 98.55
  },
  "janus": {
@@ -478,16 +478,16 @@
   "J057": {
    "direction": "short",
    "instrument": "EUR",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0072,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J058": {
    "direction": "short",
    "instrument": "GBP",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0039,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J059": {
    "direction": "long",
@@ -529,14 +529,14 @@
    "instrument": "EUR",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J065": {
    "direction": "long",
    "instrument": "GBP",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J066": {
    "direction": "short",
