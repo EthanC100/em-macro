@@ -538,7 +538,7 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
                 "metrics": m, "excess_over_benchmark": ex, "rejected": bool(hits), "criteria_met": hits}
     except Exception:
         # The synthetic sleeve can read holdout values before raising, outside the PIT read meter.
-        ctx.fail("execution_error", read_may_have_occurred=True)
+        ctx._fail_after_possible_read("execution_error")
         raise
 
 
