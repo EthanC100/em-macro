@@ -181,12 +181,12 @@ def cost_model():
 
 @pytest.fixture(scope="module")
 def null_report(world, cost_model):
-    return TC.compare(world, CFG, cost_model)
+    return TC._compare(world, CFG, cost_model)
 
 
 @pytest.fixture(scope="module")
 def planted_report(cost_model):
-    return TC.compare(SS.sector_world(planted_momentum=0.004, planted_track=NONTECH), CFG, cost_model)
+    return TC._compare(SS.sector_world(planted_momentum=0.004, planted_track=NONTECH), CFG, cost_model)
 
 
 def test_reports_are_labelled_infrastructure_never_evidence(null_report):
@@ -221,7 +221,7 @@ def test_excess_is_over_the_tracks_own_costed_equal_weight_universe(null_report)
 
 
 def test_in_sample_results_do_not_depend_on_anything_after_the_cutoff(world, cost_model, null_report):
-    cut = TC.compare(world, CFG, cost_model, end=world.calendar.session_on_or_before(date(2007, 1, 31)))
+    cut = TC._compare(world, CFG, cost_model, end=world.calendar.session_on_or_before(date(2007, 1, 31)))
     for t in (TECH, NONTECH):
         a, b = null_report["tracks"][t], cut["tracks"][t]
         assert a["chosen_lookback"] == b["chosen_lookback"]
@@ -245,15 +245,15 @@ def test_same_close_execution_and_missing_costs_are_refused(world):
     with pytest.raises(EquityDataError, match="lag"):
         TC.CompareConfig(is_end=date(2006, 12, 29), lag=0)
     with pytest.raises(EquityDataError, match="cost model"):
-        TC.run_sleeve(world, CFG, None, {NONTECH: 63}, name="x")
+        TC._sleeve(world, CFG, None, {NONTECH: 63}, name="x")
     with pytest.raises(EquityDataError):
-        TC.run_sleeve(world, CFG, EquityCostModel(**COSTS), {"combined_equities": 63}, name="x")
+        TC._sleeve(world, CFG, EquityCostModel(**COSTS), {"combined_equities": 63}, name="x")
 
 
 def test_costs_lower_net_returns_and_vanish_with_zero_costs(world):
     free = EquityCostModel(**{**COSTS, "half_spread": 0.0, "commission": 0.0, "impact": 0.0})
-    a = TC.run_sleeve(world, CFG, EquityCostModel(**COSTS), {NONTECH: 63}, name="a", end=date(2006, 6, 30))
-    b = TC.run_sleeve(world, CFG, free, {NONTECH: 63}, name="b", end=date(2006, 6, 30))
+    a = TC._sleeve(world, CFG, EquityCostModel(**COSTS), {NONTECH: 63}, name="a", end=date(2006, 6, 30))
+    b = TC._sleeve(world, CFG, free, {NONTECH: 63}, name="b", end=date(2006, 6, 30))
     assert np.array_equal(a.gross, b.gross) and sum(b.costs) == 0 and sum(a.costs) > 0
     assert a.net.sum() < b.net.sum()
     for d, e, n_members, n_held in a.decisions:                           # every fill strictly after its decision

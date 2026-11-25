@@ -1,8 +1,15 @@
 """Technology-only, non-technology-only and combined equity portfolios on one pipeline (issue #102). Synthetic only.
 
-    cfg = CompareConfig(is_end=date(2006, 12, 29))
-    report = compare(world, cfg, cost_model)          # per sleeve: costs, drawdown, volatility; correlations; OOS
+    sl = run_sleeve(world, exp, cost_model, 126, name="x")   # an admitted experiment's variant, selection window only
     vols = sector_volatility(world, start, end)       # measured, never assumed
+    report = _compare(world, cfg, cost_model)         # PRIVATE infrastructure report (tests only): reads OOS blocks
+
+**Holdouts are read through the registration gate only (S17 C1, PR-2 review).** The public ``run_sleeve`` runs a
+declared variant of an admitted experiment (``registration.admit``) and reads nothing after that experiment's
+registered ``selection_end``: the cutoff comes from the frozen spec, never from a caller's ``CompareConfig``. The
+out-of-sample comparison (``_compare``) and the unchecked sleeve (``_sleeve``) are private: no production module
+calls them except ``registration.run_holdout`` (``_sleeve``, after the look is recorded in the ledger), which the
+name scan in ``tests/test_manhattan_binding_access.py`` pins.
 
 This is **infrastructure validation**: a fixed, declared portfolio rule run through the shared equity pipeline so that
 every control can be checked. It is not a strategy search and not evidence. **It runs only on a synthetic world**
@@ -143,16 +150,42 @@ def _require_synthetic(world) -> None:
                               "pre-registered experiment (registration.admit), and real-data execution is off")
 
 
-def run_sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
-               end: date | None = None) -> Sleeve:
-    """One costed book. ``lookbacks``: {track: lookback}. With one track, a track-only sleeve; with both, the combined
-    book, in which each track has an equal share of capital. ``end``: ignore every session after it (truncation)."""
+def _check_sleeve_args(world, cost_model, lookbacks) -> None:
     _require_synthetic(world)
     if not isinstance(cost_model, EquityCostModel):
         raise EquityDataError("a cost model with a stated reference is required (no default)")
     for t in lookbacks:
         if t not in EQUITY_TRACKS:
             raise EquityDataError(f"{t!r} is not an equity research track")
+
+
+def run_sleeve(world, exp, cost_model: EquityCostModel, lookback: int, *, name: str,
+               end: date | None = None) -> Sleeve:
+    """One track-only costed book of a declared variant (``lookback``) of an **admitted experiment** ``exp``, over
+    its **registered selection window only**.
+
+    The cutoff is the experiment's registered ``selection_end`` (its frozen spec, re-verified here with its freeze),
+    never a caller's configuration; the grid, skip, lag and top fraction are the registered ones too, and the cost
+    model must be the registered one. ``end`` (default: that cutoff) may only truncate earlier. A window past the
+    cutoff is the holdout: it is read once, for the locked variant, through ``registration.run_holdout`` (which
+    records the look in the persistent ledger first), never here (S17 C1)."""
+    from .registration import selection_config
+    cfg = selection_config(exp, cost_model)
+    end = cfg.is_end if end is None else end
+    if type(end) is not date or end > cfg.is_end:
+        raise EquityDataError("run_sleeve reads the registered selection window only (end on or before the "
+                              "experiment's selection_end): a holdout is read once, through registration.run_holdout")
+    if isinstance(lookback, bool) or lookback not in cfg.lookbacks:
+        raise EquityDataError(f"lookback {lookback!r} is not a declared variant of the registered grid")
+    return _sleeve(world, cfg, cost_model, {exp.track: lookback}, name=name, end=end)
+
+
+def _sleeve(world, cfg: CompareConfig, cost_model: EquityCostModel, lookbacks: dict, *, name: str,
+            end: date | None = None) -> Sleeve:
+    """One costed book, any window, no registration. ``lookbacks``: {track: lookback}; with both tracks, the combined
+    book (equal capital per track). ``end``: ignore every session after it (truncation). PRIVATE: only ``_compare``
+    and ``registration.run_holdout`` (after its ledger record) call it (name scan in test_manhattan_binding_access)."""
+    _check_sleeve_args(world, cost_model, lookbacks)
     days = list(world.days) if end is None else [d for d in world.days if d <= end]
     n = len(days)
     builders = {t: UniverseBuilder(world.master, world.prices, world.classes, track_rules(t)) for t in lookbacks}
@@ -233,15 +266,19 @@ def _split(sl: Sleeve, is_end: date):
     return part(k), part(~k), net[k], net[~k], days[~k]
 
 
-def compare(world, cfg: CompareConfig, cost_model: EquityCostModel, *, end: date | None = None) -> dict:
+def _compare(world, cfg: CompareConfig, cost_model: EquityCostModel, *, end: date | None = None) -> dict:
     """Run every declared variant of each track-only sleeve, choose each sleeve's lookback on in-sample net Sharpe,
-    then report out of sample: technology only, non-technology only and the combined costed book."""
+    then report out of sample: technology only, non-technology only and the combined costed book.
+
+    PRIVATE infrastructure report (NON_TECH_TRACK.md section 6): it reads every variant's out-of-sample block, which
+    for a registered experiment would be a holdout read outside the gate, so it is not public. No production module
+    calls it (name scan in test_manhattan_binding_access); the non-technology track's tests reach it directly."""
     tracks = (TECHNOLOGY_TRACK, NON_TECHNOLOGY_TRACK)
     variants, chosen, oos_series = {}, {}, {}
     for t in tracks:
         rows = []
         for lb in cfg.lookbacks:
-            sl = run_sleeve(world, cfg, cost_model, {t: lb}, name=f"{t}:{lb}", end=end)
+            sl = _sleeve(world, cfg, cost_model, {t: lb}, name=f"{t}:{lb}", end=end)
             ins, oos, _, oos_net, oos_days = _split(sl, cfg.is_end)
             rows.append({"lookback": lb, "in_sample": ins, "_oos": oos, "_oos_net": oos_net, "_oos_days": oos_days,
                          "decisions": len(sl.decisions), "unfilled": len(sl.unfilled)})
@@ -257,14 +294,14 @@ def compare(world, cfg: CompareConfig, cost_model: EquityCostModel, *, end: date
     # earn the market; only the excess over their own universe speaks to the signal
     bench_cfg = replace(cfg, top_fraction=1.0)
     for t in tracks:
-        b = run_sleeve(world, bench_cfg, cost_model, {t: cfg.lookbacks[0]}, name=f"{t}:equal_weight", end=end)
+        b = _sleeve(world, bench_cfg, cost_model, {t: cfg.lookbacks[0]}, name=f"{t}:equal_weight", end=end)
         bins, boos, _, b_oos, b_days = _split(b, cfg.is_end)
         days_t, net_t = oos_series[t]
         if list(b_days) != list(days_t):
             raise EquityDataError(f"{t}: benchmark and sleeve out-of-sample days differ")
         variants[t]["benchmark_equal_weight"] = {"in_sample": bins, "out_of_sample": boos}
         variants[t]["out_of_sample_excess_over_benchmark"] = metrics(net_t - b_oos)
-    comb = run_sleeve(world, cfg, cost_model, dict(chosen), name="combined_equities", end=end)
+    comb = _sleeve(world, cfg, cost_model, dict(chosen), name="combined_equities", end=end)
     cins, coos, _, comb_oos, comb_days = _split(comb, cfg.is_end)
     (dt, nt), (dn, nn) = oos_series[TECHNOLOGY_TRACK], oos_series[NON_TECHNOLOGY_TRACK]
     if list(dt) != list(dn):
