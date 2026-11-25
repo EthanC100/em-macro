@@ -382,7 +382,7 @@ def test_reserve_is_for_the_runner_with_a_verified_batch_and_its_designated_eval
 
 def batch(n=1, channel="blind", **over):
     f1, f2 = fam(), fam(counterparty="unhedged exporters", sign="+")
-    hs = [hyp(f1), hyp(f1, domain="rates_daily"), hyp(f2)]
+    hs = [hyp(f1), hyp(f1, domain="rates_daily"), hyp(f2, domain="commodity_futures_daily")]
     kw = dict(channel=channel, template_hash="c5" * 32, generator_model="model-x", protocol_hash=PROTOCOL,
               fence={"exploration_end": "2019-12-31", "reserve": {"fx_daily": ["2020-01-01", "2026-09-30"]}},
               code_version="3fa9c1e", critic_records=["11" * 32, "22" * 32], reserve_window_ids={"fx_daily": "fx_daily:reserve"})
@@ -399,7 +399,7 @@ def test_manifest_holds_everything_the_freeze_needs():
     assert m["merkle_root"] == L.merkle_root(m["spec_hashes"]) and b.id == "AB-0001"
     assert m["spec_hashes"] == [S.spec_hash(sp) for sp in b.specs]
     # one designated evaluation per primary executable of a blind hypothesis in a domain that has a reserve window
-    assert len(m["designated_evaluations"]) == 8 and {d["domain"] for d in m["designated_evaluations"]} == {"fx_daily"}
+    assert len(m["designated_evaluations"]) == 4 and {d["domain"] for d in m["designated_evaluations"]} == {"fx_daily"}
     assert batch(channel="adaptive").manifest["designated_evaluations"] == []          # no reserve evaluation at all
     assert batch().manifest_hash == b.manifest_hash and batch(generator_model="model-y").manifest_hash != b.manifest_hash
 

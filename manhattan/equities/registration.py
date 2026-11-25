@@ -357,6 +357,7 @@ class SelectionLock:
     chosen_lookback: int
     variants_tried: int
     in_sample: str               # canonical JSON of every variant's in-sample metrics
+    data_hash: str = ""
     seal: str = dataclasses.field(default="", repr=False)
 
 
@@ -376,7 +377,7 @@ def selection_config(exp: ExperimentHandle, cost_model: EquityCostModel):
 def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> SelectionLock:
     """Every declared variant over data up to ``selection_end`` (nothing later is read), chosen by the declared rule.
     Synthetic worlds only."""
-    from .synthetic import is_synthetic
+    from .synthetic import is_synthetic, provenance
     from .track_compare import _split, run_sleeve
     h = _require(exp)
     _require_costs(h, cost_model)
@@ -388,7 +389,7 @@ def run_selection(world, exp: ExperimentHandle, cost_model: EquityCostModel) -> 
         sl = run_sleeve(world, exp, cost_model, lb, name=f"{exp.catalogue_id}:{lb}")
         rows[lb] = _split(sl, cfg.is_end)[0]
     best = _choose(cfg.lookbacks, rows)
-    return _mint(SelectionLock(exp.spec_hash, best, len(rows), json.dumps(rows, sort_keys=True)))
+    return _mint(SelectionLock(exp.spec_hash, best, len(rows), json.dumps(rows, sort_keys=True), provenance(world)))
 
 
 def _require_lock(exp: ExperimentHandle, lock) -> None:
@@ -501,34 +502,43 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
 
     The look is not completed in the ledger: a completion needs ``engine.evaluate``'s proof from a PIT read, and
     the equities pipeline reads a synthetic world, not a PIT store (stated in the result)."""
-    from .synthetic import is_synthetic
+    from .synthetic import is_synthetic, provenance
     from .track_compare import LABEL, _sleeve, metrics, replace
     h, manifest = _require(exp, with_manifest=True)
     _require_costs(h, cost_model)
     _require_lock(exp, lock)
     if not is_synthetic(world) or EXECUTION_ON_REAL_DATA:
         raise RegistrationError("dormant: an admitted experiment runs only on a synthetic world")
+    if not lock.data_hash or lock.data_hash != provenance(world):
+        raise RegistrationError("the holdout world differs from the selection lock's data identity")
+    from manhattan import access
+    if fence is not None and (type(fence) is not access.VerifiedFence or not fence.valid()) and FZ._TRUST is FZ._PRODUCTION:
+        raise RegistrationError("the holdout fence is not authorized: use None or a verified fence")
     cfg = _config(h)
     ctx = _register_look(exp, h, manifest, lock, world, cfg, ledger=ledger, fence=fence, code_version=code_version)
-    hs, he = (date.fromisoformat(h["windows"][k]) for k in ("holdout_start", "holdout_end"))
-    sl = _sleeve(world, cfg, cost_model, {exp.track: lock.chosen_lookback}, name="holdout", end=he)
-    bench = _sleeve(world, replace(cfg, top_fraction=1.0), cost_model, {exp.track: lock.chosen_lookback},
-                    name="holdout-benchmark", end=he)
-    keep = [i for i, d in enumerate(sl.days) if hs <= d <= he]
-    net, bnet = sl.net[keep], bench.net[keep]
-    m, ex = metrics(net), metrics(net - bnet)
-    values = {"excess_sharpe": ex.get("sharpe"), "excess_ann_return": ex.get("ann_return"),
-              "max_drawdown": m.get("max_drawdown")}
-    ops = {"<": lambda a, b: a < b, "<=": lambda a, b: a <= b, ">": lambda a, b: a > b, ">=": lambda a, b: a >= b}
-    hits = [c for c in h["rejection_criteria"] if values[c["metric"]] is not None
-            and ops[c["op"]](values[c["metric"]], float(c["value"]))]
-    return {**LABEL, "spec_hash": exp.spec_hash, "batch": exp.batch, "track": exp.track,
-            "catalogue_id": exp.catalogue_id, "chosen_lookback": lock.chosen_lookback,
-            "holdout": {"start": hs.isoformat(), "end": he.isoformat(), "days": len(keep),
-                        "window_id": ctx.evaluation_window.id},
-            "ledger": {"attempt_id": ctx.attempt_id, "recorded": "designated reserve start (evaluation_started)",
-                       "completion": "not recorded: no PIT read, so no engine.evaluate completion proof"},
-            "metrics": m, "excess_over_benchmark": ex, "rejected": bool(hits), "criteria_met": hits}
+    try:
+        hs, he = (date.fromisoformat(h["windows"][k]) for k in ("holdout_start", "holdout_end"))
+        sl = _sleeve(world, cfg, cost_model, {exp.track: lock.chosen_lookback}, name="holdout", end=he)
+        bench = _sleeve(world, replace(cfg, top_fraction=1.0), cost_model, {exp.track: lock.chosen_lookback},
+                        name="holdout-benchmark", end=he)
+        keep = [i for i, d in enumerate(sl.days) if hs <= d <= he]
+        net, bnet = sl.net[keep], bench.net[keep]
+        m, ex = metrics(net), metrics(net - bnet)
+        values = {"excess_sharpe": ex.get("sharpe"), "excess_ann_return": ex.get("ann_return"),
+                  "max_drawdown": m.get("max_drawdown")}
+        ops = {"<": lambda a, b: a < b, "<=": lambda a, b: a <= b, ">": lambda a, b: a > b, ">=": lambda a, b: a >= b}
+        hits = [c for c in h["rejection_criteria"] if values[c["metric"]] is not None
+                and ops[c["op"]](values[c["metric"]], float(c["value"]))]
+        return {**LABEL, "spec_hash": exp.spec_hash, "batch": exp.batch, "track": exp.track,
+                "catalogue_id": exp.catalogue_id, "chosen_lookback": lock.chosen_lookback,
+                "holdout": {"start": hs.isoformat(), "end": he.isoformat(), "days": len(keep),
+                            "window_id": ctx.evaluation_window.id},
+                "ledger": {"attempt_id": ctx.attempt_id, "recorded": "designated reserve start (evaluation_started)",
+                           "completion": "not recorded: no PIT read, so no engine.evaluate completion proof"},
+                "metrics": m, "excess_over_benchmark": ex, "rejected": bool(hits), "criteria_met": hits}
+    except Exception:
+        ctx.fail("execution_error")
+        raise
 
 
 def count_registered(handles, *, nontech_catalogue: dict | None = None) -> dict:

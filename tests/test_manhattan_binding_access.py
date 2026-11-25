@@ -220,7 +220,7 @@ ALLOWED = {
     # PR-2: freeze.verify_frozen's trust (the pin, the tag check, the timestamp verifier); the equities gate's seal,
     # the synthetic-world registry, and the readers that do not stop at the registered selection end. Tests reach
     # them through tests/manhattan_freeze_seam.py only (not scanned: it is not under manhattan/)
-    "_TRUST": {EQ_FREEZE}, "_PRODUCTION": {EQ_FREEZE}, "_Trust": {EQ_FREEZE}, "_verify_batch": {EQ_FREEZE},
+    "_TRUST": {EQ_FREEZE, EQ_REG}, "_PRODUCTION": {EQ_FREEZE, EQ_REG}, "_git": {EQ_FREEZE, STORE, "manhattan/orchestra/manifest.py", "manhattan/sim/runlog.py"}, "OpenTimestampsVerifier": {EQ_FREEZE}, "_GPG_VALIDSIG": {EQ_FREEZE}, "_SSH_GOOD": {EQ_FREEZE}, "_Trust": {EQ_FREEZE}, "_verify_batch": {EQ_FREEZE},
     "_mint": {EQ_REG}, "_HANDLE_KEY": {EQ_REG}, "_seal_of": {EQ_REG}, "_sealed": {EQ_REG},
     "_SYNTHETIC": {EQ_SYN}, "_register_world": {EQ_SYN}, "_world_provenance": {EQ_SYN}, "_GENERATORS": {EQ_SYN},
     "_sleeve": {EQ_TC, EQ_REG}, "_compare": {EQ_TC},

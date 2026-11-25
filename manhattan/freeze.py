@@ -79,7 +79,8 @@ def prepare(number: int, families: list[dict], hypotheses: list[dict], *, channe
     Every hypothesis must belong to a family of the batch, and every family must have at least one hypothesis: a
     family is registered in one batch with all its hypotheses. ``reserve_window_ids`` maps a domain to the id of
     its reserve window; each primary executable of a **blind** hypothesis in such a domain gets one designated
-    evaluation there. Adaptive specs get none (they carry no evidential weight on the reserve)."""
+    evaluation there. Only one hypothesis may be designated per domain (D-6); ambiguous batches are refused
+    before selection. Adaptive specs get none (they carry no evidential weight on the reserve)."""
     if channel not in CHANNELS:
         raise FreezeError(f"channel must be one of {CHANNELS}")
     errs = [e for f in families for e in S.validate_family(f)] + [e for h in hypotheses for e in S.validate_hypothesis(h)]
@@ -92,6 +93,10 @@ def prepare(number: int, families: list[dict], hypotheses: list[dict], *, channe
             errs.append(f"hypothesis {S.spec_id(h)} names a family that is not in this batch")
         used.add(h.get("family"))
     errs += [f"family {S.spec_id(f)} has no hypothesis in the batch" for f in families if S.spec_hash(f) not in used]
+    if channel == "blind":
+        domains = [h["domain"] for h in hypotheses if (reserve_window_ids or {}).get(h["domain"]) is not None]
+        if len(domains) != len(set(domains)):
+            errs.append("only one designated hypothesis per (batch, domain) is supported")
     if not critic_records:
         errs.append("no critic record: every family and hypothesis is reviewed before freezing")
     if errs:
@@ -182,9 +187,28 @@ def git_tag_signer(tag: str, root: Path, manifest_path: Path, raw: bytes) -> str
     """The fingerprint of the key whose good signature ``git verify-tag`` accepts on ``tag``, provided the tagged
     commit holds exactly this manifest; ``None`` otherwise (no tag, a lightweight or unsigned tag, a bad signature,
     another manifest at the tag). GPG: the primary-key fingerprint of ``VALIDSIG``; SSH: the key's SHA256
-    fingerprint. Whether that key is the owner's is decided by the pin, not here."""
+    fingerprint. The signed object must name this batch and include exactly one
+    manifest-sha256 line matching the manifest bytes. Signature and content checks use one immutable tag OID.
+    Whether that key is the owner's is decided by the pin, not here."""
     root = Path(root).resolve()
-    v = _git(["verify-tag", "--raw", tag], root)
+    resolved = _git(["rev-parse", "--verify", f"refs/tags/{tag}^{{tag}}"], root)
+    if resolved is None or resolved.returncode != 0:
+        return None
+    oid = resolved.stdout.decode("ascii", "replace").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", oid):
+        return None
+    obj = _git(["cat-file", "tag", oid], root)
+    if obj is None or obj.returncode != 0:
+        return None
+    headers, sep, message = obj.stdout.partition(b"\n\n")
+    lines = headers.splitlines()
+    if not sep or [x for x in lines if x.startswith(b"type ")] != [b"type commit"] or \
+            [x for x in lines if x.startswith(b"tag ")] != [b"tag " + tag.encode("ascii")]:
+        return None
+    digest_line = b"manifest-sha256: " + hashlib.sha256(raw).hexdigest().encode("ascii")
+    if [x for x in message.splitlines() if x.startswith(b"manifest-sha256:")] != [digest_line]:
+        return None
+    v = _git(["verify-tag", "--raw", oid], root)
     if v is None or v.returncode != 0:
         return None
     out = (v.stderr or b"").decode("utf-8", "replace") + (v.stdout or b"").decode("utf-8", "replace")
@@ -201,7 +225,7 @@ def git_tag_signer(tag: str, root: Path, manifest_path: Path, raw: bytes) -> str
         rel = Path(manifest_path).resolve().relative_to(toplevel).as_posix()
     except (UnicodeDecodeError, ValueError):
         return None
-    shown = _git(["show", f"{tag}^{{commit}}:{rel}"], root)
+    shown = _git(["show", f"{oid}^{{commit}}:{rel}"], root)
     if shown is None or shown.returncode != 0 or shown.stdout != raw:
         return None
     return found[0]
@@ -241,7 +265,9 @@ def _verify_batch(directory: Path, number: int, expected_manifest_hash: str | No
         raise FreezeError(f"batch {number}: the manifest is not in canonical form (it was edited)")
     if expected_manifest_hash is not None and S.spec_hash(manifest) != expected_manifest_hash:
         raise FreezeError(f"batch {number}: the manifest does not match the hash recorded at its freeze")
-    hashes = []
+    if type(manifest.get("batch")) is not int or manifest["batch"] != number:
+        raise FreezeError(f"batch {number}: manifest batch identity mismatch")
+    hashes, by_hash = [], {}
     for want in manifest["spec_hashes"]:
         matches = list((d / "specs").glob(f"*-{want[:S.ID_HEX]}.json"))
         if not matches:
@@ -253,6 +279,26 @@ def _verify_batch(directory: Path, number: int, expected_manifest_hash: str | No
         if S.spec_hash(spec) != want:
             raise FreezeError(f"batch {number}: {matches[0].name} no longer matches the manifest")
         hashes.append(want)
+        by_hash[want] = spec
+    designated_hypotheses = {}
+    designations = manifest.get("designated_evaluations", [])
+    if not isinstance(designations, list):
+        raise FreezeError(f"batch {number}: malformed designated hypothesis binding")
+    for designation in designations:
+        try:
+            exe = by_hash[designation["executable"]]
+            variant = by_hash[exe["variant"]]
+            hyp_hash = variant["hypothesis"]
+            hyp = by_hash[hyp_hash]
+            domain = designation["domain"]
+            if exe["level"] != "executable" or variant["level"] != "variant" or hyp["level"] != "hypothesis" \
+                    or hyp["domain"] != domain:
+                raise ValueError("inconsistent designation")
+            designated_hypotheses.setdefault(domain, set()).add(hyp_hash)
+        except (KeyError, TypeError, ValueError):
+            raise FreezeError(f"batch {number}: malformed designated hypothesis binding") from None
+    if any(len(hs) != 1 for hs in designated_hypotheses.values()):
+        raise FreezeError(f"batch {number}: only one designated hypothesis per (batch, domain) is supported")
     if L.merkle_root(hashes) != manifest["merkle_root"]:
         raise FreezeError(f"batch {number}: the Merkle root does not match the specs")
     if not trust.signers:
