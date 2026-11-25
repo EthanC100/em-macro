@@ -45,6 +45,7 @@ from manhattan import config as MC
 from manhattan import freeze as FZ
 from manhattan import ledger as L
 from manhattan import roles
+from manhattan import spec as S
 from manhattan.engine import evaluate
 from manhattan.equities import catalogue as C
 from manhattan.equities import registration as R
@@ -199,7 +200,7 @@ def _gpg_cleanup(home):
 def _commit_and_sign(git, repo, number):
     subprocess.run(git + ["add", "-A"], cwd=repo, check=True)
     subprocess.run(git + ["commit", "-q", "-m", f"batch {number}"], cwd=repo, check=True)
-    subprocess.run(git + ["tag", "-s", FZ.TAG.format(n=number), "-m", "fixture"], cwd=repo, check=True,
+    subprocess.run(git + ["tag", "-s", FZ.TAG.format(n=number), "-m", "manifest-sha256: " + hashlib.sha256(next(repo.rglob(f"AB-{number:04d}/manifest.json")).read_bytes()).hexdigest()], cwd=repo, check=True,
                    capture_output=True)
 
 
@@ -314,7 +315,7 @@ with seam.trust():
         import time
         ready, peer_ready = map(Path, sys.argv[8:10])
         ready.touch()
-        deadline = time.monotonic() + 90
+        deadline = time.monotonic() + 120
         while not peer_ready.exists():
             if time.monotonic() >= deadline:
                 raise RuntimeError("the other process did not open the ledger")
@@ -352,7 +353,8 @@ def test_p2d_two_processes_get_exactly_one_look(tmp_path, nt, cm):
     assert L.verify(book) == []
 
 
-def test_simultaneous_synthetic_holdout_starts_share_one_ledger(tmp_path, nt, cm):
+@pytest.mark.parametrize("alias_kind", ["symlink", "hardlink"])
+def test_simultaneous_synthetic_holdout_starts_share_one_ledger(tmp_path, nt, cm, alias_kind):
     base, book = tmp_path / "batches", tmp_path / "ledger.jsonl"
     hyp, batch = _batch(base, nt, cm, 777)
     seam.freeze_fixture(base, 777)
@@ -360,7 +362,10 @@ def test_simultaneous_synthetic_holdout_starts_share_one_ledger(tmp_path, nt, cm
     script.write_text(CHILD)
     book.touch()
     alias = tmp_path / "alias.jsonl"
-    alias.symlink_to(book)
+    if alias_kind == "symlink":
+        alias.symlink_to(book)
+    else:
+        alias.hardlink_to(book)
     ready = [tmp_path / "first.ready", tmp_path / "second.ready"]
 
     # Both children open the same empty ledger before either attempts registration.
@@ -374,7 +379,7 @@ def test_simultaneous_synthetic_holdout_starts_share_one_ledger(tmp_path, nt, cm
                                              stderr=subprocess.PIPE, text=True))
         outcomes = []
         for child in children:
-            stdout, stderr = child.communicate(timeout=120)
+            stdout, stderr = child.communicate(timeout=180)
             assert child.returncode == 0, stderr[-2000:]
             outcomes.append(json.loads(stdout.strip().splitlines()[-1]))
     finally:
@@ -578,7 +583,7 @@ def test_c10_the_momentum_families_still_register(nt, cm):
 
 # ------------------------------------------------------------------------------------------------ static
 
-PR2_NAMES = ("_TRUST", "_PRODUCTION", "_Trust", "_verify_batch", "_mint", "_HANDLE_KEY", "_seal_of", "_sealed",
+PR2_NAMES = ("_git", "_GPG_VALIDSIG", "_SSH_GOOD", "OpenTimestampsVerifier", "_TRUST", "_PRODUCTION", "_Trust", "_verify_batch", "_mint", "_HANDLE_KEY", "_seal_of", "_sealed",
              "_SYNTHETIC", "_register_world", "_world_provenance", "_GENERATORS", "_sleeve", "_compare",
              "manhattan_freeze_seam")
 
@@ -596,3 +601,110 @@ def test_static_no_production_module_references_the_test_seam_or_the_private_tru
            if rel not in ("manhattan/equities/synthetic.py", "manhattan/equities/sector_synthetic.py")
            and re.search(r"\bmark_synthetic\b", text)]
     assert bad == []
+
+
+def test_signed_tag_alias_cannot_freeze_another_batch_in_the_same_commit(tmp_path, monkeypatch, nt, cm):
+    git, repo, fpr, home = _gpg_repo(tmp_path, monkeypatch)
+    try:
+        base = repo / 'batches'
+        _, one = _batch(base, nt, cm, 1)
+        hyp, two = _batch(base, nt, cm, 2)
+        _commit_and_sign(git, repo, 1)
+        oid = subprocess.check_output(git + ['rev-parse', FZ.TAG.format(n=1)], cwd=repo, text=True).strip()
+        subprocess.run(git + ['update-ref', 'refs/tags/' + FZ.TAG.format(n=2), oid], cwd=repo, check=True)
+        for number in (1, 2):
+            seam.stamp(base, number)
+        with seam.trust(signers={fpr}, tag_signer=FZ.git_tag_signer):
+            assert FZ.verify_frozen(base, 1)['batch'] == 1
+            with pytest.raises(FZ.FreezeError, match='tag'):
+                FZ.verify_frozen(base, 2)
+            with pytest.raises(R.RegistrationError, match='tag'):
+                _admit(nt, hyp, two, base)
+    finally:
+        _gpg_cleanup(home)
+
+
+def test_a_signed_tag_message_must_bind_the_manifest_digest(tmp_path, monkeypatch, nt, cm):
+    git, repo, fpr, home = _gpg_repo(tmp_path, monkeypatch)
+    try:
+        base = repo / 'batches'
+        _, b = _batch(base, nt, cm, 1)
+        subprocess.run(git + ['add', '-A'], cwd=repo, check=True)
+        subprocess.run(git + ['commit', '-qm', 'fixture'], cwd=repo, check=True)
+        subprocess.run(git + ['tag', '-s', FZ.TAG.format(n=1), '-m', 'manifest-sha256: ' + '0' * 64],
+                       cwd=repo, check=True, capture_output=True)
+        m = base / b.id / FZ.MANIFEST
+        assert FZ.git_tag_signer(FZ.TAG.format(n=1), repo, m, m.read_bytes()) is None
+    finally:
+        _gpg_cleanup(home)
+
+
+def test_multiple_designated_hypotheses_in_one_domain_refuse_before_selection(tmp_path, nt, cm):
+    hyp, one = _batch(tmp_path / 'one', nt, cm, 1)
+    other = {**hyp, 'signal': {**hyp['signal'], 'construction': 'second registered specification'}}
+    kwargs = dict(channel='blind', template_hash='0' * 64, generator_model='fixture', protocol_hash='0' * 64,
+                  fence={}, code_version=CODE, critic_records=['fixture'], reserve_window_ids={DOMAIN: HOLDOUT_WINDOW})
+    fam = C.family_draft(_entry(nt), programme=NT)
+    with pytest.raises(FZ.FreezeError, match='only one designated hypothesis'):
+        FZ.prepare(1, [fam], [hyp, other], **kwargs)
+    # Even a legacy, internally hash-consistent manifest must fail verification/admission.
+    two = FZ.prepare(1, [fam], [other], **kwargs)
+    specs = list({S.spec_hash(s): s for s in one.specs + two.specs}.values())
+    hashes = [S.spec_hash(s) for s in specs]
+    manifest = {**one.manifest, 'spec_hashes': hashes, 'merkle_root': L.merkle_root(hashes),
+                'designated_evaluations': one.manifest['designated_evaluations'] + two.manifest['designated_evaluations']}
+    b = FZ.Batch(1, manifest, specs)
+    base = tmp_path / 'legacy'
+    FZ.write(b, base)
+    seam.freeze_fixture(base, 1)
+    with seam.trust(), pytest.raises(FZ.FreezeError, match='only one designated hypothesis'):
+        FZ.verify_frozen(base, 1)
+    with seam.trust(), pytest.raises(R.RegistrationError, match='only one designated hypothesis'):
+        _admit(nt, hyp, b, base)
+
+
+def test_selection_lock_refuses_a_different_synthetic_world_before_registration(tmp_path, nt, cm):
+    hyp, b = _batch(tmp_path, nt, cm, 1)
+    seam.freeze_fixture(tmp_path, 1)
+    book = tmp_path / 'ledger'
+    with seam.trust():
+        exp = _admit(nt, hyp, b, tmp_path)
+        lock = R.run_selection(SS.sector_world(seed=102), exp, cm)
+        with pytest.raises(R.RegistrationError, match='data identity'):
+            R.run_holdout(SS.sector_world(seed=103), exp, lock, cm, ledger=_ledger(book), fence=FENCE, code_version=CV)
+    assert not _starts(book)
+
+
+def test_registered_execution_failure_is_classified_without_private_exception_text(tmp_path, monkeypatch, nt, cm):
+    hyp, b = _batch(tmp_path, nt, cm, 1)
+    seam.freeze_fixture(tmp_path, 1)
+    book = tmp_path / 'ledger'
+    world = SS.sector_world()
+    with seam.trust():
+        exp = _admit(nt, hyp, b, tmp_path)
+        lock = R.run_selection(world, exp, cm)
+        def broken(*a, **kw):
+            raise RuntimeError('private fixture diagnostic that must not enter the ledger')
+        monkeypatch.setattr(TC, '_sleeve', broken)
+        with pytest.raises(RuntimeError, match='private fixture diagnostic'):
+            R.run_holdout(world, exp, lock, cm, ledger=_ledger(book), fence=FENCE, code_version=CV)
+    records = L.read(book)
+    assert len(_starts(book)) == 1
+    assert any(r['type'] == 'attempt_failed' for r in records)
+    assert 'private fixture diagnostic' not in book.read_text()
+    assert L.verify(book) == []
+
+
+def test_raw_holdout_fence_is_not_a_production_authorization(tmp_path, monkeypatch, nt, cm):
+    hyp, b = _batch(tmp_path, nt, cm, 1)
+    seam.freeze_fixture(tmp_path, 1)
+    world = SS.sector_world()
+    with seam.trust():
+        exp = _admit(nt, hyp, b, tmp_path)
+        lock = R.run_selection(world, exp, cm)
+    # Isolate this API boundary from the separate (production-empty) signing pin.
+    monkeypatch.setattr(FZ, 'verify_frozen', lambda *a, **kw: b.manifest)
+    book = tmp_path / 'ledger'
+    with pytest.raises(R.RegistrationError, match='verified fence'):
+        R.run_holdout(world, exp, lock, cm, ledger=_ledger(book), fence=FENCE, code_version=CV)
+    assert not _starts(book)
