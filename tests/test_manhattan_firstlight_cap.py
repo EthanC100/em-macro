@@ -226,3 +226,34 @@ def test_nothing_in_manhattan_imports_first_light():
             if isinstance(n, ast.ImportFrom) and n.module == "manhattan" and any(a.name == "firstlight"
                                                                                   for a in n.names):
                 pytest.fail(f"{rel} imports First Light")
+
+
+@pytest.mark.parametrize('where', ['periods', 'available'])
+@pytest.mark.parametrize('subclass', ['masked', 'plain'])
+def test_ingestion_refuses_date_array_subclasses_before_mutation(where, subclass):
+    class Dates(np.ndarray):
+        def max(self, *args, **kwargs):
+            return np.datetime64('2019-12-31', 'D')
+    days = np.array(['2019-12-30', '2020-06-01'], dtype='datetime64[D]')
+    hostile = np.ma.array(days, mask=[False, True]) if subclass == 'masked' else days.view(Dates)
+    ordinary = np.array(['2019-12-30', '2019-12-31'], dtype='datetime64[D]')
+    c = cap.CappedStore(synthetic=True)
+    before = c.store.data_hash()
+    with pytest.raises(cap.CapError):
+        c.add(SERIES, hostile if where == 'periods' else ordinary, [1., 2.],
+              **({'lag_days': 0} if where == 'periods' else {'available': hostile}))
+    assert c.store.data_hash() == before
+
+
+
+def test_lag_ingestion_passes_the_checked_plain_availability_array(monkeypatch):
+    c = cap.CappedStore(synthetic=True)
+    seen = {}
+    def add(series, periods, values, **kwargs):
+        seen.update(kwargs)
+        assert type(periods) is np.ndarray
+        assert type(kwargs['available']) is np.ndarray
+    monkeypatch.setattr(c.store, 'add', add)
+    c.add(SERIES, [date(2019, 12, 30)], [1.], lag_days=1)
+    assert seen['available'].tolist() == [date(2019, 12, 31)]
+

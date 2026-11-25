@@ -51,7 +51,7 @@ def as_day(value, what: str) -> date:
 
 def _days(values, what: str) -> np.ndarray:
     """Calendar days as ``datetime64[D]``: from ``date`` objects or a ``datetime64[D]`` array, nothing else."""
-    if isinstance(values, np.ndarray) and values.dtype.kind == "M":
+    if type(values) is np.ndarray and values.dtype.kind == "M":
         if np.datetime_data(values.dtype) != ("D", 1):          # [3D] etc. would quantize 2020 days onto 2019
             raise CapError(f"{what} must be whole days (datetime64[D]), not {values.dtype}")
         out = values.astype("datetime64[D]")
@@ -104,10 +104,7 @@ class CappedStore:
             raise CapError(f"{series}: {late_p} value(s) dated and {late_a} value(s) published after "
                            f"{DATA_END.isoformat()}; First Light loads nothing after the cap")
         self._verify_unchanged()
-        if lag_days is not None:
-            self._pit.add(series, p, values, lag_days=lag_days)
-        else:
-            self._pit.add(series, p, values, available=a)
+        self._pit.add(series, p, values, available=a)
         self._hash = self._pit.data_hash()
 
     def _verify_unchanged(self) -> None:
