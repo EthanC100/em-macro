@@ -21,8 +21,48 @@ SCREENING_FDR_MAX, FORWARD_FDR_MAX = 0.20, 0.05          # Protocol v3 section 3
 SCREENING_METHODS = (None, "batch_bh_prds", "ebh_elond")   # Protocol v3 sections 4.3 and 4.4
 
 
+class DuplicateKeyError(yaml.YAMLError):
+    """A mapping in the configuration names the same key twice (PyYAML would silently keep the last)."""
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """``yaml.SafeLoader`` that refuses a mapping with a repeated key. A second ``fx_daily:`` window, ``data_end:`` or
+    ``enabled:`` would otherwise silently replace the first (independent review of the reserve-key fix)."""
+
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._checked_mappings = set()
+
+    def flatten_mapping(self, node):
+        # SafeLoader also calls this for inline merge sources. Check each node before flattening adds inherited keys.
+        if node not in self._checked_mappings:
+            self._checked_mappings.add(node)
+            seen = set()
+            merge_seen = False
+            for key_node, _ in node.value:
+                line = key_node.start_mark.line + 1
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    if merge_seen:
+                        raise DuplicateKeyError(f"duplicate merge key '<<' at line {line}")
+                    merge_seen = True
+                    continue
+                key = self.construct_object(key_node, deep=True)
+                try:
+                    if key in seen:
+                        raise DuplicateKeyError(f"duplicate key {key!r} at line {line}")
+                    seen.add(key)
+                except TypeError:                        # SafeLoader refuses unhashable keys during construction
+                    pass
+        return super().flatten_mapping(node)
+
+
+def loads(text: str) -> dict:
+    """Parse configuration text: ``yaml.safe_load`` semantics, but a repeated key in any mapping is an error."""
+    return yaml.load(text, Loader=_StrictLoader) or {}
+
+
 def load(path: Path = CONFIG) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return loads(path.read_text(encoding="utf-8"))
 
 
 def _day(v) -> date | None:
@@ -58,8 +98,9 @@ def validate(cfg: dict) -> list[str]:
         windows = None
     for dom, w in (windows or {}).items():
         a, b = (_day(w.get("start")), _day(w.get("end"))) if isinstance(w, dict) else (None, None)
-        if a is None or b is None or a >= b:
-            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end")
+        if a is None or b is None or type(a) is not type(b) or a > b:
+            errs.append(f"reserve.windows.{dom} needs start and end dates (YYYY-MM-DD), start before end "
+                        "(or the same day)")
     if enabled is True and not windows:
         errs.append("reserve.enabled is true but reserve.windows is empty: the fence must be set first")
     cap = get("exploration", "data_end")
@@ -86,6 +127,14 @@ def validate(cfg: dict) -> list[str]:
         errs.append("claims.enabled is true but claims.screening_method is null: the simulation chooses it first")
     if get("trial_ledger", "count_in_trials_csv") not in (None, True, False):
         errs.append("trial_ledger.count_in_trials_csv must be true or false")
+    # the fence: whatever roles.Fence.from_config refuses, validate reports, so the two never disagree
+    from manhattan import roles
+    try:
+        roles.Fence.from_config(cfg)
+    except roles.FenceConfigError as exc:
+        msg = f"fence: {exc}"
+        if msg not in errs:
+            errs.append(msg)
     return errs
 
 
