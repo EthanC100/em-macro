@@ -515,9 +515,9 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
     if fence is not None and (type(fence) is not access.VerifiedFence or not fence.valid()) and FZ._TRUST is FZ._PRODUCTION:
         raise RegistrationError("the holdout fence is not authorized: use None or a verified fence")
     cfg = _config(h)
+    hs, he = (date.fromisoformat(h["windows"][k]) for k in ("holdout_start", "holdout_end"))
     ctx = _register_look(exp, h, manifest, lock, world, cfg, ledger=ledger, fence=fence, code_version=code_version)
     try:
-        hs, he = (date.fromisoformat(h["windows"][k]) for k in ("holdout_start", "holdout_end"))
         sl = _sleeve(world, cfg, cost_model, {exp.track: lock.chosen_lookback}, name="holdout", end=he)
         bench = _sleeve(world, replace(cfg, top_fraction=1.0), cost_model, {exp.track: lock.chosen_lookback},
                         name="holdout-benchmark", end=he)
@@ -537,7 +537,8 @@ def run_holdout(world, exp: ExperimentHandle, lock: SelectionLock, cost_model: E
                            "completion": "not recorded: no PIT read, so no engine.evaluate completion proof"},
                 "metrics": m, "excess_over_benchmark": ex, "rejected": bool(hits), "criteria_met": hits}
     except Exception:
-        ctx.fail("execution_error")
+        # The synthetic sleeve can read holdout values before raising, outside the PIT read meter.
+        ctx.fail("execution_error", read_may_have_occurred=True)
         raise
 
 

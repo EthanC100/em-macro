@@ -690,7 +690,9 @@ def test_registered_execution_failure_is_classified_without_private_exception_te
             R.run_holdout(world, exp, lock, cm, ledger=_ledger(book), fence=FENCE, code_version=CV)
     records = L.read(book)
     assert len(_starts(book)) == 1
-    assert any(r['type'] == 'attempt_failed' for r in records)
+    failures = [r for r in records if r['type'] == 'attempt_failed']
+    assert len(failures) == 1
+    assert failures[0]['payload']['data_read'] is True
     assert 'private fixture diagnostic' not in book.read_text()
     assert L.verify(book) == []
 

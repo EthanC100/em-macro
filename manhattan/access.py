@@ -539,17 +539,18 @@ class AttemptContext:
             raise AccessError("the window is not this attempt's declared evaluation window")
 
     # ---- terminals (classified reason only; never exception text or values)
-    def fail(self, reason: str = "execution_error"):
-        return self._end("failed", reason)
+    def fail(self, reason: str = "execution_error", *, read_may_have_occurred: bool = False):
+        """Close a failed attempt, counting possible reads made outside the PIT meter."""
+        return self._end("failed", reason, read_may_have_occurred=read_may_have_occurred)
 
     def abort(self, reason: str = "interrupted"):
         return self._end("aborted", reason)
 
-    def _end(self, status: str, reason: str):
+    def _end(self, status: str, reason: str, *, read_may_have_occurred: bool = False):
         if reason not in L.TERMINAL_REASONS:
             raise AccessError("unknown attempt reason classification")
         self._require_active()
-        out = self._backend.terminal(self.attempt_id, status, reason, self.data_read)
+        out = self._backend.terminal(self.attempt_id, status, reason, self.data_read or read_may_have_occurred)
         self._ended = True
         _BOUND.pop(self.attempt_id, None)
         return out
