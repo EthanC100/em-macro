@@ -567,6 +567,9 @@ def main(argv=None) -> int:
         p.add_argument("--attempt", type=int, default=int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")))
         p.add_argument("--commit", default=os.environ.get("GITHUB_SHA", "0" * 40))
         p.add_argument("--health-out")
+        p.add_argument("--rehearsal", action="store_true",
+                       help="synthetic rehearsal: the synthetic source only, a local bare repository as the ledger")
+        p.add_argument("--rehearsal-clock", help="rehearsal only: start the run's clock here (ISO UTC), +1 s a call")
         if name == "nightly":
             p.add_argument("--asof", default=datetime.now(timezone.utc).date().isoformat())
             p.add_argument("--sources", default="fred_DEXBZUS,fred_DEXMXUS,fred_DEXSFUS")
@@ -602,7 +605,43 @@ def main(argv=None) -> int:
         return 1
 
 
+class RehearsalClock:
+    """A rehearsal's clock: starts at a given instant and advances one second a call (as the tests' clock does),
+    so a sequence of nights can be rehearsed in seconds."""
+    def __init__(self, start: str):
+        self.t = TM.parse_time(start)
+
+    def __call__(self) -> datetime:
+        self.t += timedelta(seconds=1)
+        return self.t
+
+
+def rehearsal_guard(a) -> None:
+    """Keep synthetic data and real ledgers apart at the entry point (fail closed, before anything is opened).
+
+    - The ``synthetic`` source is accepted only in a rehearsal, so the real runner can never capture synthetic data
+      into the private ledger.
+    - A rehearsal reads only the synthetic source (no network fetch) and writes only to a local bare repository
+      (an existing directory holding ``HEAD``), never to an SSH or URL remote, so it can never reach the private
+      ledger or its mirror.
+    - ``--rehearsal-clock`` is a rehearsal-only option."""
+    sources = tuple(x for x in getattr(a, "sources", "").split(",") if x)
+    if not a.rehearsal:
+        if "synthetic" in sources:
+            raise ValueError("the synthetic source is accepted only in a rehearsal (--rehearsal)")
+        if a.rehearsal_clock:
+            raise ValueError("--rehearsal-clock needs --rehearsal")
+        return
+    if set(sources) - {"synthetic"}:
+        raise ValueError("a rehearsal reads the synthetic source only")
+    for url in (a.remote, getattr(a, "mirror", None)):
+        if url and not (Path(url).is_dir() and (Path(url) / "HEAD").is_file()):
+            raise ValueError("a rehearsal writes only to a local bare repository")
+
+
 def _run_cli(a) -> int:
+    rehearsal_guard(a)
+    clock = RehearsalClock(a.rehearsal_clock) if a.rehearsal_clock else ST.utcnow
     cfg = RunConfig(ledger_dir=Path(a.ledger_dir), remote=a.remote, batches_dir=Path(a.batches),
                     asof=date.fromisoformat(getattr(a, "asof", "2000-01-01")), run_id=a.run_id, run_attempt=a.attempt,
                     commit=a.commit, private_dir=Path(a.private_dir) if a.private_dir else None)
@@ -610,11 +649,15 @@ def _run_cli(a) -> int:
         cfg.sources = tuple(x for x in a.sources.split(",") if x)
         cfg.mirror = a.mirror
         cfg.config_sha256 = a.config_sha256
-        fetchers = {sid: (lambda src=D.SOURCES[sid]: D.fetch_fred(src)) for sid in cfg.sources
-                    if D.SOURCES[sid].kind == "fred"}
-        rec = nightly(cfg, fetchers)
+        if a.rehearsal:
+            cfg.run_calendar = "synthetic"
+            fetchers = {"synthetic": lambda: D.synthetic_csv(cfg.asof)} if cfg.sources else {}
+        else:
+            fetchers = {sid: (lambda src=D.SOURCES[sid]: D.fetch_fred(src)) for sid in cfg.sources
+                        if D.SOURCES[sid].kind == "fred"}
+        rec = nightly(cfg, fetchers, clock=clock)
     else:
-        rec = register(cfg, a.batch, read_json(a.pr_json), _witness(a.witness_json))
+        rec = register(cfg, a.batch, read_json(a.pr_json), _witness(a.witness_json), clock=clock)
     if a.health_out:
         Path(a.health_out).write_text(B.render(rec) + "\n")
     return 0 if rec.get("status") == "ok" else 1

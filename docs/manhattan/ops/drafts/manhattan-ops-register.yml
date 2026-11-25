@@ -1,0 +1,81 @@
+# DRAFT, NOT INSTALLED. A registration workflow for owner-frozen Manhattan batches (PAPER_RUNNER_READINESS.md, R04).
+#
+# Today no production path runs `python -m manhattan.ops.runner register`: the nightly workflow only observes, and
+# the private ledger's deploy key lives only in the `manhattan-ledger` environment. Installing this file under
+# .github/workflows/ is Ethan's deployment decision (a workflow that receives the ledger's deploy key), and the
+# witness step needs his choice of witness (R05: today the witness JSON's `verified` flag is not checked by code).
+# No session installs, dispatches or edits a copy of this on a branch (CLAUDE.md rules 2, 11, 16).
+name: manhattan-ops-register
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "Batch number N of data/manhattan/batches/AB-000N (already merged to main by Ethan)"
+        required: true
+      pr:
+        description: "Number of the merged manifest pull request"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read                 # merged_at from the API, server-side time
+
+concurrency:
+  group: manhattan-ops-ledger         # the same group as the nightly runner: one ledger writer at a time
+  cancel-in-progress: false
+
+jobs:
+  register:
+    if: github.ref == 'refs/heads/main'
+    environment: manhattan-ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LEDGER_REMOTE: "ledger-primary:EthanC100/manhattan-ledger.git"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (hash-locked runner environment, gate G-4)
+        run: pip install --require-hashes -r requirements-manhattan-runner.lock
+      - name: Merge time from the GitHub API (never from the pull request text)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" > "$RUNNER_TEMP/pr.json"
+      - name: Witness of the manifest hash (OWNER DECISION R05; placeholder)
+        run: |
+          echo "R05: no witness verifier is installed; refusing to write a witness file" >&2
+          # Once chosen, a verifier (e.g. `ots verify` against a Bitcoin block header source) writes
+          # $RUNNER_TEMP/witness.json with verified=true only when it verified the stamp itself.
+      - name: Keys (as in manhattan-ops-runner.yml; never printed)
+        env:
+          LEDGER_KEY: ${{ secrets.MANHATTAN_LEDGER_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          P="$RUNNER_TEMP/private"; mkdir -p "$P"
+          printf '%s\n' "$LEDGER_KEY" > "$P/ledger_key"
+          printf '%s\n' "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$P/known_hosts"
+          printf 'Host ledger-primary\n  HostName github.com\n  User git\n  IdentityFile %s\n  IdentitiesOnly yes\n' "$P/ledger_key" > "$P/ssh_config"
+          echo "GIT_SSH_COMMAND=ssh -F $P/ssh_config -o UserKnownHostsFile=$P/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes" >> "$GITHUB_ENV"
+      - name: Register (provisional without a verified witness)
+        env:
+          BATCH: ${{ inputs.batch }}
+        run: |
+          W=""; [ -f "$RUNNER_TEMP/witness.json" ] && W="--witness-json $RUNNER_TEMP/witness.json"
+          python -m manhattan.ops.runner register --ledger-dir "$RUNNER_TEMP/private/ledger" \
+            --private-dir "$RUNNER_TEMP/private" --remote "$LEDGER_REMOTE" --batches data/manhattan/batches \
+            --batch "$BATCH" --pr-json "$RUNNER_TEMP/pr.json" $W --health-out "$RUNNER_TEMP/health.json"
+      - name: Remove the private clone and keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/private" "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/health.json"
