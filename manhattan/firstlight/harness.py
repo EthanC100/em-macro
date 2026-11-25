@@ -31,7 +31,8 @@ computation and the report files byte for byte.
 would reach the network and write refs outside ``--out``. So the harness reads the explorer cutoff of the **local**
 ``config/night.yaml`` from disk (no git, no network), refuses to run if it is unreadable or earlier than
 ``cap.DATA_END``, and for the duration of the evaluations only gives ``log_variant`` ``min(local cutoff,
-cap.DATA_END)``: it can only tighten, never widen. The rows go to ``--out/ledger/exploration_variants.csv``, never
+cap.DATA_END)``: this tightens the local file only; it does not verify main's current cutoff.
+The rows go to ``--out/ledger/exploration_variants.csv``, never
 to ``results/exploration/log.csv``, and a run is complete only with exactly one row per completion. The override
 replaces a module attribute, so it is held under a module-level lock and **the harness is single-threaded**: nothing
 else in the process may log variants while it runs. The clean design, an explicit cutoff argument to
@@ -284,6 +285,9 @@ def _identity(sp: dict, v: dict, x: dict, data_hash: str, version: dict) -> dict
 
 
 def _prepare_out(out: Path, resume: bool) -> None:
+    out = Path(out).resolve()
+    if out == ROOT.resolve() or ROOT.resolve() in out.parents:
+        raise HarnessRefused("--out must be outside the repository (including writer-owned paths)")
     if resume:
         if not (out / LEDGER_REL).is_file():
             raise HarnessRefused(f"--resume needs an earlier run's ledger in {out}")
@@ -427,7 +431,7 @@ def child_env(environ=None) -> dict:
 
 def _subprocess_run(out: Path, seed: int) -> subprocess.CompletedProcess:
     env = child_env()
-    return subprocess.run([sys.executable, "-m", "manhattan.firstlight.harness", "--out", str(out), "--seed",
+    return subprocess.run([sys.executable, "-E", "-s", "-m", "manhattan.firstlight.harness", "--out", str(out), "--seed",
                            str(seed)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
 
 

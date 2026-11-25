@@ -675,3 +675,47 @@ def test_variant_log_extra_unknown_row_is_refused(clean, tmp_path):
         writer.writerow(unknown)
     with pytest.raises(report.ReportRefused, match="unknown"):
         report.build(c / harness.LEDGER_REL, c / harness.ANCHORS_REL, log)
+
+
+@pytest.mark.parametrize('mode', ['run', 'resume', 'reproduce'])
+def test_output_inside_repository_is_refused_before_writes(monkeypatch, tmp_path, mode):
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    monkeypatch.setattr(harness, 'ROOT', repo)
+    out = repo / 'data/ledger/fixture'
+    with pytest.raises(harness.HarnessRefused, match='outside the repository'):
+        if mode == 'reproduce':
+            harness.reproduce(out, SEED)
+        else:
+            harness.run(out, SEED, resume=mode == 'resume')
+    assert not (repo / 'data').exists()
+
+
+def test_children_disable_environment_and_user_site_injection(monkeypatch, tmp_path):
+    def run(cmd, **kwargs):
+        assert cmd[:4] == [sys.executable, '-E', '-s', '-m']
+        return subprocess.CompletedProcess(cmd, 0, '', '')
+    monkeypatch.setattr(harness.subprocess, 'run', run)
+    harness._subprocess_run(tmp_path / 'run', SEED)
+
+
+def test_freeze_content_errors_are_never_an_expected_attestation_refusal(monkeypatch, tmp_path):
+    from manhattan import freeze
+    def fail(*a, **kw):
+        raise freeze.FreezeError('synthetic corrupt manifest content')
+    monkeypatch.setattr(freeze, 'verify_frozen', fail)
+    with pytest.raises(freeze.FreezeError, match='corrupt manifest content'):
+        harness.run(tmp_path / 'out', SEED)
+    assert not (tmp_path / 'out' / harness.LEDGER_REL).exists()
+
+
+def test_reproduction_child_does_not_execute_user_sitecustomize(monkeypatch, tmp_path):
+    home = tmp_path / 'home'
+    user_site = home / '.local/lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+    user_site.mkdir(parents=True)
+    marker = tmp_path / 'user-site-executed'
+    (user_site / 'sitecustomize.py').write_text('from pathlib import Path\nPath(' + repr(str(marker)) + ').touch()\n')
+    monkeypatch.setenv('HOME', str(home))
+    result = harness._subprocess_run(tmp_path / 'run', SEED)
+    assert result.returncode == 0, result.stderr[-1500:]
+    assert not marker.exists()

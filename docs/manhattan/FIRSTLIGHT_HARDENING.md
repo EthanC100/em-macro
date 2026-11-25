@@ -14,8 +14,8 @@ by this continuation. PR #107 remains draft and requires independent review.
   is environment isolation, not a filesystem or network sandbox.
 - Reproduction checks the existing local explorer cutoff before creating its
   output directory or launching either child. Invalid or unreadable cutoff files
-  refuse with CLI exit 3, matching the single-run path. The owner-approved cutoff
-  remains scoped to the synthetic harness; production logging is unchanged.
+  refuse with CLI exit 3, matching the single-run path. The local-file cutoff
+  is scoped to the synthetic harness; owner authorization is not established by this document. Production logging is unchanged.
 - Added regression coverage for non-hex/malformed anchor heads and an unknown
   extra variant-log row. Existing refusal behavior is preserved.
 
@@ -57,3 +57,21 @@ key and a genuine timestamp-attestation verifier; this continuation supplies
 neither. Independent anchor custody, canonical ledger choice and other existing
 scientific policy decisions remain open. A local synthetic harness report is not
 research evidence and authorizes no promotion or trading.
+
+## S17 corrective review
+
+Masked arrays and every ndarray subclass are refused before ingestion. Both lag
+and explicit-availability paths pass the checked plain period/availability arrays
+to PitStore. Content-error refusal is tested independently of missing attestation.
+
+Output must resolve outside the checkout, including on resume and reproduction;
+writer-owned directories inside the checkout are therefore refused. Children use
+-E -s as well as the runtime environment allowlist, so user site-packages are not
+loaded. The local cutoff override does not verify main's current configuration.
+The earlier wording claiming owner approval was unsupported and has been removed;
+authorization of this local-file cutoff remains an explicit owner question.
+
+The cap also needs the same correction on the separate S17 audit branch. Its
+exact current branch/head must be identified before updating it; no unrelated
+audit work should be overwritten. GitHub CI for this stacked draft still requires
+the existing dependency merge and retarget sequence.
