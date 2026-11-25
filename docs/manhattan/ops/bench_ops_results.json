@@ -1,0 +1,409 @@
+{
+ "commit": "b41ed81001219308d3701c98783ee7935578130a",
+ "hte": {
+  "100k": {
+   "attempts_hte_chunks": 343,
+   "candidates_per_s_incl_registration": 1362.7,
+   "computed_simulations": 75468,
+   "cpu_s": 200.8,
+   "exact_aliases": 23628,
+   "families": 5,
+   "hypotheses": 15,
+   "log_records": 689,
+   "peak_rss_largest_child_mib": 385.6,
+   "peak_rss_parent_mib": 321.1,
+   "registration_s": 3.65,
+   "run_wall_s": 69.4,
+   "storage_bytes_per_candidate_excl_cache": 650.5,
+   "storage_bytes_total": 191886408,
+   "strategy_specs": 30,
+   "total_incl_registration_s": 73.05,
+   "unique_executable_configs_candidates": 99552,
+   "violations": [],
+   "workers": 4
+  },
+  "10k": {
+   "attempts_hte_chunks": 38,
+   "candidates_per_s_incl_registration": 729.4,
+   "computed_simulations": 8528,
+   "cpu_s": 32.0,
+   "exact_aliases": 1744,
+   "families": 5,
+   "hypotheses": 15,
+   "log_records": 79,
+   "peak_rss_largest_child_mib": 270.9,
+   "peak_rss_parent_mib": 152.0,
+   "registration_s": 1.54,
+   "run_wall_s": 12.64,
+   "storage_bytes_per_candidate_excl_cache": 676.7,
+   "storage_bytes_total": 53613477,
+   "strategy_specs": 30,
+   "total_incl_registration_s": 14.18,
+   "unique_executable_configs_candidates": 10344,
+   "violations": [],
+   "workers": 4
+  },
+  "command": "OPENBLAS_NUM_THREADS=1 python -m manhattan.hte.bench --target N --workers 4 --chunk 512"
+ },
+ "hte_accounting_bridge_10k": {
+  "accounting_ms_per_candidate": 2.269,
+  "accounting_wall_s": 23.47,
+  "candidates": 10344,
+  "command": "python scripts/hte_accounting_bench.py --target 10000 --workers 4",
+  "families": 5,
+  "hte_run_wall_s": 11.126,
+  "ledger_bytes": 36785536,
+  "ledger_bytes_per_candidate": 3556.2,
+  "pr86_attempts": 10344,
+  "violations": []
+ },
+ "machine": {
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "git": "git version 2.43.0",
+  "nproc": 4,
+  "numpy": "2.5.3",
+  "os": "Linux-6.18.44-fc-v880-x86_64-with-glibc2.39",
+  "python": "3.13.18"
+ },
+ "measured_on": "2026-11-25",
+ "ops_path": {
+  "runs": [
+   {
+    "capture_only_night_wall_s": 2.2866,
+    "failures": [],
+    "families": 10,
+    "final_ledger": {
+     "bare_remote_bytes": 13137603,
+     "bare_remote_bytes_after_gc": 1283285,
+     "chain_ok": true,
+     "git_commits_private_ledger": 102,
+     "mirror_status": "equal",
+     "records": 541,
+     "working_tree_bytes": {
+      "chain_jsonl": 742264,
+      "journal_jsonl": 752858,
+      "logs": 0,
+      "other_files": 21,
+      "raw": 16245521,
+      "working_tree_total": 17740664
+     }
+    },
+    "forward_confirmation": {
+     "attempts_per_night": 27.0,
+     "attempts_per_s_forward_phase_mean": 9.948,
+     "attempts_per_s_whole_night_mean": 4.108,
+     "attempts_total": 135,
+     "bare_remote_bytes_delta_per_night_mean": 2343208.6,
+     "forward_phase_wall_s_mean": 2.8417,
+     "git_commits_mirror_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "git_commits_private_ledger_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "ledger_bytes_delta_per_night_mean": {
+      "chain_jsonl": 127490,
+      "journal_jsonl": 134088,
+      "logs": 0,
+      "other_files": 0,
+      "raw": 2707915,
+      "working_tree_total": 2969492
+     },
+     "night_cpu_s_mean": 6.2835,
+     "night_wall_s": [
+      5.0572,
+      5.9269,
+      6.4908,
+      7.7464,
+      9.0448
+     ],
+     "night_wall_s_mean": 6.8532,
+     "nights": 5,
+     "per_family_per_night": {
+      "git_commits_private_ledger": 1.56,
+      "ledger_bytes_delta_excl_raw": 26158,
+      "wall_s": 0.68532
+     },
+     "stages_wall_s_mean": {
+      "attempt_recovery": 0.0001,
+      "capture_parse_hash": 0.2383,
+      "capture_write": 0.5725,
+      "fence_verify_at_commit": 0.0076,
+      "fwd_commit_results_terminals": 0.3455,
+      "fwd_completion": 1.5239,
+      "fwd_compute": 0.3359,
+      "fwd_plan": 0.0064,
+      "fwd_read_window": 0.3174,
+      "fwd_register_attempts": 0.3126,
+      "heartbeat": 0.3125,
+      "journal_reconcile": 0.0076,
+      "load_batches": 0.0052,
+      "lock": 0.1229,
+      "mirror_push": 0.4744,
+      "mirror_verify": 0.2523,
+      "missed_runs": 0.0555,
+      "open_clone_verify": 0.1846,
+      "other": 0.1827,
+      "pit_build": 0.1918,
+      "pit_first_seen": 1.275,
+      "private_log_commit": 0.0513,
+      "registrations_index": 0.0,
+      "unlock": 0.077
+     }
+    },
+    "historical_screening": {
+     "attempts": 27,
+     "attempts_per_s": 5.41,
+     "git_commits": 6,
+     "wall_s": 4.9901
+    },
+    "hypotheses": 14,
+    "pipeline_wall_s": {
+     "compile": 0.0023,
+     "critic_mechanical": 0.0037,
+     "freeze_pr_prepare_and_commit": 0.1043,
+     "generate_mock": 0.0012,
+     "historical_screening": 4.9901,
+     "mirror_verify_final": 0.1415,
+     "registration": 0.6242
+    },
+    "predictions_registered": 27,
+    "registration_git_commits": 6,
+    "unique_executable_configs": 27
+   },
+   {
+    "capture_only_night_wall_s": 2.3983,
+    "failures": [],
+    "families": 20,
+    "final_ledger": {
+     "bare_remote_bytes": 20034776,
+     "bare_remote_bytes_after_gc": 1641732,
+     "chain_ok": true,
+     "git_commits_private_ledger": 102,
+     "mirror_status": "equal",
+     "records": 1054,
+     "working_tree_bytes": {
+      "chain_jsonl": 1465473,
+      "journal_jsonl": 1480513,
+      "logs": 0,
+      "other_files": 21,
+      "raw": 16245521,
+      "working_tree_total": 19191528
+     }
+    },
+    "forward_confirmation": {
+     "attempts_per_night": 54.0,
+     "attempts_per_s_forward_phase_mean": 14.616,
+     "attempts_per_s_whole_night_mean": 6.548,
+     "attempts_total": 270,
+     "bare_remote_bytes_delta_per_night_mean": 3632291.4,
+     "forward_phase_wall_s_mean": 3.8436,
+     "git_commits_mirror_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "git_commits_private_ledger_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "ledger_bytes_delta_per_night_mean": {
+      "chain_jsonl": 251777,
+      "journal_jsonl": 263911,
+      "logs": 0,
+      "other_files": 0,
+      "raw": 2707915,
+      "working_tree_total": 3223603
+     },
+     "night_cpu_s_mean": 8.0368,
+     "night_wall_s": [
+      6.248,
+      7.1001,
+      8.7057,
+      9.6823,
+      11.4712
+     ],
+     "night_wall_s_mean": 8.6415,
+     "nights": 5,
+     "per_family_per_night": {
+      "git_commits_private_ledger": 0.78,
+      "ledger_bytes_delta_excl_raw": 25784,
+      "wall_s": 0.43208
+     },
+     "stages_wall_s_mean": {
+      "attempt_recovery": 0.0003,
+      "capture_parse_hash": 0.2809,
+      "capture_write": 0.6792,
+      "fence_verify_at_commit": 0.0057,
+      "fwd_commit_results_terminals": 0.588,
+      "fwd_completion": 1.5047,
+      "fwd_compute": 0.6638,
+      "fwd_plan": 0.013,
+      "fwd_read_window": 0.6208,
+      "fwd_register_attempts": 0.4533,
+      "heartbeat": 0.4381,
+      "journal_reconcile": 0.0127,
+      "load_batches": 0.0096,
+      "lock": 0.1676,
+      "mirror_push": 0.7087,
+      "mirror_verify": 0.3076,
+      "missed_runs": 0.0494,
+      "open_clone_verify": 0.2263,
+      "other": 0.2034,
+      "pit_build": 0.1952,
+      "pit_first_seen": 1.362,
+      "private_log_commit": 0.0546,
+      "registrations_index": 0.0001,
+      "unlock": 0.0965
+     }
+    },
+    "historical_screening": {
+     "attempts": 54,
+     "attempts_per_s": 5.31,
+     "git_commits": 6,
+     "wall_s": 10.1756
+    },
+    "hypotheses": 27,
+    "pipeline_wall_s": {
+     "compile": 0.0039,
+     "critic_mechanical": 0.0052,
+     "freeze_pr_prepare_and_commit": 0.1822,
+     "generate_mock": 0.0019,
+     "historical_screening": 10.1756,
+     "mirror_verify_final": 0.1981,
+     "registration": 0.9403
+    },
+    "predictions_registered": 54,
+    "registration_git_commits": 6,
+    "unique_executable_configs": 54
+   },
+   {
+    "capture_only_night_wall_s": 3.2486,
+    "failures": [],
+    "families": 50,
+    "final_ledger": {
+     "bare_remote_bytes": 40185767,
+     "bare_remote_bytes_after_gc": 2679861,
+     "chain_ok": true,
+     "git_commits_private_ledger": 102,
+     "mirror_status": "equal",
+     "records": 2574,
+     "working_tree_bytes": {
+      "chain_jsonl": 3610717,
+      "journal_jsonl": 3639800,
+      "logs": 0,
+      "other_files": 21,
+      "raw": 16245521,
+      "working_tree_total": 23496059
+     }
+    },
+    "forward_confirmation": {
+     "attempts_per_night": 134.0,
+     "attempts_per_s_forward_phase_mean": 21.1,
+     "attempts_per_s_whole_night_mean": 11.046,
+     "attempts_total": 670,
+     "bare_remote_bytes_delta_per_night_mean": 7401195.4,
+     "forward_phase_wall_s_mean": 6.5942,
+     "git_commits_mirror_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "git_commits_private_ledger_per_night": [
+      18,
+      15,
+      15,
+      15,
+      15
+     ],
+     "ledger_bytes_delta_per_night_mean": {
+      "chain_jsonl": 620516,
+      "journal_jsonl": 649235,
+      "logs": 0,
+      "other_files": 0,
+      "raw": 2707915,
+      "working_tree_total": 3977665
+     },
+     "night_cpu_s_mean": 12.122,
+     "night_wall_s": [
+      9.1019,
+      10.6475,
+      11.9454,
+      14.8543,
+      17.4398
+     ],
+     "night_wall_s_mean": 12.7978,
+     "nights": 5,
+     "per_family_per_night": {
+      "git_commits_private_ledger": 0.312,
+      "ledger_bytes_delta_excl_raw": 25395,
+      "wall_s": 0.25596
+     },
+     "stages_wall_s_mean": {
+      "attempt_recovery": 0.0006,
+      "capture_parse_hash": 0.2472,
+      "capture_write": 0.9521,
+      "fence_verify_at_commit": 0.005,
+      "fwd_commit_results_terminals": 1.0863,
+      "fwd_completion": 1.5576,
+      "fwd_compute": 1.5347,
+      "fwd_plan": 0.031,
+      "fwd_read_window": 1.5045,
+      "fwd_register_attempts": 0.8801,
+      "heartbeat": 0.7685,
+      "journal_reconcile": 0.0274,
+      "load_batches": 0.0237,
+      "lock": 0.1627,
+      "mirror_push": 1.2912,
+      "mirror_verify": 0.5255,
+      "missed_runs": 0.0625,
+      "open_clone_verify": 0.26,
+      "other": 0.2563,
+      "pit_build": 0.1884,
+      "pit_first_seen": 1.2109,
+      "private_log_commit": 0.0483,
+      "registrations_index": 0.0002,
+      "unlock": 0.1731
+     }
+    },
+    "historical_screening": {
+     "attempts": 134,
+     "attempts_per_s": 5.3,
+     "git_commits": 6,
+     "wall_s": 25.2706
+    },
+    "hypotheses": 67,
+    "pipeline_wall_s": {
+     "compile": 0.0101,
+     "critic_mechanical": 0.0134,
+     "freeze_pr_prepare_and_commit": 0.2075,
+     "generate_mock": 0.0476,
+     "historical_screening": 25.2706,
+     "mirror_verify_final": 0.4038,
+     "registration": 1.0306
+    },
+    "predictions_registered": 134,
+    "registration_git_commits": 6,
+    "unique_executable_configs": 134
+   }
+  ],
+  "script": "scripts/manhattan_ops_bench.py --families 10 20 50 --nights 5"
+ },
+ "schema": 1,
+ "synthetic_only": true
+}

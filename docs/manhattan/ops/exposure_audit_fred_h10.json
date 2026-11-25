@@ -1,0 +1,50 @@
+{
+ "schema": 1,
+ "written": "2026-11-25",
+ "dataset": {
+  "name": "FRED H.10 daily FX",
+  "series": {"fred_DEXBZUS": "BRL per USD", "fred_DEXMXUS": "MXN per USD", "fred_DEXSFUS": "ZAR per USD"},
+  "runner_universe": "U_FX_H10 (spot only, no carry series)",
+  "code": ["manhattan/ops/data.py", "manhattan/ops/compiler.py", "manhattan/ops/runner.py"]
+ },
+ "method": {
+  "market_data_read": false,
+  "network_fetch": false,
+  "searches": ["DEXBZUS", "DEXMXUS", "DEXSFUS", "fred", "fred_DEX", "FX_BR", "FX_MX", "FX_ZA", "BRL", "MXN", "ZAR"],
+  "git": "git log --all -S on a shallow clone (90 commits, oldest b10790d 2026-11-19); first appearances before 2026-11-19 not datable from git here, cited from documents instead",
+  "owner_followup": "in a full clone: git log --all -S DEXBZUS (and DEXMXUS, DEXSFUS, FX_BR, daily_panel.csv)"
+ },
+ "default_designation": "previously_examined",
+ "evidence": [
+  {"id": "E1", "paths": ["em_macro/config.py", "data/processed/daily_panel.csv", "README.md", "results/coverage_report.md", "data/processed/coverage.csv"], "commit": "pre-shallow-root", "what": "H.10 series committed as row-level daily panel columns FX_BR, FX_MX, FX_ZA", "currencies": ["BRL", "MXN", "ZAR"], "start": "2005-01-03", "end": "2026-10-30", "signals": ["raw history"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E2", "paths": ["README.md", "em_macro/carry.py", "data/processed/carry_monthly_returns.csv", "results/carry_benchmark.csv"], "commit": "pre-shallow-root", "what": "carry benchmark returns per currency and basket", "currencies": ["BRL", "MXN", "ZAR", "TRY", "IDR", "PLN"], "start": "2005-01", "end": "2026-09", "split": "fit 2005-2021, hold-out 2022 onward", "signals": ["carry"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E3", "paths": ["trials.csv#T01", "results/systematic/"], "commit": "7886867 (tag v1.0-frozen)", "what": "v1.0 systematic macro strategy, 10 currencies and bonds", "currencies": ["BRL", "MXN", "ZAR"], "start": "2005-01", "end": "2026-11", "split": "design 2005-01..2019-12, test 2020-01..2026-09, live paper positions after", "signals": ["carry", "trend", "value"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E4", "paths": ["results/systematic_v1.1/"], "commit": "tag v1.1-frozen", "what": "v1.1 paper book", "currencies": ["BRL"], "start": "2020-01", "end": "2026-11", "signals": ["carry", "trend", "value"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E5", "paths": ["results/T01_ts_trend.md", "results/T01/"], "commit": "62524ff (prereg dc71998)", "what": "trial T01 (trials.csv T12) time-series trend sleeve", "currencies": ["BRL", "MXN", "ZAR", "TRY", "IDR", "PLN"], "start": "2005-01", "end": "2026-09", "split": "2020-01..2026-09 decisive", "signals": ["tsmom"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E6", "paths": ["results/T02_econ_momentum.md", "results/T02/"], "commit": "run 2026-11-04", "what": "trial T02 (T13) economic momentum", "currencies": ["BRL", "MXN", "ZAR", "TRY", "IDR", "PLN"], "start": "2005-01", "end": "2026-09", "signals": ["economic momentum", "carry", "trend", "value"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E7", "paths": ["results/T16-T19_risk_batch.md", "results/T16-T19/"], "commit": "inputs at 7886867", "what": "T16 carry-crash filter, T17 factor caps, T19 volatility forecasting on v1.0 currency positions", "currencies": ["BRL", "MXN", "ZAR"], "start": "2005-01", "end": "2026-09", "signals": ["carry", "risk overlays"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E8", "paths": ["trials.csv#T07,T09,T14,T15", "results/repricing/", "results/fit/", "results/test/"], "commit": "pre-shallow-root", "what": "election FX event studies", "currencies": ["BRL", "MXN", "ZAR"], "start": "2005-01", "end": "2026-10", "signals": ["event moves"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E9", "paths": ["results/T27/", "trials.csv#T27"], "commit": "2026-11", "what": "managed-currency volatility floor, withdrawn at step 0 before any return", "currencies": ["managed currencies"], "start": null, "end": null, "signals": ["volatility"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E10", "paths": ["config/exploration_manifest.json", "docs/exploration_data.md", "em-macro-data:exploration/v1/extract.csv"], "commit": "043ff30 (em-macro-data)", "what": "night-shift explorer extract incl. FX_BR, FX_MX, FX_ZA; results/exploration/log.csv has no variant rows", "currencies": ["BRL", "MXN", "ZAR"], "start": "2005-01-03", "end": "2019-12-31", "signals": [], "visible_to": ["sessions", "owner"]},
+  {"id": "E11", "paths": ["manhattan/factors/public_fx.py", "manhattan/factors/reproduce.py", "results/manhattan_engine/"], "commit": "session 5M, 2026-11-12", "what": "Manhattan engine reproduction of carry and the T01 trend sleeve (exploration role)", "currencies": ["BRL", "MXN", "ZAR", "TRY", "IDR", "PLN"], "start": "2005-01-03", "end": "2019-12-31", "signals": ["carry", "tsmom"], "visible_to": ["owner", "sessions", "public"]},
+  {"id": "E12", "paths": ["data/ledger/instruments.csv", "data/ledger/marks.csv"], "commit": "ledger-daily bot commits, e.g. f99c245", "what": "daily spot marks: BRL BCB PTAX, MXN Banxico FIX with H.10 DEXMXUS fallback, ZAR SARB", "currencies": ["BRL", "MXN", "ZAR"], "start": "2026-10-06", "end": "2026-11-24", "signals": ["marks"], "visible_to": ["owner", "sessions", "public"], "substitute_for_h10": true},
+  {"id": "E13", "paths": ["janus/watchlist.yaml", "data/janus/records.jsonl", "docs/janus/daily_review.md"], "commit": "Janus daily commits, e.g. 77a6205", "what": "daily BRL and MXN forecasts and paper book", "currencies": ["BRL", "MXN"], "start": "2026-11-11", "end": "2026-11-24", "signals": ["discretionary forecasts"], "visible_to": ["owner", "sessions", "public"], "substitute_for_h10": true},
+  {"id": "E14", "paths": ["results/T23-T24_pre2000.md", "trials.csv#T20-T24"], "commit": "633e983, 7405e5f", "what": "futures trend/carry/basis sleeves incl. CME Mexican peso futures (6M); licensed rows not in repository", "currencies": ["MXN"], "start": "1979-05", "end": "2026-09", "signals": ["trend", "carry", "basis momentum"], "visible_to": ["owner", "sessions"]},
+  {"id": "E15", "paths": ["manhattan/ops/data.py", "manhattan/ops/compiler.py", "manhattan/ops/runner.py", "docs/manhattan/ops/RUNNER.md", "docs/manhattan/OPS_PROGRESS.md", ".github/workflows/manhattan-ops-runner.yml"], "commit": "b10790d and earlier", "what": "operational FRED fetcher and universe, written, never run against FRED; workflow schedule disabled", "currencies": ["BRL", "MXN", "ZAR"], "start": null, "end": null, "signals": [], "visible_to": []},
+  {"id": "E16", "paths": ["tests/test_manhattan_pit_integrity.py", "tests/test_automation.py", "tests/test_q021_marks_never_downgrade.py"], "commit": "in tree", "what": "fabricated FRED-format fixtures, not market data", "currencies": [], "start": null, "end": null, "signals": [], "visible_to": []}
+ ],
+ "pretraining": "cannot be excluded (docs/manhattan/ops/BLIND_GENERATOR.md): every observation before the generating model's training cutoff, and this public repository's reported results on these currencies, may be known to the generator",
+ "segments": [
+  {"start": null, "end": "2005-01-02", "designation": "previously_examined", "basis": ["E14", "pretraining"]},
+  {"start": "2005-01-03", "end": "2019-12-31", "designation": "previously_examined", "basis": ["E1", "E2", "E3", "E5", "E6", "E7", "E8", "E10", "E11"]},
+  {"start": "2020-01-01", "end": "2026-09-30", "designation": "previously_examined", "basis": ["E2", "E3", "E4", "E5", "E6", "E7", "E8"]},
+  {"start": "2026-10-01", "end": "2026-10-30", "designation": "previously_examined", "basis": ["E1", "E4", "E12"]},
+  {"start": "2026-10-31", "end": "2026-11-25", "designation": "previously_examined", "basis": ["E3", "E4", "E12", "E13"], "note": "by close substitutes; H.10 values themselves not in the repository"},
+  {"start": "per family: after its freeze and witnessed registration", "end": null, "designation": "forward_data_not_a_historical_segment", "basis": ["manhattan/ops/timing.py"]}
+ ],
+ "proposal_for_owner": {
+  "status": "proposal, not a decision",
+  "unexamined_historical_segment": null,
+  "text": "No 'unexamined after date X' segment is supported for BRL/MXN/ZAR spot. Strongest supportable designation: H.10 observations dated after a family's freeze and witnessed registration are forward data for that family; everything earlier is previously examined."
+ }
+}
