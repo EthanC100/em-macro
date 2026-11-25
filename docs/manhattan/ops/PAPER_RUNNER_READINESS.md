@@ -43,7 +43,7 @@ Wall seconds per run at 20 families: capture 2.3, registration 0.8, observation 
 restart (recovery + 54 retries) 7.3. The workflow's timeout is 60 minutes and the lock's 75: at this scale a night
 uses well under 1% of it. Ledger working tree after the sequence: 12.6 MB, almost all of it synthetic raw captures
 (the synthetic source re-sends its whole history each night; FRED does too, so capture storage, not attempts,
-dominates growth: see BENCHMARKS_OPS.md when merged). `independent_statistical_tests` stays `null` (D-1).
+dominates growth: [BENCHMARKS_OPS.md](BENCHMARKS_OPS.md)). `independent_statistical_tests` stays `null` (D-1).
 
 ## 2. Who controls the ledger and the anchor
 
@@ -117,7 +117,7 @@ forward performance and no ranking.
 | artifacts, caches | none uploaded; pip cache only | workflow + `test_manhattan_ops_e2e.py::test_no_performance_value_in_any_public_channel` |
 | **exports / API**: audit output | counts, codes, hashes | `test_audit_cli_reconciles_and_detects_a_rewritten_history` (leak scan) |
 | exports / API: readiness output | counts and seconds | `test_rehearsal_through_the_real_entry_point_reconciles` |
-| exports / API: operations app | see APP.md (allow-list model + leak scan) | the app's tests, when merged |
+| exports / API: operations app | allow-list view model, no reveal path ([APP.md](APP.md)) | `tests/test_manhattan_app.py` (deny-list walk, leak scan seeded with the ledger's values) |
 | exports / API: orchestra status (`orchestra/status.py`, loopback HTTP) | job statuses, counts, hashes; every job kind is synthetic today | its own tests; **must be re-audited before any kind touches real data** |
 | freeze PR body (what the owner sees when approving) | spec text, hashes, raw and effective variant counts, power loss; screening returns are used in memory for the effective count only and never written | `freeze_pr.py`; no ranking or performance field |
 | generator prompt | `blind_request` takes counts and domain names only: no result, path or free text can reach it | `test_manhattan_ops_e2e.py::test_nothing_reaches_the_generator` |
