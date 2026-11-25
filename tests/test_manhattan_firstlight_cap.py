@@ -256,4 +256,3 @@ def test_lag_ingestion_passes_the_checked_plain_availability_array(monkeypatch):
     monkeypatch.setattr(c.store, 'add', add)
     c.add(SERIES, [date(2019, 12, 30)], [1.], lag_days=1)
     assert seen['available'].tolist() == [date(2019, 12, 31)]
-
