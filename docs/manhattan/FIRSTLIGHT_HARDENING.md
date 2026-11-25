@@ -66,8 +66,8 @@ to PitStore. Content-error refusal is tested independently of missing attestatio
 
 Output must resolve outside the checkout, including on resume and reproduction;
 writer-owned directories inside the checkout are therefore refused. Children use
--E -s as well as the runtime environment allowlist, so user site-packages are not
-loaded. The local cutoff override does not verify main's current configuration.
+-B -E -s as well as the runtime environment allowlist, so user site-packages are not
+loaded, and -B prevents bytecode writes even though -E ignores the environment's PYTHONDONTWRITEBYTECODE setting. The local cutoff override does not verify main's current configuration.
 The earlier wording claiming owner approval was unsupported and has been removed;
 authorization of this local-file cutoff remains an explicit owner question.
 

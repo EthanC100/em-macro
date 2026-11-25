@@ -693,7 +693,7 @@ def test_output_inside_repository_is_refused_before_writes(monkeypatch, tmp_path
 
 def test_children_disable_environment_and_user_site_injection(monkeypatch, tmp_path):
     def run(cmd, **kwargs):
-        assert cmd[:4] == [sys.executable, '-E', '-s', '-m']
+        assert cmd[:5] == [sys.executable, '-B', '-E', '-s', '-m']
         return subprocess.CompletedProcess(cmd, 0, '', '')
     monkeypatch.setattr(harness.subprocess, 'run', run)
     harness._subprocess_run(tmp_path / 'run', SEED)
@@ -719,3 +719,14 @@ def test_reproduction_child_does_not_execute_user_sitecustomize(monkeypatch, tmp
     result = harness._subprocess_run(tmp_path / 'run', SEED)
     assert result.returncode == 0, result.stderr[-1500:]
     assert not marker.exists()
+
+
+def test_child_bytecode_writes_are_disabled_even_when_environment_is_ignored(monkeypatch, tmp_path):
+    real_run = subprocess.run
+    def probe(cmd, **kwargs):
+        prefix = cmd[:cmd.index('-m')]
+        check = 'import sys; assert sys.dont_write_bytecode and sys.flags.ignore_environment and sys.flags.no_user_site'
+        return real_run(prefix + ['-c', check], **kwargs)
+    monkeypatch.setattr(harness.subprocess, 'run', probe)
+    result = harness._subprocess_run(tmp_path / 'run', SEED)
+    assert result.returncode == 0, result.stderr

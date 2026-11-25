@@ -431,7 +431,7 @@ def child_env(environ=None) -> dict:
 
 def _subprocess_run(out: Path, seed: int) -> subprocess.CompletedProcess:
     env = child_env()
-    return subprocess.run([sys.executable, "-E", "-s", "-m", "manhattan.firstlight.harness", "--out", str(out), "--seed",
+    return subprocess.run([sys.executable, "-B", "-E", "-s", "-m", "manhattan.firstlight.harness", "--out", str(out), "--seed",
                            str(seed)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
 
 
