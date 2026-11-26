@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-25",
- "at": "2026-11-25T06:21:07+00:00",
+ "as_of": "2026-11-26",
+ "at": "2026-11-26T06:27:42+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,10 +77,10 @@
   }
  },
  "index": {
-  "algorithm v1.0": 102.5327,
+  "algorithm v1.0": 103.4449,
   "algorithm v1.1": 100.0,
-  "janus": 99.9899,
-  "me": 98.485
+  "janus": 99.8469,
+  "me": 98.55
  },
  "janus": {
   "J001": {
@@ -473,21 +473,21 @@
    "instrument": "JP10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J057": {
    "direction": "short",
    "instrument": "EUR",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0072,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J058": {
    "direction": "short",
    "instrument": "GBP",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0039,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J059": {
    "direction": "long",
@@ -506,46 +506,116 @@
   "J061": {
    "direction": "short",
    "instrument": "BRL",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.025,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J062": {
    "direction": "short",
    "instrument": "MXN",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0369,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J063": {
    "direction": "long",
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "cancelled"
   },
   "J064": {
    "direction": "long",
    "instrument": "EUR",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J065": {
    "direction": "long",
    "instrument": "GBP",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J066": {
    "direction": "short",
    "instrument": "BRL",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J067": {
+   "direction": "long",
+   "instrument": "MXN",
+   "net": null,
+   "reason": null,
+   "status": "open"
+  },
+  "J068": {
+   "direction": "short",
+   "instrument": "US10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J069": {
+   "direction": "short",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J070": {
+   "direction": "short",
+   "instrument": "DE10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J071": {
+   "direction": "short",
+   "instrument": "JP10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J072": {
+   "direction": "short",
+   "instrument": "EUR",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J073": {
+   "direction": "long",
+   "instrument": "GBP",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J074": {
+   "direction": "long",
+   "instrument": "JPY",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J075": {
+   "direction": "short",
+   "instrument": "AUD",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J076": {
+   "direction": "short",
+   "instrument": "BRL",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J077": {
    "direction": "long",
    "instrument": "MXN",
    "net": null,
@@ -554,5 +624,5 @@
   }
  },
  "janus_no_trades": 8,
- "latest_mark": "2026-11-25"
+ "latest_mark": "2026-11-26"
 }

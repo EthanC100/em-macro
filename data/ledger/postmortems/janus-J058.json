@@ -1,0 +1,23 @@
+{
+ "book": "janus",
+ "id": "J058",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-25T23:15:09+00:00",
+ "postmortem": {
+  "thesis_right": "partly",
+  "skill_or_luck": "luck",
+  "what_happened": "GBP/USD eased from 1.3098 on 24 Nov to 1.30598 on 25 Nov as the risk unwind lifted the dollar and hot US core PCE outshone hawkish BoE signals. The short was closed after one day when the 24 Nov review flipped sterling to 51%, for a net gain of about 0.004%.",
+  "assessment": "The direction over the one day matched the thesis, but the move came from a global dollar bid, not the UK services PMI the thesis cited, so the reasoning was not tested. Flipping a one-point forecast the next day after The Opposition's BoE-pricing argument paid round-trip costs for no measurable edge.",
+  "do_differently": "Hold a one-point lean unless a new driver appears; separate global dollar moves from UK-specific reasoning in the thesis; weigh relative central-bank pricing (BoE about 80% versus a fully priced Fed hike) from the start.",
+  "sources": [
+   {
+    "title": "Sterling today: Pound slips as risk unwind lifts dollar before PCE data (Investing.com)",
+    "url": "https://www.investing.com/news/forex-news/sterling-today-pound-falls-as-risk-unwind-sends-funds-back-to-dollar-5050111"
+   },
+   {
+    "title": "British Pound slips as hot US PCE outshines hawkish BoE signals (FXStreet)",
+    "url": "https://www.fxstreet.com/news/british-pound-slips-as-hot-us-pce-outshines-hawkish-boe-signals-202611251711"
+   }
+  ]
+ }
+}

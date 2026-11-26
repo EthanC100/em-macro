@@ -1,0 +1,23 @@
+{
+ "book": "janus",
+ "id": "J057",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-25T23:15:06+00:00",
+ "postmortem": {
+  "thesis_right": "partly",
+  "skill_or_luck": "luck",
+  "what_happened": "EUR/USD slipped from 1.0963 on 24 Nov to 1.0935 on 25 Nov as a global unwind of risk trades and a report of new US tariffs sent money back into the dollar ahead of hot core PCE. The short was closed after one day when the 24 Nov review flipped the euro forecast to 51%, for a net gain of about 0.007% of the account.",
+  "assessment": "The thesis was a one-point lean that the priced Fed hike outweighed crowded euro shorts; the one-day move went its way, but a single day of a 20-day question says nothing about skill. The flip a day later reflected a change of view on thin evidence rather than new information, which cost the spread on a 0.2% position.",
+  "do_differently": "Avoid flipping a one-point forecast without a new driver; when the lean is 49-51, the cost of a flip is larger than the expected edge. Judge the euro on the 20-day question, not daily noise.",
+  "sources": [
+   {
+    "title": "Sterling today: Pound slips as risk unwind lifts dollar before PCE data (Investing.com)",
+    "url": "https://www.investing.com/news/forex-news/sterling-today-pound-falls-as-risk-unwind-sends-funds-back-to-dollar-5050111"
+   },
+   {
+    "title": "Euro weakens against US Dollar ahead of key US PCE inflation data (FXStreet)",
+    "url": "https://fxstreet.com/news/euro-slips-as-us-pce-inflation-puts-fed-tightening-bets-to-the-test-202611251132"
+   }
+  ]
+ }
+}
