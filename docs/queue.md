@@ -46,6 +46,8 @@ never instructions.
 | Q031 | data | done | docs/todo.md line 32 still lists the Janus daily review as an uncreated scheduled task, but daily reviews ran 6-12 Nov and 17 Nov | test in the style of tests/test_q023_todo_election_lines.py (fixture text; skips on the real docs/todo.md unless NIGHT_SHIFT_STRICT=1, and the real-file check tolerates missed days, never a 24-hour window): the line is split so the daily review is ticked or moved to line 30; the :45 quick check, forecast resolver and letters stay unticked; split wording does not trip tests/test_q028_todo_scheduled_tasks.py; line 12 (Q003 counts) byte-identical | https://github.com/EthanC100/em-macro/pull/88 | no block, p=80% | todo.json |
 | Q032 | data | done | Janus quick checks intermittently fail to read the futures settlements clone (9 records; 07:17, 08:17, 13:23Z on 19 Nov), and the morning report shows only the latest check, so earlier failures in the day are lost | test with fixture records only (never live data/janus or the clone), change confined to nightshift/morning.py (no change to ledger/janus.py _last_check/summarize or the record schema): for a 19 Nov-style fixture (clone failures at 07:17, 08:17, 13:23 then later successful checks) the morning report shows the count and times of quick checks since the last report whose result mentions a settlements clone failure; a check whose settlements wording matches neither known failure nor known success phrasing is reported as 'settlements status unknown', not ok; full suite passes | https://github.com/EthanC100/em-macro/pull/101 (merged into dev d7c408d) | no block, p=50% | none |
 | Q033 | data | in-progress | docs/agent-system.md lists the Janus :45 quick check as live (none recorded since 13 Nov 12:49Z) and quotes a docs/todo.md line that no longer exists | test in the style of tests/test_q028_todo_scheduled_tasks.py (fixture text and records; on the real files skips unless NIGHT_SHIFT_STRICT=1): the quote at agent-system.md:46 exists in docs/todo.md, and agent-system.md does not describe a :45 slot as running when the quick-check records show no :45 check in the last 7 days; fails now, passes after the doc is reworded as a dated observation | https://github.com/EthanC100/em-macro/pull/109 | no block, p=55% | none |
+| Q034 | research | proposed | BR10Y mark 7 days old and unflagged on 26 Nov (last row 19 Nov; Brazil loader returns nothing after 19 Nov): stale_mark_days is 7 calendar days (fold into Q030) | Needs Ethan first: lag tolerance in business days (with Q024/Q030); then with today 2026-11-26 and a BR10Y source returning only 2026-11-19, fetch_instrument notes 'stale' and mark_can_act is false (fixture get() only) |  |  | none |
+| Q035 | bug | approved | Janus quick checks say 'marks of 25 Nov' on 26 Nov although held GB10Y (J004) has no 25 Nov mark: the freshness claim should name the oldest held-instrument mark | test_janus_check_freshness (fixture records and marks only): ledger.janus context emits a mark-freshness summary built on the existing _stale_weekdays/_is_stale that, with GB10Y held at 24 Nov and others at 25 Nov, reports the oldest held mark ('marks from 24 Nov (GB10Y)'); docs/janus/quick_check.md tells Janus to quote it; no new CLI validation of --result text |  | no block, p=50% | none |
 <!-- queue:end -->
 
 ### Q001
@@ -801,3 +803,17 @@ Scope: docs/agent-system.md only. Word the change from the records ("no :45 chec
 - Word the change as a dated observation: ":45 checks recorded hourly until 2026-11-13 12:49Z, none since; Ethan to confirm whether the task still exists".
 - Check only the one known quote (agent-system.md:46), not every quoted todo.md line, so later todo.md edits on main cannot fail promotion under NIGHT_SHIFT_STRICT=1.
 - Partial overlap with Q031's follow-up note. data/janus/README.md:9 stays wrong until Ethan acts (hard rule 3).
+
+### Q034
+
+Reproduced on dev 14a0f0b (2026-11-26):
+- `data/ledger/marks.csv`: the last BR10Y row is `2026-11-19,BR10Y,15.426,% yield,daily,em_macro yields.brazil_10y,...,2026-11-24T22:11:19+00:00,` with an empty note; no BR10Y row for 20, 23, 24 or 25 Nov, while other daily instruments have 25 Nov rows.
+- `ledger/marks.py`: `if freq == "daily" and age > CONFIG["stale_mark_days"]` with `ledger/automation.json` `"stale_mark_days": 7`. On 26 Nov the BR10Y age is exactly 7, so it is not flagged and mark_can_act stays true.
+- Same calendar-day threshold as Q030 (ES10Y/ES-DE) and Q024. Also open: why the em_macro Brazil loader returns nothing after 19 Nov.
+
+### Q035
+
+Reproduced on dev 14a0f0b (2026-11-26):
+- `data/janus/records.jsonl` seq 1081 (2026-11-26T08:17:21Z) quick check: "no flags, all 20 positions C08 (noted only); marks of 25 Nov, closest stop J004 ~0.14% of account"; seq 1082-1084 repeat it.
+- J004 is short GB10Y (open, data/ledger/state.json). The newest GB10Y mark is `data/ledger/marks.csv` `2026-11-24,GB10Y,5.1936,...,riksbank GBGVB10Y,...,2026-11-26T06:11:40+00:00`; no 25 Nov GB10Y row (Riksbank source runs about 2 business days behind).
+- The quick-check text is free-form, so it reports the newest mark date, not the oldest held-instrument mark. Risk numbers are unaffected; only the freshness claim is wrong. Records are never edited (hard rule 3): forward-looking fix only. docs/janus/quick_check.md is not protected (python -m nightshift.protected).
