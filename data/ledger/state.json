@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-26",
- "at": "2026-11-26T16:00:15+00:00",
+ "at": "2026-11-26T19:27:11+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 102.9657,
+  "algorithm v1.0": 103.7734,
   "algorithm v1.1": 100.0,
-  "janus": 99.8528,
+  "janus": 99.7706,
   "me": 98.51
  },
  "janus": {
@@ -464,9 +464,9 @@
   "J055": {
    "direction": "short",
    "instrument": "DE10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0112,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J056": {
    "direction": "short",
@@ -492,16 +492,16 @@
   "J059": {
    "direction": "long",
    "instrument": "JPY",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0101,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J060": {
    "direction": "short",
    "instrument": "AUD",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0005,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J061": {
    "direction": "short",
@@ -527,16 +527,16 @@
   "J064": {
    "direction": "long",
    "instrument": "EUR",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.01,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J065": {
    "direction": "long",
    "instrument": "GBP",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": 0.0124,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J066": {
    "direction": "short",
@@ -571,7 +571,7 @@
    "instrument": "DE10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J071": {
    "direction": "short",
@@ -585,28 +585,28 @@
    "instrument": "EUR",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J073": {
    "direction": "long",
    "instrument": "GBP",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J074": {
    "direction": "long",
    "instrument": "JPY",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J075": {
    "direction": "short",
    "instrument": "AUD",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J076": {
    "direction": "short",
