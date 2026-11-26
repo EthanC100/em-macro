@@ -1,10 +1,6 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "promote",
-  "acquired_at": "2026-11-27T05:40:23+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qaT4TinCFmd7DW3pi1"
- },
+ "lock": null,
  "night": "2026-11-26",
  "runs_used": 1,
  "last_kind": "worker",
@@ -566,6 +562,16 @@
    "cap": 4,
    "safe_mode": true,
    "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-27T05:40:23+08:00",
+   "finished_at": "2026-11-27T06:11:23+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "checks failed on dev 5260467: (a) 2 tests failed of 4233, (e) site build ModuleNotFoundError yaml (this cloud env), (b) Ledger rebuild differs from intended files; no private store (em-macro-data clone 403). ledger-daily then running, guard turned promote away; no PR opened, nothing merged",
+   "session": "https://claude.ai/code/session_01Ayx8qaT4TinCFmd7DW3pi1"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
