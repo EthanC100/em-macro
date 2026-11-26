@@ -537,6 +537,16 @@
    "commits": [],
    "note": "dev merged main (shallow clone unshallowed first; no auto_resolved files), tests 4228 passed after fixing an env-only PyYAML install; triage 1 finding, not filed (overlaps Q024/Q030: daily mark exactly 7 days old not flagged stale, marks.py:581 uses > not >=; 5 energy marks dated 17 Nov fetched 24 Nov called fresh by Janus quick check); Actions API 403 for triage; 0 filed/approved/blocked; guard next=stop",
    "session": null
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-26T22:36:00+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged with main (14a0f0b, no auto_resolved); filed Q034 (research, BR10Y stale) and Q035 (bug, Janus freshness text; Opposition no block p=50%, approved); not filed: Q024's evidence is stale (energy marks back-filled to 24 Nov on 25-26 Nov), for Ethan; triage partial (Actions API 403); night-worker not fired (no API trigger, exit 6), hourly schedule picks it up",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
