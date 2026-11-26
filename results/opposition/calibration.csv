@@ -45,3 +45,4 @@ logged_on,target_type,target_id,p_works,verdict,model,resolved_on,outcome,note
 2026-11-23,queue,Q033,55,advisory,claude-opus-5-5,,,
 2026-11-23,pr,101,75,advisory,claude-opus-5-5,,,no block
 2026-11-26,queue,Q035,50,advisory,claude-opus-5-5,,,
+2026-11-26,pr,109,88,advisory,claude-opus-5-5,,,
