@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 2.705,
+    "janus": 3.016,
     "me": 0.526
    },
    "positions": [
@@ -221,24 +221,6 @@
     },
     {
      "book": "janus",
-     "id": "J066",
-     "instrument": "BRL",
-     "pnl_pct": 0.579,
-     "move": "1.6349 -> 2.123 (2008-08-29 to 2008-10-31)",
-     "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J067",
-     "instrument": "MXN",
-     "pnl_pct": -0.89,
-     "move": "10.297 -> 12.705 (2008-08-29 to 2008-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J068",
      "instrument": "US10Y",
      "pnl_pct": 0.086,
@@ -360,7 +342,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.508,
+    "janus": 0.916,
     "me": 0.29
    },
    "positions": [
@@ -587,24 +569,6 @@
      "pnl_pct": 0.493,
      "move": "-0.153 -> 0.031 (2020-02-28 to 2020-03-31)",
      "source": "Japan MoF jgbcme_all.csv 10Y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J066",
-     "instrument": "BRL",
-     "pnl_pct": 0.337,
-     "move": "4.4906 -> 5.1855 (2020-02-28 to 2020-03-31)",
-     "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J067",
-     "instrument": "MXN",
-     "pnl_pct": -0.745,
-     "move": "19.73 -> 23.448 (2020-02-28 to 2020-03-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
      "monthly": false
     },
     {
@@ -944,24 +908,6 @@
      "pnl_pct": 0.535,
      "move": "0.089 -> 0.253 (2021-12-30 to 2022-10-31)",
      "source": "Japan MoF jgbcme_all.csv 10Y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J066",
-     "instrument": "BRL",
-     "pnl_pct": -0.158,
-     "move": "5.5749 -> 5.2464 (2021-12-30 to 2022-10-31)",
-     "source": "data/processed/daily_panel.csv FX_BR",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J067",
-     "instrument": "MXN",
-     "pnl_pct": 0.158,
-     "move": "20.514 -> 19.848 (2021-12-30 to 2022-10-31)",
-     "source": "data/processed/daily_panel.csv FX_MX",
      "monthly": false
     },
     {
