@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 2.266,
+    "janus": 2.575,
     "me": 0.526
    },
    "positions": [
@@ -295,7 +295,7 @@
      "book": "janus",
      "id": "J069",
      "instrument": "GB10Y",
-     "pnl_pct": 0.037,
+     "pnl_pct": 0.041,
      "move": "4.5611 -> 4.6467 (2008-08-29 to 2008-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -304,7 +304,7 @@
      "book": "janus",
      "id": "J070",
      "instrument": "DE10Y",
-     "pnl_pct": -0.101,
+     "pnl_pct": -0.097,
      "move": "4.27 -> 4.08 (2008-08-29 to 2008-10-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
@@ -322,7 +322,7 @@
      "book": "janus",
      "id": "J072",
      "instrument": "EUR",
-     "pnl_pct": 0.847,
+     "pnl_pct": 0.935,
      "move": "1.4669 -> 1.2682 (2008-08-29 to 2008-10-31)",
      "source": "FRED DEXUSEU",
      "monthly": false
@@ -331,7 +331,7 @@
      "book": "janus",
      "id": "J073",
      "instrument": "GBP",
-     "pnl_pct": -0.618,
+     "pnl_pct": -0.577,
      "move": "1.819 -> 1.6165 (2008-08-29 to 2008-10-31)",
      "source": "FRED DEXUSUK",
      "monthly": false
@@ -340,7 +340,7 @@
      "book": "janus",
      "id": "J074",
      "instrument": "JPY",
-     "pnl_pct": 1.112,
+     "pnl_pct": 1.104,
      "move": "108.69 -> 98.28 (2008-08-29 to 2008-10-31)",
      "source": "FRED DEXJPUS",
      "monthly": false
@@ -349,7 +349,7 @@
      "book": "janus",
      "id": "J075",
      "instrument": "AUD",
-     "pnl_pct": 0.91,
+     "pnl_pct": 1.089,
      "move": "1.16782 -> 1.52114 (2008-08-29 to 2008-10-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
@@ -405,7 +405,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.478,
+    "janus": 0.521,
     "me": 0.29
    },
    "positions": [
@@ -710,7 +710,7 @@
      "book": "janus",
      "id": "J069",
      "instrument": "GB10Y",
-     "pnl_pct": -0.044,
+     "pnl_pct": -0.049,
      "move": "0.5035 -> 0.419 (2020-02-28 to 2020-03-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -719,7 +719,7 @@
      "book": "janus",
      "id": "J070",
      "instrument": "DE10Y",
-     "pnl_pct": 0.075,
+     "pnl_pct": 0.072,
      "move": "-0.61 -> -0.47 (2020-02-28 to 2020-03-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
@@ -746,7 +746,7 @@
      "book": "janus",
      "id": "J073",
      "instrument": "GBP",
-     "pnl_pct": -0.141,
+     "pnl_pct": -0.132,
      "move": "1.2778 -> 1.2454 (2020-02-28 to 2020-03-31)",
      "source": "FRED DEXUSUK",
      "monthly": false
@@ -755,7 +755,7 @@
      "book": "janus",
      "id": "J074",
      "instrument": "JPY",
-     "pnl_pct": 0.058,
+     "pnl_pct": 0.057,
      "move": "108.12 -> 107.53 (2020-02-28 to 2020-03-31)",
      "source": "FRED DEXJPUS",
      "monthly": false
@@ -764,7 +764,7 @@
      "book": "janus",
      "id": "J075",
      "instrument": "AUD",
-     "pnl_pct": 0.215,
+     "pnl_pct": 0.257,
      "move": "1.53965 -> 1.62893 (2020-02-28 to 2020-03-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
@@ -807,7 +807,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": 0.875,
+    "janus": 1.209,
     "me": 0.317
    },
    "positions": [
@@ -1112,7 +1112,7 @@
      "book": "janus",
      "id": "J069",
      "instrument": "GB10Y",
-     "pnl_pct": 1.373,
+     "pnl_pct": 1.514,
      "move": "1.013 -> 3.6952 (2021-12-31 to 2022-10-31)",
      "source": "Bank of England IUDMNPY",
      "monthly": false
@@ -1121,7 +1121,7 @@
      "book": "janus",
      "id": "J070",
      "instrument": "DE10Y",
-     "pnl_pct": 1.305,
+     "pnl_pct": 1.251,
      "move": "-0.24 -> 2.19 (2021-12-30 to 2022-10-31)",
      "source": "Bundesbank BBSIS 10y",
      "monthly": false
@@ -1139,7 +1139,7 @@
      "book": "janus",
      "id": "J072",
      "instrument": "EUR",
-     "pnl_pct": 0.791,
+     "pnl_pct": 0.874,
      "move": "1.1318 -> 0.9885 (2021-12-30 to 2022-10-31)",
      "source": "FRED DEXUSEU",
      "monthly": false
@@ -1148,7 +1148,7 @@
      "book": "janus",
      "id": "J073",
      "instrument": "GBP",
-     "pnl_pct": -0.817,
+     "pnl_pct": -0.763,
      "move": "1.35 -> 1.1515 (2021-12-30 to 2022-10-31)",
      "source": "FRED DEXUSUK",
      "monthly": false
@@ -1157,7 +1157,7 @@
      "book": "janus",
      "id": "J074",
      "instrument": "JPY",
-     "pnl_pct": -2.364,
+     "pnl_pct": -2.346,
      "move": "115.17 -> 148.63 (2021-12-30 to 2022-10-31)",
      "source": "FRED DEXJPUS",
      "monthly": false
@@ -1166,7 +1166,7 @@
      "book": "janus",
      "id": "J075",
      "instrument": "AUD",
-     "pnl_pct": 0.467,
+     "pnl_pct": 0.559,
      "move": "1.37741 -> 1.56397 (2021-12-30 to 2022-10-31)",
      "source": "FRED DEXUSAL",
      "monthly": false
