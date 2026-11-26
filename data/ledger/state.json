@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-25",
- "at": "2026-11-25T22:29:01+00:00",
+ "as_of": "2026-11-26",
+ "at": "2026-11-26T06:27:42+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,9 +77,9 @@
   }
  },
  "index": {
-  "algorithm v1.0": 102.8597,
+  "algorithm v1.0": 103.4449,
   "algorithm v1.1": 100.0,
-  "janus": 100.0403,
+  "janus": 99.8469,
   "me": 98.55
  },
  "janus": {
@@ -522,7 +522,7 @@
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "cancelled"
   },
   "J064": {
    "direction": "long",
@@ -551,8 +551,78 @@
    "net": null,
    "reason": null,
    "status": "open"
+  },
+  "J068": {
+   "direction": "short",
+   "instrument": "US10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J069": {
+   "direction": "short",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J070": {
+   "direction": "short",
+   "instrument": "DE10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J071": {
+   "direction": "short",
+   "instrument": "JP10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J072": {
+   "direction": "short",
+   "instrument": "EUR",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J073": {
+   "direction": "long",
+   "instrument": "GBP",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J074": {
+   "direction": "long",
+   "instrument": "JPY",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J075": {
+   "direction": "short",
+   "instrument": "AUD",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J076": {
+   "direction": "short",
+   "instrument": "BRL",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J077": {
+   "direction": "long",
+   "instrument": "MXN",
+   "net": null,
+   "reason": null,
+   "status": "pending"
   }
  },
  "janus_no_trades": 8,
- "latest_mark": "2026-11-25"
+ "latest_mark": "2026-11-26"
 }
