@@ -4,7 +4,10 @@
  "night": "2026-11-26",
  "runs_used": 1,
  "last_kind": "worker",
- "chain_stopped": null,
+ "chain_stopped": {
+  "reason": "no approved items remain after Q035; PR #113 left open for the next night-worker's step 2",
+  "at": "2026-11-27T00:36:02+08:00"
+ },
  "log": [
   {
    "routine": "night-start",
