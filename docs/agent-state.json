@@ -572,6 +572,16 @@
    "commits": [],
    "note": "checks failed on dev 5260467: (a) 2 tests failed of 4233, (e) site build ModuleNotFoundError yaml (this cloud env), (b) Ledger rebuild differs from intended files; no private store (em-macro-data clone 403). ledger-daily then running, guard turned promote away; no PR opened, nothing merged",
    "session": "https://claude.ai/code/session_01Ayx8qaT4TinCFmd7DW3pi1"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-27T23:21:31+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main (merged a394c9d, no auto-resolved files); triage: no new findings (Actions API 403, runs not audited); 0 filed/approved/blocked; nothing fired (stop). Full test suite green after reinstalling PyYAML with RECORD (Debian package broke test_site_build shim)",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
