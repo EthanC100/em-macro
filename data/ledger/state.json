@@ -4,7 +4,7 @@
   "v1.1": "2026-11"
  },
  "as_of": "2026-11-27",
- "at": "2026-11-27T06:12:28+00:00",
+ "at": "2026-11-27T15:54:36+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,10 +77,10 @@
   }
  },
  "index": {
-  "algorithm v1.0": 104.2712,
+  "algorithm v1.0": 104.1118,
   "algorithm v1.1": 100.0,
-  "janus": 99.7422,
-  "me": 98.51
+  "janus": 99.7034,
+  "me": 98.438
  },
  "janus": {
   "J001": {
@@ -471,9 +471,9 @@
   "J056": {
    "direction": "short",
    "instrument": "JP10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.3035,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J057": {
    "direction": "short",
