@@ -39,6 +39,9 @@ From it, note the following. If a module is missing, run `pip install -q -r requ
 - **For each open or pending position:** `entry`, `stop`, `horizon`, `thesis`, `change_mind` (the triggers that
   would change Janus's mind), `mark` and `mark_date` (the latest official daily mark), `net_pnl_pct` and
   `distance_to_stop_pct_account`.
+- **`mark_freshness.summary`**: how fresh the held instruments' marks are, naming the oldest held mark (for example
+  "marks from 24 Nov (GB10Y); newest 25 Nov"). Some sources run a day or two behind (the Riksbank's GB10Y), so never
+  write "marks of <date>" from the newest mark you see: when the result mentions marks, quote this summary.
 - **`last_check`**, and your own model string (from your system prompt, e.g. `claude-opus-5-5`).
 - **`flags`**: the mandate's flags, computed by the CLI. Flags are raised for:
   - a failed daily review: rejected by the CLI (a failed-review record, config change C06; this includes a review
@@ -105,7 +108,7 @@ scripts/janus_commit.sh "Janus quick check $(date -u +%H:%M) UTC: no change" -- 
 
 - `--positions` must list **every** open or pending position (or `none`).
 - `--result` is one line of at most 240 characters: "no change", or a short note such as "no change; WTI 1.2% from
-  J003's stop, watching OPEC".
+  J003's stop, watching OPEC". A claim about how fresh the marks are quotes `mark_freshness.summary` from step 1.
 
 ## 5. Finish
 

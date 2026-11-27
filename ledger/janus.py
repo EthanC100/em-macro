@@ -1082,6 +1082,47 @@ def _is_stale(last: date | None, today: date) -> bool:
     return n is None or n >= DATA_STALE_WEEKDAYS
 
 
+def _day_mon(d: date) -> str:
+    return f"{d.day} {d.strftime('%b')}"
+
+
+def mark_freshness(open_rows: list[dict], today: date) -> dict:
+    """Q035: how fresh the held instruments' marks are, for a session's freshness claim. ``summary`` names the oldest
+    held mark and its instruments ("marks from 24 Nov (GB10Y); newest 25 Nov"), never only the newest mark."""
+    dated: dict[str, date] = {}
+    no_mark: list[str] = []
+    for r in open_rows:
+        inst = r.get("instrument")
+        d = parse_date(r["mark_date"]) if r.get("mark_date") else None
+        if d is None:
+            if inst not in no_mark:
+                no_mark.append(inst)
+        else:
+            dated[inst] = min(d, dated.get(inst, d))
+    out = {"oldest_mark_date": None, "oldest_instruments": [], "newest_mark_date": None, "no_mark": no_mark,
+           "stale": [], "summary": "no open positions" if not open_rows else ""}
+    parts = []
+    if dated:
+        oldest, newest = min(dated.values()), max(dated.values())
+        on_oldest = sorted(i for i, d in dated.items() if d == oldest)
+        out.update({"oldest_mark_date": oldest.isoformat(), "oldest_instruments": on_oldest,
+                    "newest_mark_date": newest.isoformat(),
+                    "stale": [{"instrument": i, "mark_date": d.isoformat(), "stale_weekdays": _stale_weekdays(d, today)}
+                              for i, d in sorted(dated.items(), key=lambda x: (x[1], x[0])) if _is_stale(d, today)]})
+        if oldest == newest:
+            parts.append(f"marks of {_day_mon(oldest)} (all {len(dated)} held)")
+        else:
+            names = ", ".join(on_oldest[:3]) + (f" +{len(on_oldest) - 3}" if len(on_oldest) > 3 else "")
+            parts.append(f"marks from {_day_mon(oldest)} ({names}); newest {_day_mon(newest)}")
+        if out["stale"]:
+            parts.append(", ".join(f"{s['instrument']} stale ({s['stale_weekdays']} weekdays)" for s in out["stale"]))
+    if no_mark:
+        parts.append("no mark yet: " + ", ".join(no_mark))
+    if parts:
+        out["summary"] = "; ".join(parts)
+    return out
+
+
 def _norm_url(u: str) -> str:
     return str(u or "").strip().rstrip("/").lower()
 
@@ -2580,6 +2621,7 @@ def context(marks_rows: list[dict] | None = None, today: date | None = None, fet
             "daily_review_status": review_status(records, today), "risk_budget_status": budget_status(records, today),
             "flags": mandate_flags(records, today),
             "risk_used_pct": s["risk_used_pct"], "n_open": s["n_open"],
+            "mark_freshness": mark_freshness(s["open"], today),     # Q035: quote its summary, never the newest mark
             "open": [{k: p.get(k) for k in keep} | {"entry": (p.get("fill") or {}).get("entry_level"),
                                                      "entry_date": (p.get("fill") or {}).get("entry_date")} for p in s["open"]],
             "universe": market_snapshot(marks_rows, today), "last_check": s["last_check"],
