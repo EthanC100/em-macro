@@ -1,32 +1,13 @@
 {
- "since": "2026-11-27T15:54:36+00:00",
- "at": "2026-11-27T19:27:19+00:00",
+ "since": "2026-11-27T19:27:19+00:00",
+ "at": "2026-11-27T22:35:00+00:00",
  "items": [
-  {
-   "book": "algorithm",
-   "kind": "pnl",
-   "label": "algorithm v1.0",
-   "change": 1.0974,
-   "text": "algorithm v1.0: +1.10 index points (to 105.21)"
-  },
   {
    "book": "janus",
    "kind": "pnl",
    "label": "janus",
-   "change": -0.1498,
-   "text": "janus: -0.15 index points (to 99.55)"
-  },
-  {
-   "book": "janus",
-   "kind": "close",
-   "link": "#/position/janus/J072",
-   "text": "Janus J072 closed (C08 side flip): net -0.00%"
-  },
-  {
-   "book": "janus",
-   "kind": "trade",
-   "link": "#/position/janus/J080",
-   "text": "Janus J080 filled: long EUR"
+   "change": -0.0321,
+   "text": "janus: -0.03 index points (to 99.52)"
   }
  ]
 }
