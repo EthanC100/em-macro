@@ -1,10 +1,6 @@
 {
  "schema": 1,
- "lock": {
-  "routine": "promote",
-  "acquired_at": "2026-11-28T05:40:14+08:00",
-  "session": "https://claude.ai/code/session_01Ayx8qbvj94dfhuiqYT3Taj"
- },
+ "lock": null,
  "night": "2026-11-27",
  "runs_used": 0,
  "last_kind": null,
@@ -586,6 +582,16 @@
    "commits": [],
    "note": "dev synced with main (merged a394c9d, no auto-resolved files); triage: no new findings (Actions API 403, runs not audited); 0 filed/approved/blocked; nothing fired (stop). Full test suite green after reinstalling PyYAML with RECORD (Debian package broke test_site_build shim)",
    "session": null
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-28T05:40:14+08:00",
+   "finished_at": "2026-11-28T06:09:37+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: (a) 2 tests failed, (e) site build missing yaml, (b) ledger rebuild differs (no private store, 403); PR 73 reused",
+   "session": "https://claude.ai/code/session_01Ayx8qbvj94dfhuiqYT3Taj"
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
