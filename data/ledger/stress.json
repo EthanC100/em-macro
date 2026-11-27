@@ -8,7 +8,7 @@
    "by_book": {
     "algorithm v1.0": -19.859,
     "algorithm v1.1": -14.296,
-    "janus": 1.851,
+    "janus": 0.916,
     "me": 0.526
    },
    "positions": [
@@ -221,15 +221,6 @@
     },
     {
      "book": "janus",
-     "id": "J072",
-     "instrument": "EUR",
-     "pnl_pct": 0.935,
-     "move": "1.4669 -> 1.2682 (2008-08-29 to 2008-10-31)",
-     "source": "FRED DEXUSEU",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J073",
      "instrument": "GBP",
      "pnl_pct": -0.577,
@@ -333,7 +324,7 @@
    "by_book": {
     "algorithm v1.0": -10.718,
     "algorithm v1.1": -8.833,
-    "janus": 0.065,
+    "janus": 0.075,
     "me": 0.29
    },
    "positions": [
@@ -564,15 +555,6 @@
     },
     {
      "book": "janus",
-     "id": "J072",
-     "instrument": "EUR",
-     "pnl_pct": -0.009,
-     "move": "1.1001 -> 1.1016 (2020-02-28 to 2020-03-31)",
-     "source": "FRED DEXUSEU",
-     "monthly": false
-    },
-    {
-     "book": "janus",
      "id": "J073",
      "instrument": "GBP",
      "pnl_pct": -0.132,
@@ -663,7 +645,7 @@
    "by_book": {
     "algorithm v1.0": -60.001,
     "algorithm v1.1": -39.232,
-    "janus": 1.109,
+    "janus": 0.235,
     "me": 0.317
    },
    "positions": [
@@ -890,15 +872,6 @@
      "pnl_pct": 1.251,
      "move": "-0.24 -> 2.19 (2021-12-30 to 2022-10-31)",
      "source": "Bundesbank BBSIS 10y",
-     "monthly": false
-    },
-    {
-     "book": "janus",
-     "id": "J072",
-     "instrument": "EUR",
-     "pnl_pct": 0.874,
-     "move": "1.1318 -> 0.9885 (2021-12-30 to 2022-10-31)",
-     "source": "FRED DEXUSEU",
      "monthly": false
     },
     {
