@@ -1,0 +1,23 @@
+{
+ "book": "janus",
+ "id": "J072",
+ "model": "claude-opus-5-5",
+ "generated_at": "2026-11-27T23:11:10+00:00",
+ "postmortem": {
+  "thesis_right": "untested",
+  "skill_or_luck": "luck",
+  "what_happened": "J072 held a one-point lean to a weaker euro for two marks: EUR/USD went from 1.0975 at entry on 26 Nov to 1.0957 on 27 Nov, a small favourable move. The CLI closed it when the 26 Nov forecast moved to 51% after the hawkish ECB minutes, and it ended slightly negative after costs.",
+  "assessment": "The thesis (tariffs, French ratings risk and the dollar haven bid outweighing crowded euro shorts) was not tested in two days; the gross gain was noise and costs took it negative. The side flip on 26 Nov reacted to ECB minutes that were largely priced, and on 27 Nov softer French and Spanish inflation pushed the euro lower again, so the flip itself looks like overreaction to one data point.",
+  "do_differently": "Do not flip a one-point lean on a single release that the market already prices; weigh scheduled data within the horizon (French and Spanish flash CPI on 27 Nov, euro-area flash on 1 Dec) before reacting to minutes; record the cost of each flip in the reasoning.",
+  "sources": [
+   {
+    "title": "French and Spanish inflation slow sharply in November (The Private Banker)",
+    "url": "https://leprivatebanker.com/2026/11/27/french-and-spanish-inflation-slow-sharply-in-november-as-fuel-prices-fall-pressuring-the-euro-against-sterling/"
+   },
+   {
+    "title": "Minutes of ECB's October meeting confirm tightening bias (ING)",
+    "url": "https://think.ing.com/articles/minutes-of-ecbs-october-meeting-confirm-tightening-bias"
+   }
+  ]
+ }
+}
