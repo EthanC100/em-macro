@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-27",
+ "night": "2026-11-28",
  "runs_used": 0,
  "last_kind": null,
  "chain_stopped": {
   "reason": "nothing left to do: approved queue empty and explorer done for the night (max_hypotheses_per_night 0)",
-  "at": "2026-11-27T23:21:29+08:00"
+  "at": "2026-11-28T23:19:58+08:00"
  },
  "log": [
   {
