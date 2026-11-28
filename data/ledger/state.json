@@ -3,8 +3,8 @@
   "v1.0": "2026-11",
   "v1.1": "2026-11"
  },
- "as_of": "2026-11-27",
- "at": "2026-11-27T06:12:28+00:00",
+ "as_of": "2026-11-28",
+ "at": "2026-11-28T06:29:56+00:00",
  "decisions": {
   "D001": {
    "action": "Sell",
@@ -77,10 +77,10 @@
   }
  },
  "index": {
-  "algorithm v1.0": 104.2712,
+  "algorithm v1.0": 105.2583,
   "algorithm v1.1": 100.0,
-  "janus": 99.7422,
-  "me": 98.51
+  "janus": 99.5115,
+  "me": 98.438
  },
  "janus": {
   "J001": {
@@ -450,9 +450,9 @@
   "J053": {
    "direction": "long",
    "instrument": "US10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0203,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J054": {
    "direction": "long",
@@ -471,9 +471,9 @@
   "J056": {
    "direction": "short",
    "instrument": "JP10Y",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.3035,
+   "reason": "C08 rebalance",
+   "status": "closed"
   },
   "J057": {
    "direction": "short",
@@ -583,9 +583,9 @@
   "J072": {
    "direction": "short",
    "instrument": "EUR",
-   "net": null,
-   "reason": null,
-   "status": "open"
+   "net": -0.0029,
+   "reason": "C08 side flip",
+   "status": "closed"
   },
   "J073": {
    "direction": "long",
@@ -627,23 +627,44 @@
    "instrument": "US10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "open"
   },
   "J079": {
    "direction": "short",
    "instrument": "GB10Y",
    "net": null,
    "reason": null,
-   "status": "pending"
+   "status": "cancelled"
   },
   "J080": {
    "direction": "long",
    "instrument": "EUR",
    "net": null,
    "reason": null,
+   "status": "open"
+  },
+  "J081": {
+   "direction": "short",
+   "instrument": "GB10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J082": {
+   "direction": "long",
+   "instrument": "DE10Y",
+   "net": null,
+   "reason": null,
+   "status": "pending"
+  },
+  "J083": {
+   "direction": "short",
+   "instrument": "JP10Y",
+   "net": null,
+   "reason": null,
    "status": "pending"
   }
  },
  "janus_no_trades": 8,
- "latest_mark": "2026-11-27"
+ "latest_mark": "2026-11-28"
 }
