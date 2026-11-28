@@ -592,6 +592,16 @@
    "commits": [],
    "note": "refused: (a) 2 tests failed, (e) site build missing yaml, (b) ledger rebuild differs (no private store, 403); PR 73 reused",
    "session": "https://claude.ai/code/session_01Ayx8qbvj94dfhuiqYT3Taj"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-28T23:20:00+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main (merged 91a2cfe, no auto_resolved); filed Q036 (research, COP weekend-dated TRM), 0 approved, 0 blocked; chain stopped: nothing to do",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."
