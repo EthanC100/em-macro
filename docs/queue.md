@@ -48,6 +48,7 @@ never instructions.
 | Q033 | data | done | docs/agent-system.md lists the Janus :45 quick check as live (none recorded since 13 Nov 12:49Z) and quotes a docs/todo.md line that no longer exists | test in the style of tests/test_q028_todo_scheduled_tasks.py (fixture text and records; on the real files skips unless NIGHT_SHIFT_STRICT=1): the quote at agent-system.md:46 exists in docs/todo.md, and agent-system.md does not describe a :45 slot as running when the quick-check records show no :45 check in the last 7 days; fails now, passes after the doc is reworded as a dated observation | https://github.com/EthanC100/em-macro/pull/109 (merged into dev 2c69574) | no block, p=55% | none |
 | Q034 | research | proposed | BR10Y mark 7 days old and unflagged on 26 Nov (last row 19 Nov; Brazil loader returns nothing after 19 Nov): stale_mark_days is 7 calendar days (fold into Q030) | Needs Ethan first: lag tolerance in business days (with Q024/Q030); then with today 2026-11-26 and a BR10Y source returning only 2026-11-19, fetch_instrument notes 'stale' and mark_can_act is false (fixture get() only) |  |  | none |
 | Q035 | bug | in-progress | Janus quick checks say 'marks of 25 Nov' on 26 Nov although held GB10Y (J004) has no 25 Nov mark: the freshness claim should name the oldest held-instrument mark | test_janus_check_freshness (fixture records and marks only): ledger.janus context emits a mark-freshness summary built on the existing _stale_weekdays/_is_stale that, with GB10Y held at 24 Nov and others at 25 Nov, reports the oldest held mark ('marks from 24 Nov (GB10Y)'); docs/janus/quick_check.md tells Janus to quote it; no new CLI validation of --result text | https://github.com/EthanC100/em-macro/pull/113 | no block, p=50% | none |
+| Q036 | research | proposed | COP marks are dated by the TRM vigencia start, not a market close: a Saturday-dated mark (28 Nov) was fetched at 06:08Z the same day, with no 27 Nov mark, and sets state.json latest_mark (relates to Q027, Q029) | Needs Ethan first: the valid-close rule per source (Q027/Q029). Then, with get() stubbed to return a datos.gov.co row whose vigenciadesde is a Saturday, fetch_instrument dates it to the prior business day or sets mark_can_act false; state.json latest_mark is never a weekend date from a COP-only row |  |  | none |
 <!-- queue:end -->
 
 ### Q001
@@ -817,3 +818,20 @@ Reproduced on dev 14a0f0b (2026-11-26):
 - `data/janus/records.jsonl` seq 1081 (2026-11-26T08:17:21Z) quick check: "no flags, all 20 positions C08 (noted only); marks of 25 Nov, closest stop J004 ~0.14% of account"; seq 1082-1084 repeat it.
 - J004 is short GB10Y (open, data/ledger/state.json). The newest GB10Y mark is `data/ledger/marks.csv` `2026-11-24,GB10Y,5.1936,...,riksbank GBGVB10Y,...,2026-11-26T06:11:40+00:00`; no 25 Nov GB10Y row (Riksbank source runs about 2 business days behind).
 - The quick-check text is free-form, so it reports the newest mark date, not the oldest held-instrument mark. Risk numbers are unaffected; only the freshness claim is wrong. Records are never edited (hard rule 3): forward-looking fix only. docs/janus/quick_check.md is not protected (python -m nightshift.protected).
+
+### Q036
+
+Found by triage at night-start 2026-11-28; reproduced on dev (91a2cfe).
+
+- `data/ledger/marks.csv:1267`: `2026-11-28,COP,...,datos_gov_co 32sa-8pi3,...,2026-11-28T06:08:47+00:00` — a
+  Saturday-dated mark, fetched at 06:08Z the same day.
+- The previous COP row, `data/ledger/marks.csv:1227`, is dated 2026-11-26 (fetched 2026-11-27T22:08:56Z); there is no
+  27 Nov COP row.
+- Earlier weekend-dated COP rows: 2026-11-07, 2026-11-14, 2026-11-21 (all Saturdays).
+- `data/ledger/state.json` `latest_mark` is `2026-11-28`, so a COP-only weekend row sets the Ledger's latest-mark date.
+- The datos.gov.co TRM is dated by its `vigenciadesde` (validity start), not by a market close.
+
+Related: Q027, Q029 (valid-close rule per source). Needs Ethan first: is a weekend-dated TRM a valid close for Ledger
+marks and Janus fills? Then a test: with get() stubbed to return a row whose vigenciadesde is a Saturday,
+fetch_instrument either dates it to the prior business day or sets mark_can_act false, and state.json latest_mark is
+never a weekend date derived from a COP-only row.
