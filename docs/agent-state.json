@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "lock": null,
- "night": "2026-11-14",
- "runs_used": 4,
- "last_kind": "worker",
+ "night": "2026-11-28",
+ "runs_used": 0,
+ "last_kind": null,
  "chain_stopped": {
-  "reason": "run cap reached (4 of 4); Q017, Q005, Q006, Q001 merged into dev",
-  "at": "2026-11-15T02:28:21+08:00"
+  "reason": "nothing left to do: approved queue empty and explorer done for the night (max_hypotheses_per_night 0)",
+  "at": "2026-11-28T23:19:58+08:00"
  },
  "log": [
   {
@@ -307,6 +307,301 @@
    "commits": [],
    "note": "all checks ok; PR #70 opened (Q001, Q005, Q006, Q017)",
    "session": "https://claude.ai/code/session_01Ayx8qc2FmkKYT94DvYqDXn"
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-15T23:35:49+08:00",
+   "finished_at": "2026-11-15T23:52:03+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q023"
+   ],
+   "commits": [],
+   "note": "Q023 implemented, PR #71 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qeBK2zF1PdQeR6trk1",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-17T05:40:00+08:00",
+   "finished_at": "2026-11-17T05:57:19+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "check (b) Ledger rebuild differs in data/todo.json; PR #73 opened, not mergeable",
+   "session": "https://claude.ai/code/session_01Ayx8qbUzaLZsq6btSat7w1"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-17T22:36:46+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (a1d3185), pushed; filed Q028 (data), Q029 and Q030 (research); approved Q028 and unblocked Q012; none blocked; Janus daily review gap sent to Ethan; worker not fired (exit 6)",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-17T23:35:45+08:00",
+   "finished_at": "2026-11-18T00:07:22+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q012"
+   ],
+   "commits": [],
+   "note": "Q012 implemented, PR #81 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdJ44YwAYqv38najuF",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-18T00:24:10+08:00",
+   "finished_at": "2026-11-18T00:57:11+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q028"
+   ],
+   "commits": [],
+   "note": "Q028 implemented, PR #82 opened into dev",
+   "session": "https://claude.ai/code/session_01Ayx8qdJ44YwAYqv38najuF",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 2
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-18T22:51:03+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged with main (4b66feb, no auto-resolved files); tests 1986 pass after pip PyYAML (2 site_build failures were env: Debian PyYAML lacks RECORD); filed Q031 (todo daily-review line, approved p=78%); Q025 p=72%, Q026 p=85% Opposition logged and set done (fixes already on main/dev via Ethan's PRs #47/#46); 0 blocked; night-worker not fired (no API trigger, exit 6), hourly schedule picks it up",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-18T23:36:02+08:00",
+   "finished_at": "2026-11-18T23:55:15+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q031"
+   ],
+   "commits": [],
+   "note": "PR #88 opened for Q031",
+   "session": "https://claude.ai/code/session_01Ayx8qcCeMH28YW9C3CHvv8",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-19T05:40:17+08:00",
+   "finished_at": "2026-11-19T06:08:38+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: (a) 2 tests failed, (e) site build needs yaml; PR #73 updated",
+   "session": "https://claude.ai/code/session_01Ayx8qahZrK756xjSVWum7N"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-19T22:36:18+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (cab2edc, no auto_resolved); triage 3 findings: filed Q032 (data, Opposition no block p=50%, auto-approved), dropped 2 (Q024 premise now stale - energy marks current to 17 Nov, needs Ethan to re-scope; ES10Y/ES-DE lag duplicates Q030, still reproduces); triage could not reach Actions API (403) and did not audit code; night-worker fire exit 6 (no API trigger), hourly schedule picks it up",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-19T23:35:52+08:00",
+   "finished_at": "2026-11-20T00:10:08+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q032"
+   ],
+   "commits": [],
+   "note": "PR #101 opened for Q032 (morning report settlements clone failures)",
+   "session": "https://claude.ai/code/session_01Ayx8qcBNDDMjrH6HFArTon",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-21T05:40:04+08:00",
+   "finished_at": "2026-11-21T06:07:24+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: (a) 2 tests failed, (e) site build missing yaml, (b) ledger rebuild differs; PR #73 reused",
+   "session": "https://claude.ai/code/session_01Ayx8qeDF87UPs8wj189N5V"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-21T22:35:19+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev sync: merged main (24b29b3), no auto_resolved; triage: 0 filed (Actions API 403, run reports unaudited); 0 approved/blocked; chain stopped: nothing to do",
+   "session": null
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-22T05:40:09+08:00",
+   "finished_at": "2026-11-22T05:41:16+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: no pytest/yaml in env, no private store (403), Ledger rebuild differs; PR #73 left open",
+   "session": "https://claude.ai/code/session_01Ayx8qbTbF7mijozbs4zsTb"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-22T23:41:16+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev sync: merged main (4da7c55; first merge 66ce146 rejected on push as night-worker 43fde2d landed during the 28-min suite, re-merged), no auto_resolved; full suite 3958 passed after pip PyYAML (Debian PyYAML lacks RECORD, broke test_site_check_sees_only_the_site_requirements in this container); triage: 0 filed (one finding updates Q024 evidence: energy marks now to 17 Nov, 3 business-day lag unflagged; fold into Q030; Actions API 403); 0 approved/blocked; chain already stopped by night-worker 23:35 (nothing approved)",
+   "session": null
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-23T05:39:59+08:00",
+   "finished_at": "2026-11-23T06:21:37+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: (a) 2 tests failed, (e) site build: no yaml module in env, (b) Ledger rebuild differs (same snapshot); PR #73 reused and left open",
+   "session": "https://claude.ai/code/session_01Ayx8qke61A"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-23T22:59:27+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged with main (264bf31, no auto-resolved files); filed Q033 (data, docs :45 quick check), Opposition no block p=55%, auto-approved; 0 blocked. Needs Ethan: Janus :45 quick checks stopped after 13 Nov 12:49Z (deleted or failing?). Fire: night-worker trigger unset (exit 6), hourly schedule picks it up",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-23T23:36:20+08:00",
+   "finished_at": "2026-11-24T01:31:04+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q033"
+   ],
+   "commits": [],
+   "note": "Q033 PR #109 opened into dev; also reviewed and merged Q032 PR #101 (suite: only 2 env-only test_site_build failures, same on clean dev)",
+   "session": "https://claude.ai/code/session_01Ayx8qe4sLREmiVZWwSpZYb",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-24T05:40:06+08:00",
+   "finished_at": "2026-11-24T05:41:04+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "guard: busy writer (ledger-daily running); no PR touched, no report file written; 06:30 run retries",
+   "session": "https://claude.ai/code/session_01Ayx8qaw5weNmrbTDhTttvb"
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-25T05:40:02+08:00",
+   "finished_at": "2026-11-25T05:40:55+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused on (d): dev conflicts with main in data/ files (criss-cross); PR #73 updated, ok false",
+   "session": "https://claude.ai/code/session_01Ayx8qb5o5BC58U1UqY4hFW"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-25T23:07:09+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged main (shallow clone unshallowed first; no auto_resolved files), tests 4228 passed after fixing an env-only PyYAML install; triage 1 finding, not filed (overlaps Q024/Q030: daily mark exactly 7 days old not flagged stale, marks.py:581 uses > not >=; 5 energy marks dated 17 Nov fetched 24 Nov called fresh by Janus quick check); Actions API 403 for triage; 0 filed/approved/blocked; guard next=stop",
+   "session": null
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-26T22:36:00+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev merged with main (14a0f0b, no auto_resolved); filed Q034 (research, BR10Y stale) and Q035 (bug, Janus freshness text; Opposition no block p=50%, approved); not filed: Q024's evidence is stale (energy marks back-filled to 24 Nov on 25-26 Nov), for Ethan; triage partial (Actions API 403); night-worker not fired (no API trigger, exit 6), hourly schedule picks it up",
+   "session": null
+  },
+  {
+   "routine": "night-worker",
+   "started_at": "2026-11-26T23:35:49+08:00",
+   "finished_at": "2026-11-27T00:35:57+08:00",
+   "outcome": "ok",
+   "items": [
+    "Q035"
+   ],
+   "commits": [],
+   "note": "Q035 PR #113 opened into dev; reviewed and merged Q033 PR #109 (suite: only 2 env-only test_site_build failures, same on clean dev)",
+   "session": "https://claude.ai/code/session_01Ayx8qcV4pLyzVqAnvpShEr",
+   "cap": 4,
+   "safe_mode": true,
+   "run": 1
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-27T05:40:23+08:00",
+   "finished_at": "2026-11-27T06:11:23+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "checks failed on dev 5260467: (a) 2 tests failed of 4233, (e) site build ModuleNotFoundError yaml (this cloud env), (b) Ledger rebuild differs from intended files; no private store (em-macro-data clone 403). ledger-daily then running, guard turned promote away; no PR opened, nothing merged",
+   "session": "https://claude.ai/code/session_01Ayx8qaT4TinCFmd7DW3pi1"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-27T23:21:31+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main (merged a394c9d, no auto-resolved files); triage: no new findings (Actions API 403, runs not audited); 0 filed/approved/blocked; nothing fired (stop). Full test suite green after reinstalling PyYAML with RECORD (Debian package broke test_site_build shim)",
+   "session": null
+  },
+  {
+   "routine": "promote",
+   "started_at": "2026-11-28T05:40:14+08:00",
+   "finished_at": "2026-11-28T06:09:37+08:00",
+   "outcome": "blocked",
+   "items": [],
+   "commits": [],
+   "note": "refused: (a) 2 tests failed, (e) site build missing yaml, (b) ledger rebuild differs (no private store, 403); PR 73 reused",
+   "session": "https://claude.ai/code/session_01Ayx8qbvj94dfhuiqYT3Taj"
+  },
+  {
+   "routine": "night-start",
+   "started_at": null,
+   "finished_at": "2026-11-28T23:20:00+08:00",
+   "outcome": "ok",
+   "items": [],
+   "commits": [],
+   "note": "dev synced with main (merged 91a2cfe, no auto_resolved); filed Q036 (research, COP weekend-dated TRM), 0 approved, 0 blocked; chain stopped: nothing to do",
+   "session": null
   }
  ],
  "note": "Written only through python -m nightshift.state via scripts/night_commit.sh (on dev)."

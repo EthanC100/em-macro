@@ -1,0 +1,68 @@
+{
+ "base": "4102283",
+ "head": "54033fb",
+ "today": "2026-11-17",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 5
+  },
+  "a_tests": {
+   "ok": true,
+   "summary": "1587 passed, 133 skipped, 10 warnings in 896.11s (0:14:56)"
+  },
+  "b_ledger_rebuild": {
+   "ok": false,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "none (no private store)",
+   "same_snapshot": true,
+   "items_merged": [],
+   "intended_files": [],
+   "differences": [
+    {
+     "file": "data/todo.json",
+     "paths": [
+      ".done",
+      ".sections[0].done",
+      ".sections[0].items[7].done",
+      ".sections[0].items[7].note",
+      ".sections[0].items[7].text",
+      ".sections[1].done",
+      ".sections[1].items[5].done",
+      ".sections[1].items[5].note",
+      ".sections[1].items[5].text",
+      ".updated"
+     ]
+    }
+   ],
+   "unexplained": [
+    "data/todo.json"
+   ],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": false,
+ "dev_commits_ahead": 12,
+ "mode": "promote",
+ "reasons": [
+  "(b) Ledger rebuild differs: ['data/todo.json']"
+ ],
+ "pr": "https://github.com/EthanC100/em-macro/pull/73"
+}

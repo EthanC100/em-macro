@@ -1,0 +1,260 @@
+{
+ "base": "e76c017",
+ "head": "2472ca8",
+ "today": "2026-11-23",
+ "checks": {
+  "d_conflict_free": {
+   "ok": true,
+   "conflicts": []
+  },
+  "c_protected_paths": {
+   "ok": true,
+   "touched": [],
+   "n_changed": 20
+  },
+  "a_tests": {
+   "ok": false,
+   "summary": "2 failed, 3956 passed, 170 skipped, 10 warnings in 1718.85s (0:28:38)"
+  },
+  "e_site_build": {
+   "ok": false,
+   "detail": "ModuleNotFoundError: No module named 'yaml'"
+  },
+  "b_ledger_rebuild": {
+   "ok": false,
+   "built": {
+    "main": {
+     "ok": true,
+     "detail": ""
+    },
+    "merged": {
+     "ok": true,
+     "detail": ""
+    }
+   },
+   "snapshot": "51aa2a26f3d2f154714dc8a5212a9818cf769517",
+   "same_snapshot": true,
+   "items_merged": [
+    "Q001",
+    "Q005",
+    "Q006",
+    "Q012",
+    "Q017",
+    "Q028",
+    "Q031"
+   ],
+   "intended_files": [
+    "books.json",
+    "marks.json",
+    "todo.json"
+   ],
+   "differences": [
+    {
+     "file": "data/home.json",
+     "paths": [
+      ".latest_report.date",
+      ".latest_report.file",
+      ".latest_report.id"
+     ]
+    },
+    {
+     "file": "data/reports.json",
+     "paths": [
+      ".items[0].date",
+      ".items[0].file",
+      ".items[0].id",
+      ".items[1].date",
+      ".items[1].file",
+      ".items[1].id",
+      ".items[2].date",
+      ".items[2].file",
+      ".items[2].id",
+      ".items[3].date",
+      ".items[3].file",
+      ".items[3].id",
+      ".items[4].date",
+      ".items[4].file",
+      ".items[4].id",
+      ".items[5].date",
+      ".items[5].file",
+      ".items[5].id",
+      ".items[6].date",
+      ".items[6].file"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_calendar-coverage.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_cost-audit-v1.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_coverage-report.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_diagnostics-v1.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_panel-coverage.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_t01-ts-trend.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_t02-econ-momentum.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_t16-t19-risk-batch.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_t20-t22-commodity-trials.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-12_t23-t24-pre2000.md",
+     "paths": [
+      "(added)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_calendar-coverage.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_cost-audit-v1.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_coverage-report.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_diagnostics-v1.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_panel-coverage.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_t01-ts-trend.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_t02-econ-momentum.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_t16-t19-risk-batch.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_t20-t22-commodity-trials.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/reports/2026-11-19_t23-t24-pre2000.md",
+     "paths": [
+      "(removed)"
+     ]
+    },
+    {
+     "file": "data/todo.json",
+     "paths": [
+      ".done",
+      ".n",
+      ".sections[0].done",
+      ".sections[0].items[7].done",
+      ".sections[0].items[7].note",
+      ".sections[0].items[7].text",
+      ".sections[1].done",
+      ".sections[1].items",
+      ".sections[1].n",
+      ".updated"
+     ]
+    }
+   ],
+   "unexplained": [
+    "data/home.json",
+    "data/reports.json",
+    "data/reports/2026-11-12_calendar-coverage.md",
+    "data/reports/2026-11-12_cost-audit-v1.md",
+    "data/reports/2026-11-12_coverage-report.md",
+    "data/reports/2026-11-12_diagnostics-v1.md",
+    "data/reports/2026-11-12_panel-coverage.md",
+    "data/reports/2026-11-12_t01-ts-trend.md",
+    "data/reports/2026-11-12_t02-econ-momentum.md",
+    "data/reports/2026-11-12_t16-t19-risk-batch.md",
+    "data/reports/2026-11-12_t20-t22-commodity-trials.md",
+    "data/reports/2026-11-12_t23-t24-pre2000.md",
+    "data/reports/2026-11-19_calendar-coverage.md",
+    "data/reports/2026-11-19_cost-audit-v1.md",
+    "data/reports/2026-11-19_coverage-report.md",
+    "data/reports/2026-11-19_diagnostics-v1.md",
+    "data/reports/2026-11-19_panel-coverage.md",
+    "data/reports/2026-11-19_t01-ts-trend.md",
+    "data/reports/2026-11-19_t02-econ-momentum.md",
+    "data/reports/2026-11-19_t16-t19-risk-batch.md",
+    "data/reports/2026-11-19_t20-t22-commodity-trials.md",
+    "data/reports/2026-11-19_t23-t24-pre2000.md"
+   ],
+   "audit_verify": [
+    true,
+    true
+   ]
+  }
+ },
+ "ok": false,
+ "dev_commits_ahead": 225,
+ "mode": "promote",
+ "reasons": [
+  "(a) test suite: 2 failed, 3956 passed, 170 skipped, 10 warnings in 1718.85s (0:28:38)",
+  "(e) site does not build as ledger-pages builds it: ModuleNotFoundError: No module named 'yaml'",
+  "(b) Ledger rebuild differs: ['data/home.json', 'data/reports.json', 'data/reports/2026-11-12_calendar-coverage.md', 'data/reports/2026-11-12_cost-audit-v1.md', 'data/reports/2026-11-12_coverage-report.md', 'data/reports/2026-11-12_diagnostics-v1.md', 'data/reports/2026-11-12_panel-coverage.md', 'data/reports/2026-11-12_t01-ts-trend.md', 'data/reports/2026-11-12_t02-econ-momentum.md', 'data/reports/2026-11-12_t16-t19-risk-batch.md', 'data/reports/2026-11-12_t20-t22-commodity-trials.md', 'data/reports/2026-11-12_t23-t24-pre2000.md', 'data/reports/2026-11-19_calendar-coverage.md', 'data/reports/2026-11-19_cost-audit-v1.md', 'data/reports/2026-11-19_coverage-report.md', 'data/reports/2026-11-19_diagnostics-v1.md', 'data/reports/2026-11-19_panel-coverage.md', 'data/reports/2026-11-19_t01-ts-trend.md', 'data/reports/2026-11-19_t02-econ-momentum.md', 'data/reports/2026-11-19_t16-t19-risk-batch.md', 'data/reports/2026-11-19_t20-t22-commodity-trials.md', 'data/reports/2026-11-19_t23-t24-pre2000.md']"
+ ],
+ "pr": "https://github.com/EthanC100/em-macro/pull/73"
+}

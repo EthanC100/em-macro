@@ -21,6 +21,14 @@ of ledger-pages (with the published site's own build time, read from its data/me
 the public GitHub Actions API (read only, no token, as nightshift.guard), and the Janus checks (latest quick check,
 due every 30 minutes, and the latest daily review) from the same records the Janus section reads. A failing or late
 one is marked FAILING / STALE / LATE and also goes to Needs Ethan; an unreadable source is said, never skipped.
+The Janus checks line also gives the count and times of the quick checks since the last report (from 05:00 SGT on
+its date) whose result says the futures settlements clone failed, and of those whose settlements wording is neither
+known failure nor known success ("settlements status unknown", never ok) (Q032: only the latest check was shown, so
+the 19 Nov 07:17, 08:17 and 13:23Z failures were lost). Shown, not escalated: Janus's response is C05's.
+
+Usage (Q012) shows the run cap and safe mode of main's config/night.yaml, read through config.load_main (the guard's
+loader) when the report is written and labelled "main's config at report time"; if it cannot be read the cap is
+"unknown", never taken from the dev checkout.
 
 An existing report for the date is never overwritten (Q013): the run exits 3, names the file and writes nothing,
 unless its "Promoted to main" line differs from promoted(<date>) now (a 05:30 promote refused, the 06:30 rerun
@@ -38,7 +46,7 @@ import re
 import tempfile
 import subprocess
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from . import config as C
@@ -297,8 +305,78 @@ def site_built(now: datetime, fetch=None) -> tuple[str, bool]:
     return f"published site built {_when(t)} ({_ago(t, now)}){' STALE' if stale else ''}", stale
 
 
-def janus_checks_line(records: list[dict], label: str, today: date, now: datetime) -> tuple[str, bool]:
-    """The latest quick check (a check record, or a quick-check run) and the latest daily review."""
+REPORT_FROM = time(5, 0)    # a report covers quick checks from 05:00 SGT (end of the night window) of the last one
+
+
+def last_report_at(day: date) -> datetime:
+    """Start of 'since the last report' for the report of `day` (Q032): 05:00 SGT on the date of the newest earlier
+    report in results/night/morning/, else the day before. A report is written after 05:00, so a check between 05:00
+    and the time it was written can appear in two reports; it is never missed."""
+    found = []
+    for p in (ROOT / "results/night/morning").glob("*.md"):
+        try:
+            d = date.fromisoformat(p.stem) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.stem) else None
+        except ValueError:
+            d = None
+        if d and d < day:
+            found.append(d)
+    return datetime.combine(max(found, default=day - timedelta(days=1)), REPORT_FROM, tzinfo=C.SGT)
+
+
+# How a quick check's result says it read the futures settlements clone (Q032, wording as written by the Janus
+# sessions, data/janus/records.jsonl). A clause (split on ; and ,) is about the settlements when it mentions them,
+# a clone or em-macro-data. Failure wording wins; a check whose wording matches neither (or that says nothing about
+# the settlements) is "unknown", never ok.
+SETTLEMENTS_CLAUSE = re.compile(r"settlements|\bclone\b|em-macro-data", re.I)
+SETTLEMENTS_FAILED = re.compile(r"\b(fail(ed|s|ing|ure)?|unavailable|not (read|available|reachable)|could ?not|"
+                                r"couldn't|cannot|can't|errors?)\b", re.I)
+SETTLEMENTS_OK = re.compile(r"\bclone (ok|worked|made|restored)\b|\bread via clone\b|\bsettlements read\b", re.I)
+SHOWN_TIMES = 6
+
+
+def settlements_status(result: str) -> str:
+    """'failed', 'ok' or 'unknown' for one quick check's result text."""
+    clauses = [c for c in re.split(r"[;,]", result or "") if SETTLEMENTS_CLAUSE.search(c)]
+    if any(SETTLEMENTS_FAILED.search(c) for c in clauses):
+        return "failed"
+    return "ok" if any(SETTLEMENTS_OK.search(c) for c in clauses) else "unknown"
+
+
+def _times(ts: list[datetime]) -> str:
+    """'19 Nov 07:17Z, 08:17Z, 13:23Z': the date only when it changes, at most SHOWN_TIMES then '(+N more)'."""
+    out, prev = [], None
+    for t in ts[:SHOWN_TIMES]:
+        u = t.astimezone(timezone.utc)
+        out.append(f"{u:%H:%M}Z" if u.date() == prev else f"{u:%d %b %H:%M}Z")
+        prev = u.date()
+    return ", ".join(out) + (f" (+{len(ts) - SHOWN_TIMES} more)" if len(ts) > SHOWN_TIMES else "")
+
+
+def settlements_clause(records: list[dict], since: datetime) -> str:
+    """The quick checks since the last report that could not read the settlements clone, or whose wording says
+    neither (Q032); '' when there was no quick check since then. Only makes the gap visible: it changes nothing."""
+    checks = sorted(((t, r) for t, r in ((_ts(r.get("recorded_at")), r) for r in records if r.get("type") == "check")
+                     if t and t >= since), key=lambda x: x[0])
+    if not checks:
+        return ""
+    n = len(checks)
+    window = f"quick check{'s' if n != 1 else ''} since {since.astimezone(C.SGT):%d %b %H:%M} SGT (last report)"
+    status = [(t, settlements_status(str(r.get("result") or ""))) for t, r in checks]
+    failed = [t for t, s in status if s == "failed"]
+    unknown = [t for t, s in status if s == "unknown"]
+    parts = [f"settlements clone FAILED in {len(failed)} of {n} {window}: {_times(failed)}"] if failed else []
+    if unknown:
+        parts.append(f"settlements status unknown in {len(unknown)} quick check{'s' if len(unknown) != 1 else ''}: "
+                     f"{_times(unknown)}" if failed else
+                     f"settlements status unknown in {len(unknown)} of {n} {window}: {_times(unknown)}")
+    return "; ".join(parts) or f"settlements clone read in all {n} {window}"
+
+
+def janus_checks_line(records: list[dict], label: str, today: date, now: datetime,
+                      since: datetime | None = None) -> tuple[str, bool]:
+    """The latest quick check (a check record, or a quick-check run), the latest daily review, and (Q032) the quick
+    checks since the last report that could not read the settlements clone. A clone failure is shown, not escalated:
+    what Janus does about it is C05's, not the report's."""
     from ledger import janus as J
     qc = [_ts(r.get("recorded_at")) for r in records
           if r.get("type") == "check" or (r.get("type") == "run" and r.get("session") == "quick_check")]
@@ -308,11 +386,13 @@ def janus_checks_line(records: list[dict], label: str, today: date, now: datetim
     line = (f"Janus checks: last quick check {_when(last)} ({_ago(last, now)}"
             + (", LATE: due every 30 min" if late else "") + f"); last daily review {rs['last_date'] or 'none'} "
             f"({rs['status'].upper() if rs['status'] != 'ok' else 'ok'})")
+    clone = settlements_clause(records, since if since is not None else last_report_at(today))
+    line += f"; {clone}" if clone else ""
     return (f"[{label}] {line}" if label else line), late or rs["status"] != "ok"
 
 
-def status_section(today: date, now: datetime, records: tuple[list[dict], str] | None, fetch=None) \
-        -> tuple[list[str], list[str]]:
+def status_section(today: date, now: datetime, records: tuple[list[dict], str] | None, fetch=None,
+                   since: datetime | None = None) -> tuple[list[str], list[str]]:
     """The section's lines, and the Needs Ethan lines for what is failing or late."""
     lines, needs = [], []
     for name, wf in WATCHED_WORKFLOWS:
@@ -328,7 +408,7 @@ def status_section(today: date, now: datetime, records: tuple[list[dict], str] |
         lines.append("Janus checks: records unreadable")
         needs.append("Janus records unreadable => check data/janus/records.jsonl on main")
     else:
-        line, bad = janus_checks_line(records[0], records[1], today, now)
+        line, bad = janus_checks_line(records[0], records[1], today, now, since)
         lines.append(line)
         if bad:
             needs.append("Janus checks late or failing => check the Janus scheduled tasks ran and committed to main")
@@ -369,8 +449,21 @@ def exploration_rows() -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def usage_line(used: int) -> str:
+    """The run count against main's cap and safe mode, read through C.load_main (the guard's loader) when the report
+    is written (Q012). It is main's config at report time, not a cap recorded at each acquire. If main's config
+    cannot be read the cap is unknown: never a fallback to the dev checkout's copy."""
+    try:
+        cfg = C.load_main()
+        cap = C.run_cap(cfg)
+        sm = bool((cfg.get("safe_mode") or {}).get("enabled"))
+    except Exception:  # noqa: BLE001 - an unreadable main config is reported, never a crash or a dev fallback
+        return f"{used} runs (cap unknown: main's config unreadable)"
+    return f"{used} of {cap} runs (" + ("SAFE MODE, " if sm else "") + "main's config at report time)"
+
+
 def build(day: date, dev: str, needs: list[str]) -> str:
-    cfg, st = C.load(), S.load()
+    st = S.load()
     night = (day - timedelta(days=1)).isoformat()
     since = datetime.fromisoformat(f"{night}T22:00:00").replace(tzinfo=C.SGT)
     runs = night_runs(st, night)
@@ -380,7 +473,6 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     drafts = sorted(p.name for p in (ROOT / "docs/prereg_drafts").glob("*.md") if p.name != "README.md")
     items = Q.parse((ROOT / "docs/queue.md").read_text(encoding="utf-8"))
     used = sum(1 for e in runs if e.get("routine") in S.COUNTED)
-    sm = (cfg.get("safe_mode") or {}).get("enabled")
     try:
         jr = janus_records()
     except Exception:  # noqa: BLE001 - an unreadable record file is reported, never a crash
@@ -402,7 +494,7 @@ def build(day: date, dev: str, needs: list[str]) -> str:
     L += ["", f"**Explorer findings:** {len(tonight)} variant(s) logged, {len(nom)} nominated"
           + (": " + ", ".join(sorted({r['hypothesis_id'] for r in nom})) if nom else "")]
     L += ["", "**Pre-registrations awaiting me:** " + (", ".join(drafts) if drafts else "none")]
-    L += ["", f"**Usage:** {used} of {C.run_cap(cfg)} runs" + (" (SAFE MODE)" if sm else "")
+    L += ["", f"**Usage:** {usage_line(used)}"
           + f"; queue: {len(Q.approved(items))} approved, {sum(1 for i in items if i['status'] == 'blocked')} blocked"]
     v1_needs = [f"{f} => act on it at the next rebalance (docs/ledger/v1_rules.md); the monitor changes nothing"
                 for f in ((v1 or {}).get("flags") or [])]
